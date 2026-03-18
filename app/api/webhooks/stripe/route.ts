@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-04-30.basil',
-})
+import { getStripe } from '@/lib/stripe'
 
 export async function POST(request: Request) {
   const body = await request.text()
@@ -13,7 +10,7 @@ export async function POST(request: Request) {
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       body,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET!
@@ -50,15 +47,18 @@ export async function POST(request: Request) {
     case 'customer.subscription.updated': {
       const subscription = event.data.object as Stripe.Subscription
       const userId = subscription.metadata?.user_id
+      const currentPeriodEnd = (subscription as unknown as Record<string, unknown>).current_period_end as number | undefined
 
       if (userId) {
         await supabase
           .from('subscriptions')
           .update({
             status: subscription.status,
-            current_period_end: new Date(
-              subscription.current_period_end * 1000
-            ).toISOString(),
+            ...(currentPeriodEnd && {
+              current_period_end: new Date(
+                currentPeriodEnd * 1000
+              ).toISOString(),
+            }),
           })
           .eq('user_id', userId)
       }

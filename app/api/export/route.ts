@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { renderToBuffer } from '@react-pdf/renderer'
+import { renderToBuffer, DocumentProps } from '@react-pdf/renderer'
 import React from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { checkPremium } from '@/lib/subscription/gate'
@@ -56,28 +56,31 @@ export async function GET() {
       .eq('user_id', user.id)
       .single()
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reportElement = React.createElement(ComplianceReport, {
+      companyName: profile?.company_name || 'Your Company',
+      date: new Date().toISOString().split('T')[0],
+      overallScore: assessment.overall_score || 0,
+      riskLevel: (assessment.risk_level as 'low' | 'medium' | 'high' | 'critical') || 'medium',
+      summary:
+        (assessment.result as Record<string, unknown>)?.summary as string ||
+        'No summary available.',
+      findings: (findings || []).map((f) => ({
+        id: f.id,
+        category: f.category,
+        severity: f.severity as 'critical' | 'high' | 'medium' | 'low' | 'pass',
+        title: f.title,
+        description: f.description,
+        recommendation: f.recommendation,
+        gdpr_article: f.gdpr_article,
+      })),
+    })
+
     const pdfBuffer = await renderToBuffer(
-      React.createElement(ComplianceReport, {
-        companyName: profile?.company_name || 'Your Company',
-        date: new Date().toISOString().split('T')[0],
-        overallScore: assessment.overall_score || 0,
-        riskLevel: (assessment.risk_level as 'low' | 'medium' | 'high' | 'critical') || 'medium',
-        summary:
-          (assessment.result as Record<string, unknown>)?.summary as string ||
-          'No summary available.',
-        findings: (findings || []).map((f) => ({
-          id: f.id,
-          category: f.category,
-          severity: f.severity as 'critical' | 'high' | 'medium' | 'low' | 'pass',
-          title: f.title,
-          description: f.description,
-          recommendation: f.recommendation,
-          gdpr_article: f.gdpr_article,
-        })),
-      })
+      reportElement as unknown as React.ReactElement<DocumentProps>
     )
 
-    return new Response(pdfBuffer, {
+    return new Response(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="kindlast-compliance-report-${new Date().toISOString().split('T')[0]}.pdf"`,

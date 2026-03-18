@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Use vi.hoisted so mocks are available during vi.mock hoisting
 const { mockConstructEvent, mockFrom, mockUpsert, mockUpdate } = vi.hoisted(() => ({
   mockConstructEvent: vi.fn(),
   mockFrom: vi.fn(),
@@ -8,17 +7,13 @@ const { mockConstructEvent, mockFrom, mockUpsert, mockUpdate } = vi.hoisted(() =
   mockUpdate: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ error: null }) }),
 }))
 
-vi.mock('stripe', () => {
-  return {
-    default: vi.fn().mockImplementation(function () {
-      return {
-        webhooks: {
-          constructEvent: mockConstructEvent,
-        },
-      }
-    }),
-  }
-})
+vi.mock('@/lib/stripe', () => ({
+  getStripe: vi.fn(() => ({
+    webhooks: {
+      constructEvent: mockConstructEvent,
+    },
+  })),
+}))
 
 vi.mock('@/lib/supabase/service-role', () => ({
   createServiceRoleClient: vi.fn(() => ({
