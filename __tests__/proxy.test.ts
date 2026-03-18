@@ -32,14 +32,14 @@ function createRequest(url: string) {
   return new NextRequest(new URL(url, 'http://localhost:3000'))
 }
 
-describe('Middleware', () => {
+describe('Proxy', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
   })
 
   it('redirects unauthenticated users from /dashboard to /login', async () => {
-    const { middleware } = await import('@/middleware')
+    const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
     const supabaseResponse = {
@@ -49,7 +49,7 @@ describe('Middleware', () => {
     mockUpdateSession.mockResolvedValue({ supabaseResponse, user: null })
 
     const request = createRequest('/dashboard')
-    await middleware(request)
+    await proxy(request)
 
     expect(NextResponse.redirect).toHaveBeenCalled()
     const redirectCall = vi.mocked(NextResponse.redirect).mock.calls[0]
@@ -57,7 +57,7 @@ describe('Middleware', () => {
   })
 
   it('redirects authenticated users from /login to /dashboard', async () => {
-    const { middleware } = await import('@/middleware')
+    const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
     const supabaseResponse = {
@@ -70,7 +70,7 @@ describe('Middleware', () => {
     })
 
     const request = createRequest('/login')
-    await middleware(request)
+    await proxy(request)
 
     expect(NextResponse.redirect).toHaveBeenCalled()
     const redirectCall = vi.mocked(NextResponse.redirect).mock.calls[0]
@@ -78,7 +78,7 @@ describe('Middleware', () => {
   })
 
   it('allows authenticated users to access /dashboard', async () => {
-    const { middleware } = await import('@/middleware')
+    const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
     const supabaseResponse = {
@@ -91,14 +91,14 @@ describe('Middleware', () => {
     })
 
     const request = createRequest('/dashboard')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(NextResponse.redirect).not.toHaveBeenCalled()
     expect(response).toBe(supabaseResponse)
   })
 
   it('allows unauthenticated users to access /login', async () => {
-    const { middleware } = await import('@/middleware')
+    const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
     const supabaseResponse = {
@@ -108,14 +108,14 @@ describe('Middleware', () => {
     mockUpdateSession.mockResolvedValue({ supabaseResponse, user: null })
 
     const request = createRequest('/login')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(NextResponse.redirect).not.toHaveBeenCalled()
     expect(response).toBe(supabaseResponse)
   })
 
   it('passes through non-protected routes', async () => {
-    const { middleware } = await import('@/middleware')
+    const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
     const supabaseResponse = {
@@ -125,7 +125,7 @@ describe('Middleware', () => {
     mockUpdateSession.mockResolvedValue({ supabaseResponse, user: null })
 
     const request = createRequest('/pricing')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(NextResponse.redirect).not.toHaveBeenCalled()
     expect(response).toBe(supabaseResponse)
