@@ -1,13 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getLatestAssessment, getFindings } from '@/lib/supabase/queries'
+import { getBusinessProfile, getLatestAssessment, getFindings } from '@/lib/supabase/queries'
 import { ScoreCard } from '@/components/dashboard/score-card'
 import { FindingsSummary } from '@/components/dashboard/findings-summary'
 import { RecentFindings } from '@/components/dashboard/recent-findings'
-import { AssessmentStatus } from '@/components/dashboard/assessment-status'
+import { AssessmentPolling } from '@/components/dashboard/assessment-polling'
 import { LegalDisclaimer } from '@/components/dashboard/legal-disclaimer'
-import type { Assessment, Finding } from '@/lib/types/database'
+import { RunAssessmentButton } from '@/components/dashboard/run-assessment-button'
+import type { Assessment, Finding, BusinessProfile } from '@/lib/types/database'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -17,6 +18,12 @@ export default async function DashboardPage() {
 
   if (!user) {
     redirect('/login')
+  }
+
+  // Check for business profile — redirect to onboarding if missing
+  const { data: profile } = await getBusinessProfile(supabase, user.id)
+  if (!profile) {
+    redirect('/dashboard/onboarding')
   }
 
   // Fetch latest assessment
@@ -38,11 +45,13 @@ export default async function DashboardPage() {
     return (
       <div className="flex flex-col gap-6 p-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <AssessmentStatus status={typedAssessment.status} />
+        <AssessmentPolling status={typedAssessment.status as 'pending' | 'processing'} />
         <LegalDisclaimer />
       </div>
     )
   }
+
+  const typedProfile = profile as BusinessProfile
 
   // No assessment yet
   if (!typedAssessment) {
@@ -51,9 +60,10 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <div className="rounded-lg border bg-card p-8 text-center">
           <h2 className="text-lg font-semibold">No Assessment Yet</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your compliance assessment will appear here once it has been run.
+          <p className="mt-2 mb-4 text-sm text-muted-foreground">
+            Run your first GDPR compliance assessment to see your score and findings.
           </p>
+          <RunAssessmentButton profileId={typedProfile.id} />
         </div>
         <LegalDisclaimer />
       </div>

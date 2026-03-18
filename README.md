@@ -57,8 +57,8 @@ pnpm dev
 
 | Variable | Description |
 |----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI API key for Gemini |
 | `STRIPE_SECRET_KEY` | Stripe secret key |

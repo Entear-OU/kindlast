@@ -121,6 +121,29 @@ describe('onboarding actions', () => {
         data: { user: mockUser },
       })
 
+      // Mock the profile query chain
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { id: 'profile-1' },
+              error: null,
+            }),
+          }),
+        }),
+        insert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { id: 'assessment-1' },
+              error: null,
+            }),
+          }),
+        }),
+      })
+
+      // Mock fetch for background assessment trigger
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true })
+
       const { redirect } = await import('next/navigation')
       const { completeOnboarding } = await import(
         '@/app/(dashboard)/dashboard/onboarding/actions'

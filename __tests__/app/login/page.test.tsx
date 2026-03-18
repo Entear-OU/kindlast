@@ -5,7 +5,6 @@ import { render, screen } from '@testing-library/react'
 vi.mock('@/lib/auth/actions', () => ({
   signIn: vi.fn(),
   signUp: vi.fn(),
-  signInWithGoogle: vi.fn(),
 }))
 
 describe('Login Page', () => {
@@ -23,13 +22,6 @@ describe('Login Page', () => {
 
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
-  })
-
-  it('has Google sign-in button', async () => {
-    const { default: LoginPage } = await import('@/app/(public)/login/page')
-    render(<LoginPage />)
-
-    expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument()
   })
 
   it('has submit button', async () => {

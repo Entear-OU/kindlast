@@ -17,13 +17,20 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
-  const [{ data: profile }, { data: subscription }] = await Promise.all([
+  const [{ data: profile }] = await Promise.all([
     getBusinessProfile(supabase, user.id),
     getSubscription(supabase, user.id),
   ])
 
+  // If no profile, render children without sidebar (for onboarding)
   if (!profile) {
-    redirect('/dashboard/onboarding')
+    return (
+      <div className="min-h-screen">
+        <main className="mx-auto max-w-3xl py-8 px-4">
+          {children}
+        </main>
+      </div>
+    )
   }
 
   return (

@@ -48,7 +48,7 @@ describe('Dashboard Layout', () => {
     expect(mockRedirect).toHaveBeenCalledWith('/login')
   })
 
-  it('redirects to /dashboard/onboarding when no business profile exists', async () => {
+  it('renders children without sidebar when no business profile exists', async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'user-123' } },
       error: null,
@@ -59,11 +59,11 @@ describe('Dashboard Layout', () => {
       error: null,
     })
 
-    await expect(
-      DashboardLayout({ children: <div>child</div> })
-    ).rejects.toThrow('NEXT_REDIRECT: /dashboard/onboarding')
+    const result = await DashboardLayout({ children: <div>child</div> })
 
-    expect(mockRedirect).toHaveBeenCalledWith('/dashboard/onboarding')
+    // Should render without redirecting (onboarding page lives under this layout)
+    expect(result).toBeTruthy()
+    expect(mockRedirect).not.toHaveBeenCalledWith('/dashboard/onboarding')
   })
 
   it('calls getBusinessProfile and getSubscription with correct args', async () => {

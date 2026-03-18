@@ -28,10 +28,12 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 // Mock queries
+const mockGetBusinessProfile = vi.fn()
 const mockGetLatestAssessment = vi.fn()
 const mockGetFindings = vi.fn()
 
 vi.mock('@/lib/supabase/queries', () => ({
+  getBusinessProfile: (...args: unknown[]) => mockGetBusinessProfile(...args),
   getLatestAssessment: (...args: unknown[]) => mockGetLatestAssessment(...args),
   getFindings: (...args: unknown[]) => mockGetFindings(...args),
 }))
@@ -51,9 +53,15 @@ vi.mock('@/components/dashboard/recent-findings', () => ({
   RecentFindings: () => <div data-testid="recent-findings">Recent Findings</div>,
 }))
 
-vi.mock('@/components/dashboard/assessment-status', () => ({
-  AssessmentStatus: ({ status }: { status: string }) => (
+vi.mock('@/components/dashboard/assessment-polling', () => ({
+  AssessmentPolling: ({ status }: { status: string }) => (
     <div data-testid="assessment-status">Status: {status}</div>
+  ),
+}))
+
+vi.mock('@/components/dashboard/run-assessment-button', () => ({
+  RunAssessmentButton: ({ profileId }: { profileId: string }) => (
+    <button data-testid="run-assessment">Run Assessment ({profileId})</button>
   ),
 }))
 
@@ -66,6 +74,11 @@ import DashboardPage from '@/app/(dashboard)/dashboard/page'
 describe('Dashboard Page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default: user has a profile
+    mockGetBusinessProfile.mockResolvedValue({
+      data: { id: 'profile-1', company_name: 'Test Co' },
+      error: null,
+    })
   })
 
   it('redirects to /login when user is not authenticated', async () => {
