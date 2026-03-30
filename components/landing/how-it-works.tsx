@@ -26,17 +26,17 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="relative overflow-hidden bg-foreground py-24 sm:py-32">
+    <section id="how-it-works" className="relative overflow-hidden py-24 sm:py-32" style={{ backgroundColor: '#0D1B2A' }}>
 
       {/* Grain */}
-      <div className="noise pointer-events-none absolute inset-0 opacity-[0.04]" aria-hidden="true" />
+      <div className="noise pointer-events-none absolute inset-0 opacity-[0.045]" aria-hidden="true" />
 
-      {/* Subtle glow */}
+      {/* Teal glow at bottom */}
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden="true"
         style={{
-          background: 'radial-gradient(ellipse 60% 50% at 50% 100%, oklch(0.655 0.130 143 / 0.08) 0%, transparent 65%)',
+          background: 'radial-gradient(ellipse 55% 40% at 50% 110%, rgba(0,201,167,0.1) 0%, transparent 65%)',
         }}
       />
 
@@ -44,10 +44,10 @@ export function HowItWorks() {
 
         {/* Header */}
         <div className="mb-16 text-center">
-          <p className="mb-4 text-[13px] font-bold uppercase tracking-[0.18em] text-primary/70">
+          <p className="mb-4 text-[13px] font-bold uppercase tracking-[0.18em]" style={{ color: '#00C9A7', opacity: 0.8 }}>
             The process
           </p>
-          <h2 className="text-[3rem] font-black tracking-[-0.035em] leading-[1.0] text-white sm:text-[3.75rem] text-balance">
+          <h2 className="text-[3rem] font-black tracking-[-0.035em] leading-none text-white sm:text-[3.75rem] text-balance">
             From zero to action plan
             <br />
             in under 10 minutes
@@ -62,20 +62,20 @@ export function HowItWorks() {
           {steps.map((step, i) => (
             <div
               key={step.number}
-              className="group relative flex flex-col rounded-[1.5rem] border border-white/[0.07] bg-white/[0.04] p-8 transition-all duration-200 hover:bg-white/[0.07] hover:border-white/[0.12]"
+              className="group relative flex flex-col rounded-[1.5rem] p-8 transition-all duration-200 border border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.07] hover:border-white/[0.11]"
             >
               {i < steps.length - 1 && (
-                <span className="hidden md:block absolute -right-[9px] top-[4.5rem] h-px w-4 bg-white/10 z-10" />
+                <span className="hidden md:block absolute -right-[9px] top-[4.5rem] h-px w-4 z-10" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }} />
               )}
 
               {/* Ghost number */}
-              <span className="mb-4 block text-[4rem] font-black tracking-[-0.04em] leading-none text-white/[0.07] select-none">
+              <span className="mb-4 block text-[4rem] font-black tracking-[-0.04em] leading-none select-none" style={{ color: 'rgba(255,255,255,0.06)' }}>
                 {step.number}
               </span>
 
               {/* Icon */}
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/12 border border-primary/20">
-                <step.icon className="h-6 w-6 text-primary" strokeWidth={2} />
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: 'rgba(0,201,167,0.12)', border: '1px solid rgba(0,201,167,0.2)' }}>
+                <step.icon className="h-6 w-6" style={{ color: '#00C9A7' }} strokeWidth={2} />
               </div>
 
               <h3 className="text-[1.1875rem] font-extrabold tracking-[-0.02em] text-white">

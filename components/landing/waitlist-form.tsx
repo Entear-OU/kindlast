@@ -1,91 +1,43 @@
-'use client'
-
-import { useState } from 'react'
-import { ArrowRight, CheckCircle2, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { ArrowRight } from 'lucide-react'
 
 interface WaitlistFormProps {
   className?: string
   size?: 'default' | 'large'
-  placeholder?: string
   variant?: 'default' | 'inverted'
+  label?: string
+}
+
+const TALLY_ATTRS = {
+  'data-tally-open': 'zxZaaM',
+  'data-tally-align-left': '1',
+  'data-tally-overlay': '1',
+  'data-tally-emoji-text': '👋',
+  'data-tally-emoji-animation': 'wave',
+  'data-tally-auto-close': '0',
+  'data-tally-form-events-forwarding': '1',
 }
 
 export function WaitlistForm({
   className = '',
   size = 'default',
-  placeholder = 'Enter your work email',
   variant = 'default',
+  label = 'Join the waitlist',
 }: WaitlistFormProps) {
-  const [email, setEmail] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
+  const py = size === 'large' ? 'py-[1.1rem]' : 'py-3.5'
+  const px = size === 'large' ? 'px-10' : 'px-8'
+  const textSize = size === 'large' ? 'text-[17px]' : 'text-[15px]'
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!email) return
-    setLoading(true)
-
-    // TODO: wire up actual backend (e.g. POST /api/waitlist)
-    await new Promise((r) => setTimeout(r, 700))
-
-    setLoading(false)
-    setDone(true)
-    toast.success("You're on the list!", {
-      description: "We'll notify you as soon as early access opens.",
-    })
-    setEmail('')
-  }
-
-  if (done) {
-    return (
-      <div className={`flex items-center gap-2.5 ${className}`}>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-full ${variant === 'inverted' ? 'bg-white/20' : 'bg-primary/10'}`}>
-          <CheckCircle2
-            className={`h-4 w-4 ${variant === 'inverted' ? 'text-white' : 'text-primary'}`}
-            strokeWidth={2.5}
-          />
-        </span>
-        <span className={`text-[15px] font-semibold tracking-[-0.01em] ${variant === 'inverted' ? 'text-white' : 'text-foreground'}`}>
-          You&apos;re on the list — we&apos;ll be in touch.
-        </span>
-      </div>
-    )
-  }
-
-  const py = size === 'large' ? 'py-[1.05rem]' : 'py-3.5'
-  const textSize = size === 'large' ? 'text-[16px]' : 'text-[15px]'
-
-  const inputClasses =
+  const btnCls =
     variant === 'inverted'
-      ? `flex-1 min-w-0 rounded-full border border-white/25 bg-white/15 backdrop-blur-sm ${py} px-5 ${textSize} font-medium tracking-[-0.01em] text-white placeholder:text-white/45 outline-none focus:border-white/50 focus:bg-white/20 focus:ring-2 focus:ring-white/20 transition-all duration-150`
-      : `flex-1 min-w-0 rounded-full border border-black/[0.1] bg-white ${py} px-5 ${textSize} font-medium tracking-[-0.01em] text-foreground placeholder:text-foreground/35 outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/12 transition-all duration-150`
-
-  const btnClasses =
-    variant === 'inverted'
-      ? `inline-flex items-center justify-center gap-2 rounded-full bg-white ${py} px-7 ${textSize} font-bold tracking-[-0.01em] text-primary transition-all duration-150 hover:bg-white/90 active:scale-[0.97] disabled:opacity-70 whitespace-nowrap`
-      : `inline-flex items-center justify-center gap-2 rounded-full bg-primary ${py} px-7 ${textSize} font-bold tracking-[-0.01em] text-white shadow-[0_4px_20px_-4px_rgba(80,168,90,0.45)] transition-all duration-150 hover:bg-primary/90 active:scale-[0.97] disabled:opacity-70 whitespace-nowrap`
+      ? `inline-flex items-center gap-2.5 rounded-full bg-[#00C9A7] ${py} ${px} ${textSize} font-bold tracking-[-0.01em] text-[#0D1B2A] transition-all duration-150 hover:bg-[#00b898] active:scale-[0.97] cursor-pointer`
+      : `inline-flex items-center gap-2.5 rounded-full bg-[#0D1B2A] ${py} ${px} ${textSize} font-bold tracking-[-0.01em] text-white shadow-[0_4px_24px_-4px_rgba(13,27,42,0.35)] transition-all duration-150 hover:bg-[#162537] active:scale-[0.97] cursor-pointer`
 
   return (
-    <form onSubmit={handleSubmit} className={`flex flex-col sm:flex-row gap-2.5 ${className}`}>
-      <input
-        type="email"
-        required
-        placeholder={placeholder}
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className={inputClasses}
-      />
-      <button type="submit" disabled={loading} className={btnClasses}>
-        {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <>
-            Join the waitlist
-            <ArrowRight className="h-4 w-4" />
-          </>
-        )}
+    <div className={className}>
+      <button type="button" className={btnCls} {...TALLY_ATTRS}>
+        {label}
+        <ArrowRight className={size === 'large' ? 'h-5 w-5' : 'h-4 w-4'} />
       </button>
-    </form>
+    </div>
   )
 }

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kindlast Logo</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: #F5F4F0;
+    color: #0D1B2A;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+  }
+  .sheet {
+    background: white;
+    border-radius: 16px;
+    padding: 48px;
+    width: 100%;
+    max-width: 640px;
+    box-shadow: 0 2px 24px rgba(13,27,42,0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .brand-name {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #7a8fa0;
+    margin-bottom: 36px;
+  }
+  .section-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #9aafbe;
+    margin-bottom: 14px;
+  }
+  .logo-block {
+    border-radius: 12px;
+    padding: 36px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+  .logo-block.light { background: #F5F4F0; }
+  .logo-block.dark  { background: #0D1B2A; }
+  .divider {
+    border: none;
+    border-top: 1px solid #eceae4;
+    margin: 32px 0;
+  }
+  .icon-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .icon-card {
+    border-radius: 10px;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 110px;
+  }
+  .icon-label {
+    font-size: 11px;
+    color: #9aafbe;
+    letter-spacing: .04em;
+  }
+  .color-row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .swatch-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+  .swatch-name { font-size: 12px; font-weight: 500; color: #0D1B2A; }
+  .swatch-hex  { font-size: 11px; color: #7a8fa0; font-family: 'Courier New', monospace; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="brand-name">Kindlast · Brand Mark</div>
+
+  <div class="section-label">Primary — on light</div>
+  <div class="logo-block light">
+    <svg width="248" height="56" viewBox="0 0 248 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="56" height="56" rx="11" fill="#0D1B2A"/>
+      <rect x="12" y="8" width="9" height="40" rx="2" fill="white"/>
+      <line x1="21" y1="28" x2="44" y2="9" stroke="white" stroke-width="9" stroke-linecap="round"/>
+      <line x1="21" y1="28" x2="44" y2="47" stroke="white" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="21" cy="28" r="5.5" fill="#00C9A7"/>
+      <text x="72" y="37"
+        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+        font-size="27" font-weight="500" fill="#0D1B2A" letter-spacing="-0.8">kindlast</text>
+    </svg>
+  </div>
+
+  <div class="section-label" style="margin-top:28px;">Primary — on dark</div>
+  <div class="logo-block dark">
+    <svg width="248" height="56" viewBox="0 0 248 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="56" height="56" rx="11" fill="#162537"/>
+      <rect x="12" y="8" width="9" height="40" rx="2" fill="white"/>
+      <line x1="21" y1="28" x2="44" y2="9" stroke="white" stroke-width="9" stroke-linecap="round"/>
+      <line x1="21" y1="28" x2="44" y2="47" stroke="white" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="21" cy="28" r="5.5" fill="#00C9A7"/>
+      <text x="72" y="37"
+        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+        font-size="27" font-weight="400" fill="white" letter-spacing="-0.8">kindlast</text>
+    </svg>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section-label">Icon mark</div>
+  <div class="icon-row">
+    <div class="icon-card" style="background:#F5F4F0;">
+      <svg width="48" height="48" viewBox="0 0 56 56" fill="none">
+        <rect width="56" height="56" rx="11" fill="#0D1B2A"/>
+        <rect x="12" y="8" width="9" height="40" rx="2" fill="white"/>
+        <line x1="21" y1="28" x2="44" y2="9" stroke="white" stroke-width="9" stroke-linecap="round"/>
+        <line x1="21" y1="28" x2="44" y2="47" stroke="white" stroke-width="9" stroke-linecap="round"/>
+        <circle cx="21" cy="28" r="5.5" fill="#00C9A7"/>
+      </svg>
+      <span class="icon-label">On light</span>
+    </div>
+    <div class="icon-card" style="background:#0D1B2A;">
+      <svg width="48" height="48" viewBox="0 0 56 56" fill="none">
+        <rect width="56" height="56" rx="11" fill="#162537"/>
+        <rect x="12" y="8" width="9" height="40" rx="2" fill="white"/>
+        <line x1="21" y1="28" x2="44" y2="9" stroke="white" stroke-width="9" stroke-linecap="round"/>
+        <line x1="21" y1="28" x2="44" y2="47" stroke="white" stroke-width="9" stroke-linecap="round"/>
+        <circle cx="21" cy="28" r="5.5" fill="#00C9A7"/>
+      </svg>
+      <span class="icon-label" style="color:#4a6a85;">On dark</span>
+    </div>
+    <div class="icon-card" style="background:#E6FAF7;">
+      <svg width="48" height="48" viewBox="0 0 56 56" fill="none">
+        <rect width="56" height="56" rx="11" fill="#00C9A7"/>
+        <rect x="12" y="8" width="9" height="40" rx="2" fill="#0D1B2A"/>
+        <line x1="21" y1="28" x2="44" y2="9" stroke="#0D1B2A" stroke-width="9" stroke-linecap="round"/>
+        <line x1="21" y1="28" x2="44" y2="47" stroke="#0D1B2A" stroke-width="9" stroke-linecap="round"/>
+        <circle cx="21" cy="28" r="5.5" fill="white"/>
+      </svg>
+      <span class="icon-label">Teal variant</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section-label">Colour palette</div>
+  <div class="color-row">
+    <div class="swatch">
+      <div class="swatch-dot" style="background:#0D1B2A;"></div>
+      <div><div class="swatch-name">Navy</div><div class="swatch-hex">#0D1B2A</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-dot" style="background:#00C9A7;"></div>
+      <div><div class="swatch-name">Teal</div><div class="swatch-hex">#00C9A7</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-dot" style="background:#FFFFFF; border-color: #d0cfc8;"></div>
+      <div><div class="swatch-name">White</div><div class="swatch-hex">#FFFFFF</div></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

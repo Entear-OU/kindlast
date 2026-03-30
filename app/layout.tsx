@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { Montserrat, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import Script from "next/script";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -42,6 +43,7 @@ export default function RootLayout({
         {children}
         <Toaster />
         <Analytics />
+        <Script src="https://tally.so/widgets/embed.js" strategy="lazyOnload" />
       </body>
     </html>
   );

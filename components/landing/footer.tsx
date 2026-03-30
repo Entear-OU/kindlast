@@ -1,8 +1,20 @@
 import Link from 'next/link'
 
+function KindlastIcon({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="56" height="56" rx="11" fill="#162537" />
+      <rect x="12" y="8" width="9" height="40" rx="2" fill="white" />
+      <line x1="21" y1="28" x2="44" y2="9" stroke="white" strokeWidth="9" strokeLinecap="round" />
+      <line x1="21" y1="28" x2="44" y2="47" stroke="white" strokeWidth="9" strokeLinecap="round" />
+      <circle cx="21" cy="28" r="5.5" fill="#00C9A7" />
+    </svg>
+  )
+}
+
 export function Footer() {
   return (
-    <footer className="bg-foreground">
+    <footer style={{ backgroundColor: '#0D1B2A' }}>
       <div className="mx-auto max-w-5xl px-6 py-16 lg:px-8">
 
         {/* Top */}
@@ -11,19 +23,9 @@ export function Footer() {
           {/* Brand */}
           <div className="max-w-[260px]">
             <div className="flex items-center gap-2.5 mb-4">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <svg width="15" height="15" viewBox="0 0 14 14" fill="none">
-                  <path
-                    d="M2 11 L7 3 L12 11"
-                    stroke="white"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
+              <KindlastIcon size={32} />
               <span className="text-[18px] font-extrabold tracking-[-0.03em] text-white">
-                Kindlast
+                kindlast
               </span>
             </div>
             <p className="text-[1rem] font-medium leading-[1.65] tracking-[-0.005em] text-white/38">
@@ -38,16 +40,10 @@ export function Footer() {
                 Product
               </p>
               <nav className="flex flex-col gap-3.5">
-                <Link
-                  href="#features"
-                  className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150"
-                >
+                <Link href="#features" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
                   Features
                 </Link>
-                <Link
-                  href="#how-it-works"
-                  className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150"
-                >
+                <Link href="#how-it-works" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
                   How it works
                 </Link>
               </nav>
@@ -58,16 +54,10 @@ export function Footer() {
                 Early access
               </p>
               <nav className="flex flex-col gap-3.5">
-                <Link
-                  href="#waitlist"
-                  className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150"
-                >
+                <Link href="#waitlist" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
                   Join waitlist
                 </Link>
-                <Link
-                  href="/login"
-                  className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150"
-                >
+                <Link href="/login" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
                   Sign in
                 </Link>
               </nav>
@@ -77,7 +67,7 @@ export function Footer() {
         </div>
 
         {/* Bottom */}
-        <div className="mt-14 flex flex-col gap-3 border-t border-white/[0.07] pt-8 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 flex flex-col gap-3 pt-8 sm:flex-row sm:items-center sm:justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
           <p className="text-[14px] font-medium tracking-[-0.005em] text-white/22">
             &copy; {new Date().getFullYear()} Kindlast. All rights reserved.
           </p>
