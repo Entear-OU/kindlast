@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 interface WaitlistFormProps {
@@ -5,16 +6,6 @@ interface WaitlistFormProps {
   size?: 'default' | 'large'
   variant?: 'default' | 'inverted'
   label?: string
-}
-
-const TALLY_ATTRS = {
-  'data-tally-open': 'zxZaaM',
-  'data-tally-align-left': '1',
-  'data-tally-overlay': '1',
-  'data-tally-emoji-text': '👋',
-  'data-tally-emoji-animation': 'wave',
-  'data-tally-auto-close': '0',
-  'data-tally-form-events-forwarding': '1',
 }
 
 export function WaitlistForm({
@@ -27,17 +18,17 @@ export function WaitlistForm({
   const px = size === 'large' ? 'px-10' : 'px-8'
   const textSize = size === 'large' ? 'text-[17px]' : 'text-[15px]'
 
-  const btnCls =
+  const cls =
     variant === 'inverted'
-      ? `inline-flex items-center gap-2.5 rounded-full bg-[#00C9A7] ${py} ${px} ${textSize} font-bold tracking-[-0.01em] text-[#0D1B2A] transition-all duration-150 hover:bg-[#00b898] active:scale-[0.97] cursor-pointer`
-      : `inline-flex items-center gap-2.5 rounded-full bg-[#0D1B2A] ${py} ${px} ${textSize} font-bold tracking-[-0.01em] text-white shadow-[0_4px_24px_-4px_rgba(13,27,42,0.35)] transition-all duration-150 hover:bg-[#162537] active:scale-[0.97] cursor-pointer`
+      ? `inline-flex items-center gap-2.5 rounded-full bg-[#00C9A7] ${py} ${px} ${textSize} font-bold tracking-[-0.01em] text-[#0D1B2A] transition-all duration-150 hover:bg-[#00b898] active:scale-[0.97]`
+      : `inline-flex items-center gap-2.5 rounded-full bg-[#0D1B2A] ${py} ${px} ${textSize} font-bold tracking-[-0.01em] text-white shadow-[0_4px_24px_-4px_rgba(13,27,42,0.35)] transition-all duration-150 hover:bg-[#162537] active:scale-[0.97]`
 
   return (
     <div className={className}>
-      <button type="button" className={btnCls} {...TALLY_ATTRS}>
+      <Link href="https://tally.so/r/zxZaaM" className={cls}>
         {label}
         <ArrowRight className={size === 'large' ? 'h-5 w-5' : 'h-4 w-4'} />
-      </button>
+      </Link>
     </div>
   )
 }

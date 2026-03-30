@@ -50,7 +50,7 @@ export default function PublicLayout({
 
           {/* CTA */}
           <Link
-            href="#waitlist"
+            href="https://tally.so/r/zxZaaM"
             className="rounded-full bg-[#0D1B2A] px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-[#162537] active:scale-[0.97]"
           >
             Join waitlist
