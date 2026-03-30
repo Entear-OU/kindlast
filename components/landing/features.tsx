@@ -84,14 +84,14 @@ function GdprMiniVisual() {
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-3">
           <span
-            className={`h-1.5 w-1.5 shrink-0 rounded-full ${item.ok ? 'bg-primary' : 'bg-red-400'}`}
+            className={`h-2 w-2 shrink-0 rounded-full ${item.ok ? 'bg-primary' : 'bg-red-400'}`}
           />
           <div className="flex-1">
             <div className="mb-1.5 flex justify-between">
-              <span className="text-[12.5px] font-semibold tracking-[-0.005em] text-foreground/50">
+              <span className="text-[14px] font-semibold tracking-[-0.005em] text-foreground/50">
                 {item.label}
               </span>
-              <span className="text-[12.5px] font-bold tabular-nums text-foreground/40">
+              <span className="text-[14px] font-bold tabular-nums text-foreground/40">
                 {item.pct}%
               </span>
             </div>
@@ -136,14 +136,14 @@ function AiActMiniVisual() {
           />
           <span
             className={[
-              'text-[12px] font-bold tracking-[-0.005em]',
+              'text-[13px] font-bold tracking-[-0.005em]',
               tier.active ? 'text-amber-700' : 'text-foreground/40',
             ].join(' ')}
           >
             {tier.label}
           </span>
           {tier.active && (
-            <span className="ml-auto text-[11px] font-bold text-amber-600 uppercase tracking-[0.06em]">
+            <span className="ml-auto text-[12px] font-bold text-amber-600 uppercase tracking-[0.06em]">
               You
             </span>
           )}
@@ -160,15 +160,15 @@ export function Features() {
 
         {/* Header */}
         <div className="mb-16 text-center">
-          <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-primary">
+          <p className="mb-4 text-[13px] font-bold uppercase tracking-[0.18em] text-primary">
             Platform capabilities
           </p>
-          <h2 className="text-[2.5rem] font-black tracking-[-0.035em] leading-[1.0] text-foreground sm:text-[3.25rem] text-balance">
+          <h2 className="text-[3rem] font-black tracking-[-0.035em] leading-[1.0] text-foreground sm:text-[3.75rem] text-balance">
             Everything you need
             <br />
             for EU compliance
           </h2>
-          <p className="mx-auto mt-5 max-w-[380px] text-[0.9375rem] font-medium leading-[1.72] tracking-[-0.01em] text-foreground/45">
+          <p className="mx-auto mt-6 max-w-[400px] text-[1.0625rem] font-medium leading-[1.72] tracking-[-0.01em] text-foreground/45">
             GDPR &amp; AI Act in a single workflow. No consultants required.
           </p>
         </div>
@@ -185,22 +185,22 @@ export function Features() {
               ].join(' ')}
             >
               {/* Icon */}
-              <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.06] bg-[#F4F4F2] transition-colors duration-200 group-hover:border-primary/20 group-hover:bg-primary/6">
+              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.06] bg-[#F4F4F2] transition-colors duration-200 group-hover:border-primary/20 group-hover:bg-primary/6">
                 <f.icon
                   className="h-5 w-5 text-foreground/50 transition-colors duration-200 group-hover:text-primary/70"
                   strokeWidth={1.75}
                 />
               </div>
 
-              <h3 className="text-[1.0625rem] font-extrabold tracking-[-0.02em] text-foreground">
+              <h3 className="text-[1.1875rem] font-extrabold tracking-[-0.02em] text-foreground">
                 {f.title}
               </h3>
-              <p className="mt-2.5 text-[0.9375rem] font-medium leading-[1.72] tracking-[-0.005em] text-foreground/48">
+              <p className="mt-2.5 text-[1.0625rem] font-medium leading-[1.72] tracking-[-0.005em] text-foreground/48">
                 {f.description}
               </p>
 
               {f.accent && f.detail && (
-                <p className="mt-3 text-[0.875rem] font-medium leading-[1.65] tracking-[-0.005em] text-foreground/30 border-t border-black/[0.05] pt-3">
+                <p className="mt-3 text-[0.9375rem] font-medium leading-[1.65] tracking-[-0.005em] text-foreground/30 border-t border-black/[0.05] pt-3">
                   {f.detail}
                 </p>
               )}

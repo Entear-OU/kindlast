@@ -21,10 +21,10 @@ export default function LandingPage() {
               { value: "Aug '26", label: 'EU AI Act high-risk obligations deadline' },
             ].map((stat) => (
               <div key={stat.value}>
-                <p className="text-[3rem] font-black tracking-[-0.04em] leading-none text-foreground sm:text-[3.75rem]">
+                <p className="text-[3.5rem] font-black tracking-[-0.04em] leading-none text-foreground sm:text-[4.5rem]">
                   {stat.value}
                 </p>
-                <p className="mt-3 text-[0.875rem] font-medium leading-[1.6] tracking-[-0.005em] text-foreground/40 max-w-[180px]">
+                <p className="mt-3 text-[1rem] font-medium leading-[1.6] tracking-[-0.005em] text-foreground/40 max-w-[200px]">
                   {stat.label}
                 </p>
               </div>
@@ -34,22 +34,22 @@ export default function LandingPage() {
           {/* Split — heading + body */}
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             <div>
-              <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-foreground/28">
+              <p className="mb-4 text-[13px] font-bold uppercase tracking-[0.18em] text-foreground/28">
                 The reality
               </p>
-              <h2 className="text-[2.5rem] font-black tracking-[-0.035em] leading-[1.0] text-foreground sm:text-[3.25rem] text-balance">
+              <h2 className="text-[3rem] font-black tracking-[-0.035em] leading-[1.0] text-foreground sm:text-[3.75rem] text-balance">
                 Why SMEs struggle
                 <br />
                 with compliance
               </h2>
             </div>
             <div className="lg:pt-2 space-y-5">
-              <p className="text-[1rem] font-medium leading-[1.82] tracking-[-0.01em] text-foreground/50">
+              <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em] text-foreground/50">
                 Most SMEs lack the legal budget, in-house expertise, or time to figure out
                 where they stand. GDPR has been in force since 2018 — and fines are
                 accelerating. The EU AI Act now adds a second wave of obligations.
               </p>
-              <p className="text-[1rem] font-medium leading-[1.82] tracking-[-0.01em] text-foreground/50">
+              <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em] text-foreground/50">
                 Kindlast turns regulatory complexity into a plain-English action plan your
                 team can act on immediately — without hiring a DPO.
               </p>
@@ -84,30 +84,30 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
           <div className="flex flex-col items-center text-center">
 
-            <p className="mb-5 text-[12px] font-bold uppercase tracking-[0.2em] text-white/60">
+            <p className="mb-5 text-[13px] font-bold uppercase tracking-[0.2em] text-white/60">
               Early access
             </p>
 
-            <h2 className="text-[2.5rem] font-black tracking-[-0.035em] leading-[1.0] text-white sm:text-[4rem] text-balance">
+            <h2 className="text-[3rem] font-black tracking-[-0.035em] leading-[1.0] text-white sm:text-[4.5rem] text-balance">
               Be first in line.
               <br />
               Join the waitlist.
             </h2>
 
-            <p className="mx-auto mt-6 max-w-[440px] text-[1rem] font-medium leading-[1.78] tracking-[-0.01em] text-white/65">
+            <p className="mx-auto mt-6 max-w-[460px] text-[1.0625rem] font-medium leading-[1.78] tracking-[-0.01em] text-white/65">
               We&apos;re opening early access to a limited number of EU SMEs. Get
               notified the moment your spot is ready — and lock in founding-member
               pricing.
             </p>
 
             <WaitlistForm
-              className="mt-10 w-full max-w-[500px]"
+              className="mt-10 w-full max-w-[520px]"
               size="large"
               placeholder="Your work email address"
               variant="inverted"
             />
 
-            <p className="mt-5 text-[13px] font-medium text-white/38">
+            <p className="mt-5 text-[14px] font-medium text-white/40">
               No spam, ever. Unsubscribe any time.
             </p>
 
@@ -120,7 +120,7 @@ export default function LandingPage() {
               ].map((item) => (
                 <span
                   key={item}
-                  className="text-[13px] font-semibold tracking-[-0.005em] text-white/55"
+                  className="text-[14px] font-semibold tracking-[-0.005em] text-white/55"
                 >
                   — {item}
                 </span>

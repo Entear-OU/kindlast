@@ -36,7 +36,7 @@ export function HowItWorks() {
         className="pointer-events-none absolute inset-0"
         aria-hidden="true"
         style={{
-          background: 'radial-gradient(ellipse 60% 50% at 50% 100%, oklch(0.683 0.185 147 / 0.08) 0%, transparent 65%)',
+          background: 'radial-gradient(ellipse 60% 50% at 50% 100%, oklch(0.655 0.130 143 / 0.08) 0%, transparent 65%)',
         }}
       />
 
@@ -44,15 +44,15 @@ export function HowItWorks() {
 
         {/* Header */}
         <div className="mb-16 text-center">
-          <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-primary/70">
+          <p className="mb-4 text-[13px] font-bold uppercase tracking-[0.18em] text-primary/70">
             The process
           </p>
-          <h2 className="text-[2.5rem] font-black tracking-[-0.035em] leading-[1.0] text-white sm:text-[3.25rem] text-balance">
+          <h2 className="text-[3rem] font-black tracking-[-0.035em] leading-[1.0] text-white sm:text-[3.75rem] text-balance">
             From zero to action plan
             <br />
             in under 10 minutes
           </h2>
-          <p className="mx-auto mt-5 max-w-[340px] text-[0.9375rem] font-medium leading-[1.72] tracking-[-0.01em] text-white/38">
+          <p className="mx-auto mt-6 max-w-[360px] text-[1.0625rem] font-medium leading-[1.72] tracking-[-0.01em] text-white/40">
             No legal expertise required. Just answer honestly.
           </p>
         </div>
@@ -64,25 +64,24 @@ export function HowItWorks() {
               key={step.number}
               className="group relative flex flex-col rounded-[1.5rem] border border-white/[0.07] bg-white/[0.04] p-8 transition-all duration-200 hover:bg-white/[0.07] hover:border-white/[0.12]"
             >
-              {/* Connector line (between cards on desktop) */}
               {i < steps.length - 1 && (
                 <span className="hidden md:block absolute -right-[9px] top-[4.5rem] h-px w-4 bg-white/10 z-10" />
               )}
 
               {/* Ghost number */}
-              <span className="mb-4 block text-[3.5rem] font-black tracking-[-0.04em] leading-none text-white/[0.07] select-none">
+              <span className="mb-4 block text-[4rem] font-black tracking-[-0.04em] leading-none text-white/[0.07] select-none">
                 {step.number}
               </span>
 
               {/* Icon */}
-              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 border border-primary/20">
-                <step.icon className="h-5 w-5 text-primary" strokeWidth={2} />
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/12 border border-primary/20">
+                <step.icon className="h-6 w-6 text-primary" strokeWidth={2} />
               </div>
 
-              <h3 className="text-[1.0625rem] font-extrabold tracking-[-0.02em] text-white">
+              <h3 className="text-[1.1875rem] font-extrabold tracking-[-0.02em] text-white">
                 {step.title}
               </h3>
-              <p className="mt-3 text-[0.9375rem] font-medium leading-[1.72] tracking-[-0.005em] text-white/40">
+              <p className="mt-3 text-[1.0625rem] font-medium leading-[1.72] tracking-[-0.005em] text-white/42">
                 {step.description}
               </p>
             </div>
