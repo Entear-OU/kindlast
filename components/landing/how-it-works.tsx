@@ -26,52 +26,69 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="bg-[#FAFAF8] py-24 sm:py-32">
-      <div className="mx-auto max-w-6xl px-6 lg:px-8">
+    <section id="how-it-works" className="relative overflow-hidden bg-foreground py-24 sm:py-32">
+
+      {/* Grain */}
+      <div className="noise pointer-events-none absolute inset-0 opacity-[0.04]" aria-hidden="true" />
+
+      {/* Subtle glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background: 'radial-gradient(ellipse 60% 50% at 50% 100%, oklch(0.683 0.185 147 / 0.08) 0%, transparent 65%)',
+        }}
+      />
+
+      <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
 
         {/* Header */}
-        <div className="mb-14 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="mb-3 text-[13px] font-bold uppercase tracking-[0.16em] text-primary">
-              The process
-            </p>
-            <h2 className="text-[2.75rem] font-black tracking-[-0.03em] leading-[1.0] text-foreground sm:text-[3.5rem] text-balance">
-              From zero to action plan
-              <br />
-              in under 10 minutes
-            </h2>
-          </div>
-          <p className="max-w-[300px] text-[1.0625rem] font-medium leading-[1.65] tracking-[-0.01em] text-foreground/50 sm:text-right">
+        <div className="mb-16 text-center">
+          <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-primary/70">
+            The process
+          </p>
+          <h2 className="text-[2.5rem] font-black tracking-[-0.035em] leading-[1.0] text-white sm:text-[3.25rem] text-balance">
+            From zero to action plan
+            <br />
+            in under 10 minutes
+          </h2>
+          <p className="mx-auto mt-5 max-w-[340px] text-[0.9375rem] font-medium leading-[1.72] tracking-[-0.01em] text-white/38">
             No legal expertise required. Just answer honestly.
           </p>
         </div>
 
-        {/* Steps — 3-col cards */}
+        {/* Steps */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {steps.map((step) => (
+          {steps.map((step, i) => (
             <div
               key={step.number}
-              className="group relative flex flex-col rounded-[1.6rem] border border-black/[0.06] bg-white p-8 transition-all duration-200 hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.08)] hover:-translate-y-0.5"
+              className="group relative flex flex-col rounded-[1.5rem] border border-white/[0.07] bg-white/[0.04] p-8 transition-all duration-200 hover:bg-white/[0.07] hover:border-white/[0.12]"
             >
-              {/* Step number — large ghost */}
-              <span className="mb-4 block text-[3.5rem] font-black tracking-[-0.04em] leading-none text-primary/10 select-none">
+              {/* Connector line (between cards on desktop) */}
+              {i < steps.length - 1 && (
+                <span className="hidden md:block absolute -right-[9px] top-[4.5rem] h-px w-4 bg-white/10 z-10" />
+              )}
+
+              {/* Ghost number */}
+              <span className="mb-4 block text-[3.5rem] font-black tracking-[-0.04em] leading-none text-white/[0.07] select-none">
                 {step.number}
               </span>
 
               {/* Icon */}
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/8 border border-primary/15">
-                <step.icon className="h-6 w-6 text-primary" strokeWidth={2} />
+              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/12 border border-primary/20">
+                <step.icon className="h-5 w-5 text-primary" strokeWidth={2} />
               </div>
 
-              <h3 className="text-[1.125rem] font-extrabold tracking-[-0.02em] text-foreground">
+              <h3 className="text-[1.0625rem] font-extrabold tracking-[-0.02em] text-white">
                 {step.title}
               </h3>
-              <p className="mt-3 text-[1rem] font-medium leading-[1.65] tracking-[-0.005em] text-foreground/50">
+              <p className="mt-3 text-[0.9375rem] font-medium leading-[1.72] tracking-[-0.005em] text-white/40">
                 {step.description}
               </p>
             </div>
           ))}
         </div>
+
       </div>
     </section>
   )

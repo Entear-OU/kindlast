@@ -2,30 +2,29 @@ import { Hero } from '@/components/landing/hero'
 import { Features } from '@/components/landing/features'
 import { HowItWorks } from '@/components/landing/how-it-works'
 import { Footer } from '@/components/landing/footer'
-import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { WaitlistForm } from '@/components/landing/waitlist-form'
 
 export default function LandingPage() {
   return (
     <>
       <Hero />
 
-      {/* ── Problem — dark stats section ── */}
-      <section className="bg-foreground py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-6 lg:px-8">
+      {/* ── Problem — stats section ── */}
+      <section className="relative overflow-hidden bg-[#FAFAF8] py-24 sm:py-32">
+        <div className="mx-auto max-w-5xl px-6 lg:px-8">
 
           {/* Stats row */}
-          <div className="mb-16 grid grid-cols-2 gap-8 sm:grid-cols-3 border-b border-white/[0.07] pb-16">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3 border-b border-black/[0.06] pb-16 mb-16">
             {[
               { value: '4%', label: 'Max GDPR fine of global annual turnover' },
               { value: '€20M', label: 'Minimum fine threshold, whichever is higher' },
-              { value: 'Aug \'26', label: 'EU AI Act high-risk obligations deadline' },
+              { value: "Aug '26", label: 'EU AI Act high-risk obligations deadline' },
             ].map((stat) => (
               <div key={stat.value}>
-                <p className="text-[3rem] font-black tracking-[-0.04em] leading-none text-primary sm:text-[3.75rem]">
+                <p className="text-[3rem] font-black tracking-[-0.04em] leading-none text-foreground sm:text-[3.75rem]">
                   {stat.value}
                 </p>
-                <p className="mt-3 text-[0.9375rem] font-medium leading-[1.55] tracking-[-0.005em] text-white/40 max-w-[180px]">
+                <p className="mt-3 text-[0.875rem] font-medium leading-[1.6] tracking-[-0.005em] text-foreground/40 max-w-[180px]">
                   {stat.label}
                 </p>
               </div>
@@ -35,35 +34,28 @@ export default function LandingPage() {
           {/* Split — heading + body */}
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             <div>
-              <p className="mb-3 text-[13px] font-bold uppercase tracking-[0.16em] text-white/30">
+              <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-foreground/28">
                 The reality
               </p>
-              <h2 className="text-[2.75rem] font-black tracking-[-0.03em] leading-[1.0] text-white sm:text-[3.5rem] text-balance">
+              <h2 className="text-[2.5rem] font-black tracking-[-0.035em] leading-[1.0] text-foreground sm:text-[3.25rem] text-balance">
                 Why SMEs struggle
                 <br />
                 with compliance
               </h2>
             </div>
-            <div className="lg:pt-3">
-              <p className="text-[1.125rem] font-medium leading-[1.8] tracking-[-0.01em] text-white/50">
-                Most SMEs lack the legal budget, in-house expertise, or time to
-                figure out where they stand. GDPR has been in force since 2018 —
-                and fines are accelerating. The EU AI Act now adds a second wave
-                of obligations.
+            <div className="lg:pt-2 space-y-5">
+              <p className="text-[1rem] font-medium leading-[1.82] tracking-[-0.01em] text-foreground/50">
+                Most SMEs lack the legal budget, in-house expertise, or time to figure out
+                where they stand. GDPR has been in force since 2018 — and fines are
+                accelerating. The EU AI Act now adds a second wave of obligations.
               </p>
-              <p className="mt-5 text-[1.125rem] font-medium leading-[1.8] tracking-[-0.01em] text-white/50">
-                Kindlast turns regulatory complexity into a plain-English action
-                plan your team can act on immediately — without hiring a DPO.
+              <p className="text-[1rem] font-medium leading-[1.82] tracking-[-0.01em] text-foreground/50">
+                Kindlast turns regulatory complexity into a plain-English action plan your
+                team can act on immediately — without hiring a DPO.
               </p>
-              <Link
-                href="/login"
-                className="mt-9 inline-flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-[15px] font-bold tracking-[-0.01em] text-white shadow-[0_4px_20px_-4px_rgba(49,181,77,0.4)] transition-all duration-150 hover:bg-primary/90 active:scale-[0.97]"
-              >
-                Start your free assessment
-                <ArrowRight className="h-4 w-4" />
-              </Link>
             </div>
           </div>
+
         </div>
       </section>
 
@@ -71,78 +63,70 @@ export default function LandingPage() {
 
       <Features />
 
-      {/* ── Pricing preview ── */}
-      <section className="bg-[#FAFAF8] py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-6 lg:px-8">
-          <div className="overflow-hidden rounded-[2rem] border border-black/[0.06] bg-white">
-            <div className="grid lg:grid-cols-2">
-              {/* Left */}
-              <div className="p-10 sm:p-14">
-                <p className="mb-3 text-[13px] font-bold uppercase tracking-[0.16em] text-primary">
-                  Pricing
-                </p>
-                <h2 className="text-[2.75rem] font-black tracking-[-0.03em] leading-[1.0] text-foreground sm:text-[3.25rem] text-balance">
-                  Simple,
-                  <br />
-                  transparent
-                  <br />
-                  pricing
-                </h2>
-              </div>
+      {/* ── Waitlist CTA ── */}
+      <section
+        id="waitlist"
+        className="relative overflow-hidden py-28 sm:py-36"
+        style={{ background: 'linear-gradient(135deg, oklch(0.655 0.130 143) 0%, oklch(0.60 0.115 148) 100%)' }}
+      >
+        {/* Grain */}
+        <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
 
-              {/* Right */}
-              <div className="flex flex-col justify-center border-t border-black/[0.05] p-10 sm:border-t-0 sm:border-l sm:p-14">
-                <p className="text-[1.125rem] font-medium leading-[1.75] tracking-[-0.01em] text-foreground/55 mb-9">
-                  Start for free with full GDPR gap analysis and your compliance
-                  score. Upgrade when you need full findings, EU AI Act
-                  classification, and audit-ready PDF exports.
-                </p>
-                <div className="flex flex-wrap items-center gap-4">
-                  <Link
-                    href="/pricing"
-                    className="inline-flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-[15px] font-bold tracking-[-0.01em] text-white shadow-[0_4px_20px_-4px_rgba(49,181,77,0.4)] transition-all duration-150 hover:bg-primary/90 active:scale-[0.97]"
-                  >
-                    View pricing
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                  <Link
-                    href="/login"
-                    className="text-[15px] font-semibold tracking-[-0.01em] text-foreground/40 hover:text-foreground transition-colors duration-150"
-                  >
-                    Start free →
-                  </Link>
-                </div>
-              </div>
+        {/* Soft radial highlight */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden="true"
+          style={{
+            background: 'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(255,255,255,0.12) 0%, transparent 65%)',
+          }}
+        />
+
+        <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
+          <div className="flex flex-col items-center text-center">
+
+            <p className="mb-5 text-[12px] font-bold uppercase tracking-[0.2em] text-white/60">
+              Early access
+            </p>
+
+            <h2 className="text-[2.5rem] font-black tracking-[-0.035em] leading-[1.0] text-white sm:text-[4rem] text-balance">
+              Be first in line.
+              <br />
+              Join the waitlist.
+            </h2>
+
+            <p className="mx-auto mt-6 max-w-[440px] text-[1rem] font-medium leading-[1.78] tracking-[-0.01em] text-white/65">
+              We&apos;re opening early access to a limited number of EU SMEs. Get
+              notified the moment your spot is ready — and lock in founding-member
+              pricing.
+            </p>
+
+            <WaitlistForm
+              className="mt-10 w-full max-w-[500px]"
+              size="large"
+              placeholder="Your work email address"
+              variant="inverted"
+            />
+
+            <p className="mt-5 text-[13px] font-medium text-white/38">
+              No spam, ever. Unsubscribe any time.
+            </p>
+
+            {/* Mini trust row */}
+            <div className="mt-12 flex flex-wrap justify-center gap-x-8 gap-y-3">
+              {[
+                'Free to join',
+                'Priority access guaranteed',
+                'Founding-member pricing',
+              ].map((item) => (
+                <span
+                  key={item}
+                  className="text-[13px] font-semibold tracking-[-0.005em] text-white/55"
+                >
+                  — {item}
+                </span>
+              ))}
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ── Final CTA ── */}
-      <section className="bg-primary py-24 sm:py-32">
-        <div className="mx-auto max-w-6xl px-6 text-center lg:px-8">
-          <h2 className="text-[2.75rem] font-black tracking-[-0.035em] leading-[1.0] text-white sm:text-[4rem] text-balance">
-            Get your AI copilot
-            <br />
-            for EU compliance.
-          </h2>
-          <p className="mx-auto mt-7 max-w-[480px] text-[1.125rem] font-medium leading-[1.72] tracking-[-0.01em] text-white/65">
-            Stop navigating GDPR and the EU AI Act alone. Get a clear action
-            plan in under 10 minutes — no legal background required.
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link
-              href="/login"
-              className="rounded-full bg-white px-9 py-4 text-[15px] font-bold tracking-[-0.01em] text-primary shadow-lg transition-all duration-150 hover:bg-white/90 active:scale-[0.97]"
-            >
-              Get started free — it&apos;s free
-            </Link>
-            <Link
-              href="/pricing"
-              className="rounded-full border border-white/25 px-9 py-4 text-[15px] font-bold tracking-[-0.01em] text-white transition-all duration-150 hover:border-white/50 hover:bg-white/10 active:scale-[0.97]"
-            >
-              View pricing
-            </Link>
           </div>
         </div>
       </section>
