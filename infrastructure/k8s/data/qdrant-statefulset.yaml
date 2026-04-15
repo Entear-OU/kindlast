@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant
+  namespace: kindlast-data
+spec:
+  serviceName: qdrant-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:v1.8.0
+        ports:
+        - containerPort: 6333
+          name: http
+        - containerPort: 6335
+          name: p2p
+        env:
+        - name: QDRANT__CLUSTER__ENABLED
+          value: "true"
+        - name: QDRANT__CLUSTER__P2P__PORT
+          value: "6335"
+        - name: QDRANT__SERVICE__API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: qdrant-credentials
+              key: api-key
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 6333
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 6333
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 2
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+  volumeClaimTemplates:
+  - metadata:
+      name: qdrant-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  namespace: kindlast-data
+spec:
+  selector:
+    app: qdrant
+  ports:
+  - port: 6333
+    targetPort: 6333
+    name: http
+  - port: 6335
+    targetPort: 6335
+    name: p2p
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-headless
+  namespace: kindlast-data
+spec:
+  clusterIP: None
+  selector:
+    app: qdrant
+  ports:
+  - port: 6333
+    name: http
+  - port: 6335
+    name: p2p

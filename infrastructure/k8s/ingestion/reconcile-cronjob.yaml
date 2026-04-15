@@ -1,0 +1,153 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingestion-reconcile
+  namespace: kindlast-ingestion
+  labels:
+    app.kubernetes.io/name: ingestion-reconcile
+    app.kubernetes.io/component: ingestion
+    app.kubernetes.io/part-of: kindlast
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    description: "Reconciliation job for failed ingestion attempts"
+    docs: "https://docs.kindlast.com/ingestion/reconcile"
+spec:
+  schedule: "0 6 * * *"
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ingestion-reconcile
+        app.kubernetes.io/component: ingestion
+        app.kubernetes.io/part-of: kindlast
+    spec:
+      activeDeadlineSeconds: 3600
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: ingestion-reconcile
+            app.kubernetes.io/component: ingestion
+            app.kubernetes.io/part-of: kindlast
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "8080"
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: ingestion-sa
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          containers:
+            - name: reconcile
+              image: kindlast/ingestion:latest
+              imagePullPolicy: Always
+              command: ["python", "-m", "src.reconcile"]
+              resources:
+                requests:
+                  memory: "1Gi"
+                  cpu: "250m"
+                limits:
+                  memory: "2Gi"
+                  cpu: "1000m"
+              env:
+                # OpenAI credentials for embeddings
+                - name: OPENAI_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-provider-keys
+                      key: openai-api-key
+                # Cohere credentials for reranking
+                - name: COHERE_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-provider-keys
+                      key: cohere-api-key
+                # Firecrawl credentials for web scraping
+                - name: FIRECRAWL_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-provider-keys
+                      key: firecrawl-api-key
+                # PostgreSQL connection
+                - name: POSTGRES_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: host
+                - name: POSTGRES_PORT
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: port
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: username
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: password
+                - name: POSTGRES_DB
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: database
+                - name: POSTGRES_DSN
+                  value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=require"
+                # Qdrant vector database connection
+                - name: QDRANT_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: qdrant-credentials
+                      key: host
+                - name: QDRANT_PORT
+                  valueFrom:
+                    secretKeyRef:
+                      name: qdrant-credentials
+                      key: port
+                - name: QDRANT_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: qdrant-credentials
+                      key: api-key
+                # Application configuration
+                - name: LOG_LEVEL
+                  value: "INFO"
+                - name: ENVIRONMENT
+                  value: "production"
+                - name: RECONCILE_MODE
+                  value: "true"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: tmp-volume
+                  mountPath: /tmp
+                - name: cache-volume
+                  mountPath: /app/.cache
+          volumes:
+            - name: tmp-volume
+              emptyDir:
+                sizeLimit: 512Mi
+            - name: cache-volume
+              emptyDir:
+                sizeLimit: 1Gi
+          nodeSelector:
+            workload-type: batch
+          tolerations:
+            - key: "batch"
+              operator: "Equal"
+              value: "true"
+              effect: "NoSchedule"
