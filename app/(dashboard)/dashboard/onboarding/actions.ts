@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import type { FullProfileData } from '@/lib/schemas/onboarding'
+import { assessGDPRCompliance } from '@/lib/ai/assess-gdpr'
+import type { BusinessProfile } from '@/lib/types/database'
 
 export async function saveBusinessProfile(data: FullProfileData) {
   const supabase = await createClient()
@@ -46,28 +48,52 @@ export async function completeOnboarding() {
   if (profile) {
     // Auto-trigger first GDPR assessment
     try {
-      const { data: assessment } = await supabase
-        .from('assessments')
-        .insert({
-          user_id: user.id,
-          profile_id: profile.id,
-          type: 'gdpr',
-          status: 'pending',
-        })
+      // Fetch full profile for AI assessment
+      const { data: fullProfile } = await supabase
+        .from('business_profiles')
         .select()
+        .eq('id', profile.id)
         .single()
 
-      if (assessment) {
-        // Trigger assessment processing in the background via API
-        // We don't await this — the dashboard will show the pending status
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-        fetch(`${appUrl}/api/assess`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ profileId: profile.id }),
-        }).catch(() => {
-          // Assessment will be retried via dashboard button if this fails
-        })
+      if (fullProfile) {
+        // Create assessment with processing status
+        const { data: assessment } = await supabase
+          .from('assessments')
+          .insert({
+            user_id: user.id,
+            profile_id: profile.id,
+            type: 'gdpr',
+            status: 'processing',
+          })
+          .select()
+          .single()
+
+        if (assessment) {
+          // Run AI assessment directly
+          const result = await assessGDPRCompliance(fullProfile as BusinessProfile)
+
+          // Update assessment with results
+          await supabase
+            .from('assessments')
+            .update({
+              status: 'complete',
+              overall_score: result.overall_score,
+              risk_level: result.risk_level,
+              result: result as unknown as Record<string, unknown>,
+            })
+            .eq('id', assessment.id)
+
+          // Save findings
+          const findings = result.findings.map((f) => ({
+            assessment_id: assessment.id,
+            user_id: user.id,
+            ...f,
+          }))
+
+          if (findings.length > 0) {
+            await supabase.from('findings').insert(findings)
+          }
+        }
       }
     } catch {
       // Non-blocking — user can trigger manually from dashboard

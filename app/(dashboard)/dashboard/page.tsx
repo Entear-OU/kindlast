@@ -37,6 +37,8 @@ export default async function DashboardPage() {
     findings = (findingsData as Finding[]) || []
   }
 
+  const typedProfile = profile as BusinessProfile
+
   // Show processing state if assessment is pending or processing
   if (
     typedAssessment &&
@@ -45,13 +47,14 @@ export default async function DashboardPage() {
     return (
       <div className="flex flex-col gap-6 p-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <AssessmentPolling status={typedAssessment.status as 'pending' | 'processing'} />
+        <AssessmentPolling
+          status={typedAssessment.status as 'pending' | 'processing'}
+          profileId={typedProfile.id}
+        />
         <LegalDisclaimer />
       </div>
     )
   }
-
-  const typedProfile = profile as BusinessProfile
 
   // No assessment yet
   if (!typedAssessment) {
