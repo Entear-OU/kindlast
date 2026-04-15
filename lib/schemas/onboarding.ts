@@ -8,11 +8,14 @@ export const step1Schema = z.object({
   employee_count: z.number().optional(),
 })
 
+// Helper to filter empty strings from arrays
+const nonEmptyStringArray = z.array(z.string()).transform((arr) => arr.filter(Boolean))
+
 // Step 2: Data Processing
 export const step2Schema = z.object({
   processes_personal_data: z.boolean(),
-  data_types: z.array(z.string()),
-  third_party_processors: z.array(z.string()),
+  data_types: nonEmptyStringArray,
+  third_party_processors: nonEmptyStringArray,
   transfers_data_outside_eu: z.boolean(),
 })
 
@@ -54,8 +57,8 @@ export const fullProfileSchema = z.object({
   employee_count: z.number().optional(),
   // Step 2
   processes_personal_data: z.boolean(),
-  data_types: z.array(z.string()),
-  third_party_processors: z.array(z.string()),
+  data_types: nonEmptyStringArray,
+  third_party_processors: nonEmptyStringArray,
   transfers_data_outside_eu: z.boolean(),
   // Step 3
   has_privacy_policy: z.boolean(),
