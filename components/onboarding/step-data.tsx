@@ -85,15 +85,15 @@ export function StepData({ data, onChange }: StepDataProps) {
           <Input
             id="third_party_processors"
             value={data.third_party_processors.join(', ')}
-            onChange={(e) =>
-              onChange({
-                ...data,
-                third_party_processors: e.target.value
-                  .split(',')
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
+            onChange={(e) => {
+              const value = e.target.value
+              const parts = value.split(',').map((s) => s.trim())
+              // Preserve trailing empty string so user can type after comma
+              const processors = value.endsWith(',')
+                ? [...parts.filter(Boolean), '']
+                : parts.filter(Boolean)
+              onChange({ ...data, third_party_processors: processors })
+            }}
             placeholder="Stripe, Google Analytics, Mailchimp"
           />
         </div>
