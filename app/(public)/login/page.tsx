@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login')
@@ -21,10 +22,14 @@ export default function LoginPage() {
       const result = await action(formData)
       if (result?.error) {
         setError(result.error)
+        setLoading(false)
       }
-    } catch {
+    } catch (err) {
+      // Re-throw Next.js redirect errors
+      if (err && typeof err === 'object' && 'digest' in err) {
+        throw err
+      }
       setError('An unexpected error occurred')
-    } finally {
       setLoading(false)
     }
   }
@@ -107,12 +112,15 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading
-                ? 'Loading...'
-                : activeTab === 'login'
-                  ? 'Sign In'
-                  : 'Create Account'}
+            <Button type="submit" className="w-full text-white" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  {activeTab === 'login' ? 'Signing In...' : 'Creating Account...'}
+                </>
+              ) : (
+                activeTab === 'login' ? 'Sign In' : 'Create Account'
+              )}
             </Button>
           </form>
 

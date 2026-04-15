@@ -69,22 +69,6 @@ export function Hero() {
             ))}
           </div>
 
-          {/* Social proof blip */}
-          <div className="mt-12 flex items-center gap-3 rounded-full border border-black/[0.06] bg-white px-5 py-3 shadow-[0_2px_16px_-4px_rgba(0,0,0,0.06)]">
-            <div className="flex -space-x-2">
-              {['#00C9A7', '#60a5fa', '#f472b6', '#fb923c'].map((color, i) => (
-                <span
-                  key={i}
-                  className="h-7 w-7 rounded-full border-2 border-white"
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-            <span className="text-[14px] font-semibold tracking-[-0.01em] text-[#0D1B2A]/55">
-              Join <strong className="text-[#0D1B2A] font-extrabold">200+</strong> EU businesses already on the list
-            </span>
-          </div>
-
         </div>
       </div>
     </section>

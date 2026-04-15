@@ -17,11 +17,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kindlast — AI-Powered GDPR & AI Act Compliance",
+  title: "Kindlast - AI-Powered GDPR & AI Act Compliance",
   description:
     "Two regulations, one platform, zero guesswork. AI-powered compliance assessment for EU SMEs.",
   openGraph: {
-    title: "Kindlast — AI-Powered GDPR & AI Act Compliance",
+    title: "Kindlast - AI-Powered GDPR & AI Act Compliance",
     description:
       "Two regulations, one platform, zero guesswork. AI-powered compliance assessment for EU SMEs.",
     type: "website",
