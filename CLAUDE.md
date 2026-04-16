@@ -4,16 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Kindlast is an AI-native GDPR & EU AI Act compliance platform for EU SMEs, with a DPO Copilot module for privacy consultants. It provides cited, grounded answers to regulatory questions via a hybrid RAG pipeline over primary regulatory sources (EUR-Lex, EDPB, national DPAs).
+Kindlast is the **AI compliance operating system for EU professional services**. We're starting with DPOs (Data Protection Officers) as our beachhead, expanding to their SME clients, then into adjacent compliance roles (legal ops, risk, ESG).
+
+The platform provides cited, grounded answers to regulatory questions via a hybrid RAG pipeline over primary regulatory sources (EUR-Lex, EDPB, national DPAs).
 
 **Core value proposition**: Answers, not checklists — every response is grounded in a specific regulatory source with inline citations.
+
+**Go-to-market sequence**:
+1. **DPO Copilot** — Deliverable accelerator for privacy consultants (current focus)
+2. **SME Compliance** — Self-serve GDPR/AI Act compliance for DPO clients
+3. **Adjacent Roles** — Legal ops, risk management, ESG compliance
 
 ## Repository Structure
 
 ```
 kindlast/
 ├── client/              # Next.js 16 frontend (TypeScript)
-├── server/              # Backend services (to be built)
+├── services/            # Backend services (to be built)
 │   ├── gateway/         # Go — API gateway, auth, rate limiting
 │   ├── rag/             # Go — RAG service, provider abstraction
 │   └── ingestion/       # Python — scraping, embedding pipeline
@@ -50,7 +57,7 @@ go build ./...
 go test ./...
 
 # Python ingestion
-cd server/ingestion
+cd services/ingestion
 uv sync
 uv run pytest
 ```

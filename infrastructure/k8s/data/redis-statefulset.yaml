@@ -17,6 +17,11 @@ data:
     appendonly yes
     appendfsync everysec
     replicaof redis-0.redis-headless.kindlast-data.svc.cluster.local 6379
+  sentinel.conf: |
+    sentinel monitor mymaster redis-0.redis-headless.kindlast-data.svc.cluster.local 6379 2
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel failover-timeout mymaster 60000
+    sentinel parallel-syncs mymaster 1
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -49,6 +54,10 @@ spec:
           # Add password configuration
           echo "requirepass ${REDIS_PASSWORD}" >> /data/redis.conf
           echo "masterauth ${REDIS_PASSWORD}" >> /data/redis.conf
+
+          # Configure sentinel
+          cp /config/sentinel.conf /data/sentinel.conf
+          echo "sentinel auth-pass mymaster ${REDIS_PASSWORD}" >> /data/sentinel.conf
         env:
         - name: REDIS_PASSWORD
           valueFrom:
@@ -99,6 +108,36 @@ spec:
         volumeMounts:
         - name: redis-data
           mountPath: /data
+      - name: sentinel
+        image: redis:7-alpine
+        command: ["redis-sentinel", "/data/sentinel.conf"]
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: password
+        ports:
+        - containerPort: 26379
+          name: sentinel
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - redis-cli -p 26379 ping
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
       volumes:
       - name: redis-config
         configMap:
@@ -124,6 +163,9 @@ spec:
   - port: 6379
     targetPort: 6379
     name: redis
+  - port: 26379
+    targetPort: 26379
+    name: sentinel
 ---
 apiVersion: v1
 kind: Service
@@ -137,3 +179,5 @@ spec:
   ports:
   - port: 6379
     name: redis
+  - port: 26379
+    name: sentinel
