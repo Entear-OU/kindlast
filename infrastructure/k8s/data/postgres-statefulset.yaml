@@ -5,7 +5,7 @@ metadata:
   namespace: kindlast-data
 spec:
   serviceName: postgres-headless
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: postgres
