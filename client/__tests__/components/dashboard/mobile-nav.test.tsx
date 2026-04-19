@@ -13,6 +13,7 @@ vi.mock('lucide-react', () => ({
   Settings: (props: Record<string, unknown>) => <svg data-testid="icon-settings" {...props} />,
   Menu: (props: Record<string, unknown>) => <svg data-testid="icon-menu" {...props} />,
   XIcon: (props: Record<string, unknown>) => <svg data-testid="icon-x" {...props} />,
+  MessageSquare: (props: Record<string, unknown>) => <svg data-testid="icon-message-square" {...props} />,
 }))
 
 describe('MobileNav', () => {
@@ -39,6 +40,7 @@ describe('MobileNav', () => {
 
     // Sheet should now be open with navigation links
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Compliance Q&A')).toBeInTheDocument()
     expect(screen.getByText('Clients')).toBeInTheDocument()
     expect(screen.getByText('Findings')).toBeInTheDocument()
     expect(screen.getByText('AI Act')).toBeInTheDocument()
@@ -55,6 +57,9 @@ describe('MobileNav', () => {
 
     const dashboardLink = screen.getByText('Dashboard').closest('a')
     expect(dashboardLink).toHaveAttribute('href', '/dashboard')
+
+    const queryLink = screen.getByText('Compliance Q&A').closest('a')
+    expect(queryLink).toHaveAttribute('href', '/dashboard/query')
 
     const clientsLink = screen.getByText('Clients').closest('a')
     expect(clientsLink).toHaveAttribute('href', '/dashboard/clients')

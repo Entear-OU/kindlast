@@ -10,6 +10,7 @@ vi.mock('lucide-react', () => ({
   Brain: (props: Record<string, unknown>) => <svg data-testid="icon-brain" {...props} />,
   Download: (props: Record<string, unknown>) => <svg data-testid="icon-download" {...props} />,
   Settings: (props: Record<string, unknown>) => <svg data-testid="icon-settings" {...props} />,
+  MessageSquare: (props: Record<string, unknown>) => <svg data-testid="icon-message-square" {...props} />,
 }))
 
 describe('SidebarNav', () => {
@@ -17,6 +18,7 @@ describe('SidebarNav', () => {
     render(<SidebarNav />)
 
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Compliance Q&A')).toBeInTheDocument()
     expect(screen.getByText('Clients')).toBeInTheDocument()
     expect(screen.getByText('Findings')).toBeInTheDocument()
     expect(screen.getByText('AI Act')).toBeInTheDocument()
@@ -29,6 +31,9 @@ describe('SidebarNav', () => {
 
     const dashboardLink = screen.getByText('Dashboard').closest('a')
     expect(dashboardLink).toHaveAttribute('href', '/dashboard')
+
+    const queryLink = screen.getByText('Compliance Q&A').closest('a')
+    expect(queryLink).toHaveAttribute('href', '/dashboard/query')
 
     const clientsLink = screen.getByText('Clients').closest('a')
     expect(clientsLink).toHaveAttribute('href', '/dashboard/clients')
