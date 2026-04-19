@@ -56,6 +56,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rag:
     build:
@@ -95,9 +100,13 @@ services:
     ports:
       - "3000:3000"
     environment:
+      # Public URL for client-side requests (from browser)
       NEXT_PUBLIC_API_URL: http://localhost:8080
+      # Internal URL for server-side requests (within Docker network)
+      API_URL_INTERNAL: http://gateway:8080
     depends_on:
-      - gateway
+      gateway:
+        condition: service_healthy
 
 volumes:
   qdrant_data:

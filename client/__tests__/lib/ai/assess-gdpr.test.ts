@@ -1,14 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { BusinessProfile } from '@/lib/types/database'
+import type { RAGResponse } from '@/lib/api/gateway'
+import type { AssessmentResult } from '@/lib/ai/schemas'
 
-const mockGenerateObject = vi.fn()
+const mockQueryRAGWithSchema = vi.fn()
 
-vi.mock('ai', () => ({
-  generateObject: (...args: unknown[]) => mockGenerateObject(...args),
-}))
-
-vi.mock('@ai-sdk/google', () => ({
-  google: vi.fn((model: string) => ({ modelId: model })),
+vi.mock('@/lib/api/gateway', () => ({
+  queryRAGWithSchema: (...args: unknown[]) => mockQueryRAGWithSchema(...args),
 }))
 
 describe('assessGDPRCompliance', () => {
@@ -34,14 +32,14 @@ describe('assessGDPRCompliance', () => {
     updated_at: '2024-01-01T00:00:00Z',
   }
 
-  const mockResult = {
+  const mockAssessmentData: AssessmentResult = {
     overall_score: 45,
-    risk_level: 'high' as const,
+    risk_level: 'high',
     summary: 'Significant compliance gaps found.',
     findings: [
       {
-        category: 'cookie_compliance' as const,
-        severity: 'high' as const,
+        category: 'cookie_compliance',
+        severity: 'high',
         title: 'No cookie consent mechanism',
         description: 'The business lacks a cookie consent mechanism.',
         recommendation: 'Implement a cookie consent banner.',
@@ -50,52 +48,94 @@ describe('assessGDPRCompliance', () => {
     ],
   }
 
+  const mockCitations = [
+    {
+      source: 'GDPR',
+      title: 'Article 7 - Conditions for consent',
+      url: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679',
+      article: 'Art. 7',
+      excerpt: 'Where processing is based on consent, the controller shall be able to demonstrate...',
+      relevance_score: 0.95,
+    },
+  ]
+
+  const mockRAGResponse: RAGResponse<AssessmentResult> = {
+    data: mockAssessmentData,
+    citations: mockCitations,
+    model: 'claude-sonnet',
+    usage: {
+      prompt_tokens: 1000,
+      completion_tokens: 500,
+      total_tokens: 1500,
+    },
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGenerateObject.mockResolvedValue({ object: mockResult })
+    mockQueryRAGWithSchema.mockResolvedValue(mockRAGResponse)
   })
 
-  it('calls generateObject with correct schema and model', async () => {
+  it('calls queryRAG with correct schema and collection', async () => {
     const { assessGDPRCompliance } = await import('@/lib/ai/assess-gdpr')
     await assessGDPRCompliance(mockProfile)
 
-    expect(mockGenerateObject).toHaveBeenCalledTimes(1)
-    const callArgs = mockGenerateObject.mock.calls[0][0]
-    expect(callArgs.model).toBeDefined()
+    expect(mockQueryRAGWithSchema).toHaveBeenCalledTimes(1)
+    const callArgs = mockQueryRAGWithSchema.mock.calls[0][0]
     expect(callArgs.schema).toBeDefined()
-    expect(callArgs.system).toBeDefined()
-    expect(callArgs.prompt).toBeDefined()
+    expect(callArgs.systemPrompt).toBeDefined()
+    expect(callArgs.query).toBeDefined()
+    expect(callArgs.collection).toBe('gdpr')
+    expect(callArgs.topK).toBe(10)
   })
 
-  it('includes business profile data in the prompt', async () => {
+  it('includes business profile data in the query', async () => {
     const { assessGDPRCompliance } = await import('@/lib/ai/assess-gdpr')
     await assessGDPRCompliance(mockProfile)
 
-    const callArgs = mockGenerateObject.mock.calls[0][0]
-    expect(callArgs.prompt).toContain('Test Corp')
-    expect(callArgs.prompt).toContain('Estonia')
-    expect(callArgs.prompt).toContain('SaaS')
-    expect(callArgs.prompt).toContain('12')
-    expect(callArgs.prompt).toContain('email')
-    expect(callArgs.prompt).toContain('Stripe')
+    const callArgs = mockQueryRAGWithSchema.mock.calls[0][0]
+    expect(callArgs.query).toContain('Test Corp')
+    expect(callArgs.query).toContain('Estonia')
+    expect(callArgs.query).toContain('SaaS')
+    expect(callArgs.query).toContain('12')
+    expect(callArgs.query).toContain('email')
+    expect(callArgs.query).toContain('Stripe')
   })
 
   it('includes system prompt about GDPR expertise', async () => {
     const { assessGDPRCompliance } = await import('@/lib/ai/assess-gdpr')
     await assessGDPRCompliance(mockProfile)
 
-    const callArgs = mockGenerateObject.mock.calls[0][0]
-    expect(callArgs.system).toContain('expert EU data protection consultant')
-    expect(callArgs.system).toContain('GDPR')
+    const callArgs = mockQueryRAGWithSchema.mock.calls[0][0]
+    expect(callArgs.systemPrompt).toContain('expert EU data protection consultant')
+    expect(callArgs.systemPrompt).toContain('GDPR')
   })
 
-  it('returns the structured assessment result', async () => {
+  it('returns the structured assessment result with citations', async () => {
     const { assessGDPRCompliance } = await import('@/lib/ai/assess-gdpr')
     const result = await assessGDPRCompliance(mockProfile)
 
-    expect(result).toEqual(mockResult)
     expect(result.overall_score).toBe(45)
     expect(result.risk_level).toBe('high')
     expect(result.findings).toHaveLength(1)
+    expect(result.citations).toHaveLength(1)
+    expect(result.citations[0].source).toBe('GDPR')
+  })
+
+  it('assessGDPRComplianceSimple returns result without citations', async () => {
+    const { assessGDPRComplianceSimple } = await import('@/lib/ai/assess-gdpr')
+    const result = await assessGDPRComplianceSimple(mockProfile)
+
+    expect(result.overall_score).toBe(45)
+    expect(result.risk_level).toBe('high')
+    expect(result.findings).toHaveLength(1)
+    expect('citations' in result).toBe(false)
+  })
+
+  it('passes temperature parameter for consistent results', async () => {
+    const { assessGDPRCompliance } = await import('@/lib/ai/assess-gdpr')
+    await assessGDPRCompliance(mockProfile)
+
+    const callArgs = mockQueryRAGWithSchema.mock.calls[0][0]
+    expect(callArgs.temperature).toBe(0.3)
   })
 })
