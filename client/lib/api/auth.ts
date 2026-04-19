@@ -9,7 +9,6 @@
  * - Providing a helper to get valid tokens for API calls
  */
 
-import { cookies } from 'next/headers';
 import { getApiConfig, buildApiUrl, API_ENDPOINTS } from './config';
 
 /**
@@ -44,6 +43,21 @@ export class GatewayAuthError extends Error {
     super(message);
     this.name = 'GatewayAuthError';
   }
+}
+
+/**
+ * Internal helper to get cookies on the server
+ */
+async function getCookieStore() {
+  if (typeof window === 'undefined') {
+    try {
+      const { cookies } = await import('next/headers');
+      return await cookies();
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**
@@ -187,7 +201,8 @@ export async function storeGatewayTokens(
   refreshToken: string
 ): Promise<void> {
   const config = getApiConfig();
-  const cookieStore = await cookies();
+  const cookieStore = await getCookieStore();
+  if (!cookieStore) return;
 
   const isProduction = process.env.NODE_ENV === 'production';
 
@@ -232,7 +247,8 @@ function getTokenMaxAge(token: string, defaultSeconds: number): number {
  */
 export async function getGatewayToken(): Promise<string | null> {
   const config = getApiConfig();
-  const cookieStore = await cookies();
+  const cookieStore = await getCookieStore();
+  if (!cookieStore) return null;
 
   const cookie = cookieStore.get(config.accessTokenCookie);
   return cookie?.value ?? null;
@@ -245,7 +261,8 @@ export async function getGatewayToken(): Promise<string | null> {
  */
 export async function getGatewayRefreshToken(): Promise<string | null> {
   const config = getApiConfig();
-  const cookieStore = await cookies();
+  const cookieStore = await getCookieStore();
+  if (!cookieStore) return null;
 
   const cookie = cookieStore.get(config.refreshTokenCookie);
   return cookie?.value ?? null;
@@ -257,7 +274,8 @@ export async function getGatewayRefreshToken(): Promise<string | null> {
  */
 export async function clearGatewayTokens(): Promise<void> {
   const config = getApiConfig();
-  const cookieStore = await cookies();
+  const cookieStore = await getCookieStore();
+  if (!cookieStore) return;
 
   cookieStore.delete(config.accessTokenCookie);
   cookieStore.delete(config.refreshTokenCookie);

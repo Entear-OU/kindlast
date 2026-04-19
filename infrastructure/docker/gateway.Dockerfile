@@ -1,7 +1,7 @@
 # Gateway Service Dockerfile
 # Go API gateway with JWT auth, rate limiting, and freemium enforcement
 
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Install git for version info and ca-certificates for HTTPS
 RUN apk add --no-cache git ca-certificates tzdata
@@ -22,7 +22,7 @@ COPY services/gateway/ .
 ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-w -s -X main.version=${VERSION}" \
-    -o gateway ./cmd/gateway
+    -o gateway ./cmd/server
 
 # Final stage: scratch for minimal attack surface
 FROM scratch
