@@ -1,4 +1,4 @@
-version: '3.9'
+version: "3.9"
 
 services:
   qdrant:
@@ -8,7 +8,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -19,7 +19,7 @@ services:
       - "6379:6379"
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,7 +36,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/k8s/data/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kindlast"]
+      test: [ "CMD-SHELL", "pg_isready -U kindlast" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -57,7 +57,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -91,7 +91,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    profiles: ["ingestion"]   # only start when explicitly requested
+    profiles: [ "ingestion" ] # only start when explicitly requested
 
   processor-ingestion:
     build:
@@ -107,7 +107,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    profiles: ["processors"]   # only start when explicitly requested
+    profiles: [ "processors" ] # only start when explicitly requested
 
   frontend:
     build:
