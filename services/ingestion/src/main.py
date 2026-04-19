@@ -1,5 +1,9 @@
 import os
 import time
+
+import psycopg2
+from qdrant_client import QdrantClient
+
 from src.config import Config
 from src.sources import SOURCES, get_sources_by_tier
 from src.pipeline.scraper import Scraper
@@ -76,8 +80,72 @@ def process_document(source_url: str, scrape_result: dict,
         db.add_to_dead_letter(source_url, str(e))
 
 
+def run_processors():
+    """Run processor profile ingestion mode."""
+    from src.processors.indexer import (
+        create_processor_collection,
+        index_processors,
+        get_processor_count,
+        get_postgres_processor_count,
+        PROCESSOR_COLLECTION,
+    )
+    from src.processors.profiles import PROCESSOR_PROFILES
+
+    config = Config()
+    config.validate_processors_required()
+
+    log.info("processor_ingestion_started", profile_count=len(PROCESSOR_PROFILES))
+
+    # Initialize clients
+    qdrant_client = QdrantClient(
+        host=config.qdrant_host,
+        port=config.qdrant_port,
+        api_key=config.qdrant_api_key or None
+    )
+    pg_conn = psycopg2.connect(config.postgres_dsn)
+    pg_conn.autocommit = True
+
+    # Initialize embedder (only OpenAI for processors)
+    embedder = OpenAIEmbedder(
+        config.openai_api_key,
+        config.openai_embedding_model,
+        config.openai_embedding_dims,
+        config.embedding_batch_size
+    )
+
+    try:
+        # Create Qdrant collection
+        create_processor_collection(qdrant_client, config, recreate=True)
+
+        # Index all processor profiles
+        indexed_count = index_processors(
+            qdrant=qdrant_client,
+            pg_conn=pg_conn,
+            embedder=embedder,
+            config=config,
+        )
+
+        # Verify counts
+        qdrant_count = get_processor_count(qdrant_client)
+        postgres_count = get_postgres_processor_count(pg_conn)
+
+        log.info("processor_ingestion_complete",
+                 indexed=indexed_count,
+                 qdrant_count=qdrant_count,
+                 postgres_count=postgres_count)
+
+    finally:
+        pg_conn.close()
+
+
 def run():
     config = Config()
+
+    # Handle processors mode separately
+    if config.mode == "processors":
+        run_processors()
+        return
+
     config.validate_required()
 
     scraper = Scraper(config)

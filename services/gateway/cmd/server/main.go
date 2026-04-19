@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/entear/kindlast/services/gateway/internal/audit"
 	"github.com/entear/kindlast/services/gateway/internal/config"
 	"github.com/entear/kindlast/services/gateway/internal/db"
 	"github.com/entear/kindlast/services/gateway/internal/handlers"
@@ -102,6 +103,12 @@ func main() {
 	ragProxy := proxy.NewRAGProxy(cfg.RAGServiceURL, logger)
 	logger.Info("RAG proxy initialized")
 
+	// Initialize audit logger
+	auditLogger := audit.NewLogger(dbConn, logger)
+
+	// Initialize plan enforcer
+	planEnforcer := middleware.NewPlanEnforcer(redisClient, logger)
+
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(dbConn, logger, cfg.JWTSecret, cfg.JWTAccessExpiration, cfg.JWTRefreshExpiration)
 	userHandler := handlers.NewUserHandler(dbConn, redisClient, logger)
@@ -109,6 +116,12 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(dbConn, redisClient, cfg.RAGServiceURL, logger, version)
 	stripeHandlers := handlers.NewStripeHandler(logger)
 	stripeWebhook := stripeHandler.NewWebhookHandler(dbClient, cfg.StripeWebhookSecret, logger)
+
+	// DPO Copilot handlers
+	clientHandler := handlers.NewClientHandler(dbConn, redisClient, logger)
+	artifactHandler := handlers.NewArtifactHandler(dbConn, redisClient, logger, auditLogger, planEnforcer, cfg.RAGServiceURL)
+	processorHandler := handlers.NewProcessorHandler(dbConn, logger)
+	auditHandler := handlers.NewAuditHandler(dbConn, logger, auditLogger)
 
 	// Initialize router
 	r := chi.NewRouter()
@@ -173,6 +186,58 @@ func main() {
 
 			r.Use(middleware.Freemium(redisClient, logger))
 			r.Post("/", queryHandler.Query)
+		})
+
+		// =============================================
+		// DPO COPILOT ROUTES
+		// =============================================
+
+		// Client management (requires professional or team plan)
+		r.Route("/clients", func(r chi.Router) {
+			r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
+			r.Use(middleware.RequirePlan("professional", "team"))
+
+			r.Get("/", clientHandler.ListClients)
+			r.Post("/", clientHandler.CreateClient)
+			r.Get("/{clientID}", clientHandler.GetClient)
+			r.Put("/{clientID}", clientHandler.UpdateClient)
+			r.Delete("/{clientID}", clientHandler.ArchiveClient)
+		})
+
+		// Artifact management (requires professional or team plan + client ownership)
+		r.Route("/clients/{clientID}/artifacts", func(r chi.Router) {
+			r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
+			r.Use(middleware.RequirePlan("professional", "team"))
+			r.Use(middleware.RequireClientOwnership(dbConn, logger))
+
+			r.Get("/", artifactHandler.ListArtifacts)
+			r.Post("/generate", artifactHandler.GenerateArtifact)
+			r.Get("/{artifactID}", artifactHandler.GetArtifact)
+			r.Put("/{artifactID}", artifactHandler.UpdateArtifact)
+			r.Put("/{artifactID}/status", artifactHandler.UpdateStatus)
+			r.Get("/{artifactID}/audit", artifactHandler.GetAuditTrail)
+			r.Post("/{artifactID}/export", artifactHandler.ExportArtifact)
+			r.Get("/{artifactID}/versions", artifactHandler.ListVersions)
+		})
+
+		// Processor profiles (read-only for users)
+		r.Route("/processors", func(r chi.Router) {
+			r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
+
+			r.Get("/", processorHandler.ListProcessors)
+			r.Get("/search", processorHandler.SearchProcessors)
+			r.Get("/categories", processorHandler.GetProcessorCategories)
+			r.Get("/{slug}", processorHandler.GetProcessor)
+		})
+
+		// Audit trail (account-level, requires professional or team plan)
+		r.Route("/audit", func(r chi.Router) {
+			r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
+			r.Use(middleware.RequirePlan("professional", "team"))
+
+			r.Get("/", auditHandler.ListAuditEntries)
+			r.Get("/export", auditHandler.ExportAuditLog)
+			r.Get("/summary", auditHandler.GetAuditSummary)
 		})
 	})
 

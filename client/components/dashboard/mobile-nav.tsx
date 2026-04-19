@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Home, List, Brain, Download, Settings, Menu } from 'lucide-react'
+import { Home, List, Brain, Download, Settings, Menu, Building2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,6 +21,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: Home },
+  { label: 'Clients', href: '/dashboard/clients', icon: Building2, premium: true },
   { label: 'Findings', href: '/dashboard/findings', icon: List },
   { label: 'AI Act', href: '/dashboard/ai-act', icon: Brain, premium: true },
   { label: 'Export', href: '/dashboard/export', icon: Download, premium: true },

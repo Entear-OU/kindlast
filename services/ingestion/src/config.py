@@ -8,9 +8,9 @@ class Config(BaseSettings):
     """Configuration for the ingestion pipeline with validation."""
 
     # Mode
-    mode: Literal["incremental", "full", "single"] = Field(
+    mode: Literal["incremental", "full", "single", "processors"] = Field(
         default="incremental",
-        description="Ingestion mode: incremental (daily), full (reconciliation), or single (debug)"
+        description="Ingestion mode: incremental (daily), full (reconciliation), single (debug), or processors (seed processor profiles)"
     )
 
     # AI providers
@@ -114,3 +114,15 @@ class Config(BaseSettings):
 
         if errors:
             raise ValueError(f"Configuration validation failed: {'; '.join(errors)}")
+
+    def validate_processors_required(self) -> None:
+        """Validate configuration for processor profile ingestion mode."""
+        errors = []
+
+        if not self.openai_api_key:
+            errors.append("OPENAI_API_KEY is required for processor embeddings")
+        if not self.postgres_dsn:
+            errors.append("POSTGRES_DSN is required for processor storage")
+
+        if errors:
+            raise ValueError(f"Processor configuration validation failed: {'; '.join(errors)}")

@@ -58,3 +58,78 @@ export interface Subscription {
   current_period_end: string | null
   created_at: string
 }
+
+// DPO Copilot types
+
+export interface Client {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  sector: string | null
+  country: string | null
+  employee_count: number | null
+  tech_stack: string[]
+  data_subjects: string[]
+  processing_purposes: string[]
+  status: 'active' | 'archived'
+  created_at: string
+  updated_at: string
+}
+
+export type ArtifactType =
+  | 'ropa'
+  | 'dpia_screening'
+  | 'dpa_gap'
+  | 'lawful_basis'
+  | 'ai_act_classification'
+
+export type ArtifactStatus = 'draft' | 'reviewed' | 'approved' | 'exported'
+
+export interface ArtifactCitation {
+  index: number
+  source_url: string
+  title: string
+  section: string
+  chunk_text: string
+}
+
+export interface ArtifactGenerationMeta {
+  provider: string
+  model: string
+  tokens_used: number
+  latency_ms: number
+  corpus_version: string
+}
+
+export interface Artifact {
+  id: string
+  client_id: string
+  user_id: string
+  type: ArtifactType
+  status: ArtifactStatus
+  title: string | null
+  input_context: string
+  generated_content: Record<string, unknown>
+  edited_content: Record<string, unknown> | null
+  citations: ArtifactCitation[]
+  generation_meta: ArtifactGenerationMeta
+  version: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ArtifactAuditLog {
+  id: string
+  artifact_id: string
+  user_id: string
+  action: 'generated' | 'edited' | 'status_changed' | 'exported' | 'deleted'
+  previous_state: Record<string, unknown> | null
+  new_state: Record<string, unknown> | null
+  metadata: {
+    ip?: string
+    user_agent?: string
+    reason?: string
+  }
+  created_at: string
+}
