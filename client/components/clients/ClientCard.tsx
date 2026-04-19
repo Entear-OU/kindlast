@@ -1,9 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, MapPin, Users, Calendar, MoreVertical } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import type { Client } from '@/lib/types/database'
 
 interface ClientCardProps {
@@ -44,70 +42,65 @@ export function ClientCard({ client, artifactCount = 0 }: ClientCardProps) {
 
   return (
     <Link href={`/dashboard/clients/${client.id}`}>
-      <Card className="transition-shadow hover:shadow-md cursor-pointer">
-        <CardHeader className="pb-2">
+      <Card className="border border-[#EAEAEA] rounded-[10px] shadow-none bg-[#FAFAFA] transition-all duration-200 ease-out hover:translate-y-[-1px] hover:opacity-95 cursor-pointer">
+        <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <Building2 className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-base">{client.name}</CardTitle>
-                {sectorLabel && (
-                  <span className="text-xs text-muted-foreground">
-                    {sectorLabel}
-                  </span>
-                )}
-              </div>
+            <div>
+              <CardTitle className="text-[15px] font-medium text-[#111111] leading-relaxed tracking-[-0.01em]">
+                {client.name}
+              </CardTitle>
+              {sectorLabel && (
+                <span className="text-[11px] text-[#666666] tracking-wide">
+                  {sectorLabel}
+                </span>
+              )}
             </div>
-            <Badge
-              variant={client.status === 'active' ? 'default' : 'secondary'}
+            <span
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-[0.08em] ${
+                client.status === 'active'
+                  ? 'bg-[#F0F7F4] text-[#2D6A4F] border border-[#D4E9DF]'
+                  : 'bg-[#F5F5F5] text-[#666666] border border-[#EAEAEA]'
+              }`}
             >
               {client.status}
-            </Badge>
+            </span>
           </div>
         </CardHeader>
         <CardContent>
           {client.description && (
-            <p className="mb-3 text-sm text-muted-foreground line-clamp-2">
+            <p className="mb-4 text-[13px] text-[#444444] leading-[1.6] line-clamp-2">
               {client.description}
             </p>
           )}
-          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-4 text-[11px] text-[#888888]">
             {client.country && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                {client.country}
-              </span>
+              <span>{client.country}</span>
             )}
             {client.employee_count && (
-              <span className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                {client.employee_count} employees
-              </span>
+              <span>{client.employee_count} employees</span>
             )}
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              Added {formatDate(client.created_at)}
-            </span>
+            <span>Added {formatDate(client.created_at)}</span>
           </div>
           {client.tech_stack && client.tech_stack.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1">
+            <div className="mt-4 flex flex-wrap gap-1.5">
               {client.tech_stack.slice(0, 4).map((tool) => (
-                <Badge key={tool} variant="outline" className="text-xs">
+                <span
+                  key={tool}
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-[#555555] bg-white border border-[#EAEAEA] tracking-wide"
+                >
                   {tool}
-                </Badge>
+                </span>
               ))}
               {client.tech_stack.length > 4 && (
-                <Badge variant="outline" className="text-xs">
-                  +{client.tech_stack.length - 4} more
-                </Badge>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-[#888888] bg-white border border-[#EAEAEA] tracking-wide">
+                  +{client.tech_stack.length - 4}
+                </span>
               )}
             </div>
           )}
           {artifactCount > 0 && (
-            <div className="mt-3 border-t pt-3">
-              <span className="text-xs text-muted-foreground">
+            <div className="mt-4 pt-4 border-t border-[#EAEAEA]">
+              <span className="text-[11px] text-[#888888] tracking-wide">
                 {artifactCount} artifact{artifactCount !== 1 ? 's' : ''} generated
               </span>
             </div>

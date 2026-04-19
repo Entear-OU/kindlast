@@ -1,19 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import {
-  FileText,
-  FileCheck,
-  FileWarning,
-  FileSearch,
-  Scale,
-  Brain,
-  Calendar,
-  Clock,
-  Quote,
-} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import type { Artifact, ArtifactType, ArtifactStatus } from '@/lib/types/database'
 
 interface ArtifactCardProps {
@@ -26,39 +14,33 @@ const artifactTypeConfig: Record<
   {
     label: string
     description: string
-    icon: React.ComponentType<{ className?: string }>
-    color: string
+    accentColor: string
   }
 > = {
   ropa: {
     label: 'RoPA',
     description: 'Record of Processing Activities',
-    icon: FileText,
-    color: 'text-blue-600 bg-blue-100',
+    accentColor: '#4A6FA5',
   },
   dpia_screening: {
     label: 'DPIA Screening',
     description: 'Data Protection Impact Assessment Pre-check',
-    icon: FileSearch,
-    color: 'text-purple-600 bg-purple-100',
+    accentColor: '#7B6B8D',
   },
   dpa_gap: {
     label: 'DPA Gap Analysis',
     description: 'Data Processing Agreement Review',
-    icon: FileWarning,
-    color: 'text-orange-600 bg-orange-100',
+    accentColor: '#B5835A',
   },
   lawful_basis: {
     label: 'Lawful Basis',
     description: 'Lawful Basis Assessment',
-    icon: Scale,
-    color: 'text-green-600 bg-green-100',
+    accentColor: '#5A8F7B',
   },
   ai_act_classification: {
     label: 'AI Act Classification',
     description: 'EU AI Act Risk Classification',
-    icon: Brain,
-    color: 'text-pink-600 bg-pink-100',
+    accentColor: '#8B6B7B',
   },
 }
 
@@ -66,13 +48,35 @@ const statusConfig: Record<
   ArtifactStatus,
   {
     label: string
-    variant: 'default' | 'secondary' | 'outline' | 'destructive'
+    bgColor: string
+    textColor: string
+    borderColor: string
   }
 > = {
-  draft: { label: 'Draft', variant: 'secondary' },
-  reviewed: { label: 'Reviewed', variant: 'outline' },
-  approved: { label: 'Approved', variant: 'default' },
-  exported: { label: 'Exported', variant: 'default' },
+  draft: {
+    label: 'DRAFT',
+    bgColor: '#F5F5F5',
+    textColor: '#666666',
+    borderColor: '#EAEAEA',
+  },
+  reviewed: {
+    label: 'REVIEWED',
+    bgColor: '#F5F5F0',
+    textColor: '#7A7A5A',
+    borderColor: '#E5E5D8',
+  },
+  approved: {
+    label: 'APPROVED',
+    bgColor: '#F0F7F4',
+    textColor: '#2D6A4F',
+    borderColor: '#D4E9DF',
+  },
+  exported: {
+    label: 'EXPORTED',
+    bgColor: '#F0F4F7',
+    textColor: '#4A6FA5',
+    borderColor: '#D4E1E9',
+  },
 }
 
 function formatDate(dateString: string): string {
@@ -95,50 +99,50 @@ function formatTime(dateString: string): string {
 export function ArtifactCard({ artifact, clientId }: ArtifactCardProps) {
   const typeConfig = artifactTypeConfig[artifact.type]
   const status = statusConfig[artifact.status]
-  const Icon = typeConfig.icon
 
   return (
     <Link href={`/dashboard/clients/${clientId}/artifacts/${artifact.id}`}>
-      <Card className="transition-shadow hover:shadow-md cursor-pointer">
-        <CardHeader className="pb-2">
+      <Card className="border border-[#EAEAEA] rounded-[10px] shadow-none bg-[#FAFAFA] transition-all duration-200 ease-out hover:translate-y-[-1px] hover:opacity-95 cursor-pointer">
+        <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-3">
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-lg ${typeConfig.color}`}
-              >
-                <Icon className="h-5 w-5" />
-              </div>
+                className="w-1 h-10 rounded-full"
+                style={{ backgroundColor: typeConfig.accentColor }}
+              />
               <div>
-                <CardTitle className="text-base">
+                <CardTitle className="text-[15px] font-medium text-[#111111] leading-relaxed tracking-[-0.01em]">
                   {artifact.title || typeConfig.label}
                 </CardTitle>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-[11px] text-[#666666] tracking-wide">
                   {typeConfig.description}
                 </span>
               </div>
             </div>
-            <Badge variant={status.variant}>{status.label}</Badge>
+            <span
+              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-[0.08em]"
+              style={{
+                backgroundColor: status.bgColor,
+                color: status.textColor,
+                border: `1px solid ${status.borderColor}`,
+              }}
+            >
+              {status.label}
+            </span>
           </div>
         </CardHeader>
         <CardContent>
           {artifact.input_context && (
-            <p className="mb-3 text-sm text-muted-foreground line-clamp-2">
+            <p className="mb-4 text-[13px] text-[#444444] leading-[1.6] line-clamp-2">
               {artifact.input_context}
             </p>
           )}
 
-          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {formatDate(artifact.created_at)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {formatTime(artifact.created_at)}
-            </span>
+          <div className="flex flex-wrap items-center gap-4 text-[11px] text-[#888888]">
+            <span>{formatDate(artifact.created_at)}</span>
+            <span>{formatTime(artifact.created_at)}</span>
             {artifact.citations && artifact.citations.length > 0 && (
-              <span className="flex items-center gap-1">
-                <Quote className="h-3 w-3" />
+              <span>
                 {artifact.citations.length} citation
                 {artifact.citations.length !== 1 ? 's' : ''}
               </span>
@@ -146,18 +150,18 @@ export function ArtifactCard({ artifact, clientId }: ArtifactCardProps) {
           </div>
 
           {artifact.generation_meta && (
-            <div className="mt-3 border-t pt-3 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Generated with {artifact.generation_meta.model}</span>
-              <span>|</span>
+            <div className="mt-4 pt-4 border-t border-[#EAEAEA] flex items-center gap-3 text-[11px] text-[#888888]">
+              <span>{artifact.generation_meta.model}</span>
+              <span className="text-[#CCCCCC]">|</span>
               <span>{artifact.generation_meta.latency_ms}ms</span>
             </div>
           )}
 
           {artifact.version > 1 && (
-            <div className="mt-2">
-              <Badge variant="outline" className="text-xs">
+            <div className="mt-3">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-[#555555] bg-white border border-[#EAEAEA] tracking-wide uppercase">
                 v{artifact.version}
-              </Badge>
+              </span>
             </div>
           )}
         </CardContent>

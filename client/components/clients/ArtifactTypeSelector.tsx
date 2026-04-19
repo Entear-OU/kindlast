@@ -1,15 +1,7 @@
 'use client'
 
-import {
-  FileText,
-  FileSearch,
-  FileWarning,
-  Scale,
-  Brain,
-  Check,
-} from 'lucide-react'
+import { Check } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { ArtifactType } from '@/lib/types/database'
 
@@ -24,8 +16,7 @@ interface ArtifactTypeOption {
   label: string
   description: string
   details: string[]
-  icon: React.ComponentType<{ className?: string }>
-  color: string
+  accentColor: string
   gdprArticle?: string
 }
 
@@ -41,8 +32,7 @@ const artifactTypes: ArtifactTypeOption[] = [
       'Retention periods',
       'Security measures',
     ],
-    icon: FileText,
-    color: 'border-blue-500 bg-blue-50 text-blue-700',
+    accentColor: '#4A6FA5',
     gdprArticle: 'Article 30',
   },
   {
@@ -55,8 +45,7 @@ const artifactTypes: ArtifactTypeOption[] = [
       'Processing activity analysis',
       'Recommendations',
     ],
-    icon: FileSearch,
-    color: 'border-purple-500 bg-purple-50 text-purple-700',
+    accentColor: '#7B6B8D',
     gdprArticle: 'Article 35',
   },
   {
@@ -69,8 +58,7 @@ const artifactTypes: ArtifactTypeOption[] = [
       'Transfer mechanism analysis',
       'Action items',
     ],
-    icon: FileWarning,
-    color: 'border-orange-500 bg-orange-50 text-orange-700',
+    accentColor: '#B5835A',
     gdprArticle: 'Article 28',
   },
   {
@@ -83,8 +71,7 @@ const artifactTypes: ArtifactTypeOption[] = [
       'Consent requirements',
       'Legal citations',
     ],
-    icon: Scale,
-    color: 'border-green-500 bg-green-50 text-green-700',
+    accentColor: '#5A8F7B',
     gdprArticle: 'Article 6',
   },
   {
@@ -97,8 +84,7 @@ const artifactTypes: ArtifactTypeOption[] = [
       'Compliance obligations',
       'Timeline requirements',
     ],
-    icon: Brain,
-    color: 'border-pink-500 bg-pink-50 text-pink-700',
+    accentColor: '#8B6B7B',
   },
 ]
 
@@ -110,56 +96,53 @@ export function ArtifactTypeSelector({
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {artifactTypes.map((option) => {
-        const Icon = option.icon
         const isSelected = selectedType === option.type
 
         return (
           <Card
             key={option.type}
             className={cn(
-              'cursor-pointer transition-all',
-              isSelected && `ring-2 ring-offset-2 ${option.color.split(' ')[0].replace('border', 'ring')}`,
+              'border border-[#EAEAEA] rounded-[10px] shadow-none bg-[#FAFAFA] transition-all duration-200 ease-out cursor-pointer',
+              isSelected && 'border-[#111111] bg-white',
               disabled && 'opacity-50 cursor-not-allowed',
-              !disabled && 'hover:shadow-md'
+              !disabled && !isSelected && 'hover:translate-y-[-1px] hover:opacity-95'
             )}
             onClick={() => !disabled && onSelect(option.type)}
           >
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div
-                  className={cn(
-                    'flex h-10 w-10 items-center justify-center rounded-lg',
-                    option.color.split(' ').slice(1).join(' ')
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                </div>
+                  className="w-1 h-8 rounded-full"
+                  style={{ backgroundColor: option.accentColor }}
+                />
                 <div className="flex items-center gap-2">
                   {option.gdprArticle && (
-                    <Badge variant="outline" className="text-xs">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-[#555555] bg-white border border-[#EAEAEA] tracking-[0.05em] uppercase">
                       {option.gdprArticle}
-                    </Badge>
+                    </span>
                   )}
                   {isSelected && (
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      <Check className="h-4 w-4" />
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#111111]">
+                      <Check className="h-3 w-3 text-white" />
                     </div>
                   )}
                 </div>
               </div>
-              <CardTitle className="text-base mt-2">{option.label}</CardTitle>
-              <CardDescription className="text-sm">
+              <CardTitle className="text-[15px] font-medium text-[#111111] leading-relaxed tracking-[-0.01em] mt-3">
+                {option.label}
+              </CardTitle>
+              <CardDescription className="text-[13px] text-[#666666] leading-[1.6]">
                 {option.description}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="space-y-1">
+              <ul className="space-y-2">
                 {option.details.map((detail, index) => (
                   <li
                     key={index}
-                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                    className="flex items-center gap-2.5 text-[12px] text-[#888888] leading-relaxed"
                   >
-                    <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+                    <span className="h-1 w-1 rounded-full bg-[#CCCCCC] flex-shrink-0" />
                     {detail}
                   </li>
                 ))}

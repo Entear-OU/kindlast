@@ -13,8 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { X, Plus, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import type { Client } from '@/lib/types/database'
 import type { CreateClientRequest, UpdateClientRequest } from '@/lib/api/clients'
 
@@ -22,6 +22,108 @@ interface ClientFormProps {
   client?: Client
   onSubmit: (data: CreateClientRequest | UpdateClientRequest) => Promise<void>
   isSubmitting?: boolean
+}
+
+// Section header component with uppercase styling
+function SectionHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="space-y-1">
+      <h3 className="text-xs font-medium uppercase tracking-[0.1em] text-foreground/80">
+        {title}
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  )
+}
+
+// Pill chip component for tech stack and selectable items
+function Chip({
+  children,
+  selected = false,
+  removable = false,
+  onClick,
+  onRemove,
+  className,
+}: {
+  children: React.ReactNode
+  selected?: boolean
+  removable?: boolean
+  onClick?: () => void
+  onRemove?: () => void
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-out',
+        'border border-[#EAEAEA] dark:border-white/10',
+        selected
+          ? 'bg-[#111111] text-white border-[#111111] dark:bg-white dark:text-[#111111] dark:border-white'
+          : 'bg-transparent text-foreground/80 hover:bg-muted/50 hover:border-[#DADADA]',
+        onClick && 'cursor-pointer',
+        className
+      )}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+    >
+      {children}
+      {removable && onRemove && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          className="ml-0.5 rounded-full p-0.5 transition-colors duration-150 hover:bg-white/20 dark:hover:bg-black/20"
+          aria-label="Remove"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </span>
+  )
+}
+
+// Form field wrapper for consistent styling
+function FormField({
+  children,
+  label,
+  htmlFor,
+  required,
+  hint,
+  error,
+}: {
+  children: React.ReactNode
+  label: string
+  htmlFor: string
+  required?: boolean
+  hint?: string
+  error?: string
+}) {
+  return (
+    <div className="space-y-2">
+      <Label
+        htmlFor={htmlFor}
+        className="text-sm font-medium text-foreground/90"
+      >
+        {label}
+        {required && <span className="ml-0.5 text-muted-foreground">*</span>}
+      </Label>
+      {children}
+      {hint && !error && (
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      )}
+      {error && (
+        <p className="text-xs text-destructive animate-in fade-in slide-in-from-top-1 duration-200">
+          {error}
+        </p>
+      )}
+    </div>
+  )
 }
 
 const sectors = [
@@ -198,35 +300,35 @@ export function ClientForm({ client, onSubmit, isSubmitting = false }: ClientFor
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-10">
       {/* Basic Information */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold">Basic Information</h3>
-          <p className="text-sm text-muted-foreground">
-            Core details about your client organization.
-          </p>
-        </div>
+      <section className="space-y-6">
+        <SectionHeader
+          title="Basic Information"
+          description="Core details about your client organization."
+        />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="name">Organization Name *</Label>
+        <div className="grid gap-6 md:grid-cols-2">
+          <FormField label="Organization Name" htmlFor="name" required>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Acme Corp"
               required
+              className="border-[#EAEAEA] focus-visible:border-[#111111] focus-visible:ring-[#111111]/10 dark:border-white/10 dark:focus-visible:border-white/30"
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <Label htmlFor="sector">Sector</Label>
+          <FormField label="Sector" htmlFor="sector">
             <Select
               value={formData.sector}
               onValueChange={(value: string | null) => value && setFormData({ ...formData, sector: value })}
             >
-              <SelectTrigger id="sector">
+              <SelectTrigger
+                id="sector"
+                className="border-[#EAEAEA] focus-visible:border-[#111111] focus-visible:ring-[#111111]/10 dark:border-white/10 dark:focus-visible:border-white/30"
+              >
                 <SelectValue placeholder="Select sector" />
               </SelectTrigger>
               <SelectContent>
@@ -237,15 +339,17 @@ export function ClientForm({ client, onSubmit, isSubmitting = false }: ClientFor
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <Label htmlFor="country">Country</Label>
+          <FormField label="Country" htmlFor="country">
             <Select
               value={formData.country}
               onValueChange={(value: string | null) => value && setFormData({ ...formData, country: value })}
             >
-              <SelectTrigger id="country">
+              <SelectTrigger
+                id="country"
+                className="border-[#EAEAEA] focus-visible:border-[#111111] focus-visible:ring-[#111111]/10 dark:border-white/10 dark:focus-visible:border-white/30"
+              >
                 <SelectValue placeholder="Select country" />
               </SelectTrigger>
               <SelectContent>
@@ -256,10 +360,9 @@ export function ClientForm({ client, onSubmit, isSubmitting = false }: ClientFor
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <Label htmlFor="employee_count">Employee Count</Label>
+          <FormField label="Employee Count" htmlFor="employee_count">
             <Input
               id="employee_count"
               type="number"
@@ -272,35 +375,35 @@ export function ClientForm({ client, onSubmit, isSubmitting = false }: ClientFor
               }
               placeholder="50"
               min={1}
+              className="border-[#EAEAEA] focus-visible:border-[#111111] focus-visible:ring-[#111111]/10 dark:border-white/10 dark:focus-visible:border-white/30"
             />
-          </div>
+          </FormField>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="description">Business Description</Label>
+        <FormField
+          label="Business Description"
+          htmlFor="description"
+          hint="The more detail you provide, the better the generated artifacts will be."
+        >
           <Textarea
             id="description"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             placeholder="Describe the client's business activities, the data they process, and any relevant compliance context..."
             rows={4}
+            className="border-[#EAEAEA] focus-visible:border-[#111111] focus-visible:ring-[#111111]/10 dark:border-white/10 dark:focus-visible:border-white/30 resize-none"
           />
-          <p className="text-xs text-muted-foreground">
-            The more detail you provide, the better the generated artifacts will be.
-          </p>
-        </div>
-      </div>
+        </FormField>
+      </section>
 
       {/* Tech Stack */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold">Tech Stack</h3>
-          <p className="text-sm text-muted-foreground">
-            List the SaaS tools and processors the client uses. This helps identify data flows and DPA requirements.
-          </p>
-        </div>
+      <section className="space-y-6">
+        <SectionHeader
+          title="Tech Stack"
+          description="List the SaaS tools and processors the client uses. This helps identify data flows and DPA requirements."
+        />
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Input
             value={newTechItem}
             onChange={(e) => setNewTechItem(e.target.value)}
@@ -311,53 +414,59 @@ export function ClientForm({ client, onSubmit, isSubmitting = false }: ClientFor
                 addTechItem()
               }
             }}
+            className="border-[#EAEAEA] focus-visible:border-[#111111] focus-visible:ring-[#111111]/10 dark:border-white/10 dark:focus-visible:border-white/30"
           />
-          <Button type="button" variant="outline" onClick={addTechItem}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addTechItem}
+            className="shrink-0 border-[#EAEAEA] hover:bg-muted/50 dark:border-white/10"
+          >
             <Plus className="h-4 w-4" />
           </Button>
         </div>
 
         {formData.tech_stack.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {formData.tech_stack.map((item) => (
-              <Badge key={item} variant="secondary" className="gap-1">
-                {item}
-                <button
-                  type="button"
-                  onClick={() => removeTechItem(item)}
-                  className="ml-1 hover:text-destructive"
+            {formData.tech_stack.map((item, index) => (
+              <div
+                key={item}
+                className="animate-in fade-in slide-in-from-bottom-2 duration-200"
+                style={{ animationDelay: `${index * 30}ms` }}
+              >
+                <Chip
+                  selected
+                  removable
+                  onRemove={() => removeTechItem(item)}
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
+                  {item}
+                </Chip>
+              </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Data Subjects */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold">Data Subjects</h3>
-          <p className="text-sm text-muted-foreground">
-            Select the categories of individuals whose data the client processes.
-          </p>
-        </div>
+      <section className="space-y-6">
+        <SectionHeader
+          title="Data Subjects"
+          description="Select the categories of individuals whose data the client processes."
+        />
 
         <div className="flex flex-wrap gap-2">
           {commonDataSubjects.map((subject) => (
-            <Badge
+            <Chip
               key={subject}
-              variant={formData.data_subjects.includes(subject) ? 'default' : 'outline'}
-              className="cursor-pointer"
+              selected={formData.data_subjects.includes(subject)}
               onClick={() => toggleDataSubject(subject)}
             >
               {subject}
-            </Badge>
+            </Chip>
           ))}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Input
             value={newDataSubject}
             onChange={(e) => setNewDataSubject(e.target.value)}
@@ -368,55 +477,64 @@ export function ClientForm({ client, onSubmit, isSubmitting = false }: ClientFor
                 addCustomDataSubject()
               }
             }}
+            className="border-[#EAEAEA] focus-visible:border-[#111111] focus-visible:ring-[#111111]/10 dark:border-white/10 dark:focus-visible:border-white/30"
           />
-          <Button type="button" variant="outline" onClick={addCustomDataSubject}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addCustomDataSubject}
+            className="shrink-0 border-[#EAEAEA] hover:bg-muted/50 dark:border-white/10"
+          >
             <Plus className="h-4 w-4" />
           </Button>
         </div>
 
         {formData.data_subjects.filter((s) => !commonDataSubjects.includes(s)).length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 pt-2">
+            <span className="w-full text-xs uppercase tracking-[0.08em] text-muted-foreground mb-1">
+              Custom Categories
+            </span>
             {formData.data_subjects
               .filter((s) => !commonDataSubjects.includes(s))
-              .map((subject) => (
-                <Badge key={subject} variant="secondary" className="gap-1">
-                  {subject}
-                  <button
-                    type="button"
-                    onClick={() => toggleDataSubject(subject)}
-                    className="ml-1 hover:text-destructive"
+              .map((subject, index) => (
+                <div
+                  key={subject}
+                  className="animate-in fade-in slide-in-from-bottom-2 duration-200"
+                  style={{ animationDelay: `${index * 30}ms` }}
+                >
+                  <Chip
+                    selected
+                    removable
+                    onRemove={() => toggleDataSubject(subject)}
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
+                    {subject}
+                  </Chip>
+                </div>
               ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Processing Purposes */}
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold">Processing Purposes</h3>
-          <p className="text-sm text-muted-foreground">
-            Select the purposes for which the client processes personal data.
-          </p>
-        </div>
+      <section className="space-y-6">
+        <SectionHeader
+          title="Processing Purposes"
+          description="Select the purposes for which the client processes personal data."
+        />
 
         <div className="flex flex-wrap gap-2">
           {commonPurposes.map((purpose) => (
-            <Badge
+            <Chip
               key={purpose}
-              variant={formData.processing_purposes.includes(purpose) ? 'default' : 'outline'}
-              className="cursor-pointer"
+              selected={formData.processing_purposes.includes(purpose)}
               onClick={() => togglePurpose(purpose)}
             >
               {purpose}
-            </Badge>
+            </Chip>
           ))}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Input
             value={newPurpose}
             onChange={(e) => setNewPurpose(e.target.value)}
@@ -427,35 +545,51 @@ export function ClientForm({ client, onSubmit, isSubmitting = false }: ClientFor
                 addCustomPurpose()
               }
             }}
+            className="border-[#EAEAEA] focus-visible:border-[#111111] focus-visible:ring-[#111111]/10 dark:border-white/10 dark:focus-visible:border-white/30"
           />
-          <Button type="button" variant="outline" onClick={addCustomPurpose}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addCustomPurpose}
+            className="shrink-0 border-[#EAEAEA] hover:bg-muted/50 dark:border-white/10"
+          >
             <Plus className="h-4 w-4" />
           </Button>
         </div>
 
         {formData.processing_purposes.filter((p) => !commonPurposes.includes(p)).length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 pt-2">
+            <span className="w-full text-xs uppercase tracking-[0.08em] text-muted-foreground mb-1">
+              Custom Purposes
+            </span>
             {formData.processing_purposes
               .filter((p) => !commonPurposes.includes(p))
-              .map((purpose) => (
-                <Badge key={purpose} variant="secondary" className="gap-1">
-                  {purpose}
-                  <button
-                    type="button"
-                    onClick={() => togglePurpose(purpose)}
-                    className="ml-1 hover:text-destructive"
+              .map((purpose, index) => (
+                <div
+                  key={purpose}
+                  className="animate-in fade-in slide-in-from-bottom-2 duration-200"
+                  style={{ animationDelay: `${index * 30}ms` }}
+                >
+                  <Chip
+                    selected
+                    removable
+                    onRemove={() => togglePurpose(purpose)}
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
+                    {purpose}
+                  </Chip>
+                </div>
               ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Form Actions */}
-      <div className="flex items-center gap-4 pt-4 border-t">
-        <Button type="submit" disabled={isSubmitting || !formData.name.trim()}>
+      <div className="flex items-center gap-4 pt-8 border-t border-[#EAEAEA] dark:border-white/10">
+        <Button
+          type="submit"
+          disabled={isSubmitting || !formData.name.trim()}
+          className="bg-[#111111] text-white hover:bg-[#111111]/90 rounded-md px-6 shadow-none dark:bg-white dark:text-[#111111] dark:hover:bg-white/90 transition-all duration-200"
+        >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {client ? 'Update Client' : 'Create Client'}
         </Button>
@@ -464,6 +598,7 @@ export function ClientForm({ client, onSubmit, isSubmitting = false }: ClientFor
           variant="outline"
           onClick={() => router.back()}
           disabled={isSubmitting}
+          className="border-[#EAEAEA] hover:bg-muted/50 rounded-md px-6 shadow-none dark:border-white/10 transition-all duration-200"
         >
           Cancel
         </Button>

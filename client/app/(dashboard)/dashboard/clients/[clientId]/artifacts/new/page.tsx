@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, Sparkles } from 'lucide-react'
+import { ArrowLeft, Loader2, Sparkles, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -20,6 +20,40 @@ import type { Client, ArtifactType } from '@/lib/types/database'
 
 interface GenerateArtifactPageProps {
   params: Promise<{ clientId: string }>
+}
+
+function PageSkeleton() {
+  return (
+    <div className="min-h-screen">
+      <div className="px-6 pt-8 lg:px-12">
+        <Skeleton className="h-4 w-32 mb-8" />
+      </div>
+      <header className="px-6 pb-8 lg:px-12">
+        <div className="max-w-3xl">
+          <Skeleton className="h-10 w-56 mb-2" />
+          <Skeleton className="h-5 w-80" />
+        </div>
+      </header>
+      <div className="px-6 pb-12 lg:px-12">
+        <div className="max-w-3xl space-y-8">
+          <div className="rounded-xl border border-border/40 bg-card p-6">
+            <Skeleton className="h-6 w-40 mb-2" />
+            <Skeleton className="h-4 w-72 mb-6" />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-xl border border-border/40 bg-card p-6">
+            <Skeleton className="h-6 w-36 mb-2" />
+            <Skeleton className="h-4 w-96 mb-6" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function GenerateArtifactPage({ params }: GenerateArtifactPageProps) {
@@ -94,200 +128,245 @@ export default function GenerateArtifactPage({ params }: GenerateArtifactPagePro
   }
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col gap-6 p-6">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-48" />
-          ))}
-        </div>
-      </div>
-    )
+    return <PageSkeleton />
   }
 
   if (error && !client) {
     return (
-      <div className="flex flex-col gap-6 p-6">
-        <Link
-          href="/dashboard/clients"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Clients
-        </Link>
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-8 text-center">
-          <p className="text-destructive">{error}</p>
-          <Link href="/dashboard/clients" className="mt-4 inline-block">
-            <Button variant="outline">Return to Clients</Button>
+      <div className="min-h-screen">
+        <div className="px-6 pt-8 lg:px-12">
+          <Link
+            href="/dashboard/clients"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-[#111111] transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Clients
           </Link>
+        </div>
+        <div className="px-6 py-12 lg:px-12">
+          <div className="max-w-md mx-auto rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center">
+            <p className="text-destructive mb-4">{error}</p>
+            <Link href="/dashboard/clients">
+              <Button variant="outline">Return to Clients</Button>
+            </Link>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="min-h-screen">
       {/* Breadcrumb */}
-      <Link
-        href={`/dashboard/clients/${clientId}`}
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to {client?.name}
-      </Link>
-
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Generate Artifact</h1>
-        <p className="text-sm text-muted-foreground">
-          Select the type of compliance document to generate for {client?.name}.
-        </p>
+      <div className="px-6 pt-8 lg:px-12">
+        <div className="max-w-3xl">
+          <Link
+            href={`/dashboard/clients/${clientId}`}
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-[#111111] transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to {client?.name}
+          </Link>
+        </div>
       </div>
 
+      {/* Page Header */}
+      <header className="px-6 pt-6 pb-10 lg:px-12">
+        <div className="max-w-3xl">
+          <div className="flex items-start gap-6">
+            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+              <Sparkles className="h-8 w-8 text-primary" strokeWidth={1.5} />
+            </div>
+            <div>
+              <h1 className="text-4xl font-semibold tracking-tighter text-[#111111]">
+                Generate Artifact
+              </h1>
+              <p className="mt-2 text-muted-foreground text-lg">
+                Select the type of compliance document to generate for {client?.name}.
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Error Alert */}
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
+        <div className="px-6 pb-6 lg:px-12">
+          <div className="max-w-3xl">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive">
+              {error}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Step 1: Select Artifact Type */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">1. Select Artifact Type</CardTitle>
-          <CardDescription>
-            Choose the type of compliance document you want to generate.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ArtifactTypeSelector
-            selectedType={selectedType}
-            onSelect={setSelectedType}
-            disabled={isGenerating}
-          />
-        </CardContent>
-      </Card>
+      {/* Main Content */}
+      <div className="px-6 pb-12 lg:px-12">
+        <div className="max-w-3xl space-y-8">
+          {/* Step 1: Select Artifact Type */}
+          <Card className="border-border/40">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-4">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                  1
+                </span>
+                <div>
+                  <CardTitle className="text-lg font-medium text-[#111111]">
+                    Select Artifact Type
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Choose the type of compliance document you want to generate.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-2">
+              <ArtifactTypeSelector
+                selectedType={selectedType}
+                onSelect={setSelectedType}
+                disabled={isGenerating}
+              />
+            </CardContent>
+          </Card>
 
-      {/* Step 2: Provide Context */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">2. Provide Context</CardTitle>
-          <CardDescription>
-            Describe the business activities and data processing to analyze. The more detail you
-            provide, the better the generated artifact will be.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="input_context">Business Description</Label>
-            <Textarea
-              id="input_context"
-              value={inputContext}
-              onChange={(e) => setInputContext(e.target.value)}
-              placeholder="Describe the client's business activities, the data they process, third-party tools they use, and any specific compliance concerns..."
-              rows={6}
+          {/* Step 2: Provide Context */}
+          <Card className="border-border/40">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-4">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                  2
+                </span>
+                <div>
+                  <CardTitle className="text-lg font-medium text-[#111111]">
+                    Provide Context
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Describe the business activities and data processing to analyze.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-2 space-y-6">
+              <div className="space-y-3">
+                <Label htmlFor="input_context" className="text-sm font-medium text-[#111111]">
+                  Business Description
+                </Label>
+                <Textarea
+                  id="input_context"
+                  value={inputContext}
+                  onChange={(e) => setInputContext(e.target.value)}
+                  placeholder="Describe the client's business activities, the data they process, third-party tools they use, and any specific compliance concerns..."
+                  rows={6}
+                  disabled={isGenerating}
+                  className="resize-none bg-background border-border/40"
+                />
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Include details about: data subjects, processing purposes, third-party processors,
+                  data transfers, and any special categories of data. The more detail you provide,
+                  the better the generated artifact will be.
+                </p>
+              </div>
+
+              {/* Pre-populated context info */}
+              {client && (
+                <div className="rounded-xl bg-muted/30 p-5 space-y-4">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Client Context (Pre-populated)
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {client.sector && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Sector</p>
+                        <p className="text-sm font-medium">{client.sector}</p>
+                      </div>
+                    )}
+                    {client.country && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Country</p>
+                        <p className="text-sm font-medium">{client.country}</p>
+                      </div>
+                    )}
+                    {client.employee_count && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Employees</p>
+                        <p className="text-sm font-medium">{client.employee_count}</p>
+                      </div>
+                    )}
+                  </div>
+                  {client.tech_stack && client.tech_stack.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-2">Tech Stack</p>
+                      <p className="text-sm">{client.tech_stack.join(', ')}</p>
+                    </div>
+                  )}
+                  {client.data_subjects && client.data_subjects.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-2">Data Subjects</p>
+                      <p className="text-sm">{client.data_subjects.join(', ')}</p>
+                    </div>
+                  )}
+                  {client.processing_purposes && client.processing_purposes.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-2">Processing Purposes</p>
+                      <p className="text-sm">{client.processing_purposes.join(', ')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Generation Info */}
+          {isGenerating && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="py-6">
+                <div className="flex items-start gap-5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-[#111111]">Generating your artifact...</p>
+                    <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+                      This typically takes 10-20 seconds. We are analyzing your business context against
+                      our regulatory corpus and generating a cited compliance document.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-4 pt-4">
+            <Button
+              onClick={handleGenerate}
+              disabled={!selectedType || !inputContext.trim() || isGenerating}
+              size="lg"
+              className="gap-2"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Generate Artifact
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => router.back()}
               disabled={isGenerating}
-            />
-            <p className="text-xs text-muted-foreground">
-              Include details about: data subjects, processing purposes, third-party processors,
-              data transfers, and any special categories of data.
-            </p>
+            >
+              Cancel
+            </Button>
           </div>
-
-          {/* Pre-populated context info */}
-          {client && (
-            <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase">
-                Client Context (Pre-populated)
-              </p>
-              <div className="flex flex-wrap gap-4 text-xs">
-                {client.sector && (
-                  <span>
-                    <span className="text-muted-foreground">Sector:</span> {client.sector}
-                  </span>
-                )}
-                {client.country && (
-                  <span>
-                    <span className="text-muted-foreground">Country:</span> {client.country}
-                  </span>
-                )}
-                {client.employee_count && (
-                  <span>
-                    <span className="text-muted-foreground">Employees:</span> {client.employee_count}
-                  </span>
-                )}
-              </div>
-              {client.tech_stack && client.tech_stack.length > 0 && (
-                <p className="text-xs">
-                  <span className="text-muted-foreground">Tech Stack:</span>{' '}
-                  {client.tech_stack.join(', ')}
-                </p>
-              )}
-              {client.data_subjects && client.data_subjects.length > 0 && (
-                <p className="text-xs">
-                  <span className="text-muted-foreground">Data Subjects:</span>{' '}
-                  {client.data_subjects.join(', ')}
-                </p>
-              )}
-              {client.processing_purposes && client.processing_purposes.length > 0 && (
-                <p className="text-xs">
-                  <span className="text-muted-foreground">Processing Purposes:</span>{' '}
-                  {client.processing_purposes.join(', ')}
-                </p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Generate Button */}
-      <div className="flex items-center gap-4">
-        <Button
-          onClick={handleGenerate}
-          disabled={!selectedType || !inputContext.trim() || isGenerating}
-          size="lg"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Generate Artifact
-            </>
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => router.back()}
-          disabled={isGenerating}
-        >
-          Cancel
-        </Button>
+        </div>
       </div>
-
-      {/* Generation Info */}
-      {isGenerating && (
-        <Card className="border-primary/50 bg-primary/5">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              </div>
-              <div>
-                <p className="font-medium">Generating your artifact...</p>
-                <p className="text-sm text-muted-foreground">
-                  This typically takes 10-20 seconds. We are analyzing your business context against
-                  our regulatory corpus and generating a cited compliance document.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
