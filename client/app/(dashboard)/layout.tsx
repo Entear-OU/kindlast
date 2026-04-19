@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessProfile, getSubscription } from '@/lib/supabase/queries'
 import { SidebarNav } from '@/components/dashboard/sidebar-nav'
+import { MobileNav } from '@/components/dashboard/mobile-nav'
 
 export default async function DashboardLayout({
   children,
@@ -34,7 +35,13 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col md:flex-row">
+      {/* Mobile header with hamburger menu */}
+      <header className="flex items-center gap-4 border-b bg-card px-4 py-3 md:hidden">
+        <MobileNav />
+        <h1 className="text-lg font-semibold">Kindlast</h1>
+      </header>
+      {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 border-r bg-card md:block">
         <SidebarNav />
       </aside>
