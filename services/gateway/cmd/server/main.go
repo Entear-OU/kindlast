@@ -151,18 +151,21 @@ func main() {
 		// Status endpoint (no auth required)
 		r.Get("/status", healthHandler.Status)
 
-		// Auth endpoints (no auth required, but rate limited by IP)
+		// Auth endpoints
 		r.Route("/auth", func(r chi.Router) {
-			// Apply IP-based rate limiting to prevent brute force attacks
-			if cfg.RateLimitEnabled {
-				r.Use(middleware.AuthRateLimit(redisClient, logger, authRateLimitConfig))
-			}
+			// Rate-limited endpoints (login/register only - brute force protection)
+			r.Group(func(r chi.Router) {
+				if cfg.RateLimitEnabled {
+					r.Use(middleware.AuthRateLimit(redisClient, logger, authRateLimitConfig))
+				}
+				r.Post("/register", authHandler.Register)
+				r.Post("/login", authHandler.Login)
+			})
 
-			r.Post("/register", authHandler.Register)
-			r.Post("/login", authHandler.Login)
+			// Token refresh (not rate limited - requires valid refresh token)
 			r.Post("/refresh", authHandler.Refresh)
 
-			// Protected auth endpoints
+			// Protected auth endpoints (requires valid access token)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
 				r.Get("/me", authHandler.Me)
