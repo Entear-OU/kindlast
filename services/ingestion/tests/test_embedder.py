@@ -69,6 +69,70 @@ class TestOpenAIEmbedder:
             assert mock_client.embeddings.create.call_count == 3
 
 
+class TestLocalEmbedder:
+    """Tests for local embedder (LMStudio) via OpenAIEmbedder."""
+
+    def test_local_embedder_uses_base_url(self):
+        """Test that local embedder passes base_url to OpenAI client."""
+        from src.pipeline.embedder import OpenAIEmbedder
+
+        with patch("src.pipeline.embedder.OpenAI") as mock_openai:
+            embedder = OpenAIEmbedder(
+                api_key="lm-studio",
+                model="text-embedding-nomic-embed-text-v1.5",
+                dimensions=768,
+                base_url="http://localhost:1234/v1",
+                collection_name="kindlast_local_test"
+            )
+
+            # Verify OpenAI client was created with base_url
+            mock_openai.assert_called_once_with(
+                api_key="lm-studio",
+                base_url="http://localhost:1234/v1"
+            )
+            assert embedder._is_local is True
+            assert embedder.collection_name == "kindlast_local_test"
+
+    def test_local_embedder_no_dimensions_param(self):
+        """Test that local embedder doesn't pass dimensions to API."""
+        from src.pipeline.embedder import OpenAIEmbedder
+
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.data = [Mock(embedding=[0.1] * 768)]
+        mock_client.embeddings.create.return_value = mock_response
+
+        with patch("src.pipeline.embedder.OpenAI", return_value=mock_client):
+            embedder = OpenAIEmbedder(
+                api_key="lm-studio",
+                model="local-model",
+                dimensions=768,
+                base_url="http://localhost:1234/v1"
+            )
+            embedder.embed(["test text"])
+
+            # Verify dimensions was NOT passed (local models don't support it)
+            call_kwargs = mock_client.embeddings.create.call_args[1]
+            assert "dimensions" not in call_kwargs
+
+    def test_openai_embedder_passes_dimensions(self):
+        """Test that non-local embedder passes dimensions to API."""
+        from src.pipeline.embedder import OpenAIEmbedder
+
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.data = [Mock(embedding=[0.1] * 3072)]
+        mock_client.embeddings.create.return_value = mock_response
+
+        with patch("src.pipeline.embedder.OpenAI", return_value=mock_client):
+            embedder = OpenAIEmbedder(api_key="test-key")  # No base_url = not local
+            embedder.embed(["test text"])
+
+            # Verify dimensions WAS passed
+            call_kwargs = mock_client.embeddings.create.call_args[1]
+            assert call_kwargs["dimensions"] == 3072
+
+
 class TestCohereEmbedder:
     """Tests for CohereEmbedder class."""
 

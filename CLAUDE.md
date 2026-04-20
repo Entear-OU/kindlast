@@ -34,6 +34,25 @@ kindlast/
 - **JavaScript/TypeScript**: Always use **pnpm** — never npm or yarn
 - **Python**: Always use **uv** — never pip or poetry
 
+### Adding Dependencies
+
+**Never manually edit dependency files with arbitrary version numbers.** Use the package manager CLI to add dependencies — it will resolve the correct version and update lock files.
+
+```bash
+# JavaScript/TypeScript (in client/)
+pnpm add <package>           # Add runtime dependency
+pnpm add -D <package>        # Add dev dependency
+
+# Python (in services/ingestion/)
+uv add <package>             # Add runtime dependency
+uv add --dev <package>       # Add dev dependency
+
+# Go (in services/gateway/ or services/rag/)
+go get <package>             # Add dependency and update go.mod
+go get <package>@latest      # Add/update to latest version
+go mod tidy                  # Clean up unused dependencies
+```
+
 ## Development Commands
 
 ### Client (Next.js)

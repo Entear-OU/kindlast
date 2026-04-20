@@ -1,6 +1,6 @@
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
-firecrawl-py>=0.0.16
+firecrawl-py>=4.22.2
 unstructured[md]>=0.12.0
 openai>=1.12.0
 cohere>=5.0.0

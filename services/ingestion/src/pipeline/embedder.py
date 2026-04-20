@@ -23,16 +23,28 @@ class EmbeddingProvider(ABC):
 
 
 class OpenAIEmbedder(EmbeddingProvider):
+    """OpenAI-compatible embedder (works with OpenAI API and LMStudio)."""
+
     def __init__(self, api_key: str, model: str = "text-embedding-3-large",
-                 dimensions: int = 3072, batch_size: int = 100):
-        self.client = OpenAI(api_key=api_key)
+                 dimensions: int = 3072, batch_size: int = 100,
+                 base_url: str | None = None, collection_name: str = "kindlast_openai_prod"):
+        # For local providers like LMStudio, api_key can be a dummy value
+        self.client = OpenAI(api_key=api_key or "lm-studio", base_url=base_url)
         self.model = model
         self._dims = dimensions
         self.batch_size = batch_size
+        self._collection_name = collection_name
+        self._is_local = base_url is not None
+
+        log.info("embedder_initialized",
+                 model=model,
+                 dimensions=dimensions,
+                 is_local=self._is_local,
+                 base_url=base_url or "default")
 
     @property
     def collection_name(self) -> str:
-        return "kindlast_openai_prod"
+        return self._collection_name
 
     @property
     def dimensions(self) -> int:
@@ -42,11 +54,18 @@ class OpenAIEmbedder(EmbeddingProvider):
         all_vectors = []
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i:i + self.batch_size]
-            response = self.client.embeddings.create(
-                model=self.model,
-                input=batch,
-                dimensions=self._dims
-            )
+            # Local models (LMStudio) don't support the dimensions parameter
+            if self._is_local:
+                response = self.client.embeddings.create(
+                    model=self.model,
+                    input=batch,
+                )
+            else:
+                response = self.client.embeddings.create(
+                    model=self.model,
+                    input=batch,
+                    dimensions=self._dims
+                )
             all_vectors.extend([r.embedding for r in response.data])
         return all_vectors
 

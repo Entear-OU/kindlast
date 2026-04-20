@@ -19,7 +19,9 @@ class Config(BaseSettings):
         description="Embedding provider: openai, cohere, or local"
     )
     openai_api_key: str = Field(default="", description="OpenAI API key for embeddings")
-    openai_api_base_url: str = Field(default="", description="OpenAI API base URL (for local models like LMstudio)")
+    # Support both EMBEDDING_BASE_URL (preferred) and OPENAI_API_BASE_URL (legacy)
+    embedding_base_url: str = Field(default="", description="Embedding API base URL (for local models like LMstudio)")
+    openai_api_base_url: str = Field(default="", description="(Deprecated) Use EMBEDDING_BASE_URL instead")
     cohere_api_key: str = Field(default="", description="Cohere API key for embeddings")
     firecrawl_api_key: str = Field(default="", description="Firecrawl API key for web scraping")
 
@@ -53,7 +55,17 @@ class Config(BaseSettings):
         description="Overlap between chunks"
     )
 
-    # Embedding
+    # Embedding - generic settings (preferred for local provider)
+    embedding_model: str = Field(
+        default="",
+        description="Embedding model name (used when EMBEDDING_PROVIDER=local)"
+    )
+    embedding_dimension: int = Field(
+        default=0,
+        description="Embedding dimension (used when EMBEDDING_PROVIDER=local)"
+    )
+
+    # Embedding - provider-specific settings (fallbacks)
     openai_embedding_model: str = Field(
         default="text-embedding-3-large",
         description="OpenAI embedding model"
@@ -106,14 +118,30 @@ class Config(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def resolve_embedding_config(self) -> "Config":
+        """Resolve embedding configuration with generic vars taking precedence."""
+        # Resolve base_url: EMBEDDING_BASE_URL takes precedence over OPENAI_API_BASE_URL
+        if self.embedding_base_url:
+            self.openai_api_base_url = self.embedding_base_url
+
+        # For local provider, use generic EMBEDDING_MODEL and EMBEDDING_DIMENSION
+        if self.embedding_provider == "local":
+            if self.embedding_model:
+                self.openai_embedding_model = self.embedding_model
+            if self.embedding_dimension > 0:
+                self.openai_embedding_dims = self.embedding_dimension
+
+        return self
+
     def validate_required(self) -> None:
         """Validate that required API keys and connection strings are set."""
         errors = []
 
         # Validate embedding provider configuration
         if self.embedding_provider == "local":
-            if not self.openai_api_base_url:
-                errors.append("OPENAI_API_BASE_URL is required when using local embedding provider")
+            if not self.embedding_base_url and not self.openai_api_base_url:
+                errors.append("EMBEDDING_BASE_URL is required when using local embedding provider")
         elif self.embedding_provider == "openai":
             if not self.openai_api_key:
                 errors.append("OPENAI_API_KEY is required when using openai embedding provider")
@@ -135,8 +163,8 @@ class Config(BaseSettings):
 
         # Validate embedding provider for processors
         if self.embedding_provider == "local":
-            if not self.openai_api_base_url:
-                errors.append("OPENAI_API_BASE_URL is required for local processor embeddings")
+            if not self.embedding_base_url and not self.openai_api_base_url:
+                errors.append("EMBEDDING_BASE_URL is required for local processor embeddings")
         elif self.embedding_provider == "openai":
             if not self.openai_api_key:
                 errors.append("OPENAI_API_KEY is required for processor embeddings")

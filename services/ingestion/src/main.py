@@ -18,6 +18,41 @@ from src.utils.logging import get_logger
 log = get_logger(__name__)
 
 
+def create_embedder(config: Config) -> OpenAIEmbedder | CohereEmbedder:
+    """Create the appropriate embedder based on EMBEDDING_PROVIDER config."""
+    provider = config.embedding_provider
+
+    if provider == "local":
+        # Local provider uses OpenAI-compatible API (LMStudio, Ollama, etc.)
+        log.info("using_local_embedder",
+                 base_url=config.openai_api_base_url,
+                 model=config.openai_embedding_model)
+        return OpenAIEmbedder(
+            api_key=config.openai_api_key or "lm-studio",
+            model=config.openai_embedding_model,
+            dimensions=config.openai_embedding_dims,
+            batch_size=config.embedding_batch_size,
+            base_url=config.openai_api_base_url,
+            collection_name=config.openai_collection,
+        )
+    elif provider == "cohere":
+        log.info("using_cohere_embedder", model=config.cohere_embedding_model)
+        return CohereEmbedder(
+            api_key=config.cohere_api_key,
+            model=config.cohere_embedding_model,
+            batch_size=config.embedding_batch_size,
+        )
+    else:  # openai (default)
+        log.info("using_openai_embedder", model=config.openai_embedding_model)
+        return OpenAIEmbedder(
+            api_key=config.openai_api_key,
+            model=config.openai_embedding_model,
+            dimensions=config.openai_embedding_dims,
+            batch_size=config.embedding_batch_size,
+            collection_name=config.openai_collection,
+        )
+
+
 def process_document(source_url: str, scrape_result: dict,
                      config: Config, scraper: Scraper, parser: Parser,
                      chunker: Chunker, embedders: list, indexer: Indexer, db: DB):
@@ -105,13 +140,8 @@ def run_processors():
     pg_conn = psycopg2.connect(config.postgres_dsn)
     pg_conn.autocommit = True
 
-    # Initialize embedder (only OpenAI for processors)
-    embedder = OpenAIEmbedder(
-        config.openai_api_key,
-        config.openai_embedding_model,
-        config.openai_embedding_dims,
-        config.embedding_batch_size
-    )
+    # Initialize embedder based on EMBEDDING_PROVIDER config
+    embedder = create_embedder(config)
 
     try:
         # Create Qdrant collection
@@ -151,12 +181,8 @@ def run():
     scraper = Scraper(config)
     parser = Parser()
     chunker = Chunker(config)
-    embedders = [
-        OpenAIEmbedder(config.openai_api_key, config.openai_embedding_model,
-                      config.openai_embedding_dims, config.embedding_batch_size),
-        CohereEmbedder(config.cohere_api_key, config.cohere_embedding_model,
-                      config.embedding_batch_size),
-    ]
+    # Use single embedder based on EMBEDDING_PROVIDER config
+    embedders = [create_embedder(config)]
     indexer = Indexer(config.qdrant_host, config.qdrant_port, config.qdrant_api_key)
     db = DB(config.postgres_dsn)
 
