@@ -25,7 +25,11 @@ import type {
 // ============================================================================
 
 // Legacy configuration (for backward compatibility)
-const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:8080'
+// Use internal URL for server-side requests (Docker network)
+const isServer = typeof window === 'undefined'
+const GATEWAY_URL = isServer
+  ? (process.env.API_URL_INTERNAL || process.env.GATEWAY_URL || 'http://gateway:8080')
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY || ''
 
 /**
@@ -435,7 +439,7 @@ export async function queryRAGWithSchema<T extends z.ZodTypeAny>(
 ): Promise<RAGResponse<z.infer<T>>> {
   const { query, systemPrompt, schema, collection = 'regulatory', topK = 5, temperature = 0.3 } = options
 
-  const response = await fetch(`${GATEWAY_URL}/api/v1/rag/query`, {
+  const response = await fetch(`${GATEWAY_URL}/api/v1/query`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -402,7 +402,15 @@ func initEmbedder(cfg *config.Config, logger *slog.Logger) (providers.EmbeddingP
 	var err error
 
 	switch cfg.Providers.Embedding.Provider {
-	case "openai", "local":
+	case "openai":
+		// Use official OpenAI API (no custom base URL)
+		primary, err = embedding.NewOpenAIProvider(
+			cfg.Providers.Embedding.OpenAIAPIKey,
+			cfg.Providers.Embedding.OpenAIModel,
+			"", // Use default OpenAI API endpoint
+		)
+	case "local":
+		// Use local model server (LMStudio, etc.)
 		primary, err = embedding.NewOpenAIProvider(
 			cfg.Providers.Embedding.OpenAIAPIKey,
 			cfg.Providers.Embedding.OpenAIModel,
@@ -421,7 +429,13 @@ func initEmbedder(cfg *config.Config, logger *slog.Logger) (providers.EmbeddingP
 	var fallback providers.EmbeddingProvider
 	if cfg.Providers.Embedding.Fallback != "" {
 		switch cfg.Providers.Embedding.Fallback {
-		case "openai", "local":
+		case "openai":
+			fallback, err = embedding.NewOpenAIProvider(
+				cfg.Providers.Embedding.OpenAIAPIKey,
+				cfg.Providers.Embedding.OpenAIModel,
+				"", // Use default OpenAI API endpoint
+			)
+		case "local":
 			fallback, err = embedding.NewOpenAIProvider(
 				cfg.Providers.Embedding.OpenAIAPIKey,
 				cfg.Providers.Embedding.OpenAIModel,

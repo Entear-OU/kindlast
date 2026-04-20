@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/entear/kindlast/services/rag/internal/cache"
@@ -70,7 +71,7 @@ func (a *RetrieverAdapter) HybridSearch(ctx context.Context, query string, vecto
 		Query:       query,
 		TopK:        topK,
 		RerankTopK:  topK * 2, // Fetch more for reranking
-		Collections: []string{"gdpr_chunks", "ai_act_chunks"},
+		Collections: []string{"kindlast_openai_prod"},
 		Filters:     make(map[string]string),
 	}
 
@@ -272,6 +273,11 @@ func (a *CacheAdapter) Get(ctx context.Context, key string) (string, error) {
 	cached, err := a.cache.Get(ctx, key, nil)
 	if err != nil {
 		return "", err
+	}
+
+	// Handle cache miss (nil response with no error)
+	if cached == nil {
+		return "", fmt.Errorf("cache miss")
 	}
 
 	// Return the response content

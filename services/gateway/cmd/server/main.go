@@ -207,6 +207,12 @@ func main() {
 			r.Post("/", queryHandler.Query)
 		})
 
+		// RAG endpoint (legacy route for backward compatibility)
+		r.Route("/rag", func(r chi.Router) {
+			r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
+			r.Post("/query", queryHandler.Query)
+		})
+
 		// =============================================
 		// SME ASSESSMENT ROUTES
 		// =============================================
