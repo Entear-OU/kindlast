@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -426,21 +427,50 @@ type BusinessProfile struct {
 
 // CreateBusinessProfileRequest represents the request to create/update a business profile
 type CreateBusinessProfileRequest struct {
-	CompanyName            string   `json:"company_name,omitempty"`
-	Country                string   `json:"country,omitempty"`
-	Industry               string   `json:"industry,omitempty"`
-	EmployeeCount          string   `json:"employee_count,omitempty"`
-	ProcessesPersonalData  bool     `json:"processes_personal_data"`
-	DataTypes              []string `json:"data_types,omitempty"`
-	UsesAISystems          bool     `json:"uses_ai_systems"`
-	AISystemDescriptions   string   `json:"ai_system_descriptions,omitempty"`
-	ThirdPartyProcessors   []string `json:"third_party_processors,omitempty"`
-	TransfersDataOutsideEU bool     `json:"transfers_data_outside_eu"`
-	HasDPO                 bool     `json:"has_dpo"`
-	HasPrivacyPolicy       bool     `json:"has_privacy_policy"`
-	HasCookieConsent       bool     `json:"has_cookie_consent"`
-	HasBreachNotification  bool     `json:"has_breach_notification"`
-	HasDSRProcess          bool     `json:"has_dsr_process"`
+	CompanyName            string          `json:"company_name,omitempty"`
+	Country                string          `json:"country,omitempty"`
+	Industry               string          `json:"industry,omitempty"`
+	EmployeeCount          json.RawMessage `json:"employee_count,omitempty"`
+	ProcessesPersonalData  bool            `json:"processes_personal_data"`
+	DataTypes              []string        `json:"data_types,omitempty"`
+	UsesAISystems          bool            `json:"uses_ai_systems"`
+	AISystemDescriptions   json.RawMessage `json:"ai_system_descriptions,omitempty"`
+	ThirdPartyProcessors   []string        `json:"third_party_processors,omitempty"`
+	TransfersDataOutsideEU bool            `json:"transfers_data_outside_eu"`
+	HasDPO                 bool            `json:"has_dpo"`
+	HasPrivacyPolicy       bool            `json:"has_privacy_policy"`
+	HasCookieConsent       bool            `json:"has_cookie_consent"`
+	HasBreachNotification  bool            `json:"has_breach_notification"`
+	HasDSRProcess          bool            `json:"has_dsr_process"`
+}
+
+// GetEmployeeCountString returns employee_count as a string
+// Handles both number and string inputs from JSON
+func (r *CreateBusinessProfileRequest) GetEmployeeCountString() string {
+	if len(r.EmployeeCount) == 0 {
+		return ""
+	}
+	// Try to unmarshal as string first
+	var strVal string
+	if err := json.Unmarshal(r.EmployeeCount, &strVal); err == nil {
+		return strVal
+	}
+	// Try as number
+	var numVal float64
+	if err := json.Unmarshal(r.EmployeeCount, &numVal); err == nil {
+		return fmt.Sprintf("%.0f", numVal)
+	}
+	return ""
+}
+
+// GetAISystemDescriptionsString returns ai_system_descriptions as a JSON string
+// Handles both array of objects and string inputs
+func (r *CreateBusinessProfileRequest) GetAISystemDescriptionsString() string {
+	if len(r.AISystemDescriptions) == 0 {
+		return ""
+	}
+	// If it's already valid JSON (array or object), return as-is
+	return string(r.AISystemDescriptions)
 }
 
 // Assessment represents a compliance assessment result

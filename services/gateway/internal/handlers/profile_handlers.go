@@ -91,6 +91,10 @@ func (h *ProfileHandler) CreateOrUpdateProfile(w http.ResponseWriter, r *http.Re
 
 	now := time.Now()
 
+	// Convert flexible fields to storage format
+	employeeCount := req.GetEmployeeCountString()
+	aiSystemDescriptions := req.GetAISystemDescriptionsString()
+
 	if err == sql.ErrNoRows {
 		// Create new profile
 		profileID := uuid.New().String()
@@ -102,8 +106,8 @@ func (h *ProfileHandler) CreateOrUpdateProfile(w http.ResponseWriter, r *http.Re
 				has_cookie_consent, has_breach_notification, has_dsr_process, created_at, updated_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		`,
-			profileID, user.ID, req.CompanyName, req.Country, req.Industry, req.EmployeeCount,
-			req.ProcessesPersonalData, pq.Array(req.DataTypes), req.UsesAISystems, req.AISystemDescriptions,
+			profileID, user.ID, req.CompanyName, req.Country, req.Industry, employeeCount,
+			req.ProcessesPersonalData, pq.Array(req.DataTypes), req.UsesAISystems, aiSystemDescriptions,
 			pq.Array(req.ThirdPartyProcessors), req.TransfersDataOutsideEU, req.HasDPO, req.HasPrivacyPolicy,
 			req.HasCookieConsent, req.HasBreachNotification, req.HasDSRProcess, now, now,
 		)
@@ -127,8 +131,8 @@ func (h *ProfileHandler) CreateOrUpdateProfile(w http.ResponseWriter, r *http.Re
 				has_cookie_consent = $13, has_breach_notification = $14, has_dsr_process = $15, updated_at = $16
 			WHERE id = $17
 		`,
-			req.CompanyName, req.Country, req.Industry, req.EmployeeCount,
-			req.ProcessesPersonalData, pq.Array(req.DataTypes), req.UsesAISystems, req.AISystemDescriptions,
+			req.CompanyName, req.Country, req.Industry, employeeCount,
+			req.ProcessesPersonalData, pq.Array(req.DataTypes), req.UsesAISystems, aiSystemDescriptions,
 			pq.Array(req.ThirdPartyProcessors), req.TransfersDataOutsideEU, req.HasDPO, req.HasPrivacyPolicy,
 			req.HasCookieConsent, req.HasBreachNotification, req.HasDSRProcess, now, existingID,
 		)
