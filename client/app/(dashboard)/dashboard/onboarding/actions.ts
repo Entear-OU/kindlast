@@ -1,103 +1,111 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { getApiConfig, buildApiUrl, API_ENDPOINTS } from '@/lib/api/config'
 import type { FullProfileData } from '@/lib/schemas/onboarding'
 import { assessGDPRCompliance } from '@/lib/ai/assess-gdpr'
 import type { BusinessProfile } from '@/lib/types/database'
 
+async function getAccessToken(): Promise<string | null> {
+  const config = getApiConfig()
+  const cookieStore = await cookies()
+  return cookieStore.get(config.accessTokenCookie)?.value || null
+}
+
 export async function saveBusinessProfile(data: FullProfileData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const accessToken = await getAccessToken()
 
-  if (!user) throw new Error('Unauthorized')
+  if (!accessToken) {
+    throw new Error('Unauthorized')
+  }
 
-  const { data: profile, error } = await supabase
-    .from('business_profiles')
-    .upsert(
-      { ...data, user_id: user.id },
-      { onConflict: 'user_id' }
-    )
-    .select()
-    .single()
+  const config = getApiConfig()
+  const url = buildApiUrl(API_ENDPOINTS.profile, config)
 
-  if (error) throw new Error(error.message)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.message || 'Failed to save profile')
+  }
+
+  const profile = await response.json()
 
   revalidatePath('/dashboard')
   return profile
 }
 
 export async function completeOnboarding() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const accessToken = await getAccessToken()
 
-  if (!user) throw new Error('Unauthorized')
+  if (!accessToken) {
+    throw new Error('Unauthorized')
+  }
 
-  // Fetch the saved profile to get its ID
-  const { data: profile } = await supabase
-    .from('business_profiles')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
+  const config = getApiConfig()
 
-  if (profile) {
-    // Auto-trigger first GDPR assessment
-    try {
-      // Fetch full profile for AI assessment
-      const { data: fullProfile } = await supabase
-        .from('business_profiles')
-        .select()
-        .eq('id', profile.id)
-        .single()
+  // Fetch the saved profile
+  const profileUrl = buildApiUrl(API_ENDPOINTS.profile, config)
+  const profileResponse = await fetch(profileUrl, {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  })
 
-      if (fullProfile) {
-        // Create assessment with processing status
-        const { data: assessment } = await supabase
-          .from('assessments')
-          .insert({
-            user_id: user.id,
-            profile_id: profile.id,
-            type: 'gdpr',
-            status: 'processing',
-          })
-          .select()
-          .single()
+  if (!profileResponse.ok) {
+    throw new Error('Profile not found')
+  }
 
-        if (assessment) {
-          // Run AI assessment directly
-          const result = await assessGDPRCompliance(fullProfile as BusinessProfile)
+  const profile: BusinessProfile = await profileResponse.json()
 
-          // Update assessment with results
-          await supabase
-            .from('assessments')
-            .update({
-              status: 'complete',
-              overall_score: result.overall_score,
-              risk_level: result.risk_level,
-              result: result as unknown as Record<string, unknown>,
-            })
-            .eq('id', assessment.id)
+  // Auto-trigger first GDPR assessment
+  try {
+    // Create assessment with processing status
+    const assessmentUrl = buildApiUrl(API_ENDPOINTS.assessments.create, config)
+    const assessmentResponse = await fetch(assessmentUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ type: 'gdpr' }),
+    })
 
-          // Save findings
-          const findings = result.findings.map((f) => ({
-            assessment_id: assessment.id,
-            user_id: user.id,
-            ...f,
-          }))
+    if (assessmentResponse.ok) {
+      const assessment = await assessmentResponse.json()
 
-          if (findings.length > 0) {
-            await supabase.from('findings').insert(findings)
-          }
-        }
-      }
-    } catch {
-      // Non-blocking — user can trigger manually from dashboard
+      // Run AI assessment
+      const result = await assessGDPRCompliance(profile)
+
+      // Update assessment with results
+      const updateUrl = buildApiUrl(API_ENDPOINTS.assessments.update(assessment.id), config)
+      await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          status: 'complete',
+          overall_score: result.overall_score,
+          risk_level: result.risk_level,
+          result: result,
+        }),
+      })
+
+      // Note: Findings creation should be handled by the Gateway
+      // when the assessment is updated to 'complete'
+      // For now, findings are embedded in the result JSON
     }
+  } catch {
+    // Non-blocking — user can trigger manually from dashboard
   }
 
   revalidatePath('/dashboard')

@@ -43,6 +43,11 @@ func (p *ParentFetcher) Close() error {
 	return nil
 }
 
+// Ping tests the database connection
+func (p *ParentFetcher) Ping(ctx context.Context) error {
+	return p.db.PingContext(ctx)
+}
+
 // FetchParentChunks fetches parent chunks given child chunk IDs
 func (p *ParentFetcher) FetchParentChunks(ctx context.Context, chunkIDs []string) ([]ParentChunk, error) {
 	if len(chunkIDs) == 0 {

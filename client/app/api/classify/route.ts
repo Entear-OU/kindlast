@@ -1,34 +1,50 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { checkPremium } from '@/lib/subscription/gate'
+import { cookies } from 'next/headers'
+import { getApiConfig, buildApiUrl, API_ENDPOINTS } from '@/lib/api/config'
 import { classifyAIRisk } from '@/lib/ai/classify-ai-risk'
+import type { BusinessProfile } from '@/lib/types/database'
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const config = getApiConfig()
+    const cookieStore = await cookies()
+    const accessToken = cookieStore.get(config.accessTokenCookie)?.value
 
-    if (!user) {
+    if (!accessToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const isPremium = await checkPremium(supabase, user.id)
-    if (!isPremium) {
+    // Check user plan for premium access
+    const planUrl = buildApiUrl(API_ENDPOINTS.users.plan, config)
+    const planResponse = await fetch(planUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    })
+
+    if (!planResponse.ok) {
+      return NextResponse.json({ error: 'Failed to check subscription' }, { status: 500 })
+    }
+
+    const plan = await planResponse.json()
+    if (plan.plan !== 'premium' && plan.plan !== 'professional' && plan.plan !== 'team') {
       return NextResponse.json(
         { error: 'Premium subscription required' },
         { status: 403 }
       )
     }
 
-    const { data: profile } = await supabase
-      .from('business_profiles')
-      .select('ai_system_descriptions')
-      .eq('user_id', user.id)
-      .single()
+    // Fetch profile from Gateway
+    const profileUrl = buildApiUrl(API_ENDPOINTS.profile, config)
+    const profileResponse = await fetch(profileUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    })
 
-    if (!profile?.ai_system_descriptions) {
+    if (!profileResponse.ok) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+    }
+
+    const profile: BusinessProfile = await profileResponse.json()
+
+    if (!profile.ai_system_descriptions) {
       return NextResponse.json(
         { error: 'No AI systems found in your profile' },
         { status: 400 }
@@ -44,13 +60,34 @@ export async function POST(request: Request) {
 
     const result = await classifyAIRisk(aiSystems)
 
-    // Save as ai_act assessment
-    await supabase.from('assessments').insert({
-      user_id: user.id,
-      type: 'ai_act',
-      status: 'complete',
-      result,
+    // Create ai_act assessment via Gateway
+    const assessmentUrl = buildApiUrl(API_ENDPOINTS.assessments.create, config)
+    const assessmentResponse = await fetch(assessmentUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ type: 'ai_act' }),
     })
+
+    if (assessmentResponse.ok) {
+      const assessment = await assessmentResponse.json()
+
+      // Update with results
+      const updateUrl = buildApiUrl(API_ENDPOINTS.assessments.update(assessment.id), config)
+      await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          status: 'complete',
+          result: result,
+        }),
+      })
+    }
 
     return NextResponse.json(result)
   } catch (error) {

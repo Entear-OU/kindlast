@@ -1,21 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
+// OAuth callback - currently not supported
+// Will be implemented when Gateway OAuth support is added
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const code = searchParams.get('code')
   const origin = new URL(request.url).origin
 
-  if (!code) {
-    return NextResponse.redirect(new URL('/login', origin))
-  }
-
-  const supabase = await createClient()
-  const { error } = await supabase.auth.exchangeCodeForSession(code)
-
-  if (error) {
-    return NextResponse.redirect(new URL('/login', origin))
-  }
-
-  return NextResponse.redirect(new URL('/dashboard', origin))
+  // OAuth is not yet supported, redirect to login
+  return NextResponse.redirect(new URL('/login?error=oauth_not_supported', origin))
 }

@@ -1,66 +1,69 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
+import {
+  loginAndStore,
+  registerAndStore,
+  clearGatewayTokens,
+  GatewayAuthError,
+} from '@/lib/api'
 
 export async function signUp(formData: FormData) {
-  const supabase = await createClient()
-
   const email = formData.get('email') as string
   const password = formData.get('password') as string
+  const fullName = formData.get('full_name') as string | null
 
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-  })
+  if (!email || !password) {
+    return { error: 'Email and password are required' }
+  }
 
-  if (error) {
-    return { error: error.message }
+  try {
+    await registerAndStore({
+      email,
+      password,
+      full_name: fullName || undefined,
+    })
+  } catch (error) {
+    if (error instanceof GatewayAuthError) {
+      return { error: error.message }
+    }
+    return { error: 'Registration failed. Please try again.' }
   }
 
   redirect('/dashboard')
 }
 
 export async function signIn(formData: FormData) {
-  const supabase = await createClient()
-
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+  if (!email || !password) {
+    return { error: 'Email and password are required' }
+  }
 
-  if (error) {
-    return { error: error.message }
+  try {
+    await loginAndStore({ email, password })
+  } catch (error) {
+    if (error instanceof GatewayAuthError) {
+      // Provide user-friendly error messages
+      if (error.status === 401) {
+        return { error: 'Invalid email or password' }
+      }
+      return { error: error.message }
+    }
+    return { error: 'Login failed. Please try again.' }
   }
 
   redirect('/dashboard')
 }
 
 export async function signInWithGoogle() {
-  const supabase = await createClient()
-  const headersList = await headers()
-  const origin = headersList.get('origin') || 'http://localhost:3000'
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${origin}/auth/callback`,
-    },
-  })
-
-  if (error || !data.url) {
-    return { error: error?.message || 'Failed to initiate Google sign-in' }
-  }
-
-  redirect(data.url)
+  // OAuth support requires Gateway-side implementation
+  // For now, return an error indicating OAuth is not yet supported
+  return { error: 'Google sign-in is not yet available. Please use email/password.' }
 }
 
 export async function signOut() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  await clearGatewayTokens()
   redirect('/login')
 }

@@ -396,3 +396,130 @@ var DPOCopilotPlanLimits = map[string]DPOCopilotLimits{
 		TeamMembers:          5,
 	},
 }
+
+// =============================================
+// SME SELF-ASSESSMENT MODELS
+// =============================================
+
+// BusinessProfile represents a user's company profile for compliance assessment
+type BusinessProfile struct {
+	ID                      string    `json:"id" db:"id"`
+	UserID                  string    `json:"user_id" db:"user_id"`
+	CompanyName             string    `json:"company_name,omitempty" db:"company_name"`
+	Country                 string    `json:"country,omitempty" db:"country"`
+	Industry                string    `json:"industry,omitempty" db:"industry"`
+	EmployeeCount           string    `json:"employee_count,omitempty" db:"employee_count"`
+	ProcessesPersonalData   bool      `json:"processes_personal_data" db:"processes_personal_data"`
+	DataTypes               []string  `json:"data_types" db:"data_types"`
+	UsesAISystems           bool      `json:"uses_ai_systems" db:"uses_ai_systems"`
+	AISystemDescriptions    string    `json:"ai_system_descriptions,omitempty" db:"ai_system_descriptions"`
+	ThirdPartyProcessors    []string  `json:"third_party_processors" db:"third_party_processors"`
+	TransfersDataOutsideEU  bool      `json:"transfers_data_outside_eu" db:"transfers_data_outside_eu"`
+	HasDPO                  bool      `json:"has_dpo" db:"has_dpo"`
+	HasPrivacyPolicy        bool      `json:"has_privacy_policy" db:"has_privacy_policy"`
+	HasCookieConsent        bool      `json:"has_cookie_consent" db:"has_cookie_consent"`
+	HasBreachNotification   bool      `json:"has_breach_notification" db:"has_breach_notification"`
+	HasDSRProcess           bool      `json:"has_dsr_process" db:"has_dsr_process"`
+	CreatedAt               time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// CreateBusinessProfileRequest represents the request to create/update a business profile
+type CreateBusinessProfileRequest struct {
+	CompanyName            string   `json:"company_name,omitempty"`
+	Country                string   `json:"country,omitempty"`
+	Industry               string   `json:"industry,omitempty"`
+	EmployeeCount          string   `json:"employee_count,omitempty"`
+	ProcessesPersonalData  bool     `json:"processes_personal_data"`
+	DataTypes              []string `json:"data_types,omitempty"`
+	UsesAISystems          bool     `json:"uses_ai_systems"`
+	AISystemDescriptions   string   `json:"ai_system_descriptions,omitempty"`
+	ThirdPartyProcessors   []string `json:"third_party_processors,omitempty"`
+	TransfersDataOutsideEU bool     `json:"transfers_data_outside_eu"`
+	HasDPO                 bool     `json:"has_dpo"`
+	HasPrivacyPolicy       bool     `json:"has_privacy_policy"`
+	HasCookieConsent       bool     `json:"has_cookie_consent"`
+	HasBreachNotification  bool     `json:"has_breach_notification"`
+	HasDSRProcess          bool     `json:"has_dsr_process"`
+}
+
+// Assessment represents a compliance assessment result
+type Assessment struct {
+	ID           string          `json:"id" db:"id"`
+	UserID       string          `json:"user_id" db:"user_id"`
+	ProfileID    string          `json:"profile_id,omitempty" db:"profile_id"`
+	Type         string          `json:"type" db:"type"`
+	Status       string          `json:"status" db:"status"`
+	OverallScore *int            `json:"overall_score,omitempty" db:"overall_score"`
+	RiskLevel    string          `json:"risk_level,omitempty" db:"risk_level"`
+	Result       json.RawMessage `json:"result,omitempty" db:"result"`
+	CreatedAt    time.Time       `json:"created_at" db:"created_at"`
+}
+
+// Assessment types
+const (
+	AssessmentTypeGDPR  = "gdpr"
+	AssessmentTypeAIAct = "ai_act"
+)
+
+// Assessment statuses
+const (
+	AssessmentStatusPending    = "pending"
+	AssessmentStatusProcessing = "processing"
+	AssessmentStatusComplete   = "complete"
+	AssessmentStatusError      = "error"
+)
+
+// CreateAssessmentRequest represents the request to create an assessment
+type CreateAssessmentRequest struct {
+	Type string `json:"type"`
+}
+
+// AssessmentListResponse represents a paginated list of assessments
+type AssessmentListResponse struct {
+	Assessments []Assessment `json:"assessments"`
+	Total       int          `json:"total"`
+	Page        int          `json:"page"`
+	PageSize    int          `json:"page_size"`
+	TotalPages  int          `json:"total_pages"`
+}
+
+// Finding represents a compliance finding from an assessment
+type Finding struct {
+	ID             string     `json:"id" db:"id"`
+	AssessmentID   string     `json:"assessment_id" db:"assessment_id"`
+	UserID         string     `json:"user_id" db:"user_id"`
+	Category       string     `json:"category,omitempty" db:"category"`
+	Severity       string     `json:"severity,omitempty" db:"severity"`
+	Title          string     `json:"title" db:"title"`
+	Description    string     `json:"description,omitempty" db:"description"`
+	Recommendation string     `json:"recommendation,omitempty" db:"recommendation"`
+	GDPRArticle    string     `json:"gdpr_article,omitempty" db:"gdpr_article"`
+	AIActArticle   string     `json:"ai_act_article,omitempty" db:"ai_act_article"`
+	IsResolved     bool       `json:"is_resolved" db:"is_resolved"`
+	ResolvedAt     *time.Time `json:"resolved_at,omitempty" db:"resolved_at"`
+	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
+}
+
+// Finding severities
+const (
+	FindingSeverityCritical = "critical"
+	FindingSeverityHigh     = "high"
+	FindingSeverityMedium   = "medium"
+	FindingSeverityLow      = "low"
+	FindingSeverityInfo     = "info"
+)
+
+// UpdateFindingRequest represents the request to update a finding
+type UpdateFindingRequest struct {
+	IsResolved *bool `json:"is_resolved,omitempty"`
+}
+
+// FindingListResponse represents a list of findings
+type FindingListResponse struct {
+	Findings   []Finding `json:"findings"`
+	Total      int       `json:"total"`
+	Page       int       `json:"page"`
+	PageSize   int       `json:"page_size"`
+	TotalPages int       `json:"total_pages"`
+}

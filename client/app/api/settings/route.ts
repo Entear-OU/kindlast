@@ -1,35 +1,45 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { getApiConfig, buildApiUrl, API_ENDPOINTS } from '@/lib/api/config'
 
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const config = getApiConfig()
+    const cookieStore = await cookies()
+    const accessToken = cookieStore.get(config.accessTokenCookie)?.value
 
-    if (!user) {
+    if (!accessToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Fetch business profile
-    const { data: profile, error: profileError } = await supabase
-      .from('business_profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    // Fetch business profile from Gateway
+    let profile = null
+    try {
+      const profileUrl = buildApiUrl(API_ENDPOINTS.profile, config)
+      const profileResponse = await fetch(profileUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      })
 
-    if (profileError) {
-      return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
+      if (profileResponse.ok) {
+        profile = await profileResponse.json()
+      }
+    } catch {
+      // Profile not found is OK
     }
 
-    // Fetch subscription
-    const { data: subscription, error: subscriptionError } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    // Fetch user plan from Gateway
+    let subscription = null
+    try {
+      const planUrl = buildApiUrl(API_ENDPOINTS.users.plan, config)
+      const planResponse = await fetch(planUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      })
 
-    if (subscriptionError) {
-      return NextResponse.json({ error: 'Failed to fetch subscription' }, { status: 500 })
+      if (planResponse.ok) {
+        subscription = await planResponse.json()
+      }
+    } catch {
+      // Plan not found is OK
     }
 
     return NextResponse.json({

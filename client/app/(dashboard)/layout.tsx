@@ -1,27 +1,70 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { getBusinessProfile, getSubscription } from '@/lib/supabase/queries'
+import { cookies } from 'next/headers'
+import { getApiConfig, buildApiUrl, API_ENDPOINTS } from '@/lib/api/config'
 import { SidebarNav } from '@/components/dashboard/sidebar-nav'
 import { MobileNav } from '@/components/dashboard/mobile-nav'
+
+async function getAuthUser() {
+  const config = getApiConfig()
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get(config.accessTokenCookie)?.value
+
+  if (!accessToken) {
+    return null
+  }
+
+  try {
+    const url = buildApiUrl(API_ENDPOINTS.auth.me, config)
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+async function getProfile(accessToken: string) {
+  const config = getApiConfig()
+  try {
+    const url = buildApiUrl(API_ENDPOINTS.profile, config)
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    return await response.json()
+  } catch {
+    return null
+  }
+}
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const config = getApiConfig()
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get(config.accessTokenCookie)?.value
+
+  const user = await getAuthUser()
 
   if (!user) {
     redirect('/login')
   }
 
-  const [{ data: profile }] = await Promise.all([
-    getBusinessProfile(supabase, user.id),
-    getSubscription(supabase, user.id),
-  ])
+  const profile = accessToken ? await getProfile(accessToken) : null
 
   // If no profile, render children without sidebar (for onboarding)
   if (!profile) {

@@ -117,6 +117,11 @@ func main() {
 	stripeHandlers := handlers.NewStripeHandler(logger)
 	stripeWebhook := stripeHandler.NewWebhookHandler(dbClient, cfg.StripeWebhookSecret, logger)
 
+	// SME Assessment handlers
+	profileHandler := handlers.NewProfileHandler(dbConn, logger)
+	assessmentHandler := handlers.NewAssessmentHandler(dbConn, logger)
+	findingHandler := handlers.NewFindingHandler(dbConn, logger)
+
 	// DPO Copilot handlers
 	clientHandler := handlers.NewClientHandler(dbConn, redisClient, logger)
 	artifactHandler := handlers.NewArtifactHandler(dbConn, redisClient, logger, auditLogger, planEnforcer, cfg.RAGServiceURL)
@@ -130,18 +135,29 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger(logger))
 	r.Use(middleware.Recovery(logger))
-	r.Use(middleware.CORS(cfg.CORSOrigins))
+	r.Use(middleware.CORS(middleware.CORSConfig{
+		Origins:     cfg.CORSOrigins,
+		Environment: cfg.Environment,
+	}))
 
 	// Health endpoints (no auth required)
 	r.Get("/health", healthHandler.Health)
+
+	// Initialize auth rate limiting config
+	authRateLimitConfig := middleware.DefaultAuthRateLimitConfig()
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		// Status endpoint (no auth required)
 		r.Get("/status", healthHandler.Status)
 
-		// Auth endpoints (no auth required)
+		// Auth endpoints (no auth required, but rate limited by IP)
 		r.Route("/auth", func(r chi.Router) {
+			// Apply IP-based rate limiting to prevent brute force attacks
+			if cfg.RateLimitEnabled {
+				r.Use(middleware.AuthRateLimit(redisClient, logger, authRateLimitConfig))
+			}
+
 			r.Post("/register", authHandler.Register)
 			r.Post("/login", authHandler.Login)
 			r.Post("/refresh", authHandler.Refresh)
@@ -186,6 +202,38 @@ func main() {
 
 			r.Use(middleware.Freemium(redisClient, logger))
 			r.Post("/", queryHandler.Query)
+		})
+
+		// =============================================
+		// SME ASSESSMENT ROUTES
+		// =============================================
+
+		// Business profile (auth required)
+		r.Route("/profile", func(r chi.Router) {
+			r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
+
+			r.Get("/", profileHandler.GetProfile)
+			r.Post("/", profileHandler.CreateOrUpdateProfile)
+		})
+
+		// Assessments (auth required)
+		r.Route("/assessments", func(r chi.Router) {
+			r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
+
+			r.Get("/", assessmentHandler.ListAssessments)
+			r.Post("/", assessmentHandler.CreateAssessment)
+			r.Get("/latest", assessmentHandler.GetLatestAssessment)
+			r.Get("/{id}", assessmentHandler.GetAssessment)
+			r.Patch("/{id}", assessmentHandler.UpdateAssessment)
+			r.Get("/{id}/findings", findingHandler.ListFindings)
+		})
+
+		// Findings (auth required)
+		r.Route("/findings", func(r chi.Router) {
+			r.Use(middleware.Auth(cfg.JWTSecret, dbConn, logger))
+
+			r.Get("/", findingHandler.ListUserFindings)
+			r.Patch("/{id}", findingHandler.UpdateFinding)
 		})
 
 		// =============================================

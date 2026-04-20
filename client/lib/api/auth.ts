@@ -114,7 +114,97 @@ export function isTokenExpired(token: string, bufferMs?: number): boolean {
 }
 
 /**
+ * Login request payload
+ */
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+/**
+ * Register request payload
+ */
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  full_name?: string;
+}
+
+/**
+ * Login to gateway with email and password.
+ *
+ * @param credentials Login credentials
+ * @returns Gateway auth response with tokens and user info
+ * @throws GatewayAuthError on failure
+ */
+export async function login(credentials: LoginRequest): Promise<GatewayAuthResponse> {
+  const config = getApiConfig();
+  const url = buildApiUrl(API_ENDPOINTS.auth.login, config);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(credentials),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new GatewayAuthError(
+      data.message || data.error || 'Login failed',
+      data.code || 'LOGIN_FAILED',
+      response.status
+    );
+  }
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    user: data.user,
+  };
+}
+
+/**
+ * Register a new user with gateway.
+ *
+ * @param userData Registration data
+ * @returns Gateway auth response with tokens and user info
+ * @throws GatewayAuthError on failure
+ */
+export async function register(userData: RegisterRequest): Promise<GatewayAuthResponse> {
+  const config = getApiConfig();
+  const url = buildApiUrl(API_ENDPOINTS.auth.register, config);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userData),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new GatewayAuthError(
+      data.message || data.error || 'Registration failed',
+      data.code || 'REGISTER_FAILED',
+      response.status
+    );
+  }
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    user: data.user,
+  };
+}
+
+/**
  * Exchange a Supabase session token for gateway JWT tokens.
+ * @deprecated Use login() or register() instead for direct Gateway auth
  *
  * @param supabaseToken The Supabase access token
  * @returns Gateway auth response with tokens and user info
@@ -320,6 +410,7 @@ export async function getValidGatewayToken(): Promise<string | null> {
 /**
  * Authenticate with gateway using Supabase session.
  * Exchanges Supabase token for gateway tokens and stores them.
+ * @deprecated Use loginAndStore() or registerAndStore() instead
  *
  * @param supabaseToken The Supabase access token from session
  * @returns Gateway user info
@@ -331,4 +422,62 @@ export async function authenticateWithGateway(
   const response = await exchangeSupabaseToken(supabaseToken);
   await storeGatewayTokens(response.accessToken, response.refreshToken);
   return response.user;
+}
+
+/**
+ * Login with credentials and store tokens.
+ *
+ * @param credentials Login credentials
+ * @returns Gateway user info
+ * @throws GatewayAuthError on failure
+ */
+export async function loginAndStore(credentials: LoginRequest): Promise<GatewayUser> {
+  const response = await login(credentials);
+  await storeGatewayTokens(response.accessToken, response.refreshToken);
+  return response.user;
+}
+
+/**
+ * Register and store tokens.
+ *
+ * @param userData Registration data
+ * @returns Gateway user info
+ * @throws GatewayAuthError on failure
+ */
+export async function registerAndStore(userData: RegisterRequest): Promise<GatewayUser> {
+  const response = await register(userData);
+  await storeGatewayTokens(response.accessToken, response.refreshToken);
+  return response.user;
+}
+
+/**
+ * Get current user from gateway.
+ *
+ * @returns Gateway user info or null if not authenticated
+ */
+export async function getCurrentUser(): Promise<GatewayUser | null> {
+  const token = await getValidGatewayToken();
+  if (!token) {
+    return null;
+  }
+
+  const config = getApiConfig();
+  const url = buildApiUrl(API_ENDPOINTS.auth.me, config);
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch {
+    return null;
+  }
 }

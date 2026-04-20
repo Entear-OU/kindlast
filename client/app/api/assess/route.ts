@@ -1,74 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { getApiConfig, buildApiUrl, API_ENDPOINTS } from '@/lib/api/config'
 import { assessGDPRCompliance } from '@/lib/ai/assess-gdpr'
+import type { BusinessProfile } from '@/lib/types/database'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const config = getApiConfig()
+    const cookieStore = await cookies()
+    const accessToken = cookieStore.get(config.accessTokenCookie)?.value
 
-    if (!user) {
+    if (!accessToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
     const { profileId } = body
 
-    if (!profileId) {
-      return NextResponse.json({ error: 'profileId is required' }, { status: 400 })
-    }
+    // Fetch business profile from Gateway
+    const profileUrl = buildApiUrl(API_ENDPOINTS.profile, config)
+    const profileResponse = await fetch(profileUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    })
 
-    // Fetch business profile
-    const { data: profile, error: profileError } = await supabase
-      .from('business_profiles')
-      .select()
-      .eq('id', profileId)
-      .single()
-
-    if (profileError || !profile) {
+    if (!profileResponse.ok) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
 
-    // Create pending assessment
-    const { data: assessment, error: assessmentError } = await supabase
-      .from('assessments')
-      .insert({
-        user_id: user.id,
-        profile_id: profileId,
-        type: 'gdpr',
-        status: 'processing',
-      })
-      .select()
-      .single()
+    const profile: BusinessProfile = await profileResponse.json()
 
-    if (assessmentError || !assessment) {
+    // Verify the profile matches the requested profileId if provided
+    if (profileId && profile.id !== profileId) {
+      return NextResponse.json({ error: 'Profile mismatch' }, { status: 403 })
+    }
+
+    // Create assessment via Gateway
+    const assessmentUrl = buildApiUrl(API_ENDPOINTS.assessments.create, config)
+    const assessmentResponse = await fetch(assessmentUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ type: 'gdpr' }),
+    })
+
+    if (!assessmentResponse.ok) {
       return NextResponse.json({ error: 'Failed to create assessment' }, { status: 500 })
     }
+
+    const assessment = await assessmentResponse.json()
 
     // Run AI assessment
     const result = await assessGDPRCompliance(profile)
 
-    // Update assessment with results
-    await supabase
-      .from('assessments')
-      .update({
+    // Update assessment with results via Gateway
+    const updateUrl = buildApiUrl(API_ENDPOINTS.assessments.update(assessment.id), config)
+    await fetch(updateUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
         status: 'complete',
         overall_score: result.overall_score,
         risk_level: result.risk_level,
-        result: result as unknown as Record<string, unknown>,
-      })
-      .eq('id', assessment.id)
+        result: result,
+      }),
+    })
 
-    // Save individual findings
-    const findings = result.findings.map((f) => ({
-      assessment_id: assessment.id,
-      user_id: user.id,
-      ...f,
-    }))
-
-    if (findings.length > 0) {
-      await supabase.from('findings').insert(findings)
-    }
+    // Note: Findings are embedded in the result JSON
+    // A future enhancement would be to store findings separately via Gateway
 
     return NextResponse.json({ assessmentId: assessment.id })
   } catch (error) {

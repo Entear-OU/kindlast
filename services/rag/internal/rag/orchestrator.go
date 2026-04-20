@@ -320,11 +320,20 @@ func (o *Orchestrator) retrieveAndRerank(ctx context.Context, req QueryRequest) 
 		documents[i] = result.Content
 	}
 
-	// Rerank
-	rerankedResults, err := o.reranker.Rerank(ctx, req.Query, documents)
-	if err != nil {
-		o.logger.Warn("reranking failed, using original results", "error", err)
-		// Fallback to original results
+	// Rerank (skip if reranker is disabled)
+	var rerankedResults []RerankResult
+
+	if o.reranker != nil {
+		var rerankErr error
+		rerankedResults, rerankErr = o.reranker.Rerank(ctx, req.Query, documents)
+		if rerankErr != nil {
+			o.logger.Warn("reranking failed, using original results", "error", rerankErr)
+			// Fallback to original results
+			return o.buildCitations(results, topK), o.getMaxScore(results), nil
+		}
+	} else {
+		// Reranker disabled, use original results as-is
+		o.logger.Debug("reranking disabled, using retrieval results as-is")
 		return o.buildCitations(results, topK), o.getMaxScore(results), nil
 	}
 
@@ -476,7 +485,12 @@ func (o *Orchestrator) Health(ctx context.Context) map[string]error {
 
 	healthChecks["embedder"] = o.embedder.Health(ctx)
 	healthChecks["retriever"] = o.retriever.Health(ctx)
-	healthChecks["reranker"] = o.reranker.Health(ctx)
+
+	// Reranker is optional (can be nil when disabled)
+	if o.reranker != nil {
+		healthChecks["reranker"] = o.reranker.Health(ctx)
+	}
+
 	healthChecks["generator"] = o.generator.Health(ctx)
 	healthChecks["cache"] = o.cache.Health(ctx)
 	healthChecks["parent_fetcher"] = o.parentFetcher.Health(ctx)

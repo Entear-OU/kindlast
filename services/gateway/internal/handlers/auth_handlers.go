@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/entear/kindlast/services/gateway/internal/models"
@@ -69,11 +72,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:    time.Now(),
 	}
 
+	// Generate email hash for lookups
+	emailHash := hashEmail(req.Email)
+
 	// Insert into database
 	_, err = h.db.ExecContext(r.Context(),
-		`INSERT INTO users (id, email, password_hash, full_name, plan, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		user.ID, user.Email, user.PasswordHash, user.FullName, user.Plan, user.CreatedAt, user.UpdatedAt,
+		`INSERT INTO users (id, email, email_hash, password_hash, full_name, plan, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		user.ID, user.Email, emailHash, user.PasswordHash, user.FullName, user.Plan, user.CreatedAt, user.UpdatedAt,
 	)
 	if err != nil {
 		// Check for unique constraint violation
@@ -285,4 +291,12 @@ func (h *AuthHandler) generateTokens(user *models.User) (string, string, error) 
 	}
 
 	return accessTokenString, refreshTokenString, nil
+}
+
+// hashEmail generates a SHA256 hash of the email for secure lookups
+func hashEmail(email string) string {
+	// Normalize email to lowercase before hashing
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	hash := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(hash[:])
 }

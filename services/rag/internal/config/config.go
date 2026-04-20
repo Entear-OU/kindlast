@@ -129,7 +129,7 @@ func Load() (*Config, error) {
 		Providers: ProvidersConfig{
 			Generation: GenerationConfig{
 				Provider:        getEnv("RAG_PROVIDER", "anthropic"),
-				Fallback:        getEnv("RAG_FALLBACK", "openai"),
+				Fallback:        getEnv("RAG_FALLBACK", ""),
 				AnthropicAPIKey: getEnv("ANTHROPIC_API_KEY", ""),
 				AnthropicModel:  getEnv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929"),
 				OpenAIAPIKey:    getEnv("OPENAI_API_KEY", ""),
@@ -141,7 +141,7 @@ func Load() (*Config, error) {
 			},
 			Embedding: EmbeddingConfig{
 				Provider:     getEnv("EMBEDDING_PROVIDER", "openai"),
-				Fallback:     getEnv("EMBEDDING_FALLBACK", "cohere"),
+				Fallback:     getEnv("EMBEDDING_FALLBACK", ""),
 				OpenAIAPIKey: getEnv("OPENAI_API_KEY", ""),
 				OpenAIBaseURL: getEnv("EMBEDDING_BASE_URL",
 					getEnv("OPENAI_API_BASE_URL", "")), // Fallback to same as generation

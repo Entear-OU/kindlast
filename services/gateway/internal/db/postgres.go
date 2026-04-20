@@ -188,3 +188,57 @@ func (c *Client) GetUserPlan(ctx context.Context, userID string) (*models.PlanLi
 func (c *Client) Health(ctx context.Context) error {
 	return c.db.PingContext(ctx)
 }
+
+// UpdateUserStripeCustomerID sets the Stripe customer ID for a user
+func (c *Client) UpdateUserStripeCustomerID(ctx context.Context, userID, stripeCustomerID string) error {
+	query := `
+		UPDATE users
+		SET stripe_customer_id = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+
+	result, err := c.db.ExecContext(ctx, query, stripeCustomerID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update user stripe customer id: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
+}
+
+// GetUserByStripeCustomerID retrieves a user by their Stripe customer ID
+func (c *Client) GetUserByStripeCustomerID(ctx context.Context, stripeCustomerID string) (*models.User, error) {
+	query := `
+		SELECT id, email, password_hash, full_name, plan, created_at, updated_at
+		FROM users
+		WHERE stripe_customer_id = $1
+	`
+
+	var user models.User
+	err := c.db.QueryRowContext(ctx, query, stripeCustomerID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.FullName,
+		&user.Plan,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("user not found for stripe customer: %s", stripeCustomerID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by stripe customer id: %w", err)
+	}
+
+	return &user, nil
+}

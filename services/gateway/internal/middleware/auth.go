@@ -98,6 +98,11 @@ func GetUser(ctx context.Context) (*models.User, bool) {
 	return user, ok
 }
 
+// SetUser adds a user to the context (primarily for testing)
+func SetUser(ctx context.Context, user *models.User) context.Context {
+	return context.WithValue(ctx, userContextKey, user)
+}
+
 func respondError(w http.ResponseWriter, status int, message, code string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

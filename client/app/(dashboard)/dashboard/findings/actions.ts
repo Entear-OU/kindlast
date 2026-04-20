@@ -1,28 +1,35 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { getApiConfig, buildApiUrl, API_ENDPOINTS } from '@/lib/api/config'
+
+async function getAccessToken(): Promise<string | null> {
+  const config = getApiConfig()
+  const cookieStore = await cookies()
+  return cookieStore.get(config.accessTokenCookie)?.value || null
+}
 
 export async function toggleFindingResolved(findingId: string, resolved: boolean) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const accessToken = await getAccessToken()
 
-  if (!user) {
+  if (!accessToken) {
     throw new Error('Unauthorized')
   }
 
-  const updateData: Record<string, unknown> = {
-    is_resolved: resolved,
-    resolved_at: resolved ? new Date().toISOString() : null,
-  }
+  const config = getApiConfig()
+  const url = buildApiUrl(API_ENDPOINTS.findings.update(findingId), config)
 
-  const { error } = await supabase
-    .from('findings')
-    .update(updateData)
-    .eq('id', findingId)
-    .eq('user_id', user.id)
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ is_resolved: resolved }),
+  })
 
-  if (error) {
+  if (!response.ok) {
     throw new Error('Failed to update finding')
   }
 
@@ -31,19 +38,23 @@ export async function toggleFindingResolved(findingId: string, resolved: boolean
 }
 
 export async function rerunAssessment(profileId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const accessToken = await getAccessToken()
 
-  if (!user) {
+  if (!accessToken) {
     throw new Error('Unauthorized')
   }
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/assess`, {
+  // Create a new assessment via the Gateway
+  const config = getApiConfig()
+  const url = buildApiUrl(API_ENDPOINTS.assessments.create, config)
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ profileId }),
+    body: JSON.stringify({ type: 'gdpr' }),
   })
 
   if (!response.ok) {
@@ -55,5 +66,5 @@ export async function rerunAssessment(profileId: string) {
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/findings')
 
-  return data.assessmentId
+  return data.id
 }

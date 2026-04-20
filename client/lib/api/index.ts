@@ -17,9 +17,16 @@ export {
 export {
   type GatewayUser,
   type GatewayAuthResponse,
+  type LoginRequest,
+  type RegisterRequest,
   GatewayAuthError,
   parseJwtExpiry,
   isTokenExpired,
+  login,
+  register,
+  loginAndStore,
+  registerAndStore,
+  getCurrentUser,
   exchangeSupabaseToken,
   refreshGatewayToken,
   storeGatewayTokens,
@@ -39,3 +46,22 @@ export {
   gateway,
   checkGatewayHealth,
 } from './client';
+
+// Data queries (replaces Supabase queries)
+export {
+  type PaginatedResponse,
+  type AssessmentListResponse,
+  type FindingListResponse,
+  type UserPlan,
+  getBusinessProfile,
+  saveBusinessProfile,
+  getLatestAssessment,
+  getAssessment,
+  listAssessments,
+  createAssessment,
+  updateAssessment,
+  getFindings,
+  getUserFindings,
+  updateFinding,
+  getUserPlan,
+} from './queries';

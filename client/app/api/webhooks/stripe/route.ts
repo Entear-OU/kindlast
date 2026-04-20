@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       signature,
       process.env.STRIPE_WEBHOOK_SECRET!
     )
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Invalid signature' },
       { status: 400 }
@@ -23,6 +23,14 @@ export async function POST(request: Request) {
   }
 
   const supabase = createServiceRoleClient()
+
+  // If Supabase is not configured, log the event but don't fail
+  // This allows the webhook to succeed during migration
+  if (!supabase) {
+    console.warn('Stripe webhook received but Supabase not configured:', event.type)
+    // TODO: Implement Gateway-based subscription updates
+    return NextResponse.json({ received: true, warning: 'Database not configured' }, { status: 200 })
+  }
 
   switch (event.type) {
     case 'checkout.session.completed': {

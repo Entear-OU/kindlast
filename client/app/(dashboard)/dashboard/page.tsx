@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { getBusinessProfile, getLatestAssessment, getFindings } from '@/lib/supabase/queries'
+import { getApiConfig, buildApiUrl, API_ENDPOINTS } from '@/lib/api/config'
 import { ScoreCard } from '@/components/dashboard/score-card'
 import { FindingsSummary } from '@/components/dashboard/findings-summary'
 import { RecentFindings } from '@/components/dashboard/recent-findings'
@@ -10,46 +10,64 @@ import { LegalDisclaimer } from '@/components/dashboard/legal-disclaimer'
 import { RunAssessmentButton } from '@/components/dashboard/run-assessment-button'
 import type { Assessment, Finding, BusinessProfile } from '@/lib/types/database'
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+async function fetchWithAuth<T>(endpoint: string, accessToken: string): Promise<T | null> {
+  const config = getApiConfig()
+  try {
+    const url = buildApiUrl(endpoint, config)
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
 
-  if (!user) {
+    if (!response.ok) {
+      return null
+    }
+
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+export default async function DashboardPage() {
+  const config = getApiConfig()
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get(config.accessTokenCookie)?.value
+
+  if (!accessToken) {
     redirect('/login')
   }
 
   // Check for business profile — redirect to onboarding if missing
-  const { data: profile } = await getBusinessProfile(supabase, user.id)
+  const profile = await fetchWithAuth<BusinessProfile>(API_ENDPOINTS.profile, accessToken)
   if (!profile) {
     redirect('/dashboard/onboarding')
   }
 
   // Fetch latest assessment
-  const { data: assessment } = await getLatestAssessment(supabase, user.id)
-  const typedAssessment = assessment as Assessment | null
+  const assessment = await fetchWithAuth<Assessment>(API_ENDPOINTS.assessments.latest, accessToken)
 
   // Fetch findings if assessment exists and is complete
   let findings: Finding[] = []
-  if (typedAssessment?.id && typedAssessment.status === 'complete') {
-    const { data: findingsData } = await getFindings(supabase, typedAssessment.id)
-    findings = (findingsData as Finding[]) || []
+  if (assessment?.id && assessment.status === 'complete') {
+    const findingsResponse = await fetchWithAuth<{ findings: Finding[] }>(
+      API_ENDPOINTS.assessments.findings(assessment.id),
+      accessToken
+    )
+    findings = findingsResponse?.findings || []
   }
-
-  const typedProfile = profile as BusinessProfile
 
   // Show processing state if assessment is pending or processing
   if (
-    typedAssessment &&
-    (typedAssessment.status === 'pending' || typedAssessment.status === 'processing')
+    assessment &&
+    (assessment.status === 'pending' || assessment.status === 'processing')
   ) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <AssessmentPolling
-          status={typedAssessment.status as 'pending' | 'processing'}
-          profileId={typedProfile.id}
+          status={assessment.status as 'pending' | 'processing'}
+          profileId={profile.id}
         />
         <LegalDisclaimer />
       </div>
@@ -57,7 +75,7 @@ export default async function DashboardPage() {
   }
 
   // No assessment yet
-  if (!typedAssessment) {
+  if (!assessment) {
     return (
       <div className="flex flex-col gap-6 p-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -66,7 +84,7 @@ export default async function DashboardPage() {
           <p className="mt-2 mb-4 text-sm text-muted-foreground">
             Run your first GDPR compliance assessment to see your score and findings.
           </p>
-          <RunAssessmentButton profileId={typedProfile.id} />
+          <RunAssessmentButton profileId={profile.id} />
         </div>
         <LegalDisclaimer />
       </div>
@@ -88,8 +106,8 @@ export default async function DashboardPage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <ScoreCard
-          score={typedAssessment.overall_score ?? 0}
-          riskLevel={typedAssessment.risk_level ?? 'unknown'}
+          score={assessment.overall_score ?? 0}
+          riskLevel={assessment.risk_level ?? 'unknown'}
         />
         <FindingsSummary findings={findings} />
       </div>

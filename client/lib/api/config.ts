@@ -55,10 +55,58 @@ export const API_ENDPOINTS = {
     me: '/api/v1/auth/me',
     exchange: '/api/v1/auth/exchange', // Exchange Supabase token for gateway token
   },
-  // RAG endpoints
+  // User endpoints
+  users: {
+    me: '/api/v1/users/me',
+    plan: '/api/v1/users/me/plan',
+  },
+  // RAG/Query endpoints
   rag: {
-    query: '/api/v1/rag/query',
+    query: '/api/v1/query',
     search: '/api/v1/rag/search',
+  },
+  // SME Assessment endpoints
+  profile: '/api/v1/profile',
+  assessments: {
+    list: '/api/v1/assessments',
+    create: '/api/v1/assessments',
+    latest: '/api/v1/assessments/latest',
+    get: (id: string) => `/api/v1/assessments/${id}`,
+    update: (id: string) => `/api/v1/assessments/${id}`,
+    findings: (id: string) => `/api/v1/assessments/${id}/findings`,
+  },
+  findings: {
+    list: '/api/v1/findings',
+    update: (id: string) => `/api/v1/findings/${id}`,
+  },
+  // DPO Copilot endpoints
+  clients: {
+    list: '/api/v1/clients',
+    create: '/api/v1/clients',
+    get: (id: string) => `/api/v1/clients/${id}`,
+    update: (id: string) => `/api/v1/clients/${id}`,
+    archive: (id: string) => `/api/v1/clients/${id}`,
+  },
+  artifacts: {
+    list: (clientId: string) => `/api/v1/clients/${clientId}/artifacts`,
+    generate: (clientId: string) => `/api/v1/clients/${clientId}/artifacts/generate`,
+    get: (clientId: string, artifactId: string) => `/api/v1/clients/${clientId}/artifacts/${artifactId}`,
+    update: (clientId: string, artifactId: string) => `/api/v1/clients/${clientId}/artifacts/${artifactId}`,
+    updateStatus: (clientId: string, artifactId: string) => `/api/v1/clients/${clientId}/artifacts/${artifactId}/status`,
+    audit: (clientId: string, artifactId: string) => `/api/v1/clients/${clientId}/artifacts/${artifactId}/audit`,
+    export: (clientId: string, artifactId: string) => `/api/v1/clients/${clientId}/artifacts/${artifactId}/export`,
+    versions: (clientId: string, artifactId: string) => `/api/v1/clients/${clientId}/artifacts/${artifactId}/versions`,
+  },
+  processors: {
+    list: '/api/v1/processors',
+    search: '/api/v1/processors/search',
+    categories: '/api/v1/processors/categories',
+    get: (slug: string) => `/api/v1/processors/${slug}`,
+  },
+  audit: {
+    list: '/api/v1/audit',
+    export: '/api/v1/audit/export',
+    summary: '/api/v1/audit/summary',
   },
   // Health check
   health: '/health',
