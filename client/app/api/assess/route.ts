@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
 
     const assessment = await assessmentResponse.json()
 
-    // Run AI assessment
-    const result = await assessGDPRCompliance(profile)
+    // Run AI assessment with the user's access token
+    const result = await assessGDPRCompliance(profile, accessToken)
 
     // Update assessment with results via Gateway
     const updateUrl = buildApiUrl(API_ENDPOINTS.assessments.update(assessment.id), config)

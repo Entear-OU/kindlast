@@ -82,8 +82,8 @@ Testing frameworks:
 |-------|-----------|
 | Framework | Next.js 16 (App Router) |
 | UI | shadcn/ui + Tailwind CSS v4 |
-| AI | Vercel AI SDK + Google Gemini 2.5 Flash |
-| Database | Supabase (Postgres + Auth + RLS) |
+| AI | Gateway RAG Service (hybrid search + reranking) |
+| Auth | Gateway JWT (email/password) |
 | Payments | Stripe (Checkout + Customer Portal) |
 | Validation | Zod |
 
@@ -118,11 +118,11 @@ All AI providers sit behind Go interfaces — switching providers requires confi
 
 **Server Actions**: Form submissions use Next.js server actions in colocated `actions.ts` files.
 
-**AI Integration**: Uses Vercel AI SDK's `generateObject()` with Zod schemas:
+**AI Integration**: Uses Gateway RAG service with Zod schemas:
 - `lib/ai/assess-gdpr.ts` — GDPR compliance assessment
 - `lib/ai/classify-ai-risk.ts` — EU AI Act risk classification
 
-**Database Access**: Supabase queries centralized in `lib/supabase/queries.ts`.
+**API Access**: Gateway API calls via `lib/api/gateway.ts` and `lib/api/config.ts`.
 
 ### Server Patterns (Planned)
 
@@ -175,7 +175,7 @@ pnpm test path/to/file.test.ts
 ## Environment Variables
 
 Key variables (see `.env.example`):
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_API_URL`, `API_URL_INTERNAL` — Gateway API URLs
 - `GOOGLE_GENERATIVE_AI_API_KEY`
 - `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `COHERE_API_KEY`
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`

@@ -17,10 +17,10 @@ AI-powered GDPR & EU AI Act compliance platform for EU SMEs.
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 15 (App Router) |
+| Framework | Next.js 16 (App Router) |
 | UI | shadcn/ui + Tailwind CSS v4 |
-| AI | Vercel AI SDK + Google Gemini 2.5 Flash |
-| Database | Supabase (Postgres + Auth + RLS) |
+| AI | Gateway RAG Service (hybrid search + reranking) |
+| Auth | Gateway JWT (email/password) |
 | Payments | Stripe (Checkout + Customer Portal) |
 | PDF Export | @react-pdf/renderer |
 | Validation | Zod |
@@ -30,24 +30,25 @@ AI-powered GDPR & EU AI Act compliance platform for EU SMEs.
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - pnpm
-- Supabase project
+- Docker (for running Gateway, RAG, and database services)
 - Google AI API key (Gemini)
 - Stripe account (test mode)
 
 ### Setup
 
 ```bash
-# Install dependencies
+# Start backend services with Docker Compose (from repo root)
+docker compose up -d
+
+# Install frontend dependencies
+cd client
 pnpm install
 
 # Copy environment variables
 cp .env.example .env.local
 # Fill in your API keys in .env.local
-
-# Run database migration
-# Apply supabase/migrations/001_initial_schema.sql to your Supabase project
 
 # Start development server
 pnpm dev
@@ -57,9 +58,8 @@ pnpm dev
 
 | Variable | Description |
 |----------|-------------|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
+| `NEXT_PUBLIC_API_URL` | Gateway API URL (default: `http://localhost:8080`) |
+| `API_URL_INTERNAL` | Internal Gateway URL for server-side requests |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI API key for Gemini |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
@@ -106,16 +106,14 @@ app/
 │   ├── classify/       # AI Act classification endpoint
 │   ├── export/         # PDF generation endpoint
 │   └── webhooks/stripe # Stripe webhook handler
-└── auth/callback/      # OAuth callback
+└── auth/callback/      # Auth callback
 
 lib/
 ├── ai/                 # AI assessment & classification
-├── auth/               # Auth server actions
+├── api/                # Gateway API client & auth
 ├── pdf/                # PDF report template
 ├── schemas/            # Zod validation schemas
 ├── stripe/             # Stripe utilities
-├── subscription/       # Premium gating
-├── supabase/           # Supabase client helpers & queries
 └── types/              # TypeScript type definitions
 
 components/
@@ -133,7 +131,7 @@ components/
 The project follows test-driven development (TDD). Tests are written with Vitest and React Testing Library.
 
 ```bash
-pnpm test           # 38 test suites, 197 tests
+pnpm test
 ```
 
 ## Legal Disclaimer

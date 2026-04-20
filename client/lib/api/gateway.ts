@@ -78,6 +78,8 @@ export interface QueryRAGOptions<T extends z.ZodTypeAny> {
   collection?: string
   topK?: number
   temperature?: number
+  /** JWT token for authentication (optional, falls back to GATEWAY_API_KEY) */
+  token?: string
 }
 
 // ============================================================================
@@ -437,13 +439,16 @@ function zodSchemaToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
 export async function queryRAGWithSchema<T extends z.ZodTypeAny>(
   options: QueryRAGOptions<T>
 ): Promise<RAGResponse<z.infer<T>>> {
-  const { query, systemPrompt, schema, collection = 'regulatory', topK = 5, temperature = 0.3 } = options
+  const { query, systemPrompt, schema, collection = 'regulatory', topK = 5, temperature = 0.3, token } = options
+
+  // Use provided token first, fall back to GATEWAY_API_KEY
+  const authToken = token || GATEWAY_API_KEY
 
   const response = await fetch(`${GATEWAY_URL}/api/v1/query`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(GATEWAY_API_KEY && { Authorization: `Bearer ${GATEWAY_API_KEY}` }),
+      ...(authToken && { Authorization: `Bearer ${authToken}` }),
     },
     body: JSON.stringify({
       query,

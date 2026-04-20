@@ -58,7 +58,7 @@ export async function POST() {
       isAutomatedDecision: boolean
     }>
 
-    const result = await classifyAIRisk(aiSystems)
+    const result = await classifyAIRisk(aiSystems, accessToken)
 
     // Create ai_act assessment via Gateway
     const assessmentUrl = buildApiUrl(API_ENDPOINTS.assessments.create, config)

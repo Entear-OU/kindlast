@@ -56,10 +56,12 @@ Provide a comprehensive GDPR compliance assessment with specific findings and ac
  * Assesses GDPR compliance for a business profile using the backend RAG service.
  *
  * @param profile - The business profile to assess
+ * @param token - JWT access token for authentication
  * @returns Assessment result with findings and citations from regulatory sources
  */
 export async function assessGDPRCompliance(
-  profile: BusinessProfile
+  profile: BusinessProfile,
+  token?: string
 ): Promise<AssessmentResultWithCitations> {
   const response = await queryRAGWithSchema({
     query: buildAssessmentPrompt(profile),
@@ -68,6 +70,7 @@ export async function assessGDPRCompliance(
     collection: 'gdpr',
     topK: 10,
     temperature: 0.3,
+    token,
   })
 
   return {

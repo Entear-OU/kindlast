@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { getStripe } from '@/lib/stripe'
 
 export async function POST(request: Request) {
@@ -22,71 +21,38 @@ export async function POST(request: Request) {
     )
   }
 
-  const supabase = createServiceRoleClient()
-
-  // If Supabase is not configured, log the event but don't fail
-  // This allows the webhook to succeed during migration
-  if (!supabase) {
-    console.warn('Stripe webhook received but Supabase not configured:', event.type)
-    // TODO: Implement Gateway-based subscription updates
-    return NextResponse.json({ received: true, warning: 'Database not configured' }, { status: 200 })
-  }
+  // TODO: Implement Gateway-based subscription management
+  // The Gateway should handle subscription status updates via its own database
+  // For now, we log the event and acknowledge receipt
 
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session
-      const userId = session.metadata?.user_id
-
-      if (userId) {
-        await supabase.from('subscriptions').upsert(
-          {
-            user_id: userId,
-            stripe_customer_id: session.customer as string,
-            stripe_subscription_id: session.subscription as string,
-            plan: 'premium',
-            status: 'active',
-          },
-          { onConflict: 'user_id' }
-        )
-      }
+      console.log('Checkout completed:', {
+        userId: session.metadata?.user_id,
+        customerId: session.customer,
+        subscriptionId: session.subscription,
+      })
+      // TODO: Call Gateway API to update user subscription
       break
     }
 
     case 'customer.subscription.updated': {
       const subscription = event.data.object as Stripe.Subscription
-      const userId = subscription.metadata?.user_id
-      const currentPeriodEnd = (subscription as unknown as Record<string, unknown>).current_period_end as number | undefined
-
-      if (userId) {
-        await supabase
-          .from('subscriptions')
-          .update({
-            status: subscription.status,
-            ...(currentPeriodEnd && {
-              current_period_end: new Date(
-                currentPeriodEnd * 1000
-              ).toISOString(),
-            }),
-          })
-          .eq('user_id', userId)
-      }
+      console.log('Subscription updated:', {
+        userId: subscription.metadata?.user_id,
+        status: subscription.status,
+      })
+      // TODO: Call Gateway API to update subscription status
       break
     }
 
     case 'customer.subscription.deleted': {
       const subscription = event.data.object as Stripe.Subscription
-      const userId = subscription.metadata?.user_id
-
-      if (userId) {
-        await supabase
-          .from('subscriptions')
-          .update({
-            plan: 'free',
-            status: 'canceled',
-            stripe_subscription_id: null,
-          })
-          .eq('user_id', userId)
-      }
+      console.log('Subscription deleted:', {
+        userId: subscription.metadata?.user_id,
+      })
+      // TODO: Call Gateway API to downgrade user to free plan
       break
     }
   }

@@ -1,9 +1,8 @@
 /**
  * Gateway JWT token management.
  *
- * This module bridges Supabase authentication with the backend gateway.
- * It handles:
- * - Exchanging Supabase tokens for gateway JWT tokens
+ * This module handles authentication with the backend gateway:
+ * - Login and registration with email/password
  * - Storing tokens securely in httpOnly cookies
  * - Refreshing tokens before expiry
  * - Providing a helper to get valid tokens for API calls
@@ -203,45 +202,6 @@ export async function register(userData: RegisterRequest): Promise<GatewayAuthRe
 }
 
 /**
- * Exchange a Supabase session token for gateway JWT tokens.
- * @deprecated Use login() or register() instead for direct Gateway auth
- *
- * @param supabaseToken The Supabase access token
- * @returns Gateway auth response with tokens and user info
- * @throws GatewayAuthError on failure
- */
-export async function exchangeSupabaseToken(
-  supabaseToken: string
-): Promise<GatewayAuthResponse> {
-  const config = getApiConfig();
-  const url = buildApiUrl(API_ENDPOINTS.auth.exchange, config);
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ supabase_token: supabaseToken }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new GatewayAuthError(
-      `Failed to exchange token: ${data.error || 'Unknown error'}`,
-      data.code || 'EXCHANGE_FAILED',
-      response.status
-    );
-  }
-
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    user: data.user,
-  };
-}
-
-/**
  * Refresh gateway access token using refresh token.
  *
  * @param refreshToken The gateway refresh token
@@ -405,23 +365,6 @@ export async function getValidGatewayToken(): Promise<string | null> {
     await clearGatewayTokens();
     return null;
   }
-}
-
-/**
- * Authenticate with gateway using Supabase session.
- * Exchanges Supabase token for gateway tokens and stores them.
- * @deprecated Use loginAndStore() or registerAndStore() instead
- *
- * @param supabaseToken The Supabase access token from session
- * @returns Gateway user info
- * @throws GatewayAuthError on failure
- */
-export async function authenticateWithGateway(
-  supabaseToken: string
-): Promise<GatewayUser> {
-  const response = await exchangeSupabaseToken(supabaseToken);
-  await storeGatewayTokens(response.accessToken, response.refreshToken);
-  return response.user;
 }
 
 /**

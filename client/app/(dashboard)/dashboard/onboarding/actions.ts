@@ -81,8 +81,8 @@ export async function completeOnboarding() {
     if (assessmentResponse.ok) {
       const assessment = await assessmentResponse.json()
 
-      // Run AI assessment
-      const result = await assessGDPRCompliance(profile)
+      // Run AI assessment with user's access token
+      const result = await assessGDPRCompliance(profile, accessToken)
 
       // Update assessment with results
       const updateUrl = buildApiUrl(API_ENDPOINTS.assessments.update(assessment.id), config)

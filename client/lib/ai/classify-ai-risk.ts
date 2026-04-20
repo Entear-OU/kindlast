@@ -70,10 +70,12 @@ cite relevant AI Act articles, and provide the compliance deadline.`
  * Classifies AI systems according to EU AI Act risk tiers using the backend RAG service.
  *
  * @param aiSystems - Array of AI system descriptions to classify
+ * @param token - JWT access token for authentication
  * @returns Classification result with risk tiers and citations from regulatory sources
  */
 export async function classifyAIRisk(
-  aiSystems: AISystem[]
+  aiSystems: AISystem[],
+  token?: string
 ): Promise<AIActClassificationWithCitations> {
   const response = await queryRAGWithSchema({
     query: buildClassificationPrompt(aiSystems),
@@ -82,6 +84,7 @@ export async function classifyAIRisk(
     collection: 'ai_act',
     topK: 10,
     temperature: 0.3,
+    token,
   })
 
   return {
