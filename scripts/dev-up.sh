@@ -25,7 +25,7 @@ echo ""
 # Step 1: Copy .env.example to .env.local if it doesn't exist
 if [ ! -f .env.local ]; then
     if [ -f .env.example ]; then
-        echo "[1/6] Creating .env.local from .env.example..."
+        echo "[1/7] Creating .env.local from .env.example..."
         cp .env.example .env.local
         echo "      Created .env.local - please configure API keys before running services"
     else
@@ -33,17 +33,17 @@ if [ ! -f .env.local ]; then
         exit 1
     fi
 else
-    echo "[1/6] .env.local already exists, skipping copy"
+    echo "[1/7] .env.local already exists, skipping copy"
 fi
 
 # Step 2: Start infrastructure services
 echo ""
-echo "[2/6] Starting infrastructure services (qdrant, redis, postgres)..."
+echo "[2/7] Starting infrastructure services (qdrant, redis, postgres)..."
 docker compose up -d qdrant redis postgres
 
 # Step 3: Wait for databases to be ready
 echo ""
-echo "[3/6] Waiting for databases to be ready..."
+echo "[3/7] Waiting for databases to be ready..."
 
 # Wait for health checks or timeout after 30 seconds
 TIMEOUT=30
@@ -87,22 +87,27 @@ else
     echo "      PostgreSQL is ready"
 fi
 
-# Step 4: Seed Qdrant collections
+# Step 4: Run database migrations
 echo ""
-echo "[4/6] Creating Qdrant collections..."
+echo "[4/7] Running database migrations..."
+bash "${SCRIPT_DIR}/run-migrations.sh"
+
+# Step 5: Seed Qdrant collections
+echo ""
+echo "[5/7] Creating Qdrant collections..."
 QDRANT_HOST=localhost:6333 bash "${SCRIPT_DIR}/seed-qdrant.sh"
 
-# Step 5: Seed processor profiles
+# Step 6: Seed processor profiles
 echo ""
-echo "[5/6] Seeding processor profiles..."
+echo "[6/7] Seeding processor profiles..."
 docker compose --profile processors run --rm processor-ingestion || {
     echo "      [WARN] Processor ingestion failed or service not available"
     echo "      This is expected if the ingestion service is not yet built"
 }
 
-# Step 6: Start application services
+# Step 7: Start application services
 echo ""
-echo "[6/6] Starting application services (gateway, rag, frontend)..."
+echo "[7/7] Starting application services (gateway, rag, frontend)..."
 docker compose up -d gateway rag frontend
 
 echo ""

@@ -19,8 +19,8 @@ export type QueryTopic = 'gdpr' | 'ai_act' | 'both'
  */
 export interface UseStreamingQueryOptions {
   /**
-   * Base URL for the RAG API
-   * @default process.env.NEXT_PUBLIC_RAG_API_URL || ''
+   * Base URL for the RAG API. Defaults to empty string to use local /api/query route.
+   * @default ''
    */
   baseUrl?: string
 
@@ -116,7 +116,8 @@ export function useStreamingQuery(
   options: UseStreamingQueryOptions = {}
 ): UseStreamingQueryReturn {
   const {
-    baseUrl = process.env.NEXT_PUBLIC_RAG_API_URL || '',
+    // Use local API route by default to handle auth via cookies
+    baseUrl = '',
     topic = 'both',
     topK,
   } = options
@@ -223,7 +224,7 @@ export function useStreamingQuery(
       // Execute fetch and process stream
       const runQuery = async () => {
         try {
-          const response = await fetch(`${baseUrl}/api/v1/query`, {
+          const response = await fetch(`${baseUrl}/api/query`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
