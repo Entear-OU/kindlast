@@ -14,7 +14,12 @@ class Config(BaseSettings):
     )
 
     # AI providers
+    embedding_provider: Literal["openai", "cohere", "local"] = Field(
+        default="openai",
+        description="Embedding provider: openai, cohere, or local"
+    )
     openai_api_key: str = Field(default="", description="OpenAI API key for embeddings")
+    openai_api_base_url: str = Field(default="", description="OpenAI API base URL (for local models like LMstudio)")
     cohere_api_key: str = Field(default="", description="Cohere API key for embeddings")
     firecrawl_api_key: str = Field(default="", description="Firecrawl API key for web scraping")
 
@@ -105,8 +110,17 @@ class Config(BaseSettings):
         """Validate that required API keys and connection strings are set."""
         errors = []
 
-        if not self.openai_api_key:
-            errors.append("OPENAI_API_KEY is required")
+        # Validate embedding provider configuration
+        if self.embedding_provider == "local":
+            if not self.openai_api_base_url:
+                errors.append("OPENAI_API_BASE_URL is required when using local embedding provider")
+        elif self.embedding_provider == "openai":
+            if not self.openai_api_key:
+                errors.append("OPENAI_API_KEY is required when using openai embedding provider")
+        elif self.embedding_provider == "cohere":
+            if not self.cohere_api_key:
+                errors.append("COHERE_API_KEY is required when using cohere embedding provider")
+
         if not self.firecrawl_api_key:
             errors.append("FIRECRAWL_API_KEY is required")
         if not self.postgres_dsn:
@@ -119,8 +133,17 @@ class Config(BaseSettings):
         """Validate configuration for processor profile ingestion mode."""
         errors = []
 
-        if not self.openai_api_key:
-            errors.append("OPENAI_API_KEY is required for processor embeddings")
+        # Validate embedding provider for processors
+        if self.embedding_provider == "local":
+            if not self.openai_api_base_url:
+                errors.append("OPENAI_API_BASE_URL is required for local processor embeddings")
+        elif self.embedding_provider == "openai":
+            if not self.openai_api_key:
+                errors.append("OPENAI_API_KEY is required for processor embeddings")
+        elif self.embedding_provider == "cohere":
+            if not self.cohere_api_key:
+                errors.append("COHERE_API_KEY is required for processor embeddings")
+
         if not self.postgres_dsn:
             errors.append("POSTGRES_DSN is required for processor storage")
 

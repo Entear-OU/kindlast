@@ -199,17 +199,18 @@ func (s *Server) handleProviderStatus(w http.ResponseWriter, r *http.Request) {
 
 	providerStatus := map[string]any{
 		"generation": map[string]any{
-			"primary":  s.config.Providers.Generation.Primary,
+			"provider": s.config.Providers.Generation.Provider,
 			"fallback": s.config.Providers.Generation.Fallback,
 			"healthy":  healthChecks["generator"] == nil,
 		},
 		"embedding": map[string]any{
-			"primary":  s.config.Providers.Embedding.Primary,
+			"provider": s.config.Providers.Embedding.Provider,
 			"fallback": s.config.Providers.Embedding.Fallback,
 			"healthy":  healthChecks["embedder"] == nil,
 		},
 		"reranking": map[string]any{
-			"primary":  s.config.Providers.Reranking.Primary,
+			"enabled":  s.config.Providers.Reranking.Enabled,
+			"provider": s.config.Providers.Reranking.Provider,
 			"fallback": s.config.Providers.Reranking.Fallback,
 			"healthy":  healthChecks["reranker"] == nil,
 		},
@@ -311,9 +312,10 @@ func main() {
 	}
 
 	logger.Info("configuration loaded",
-		"generation_primary", cfg.Providers.Generation.Primary,
-		"embedding_primary", cfg.Providers.Embedding.Primary,
-		"reranking_primary", cfg.Providers.Reranking.Primary,
+		"generation_provider", cfg.Providers.Generation.Provider,
+		"embedding_provider", cfg.Providers.Embedding.Provider,
+		"reranking_enabled", cfg.Providers.Reranking.Enabled,
+		"reranking_provider", cfg.Providers.Reranking.Provider,
 		"qdrant_host", cfg.Qdrant.Host,
 		"redis_url", cfg.Redis.URL,
 	)
@@ -399,13 +401,17 @@ func initEmbedder(cfg *config.Config, logger *slog.Logger) (providers.EmbeddingP
 	var primary providers.EmbeddingProvider
 	var err error
 
-	switch cfg.Providers.Embedding.Primary {
-	case "openai":
-		primary, err = embedding.NewOpenAIProvider(cfg.Providers.Embedding.OpenAIAPIKey, cfg.Providers.Embedding.OpenAIModel)
+	switch cfg.Providers.Embedding.Provider {
+	case "openai", "local":
+		primary, err = embedding.NewOpenAIProvider(
+			cfg.Providers.Embedding.OpenAIAPIKey,
+			cfg.Providers.Embedding.OpenAIModel,
+			cfg.Providers.Embedding.OpenAIBaseURL,
+		)
 	case "cohere":
 		primary, err = embedding.NewCohereProvider(cfg.Providers.Embedding.CohereAPIKey, cfg.Providers.Embedding.CohereModel)
 	default:
-		return nil, fmt.Errorf("unknown embedding provider: %s", cfg.Providers.Embedding.Primary)
+		return nil, fmt.Errorf("unknown embedding provider: %s", cfg.Providers.Embedding.Provider)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize primary embedder: %w", err)
@@ -415,8 +421,12 @@ func initEmbedder(cfg *config.Config, logger *slog.Logger) (providers.EmbeddingP
 	var fallback providers.EmbeddingProvider
 	if cfg.Providers.Embedding.Fallback != "" {
 		switch cfg.Providers.Embedding.Fallback {
-		case "openai":
-			fallback, err = embedding.NewOpenAIProvider(cfg.Providers.Embedding.OpenAIAPIKey, cfg.Providers.Embedding.OpenAIModel)
+		case "openai", "local":
+			fallback, err = embedding.NewOpenAIProvider(
+				cfg.Providers.Embedding.OpenAIAPIKey,
+				cfg.Providers.Embedding.OpenAIModel,
+				cfg.Providers.Embedding.OpenAIBaseURL,
+			)
 		case "cohere":
 			fallback, err = embedding.NewCohereProvider(cfg.Providers.Embedding.CohereAPIKey, cfg.Providers.Embedding.CohereModel)
 		default:
@@ -432,7 +442,7 @@ func initEmbedder(cfg *config.Config, logger *slog.Logger) (providers.EmbeddingP
 	// If fallback is configured, we'd use the router here
 	// For now, just return the primary provider directly
 	logger.Info("embedding provider initialized",
-		"primary", cfg.Providers.Embedding.Primary,
+		"provider", cfg.Providers.Embedding.Provider,
 		"has_fallback", fallback != nil,
 	)
 
@@ -464,17 +474,23 @@ func initRetriever(cfg *config.Config, logger *slog.Logger) (*retrieval.QdrantCl
 }
 
 func initReranker(cfg *config.Config, logger *slog.Logger) (providers.RerankProvider, error) {
+	// Check if reranking is disabled
+	if !cfg.Providers.Reranking.Enabled {
+		logger.Info("reranking is disabled")
+		return nil, nil // Return nil provider when disabled
+	}
+
 	// Initialize primary provider
 	var primary providers.RerankProvider
 	var err error
 
-	switch cfg.Providers.Reranking.Primary {
+	switch cfg.Providers.Reranking.Provider {
 	case "cohere":
 		primary, err = reranking.NewCohereProvider(cfg.Providers.Reranking.CohereAPIKey, cfg.Providers.Reranking.CohereModel)
 	case "jina":
 		primary, err = reranking.NewJinaProvider(cfg.Providers.Reranking.JinaAPIKey, cfg.Providers.Reranking.JinaModel)
 	default:
-		return nil, fmt.Errorf("unknown reranking provider: %s", cfg.Providers.Reranking.Primary)
+		return nil, fmt.Errorf("unknown reranking provider: %s", cfg.Providers.Reranking.Provider)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize primary reranker: %w", err)
@@ -499,7 +515,7 @@ func initReranker(cfg *config.Config, logger *slog.Logger) (providers.RerankProv
 
 	// Return primary provider with fallback
 	logger.Info("reranking provider initialized",
-		"primary", cfg.Providers.Reranking.Primary,
+		"provider", cfg.Providers.Reranking.Provider,
 		"has_fallback", fallback != nil,
 	)
 
@@ -521,13 +537,17 @@ func initGenerator(cfg *config.Config, logger *slog.Logger) (providers.Generatio
 	var primary providers.GenerationProvider
 	var err error
 
-	switch cfg.Providers.Generation.Primary {
+	switch cfg.Providers.Generation.Provider {
 	case "anthropic", "claude":
 		primary, err = generation.NewClaudeProvider(cfg.Providers.Generation.AnthropicAPIKey, cfg.Providers.Generation.AnthropicModel)
-	case "openai":
-		primary, err = generation.NewOpenAIProvider(cfg.Providers.Generation.OpenAIAPIKey, cfg.Providers.Generation.OpenAIModel)
+	case "openai", "local":
+		primary, err = generation.NewOpenAIProvider(
+			cfg.Providers.Generation.OpenAIAPIKey,
+			cfg.Providers.Generation.OpenAIModel,
+			cfg.Providers.Generation.OpenAIBaseURL,
+		)
 	default:
-		return nil, fmt.Errorf("unknown generation provider: %s", cfg.Providers.Generation.Primary)
+		return nil, fmt.Errorf("unknown generation provider: %s", cfg.Providers.Generation.Provider)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize primary generator: %w", err)
@@ -539,8 +559,12 @@ func initGenerator(cfg *config.Config, logger *slog.Logger) (providers.Generatio
 		switch cfg.Providers.Generation.Fallback {
 		case "anthropic", "claude":
 			fallback, err = generation.NewClaudeProvider(cfg.Providers.Generation.AnthropicAPIKey, cfg.Providers.Generation.AnthropicModel)
-		case "openai":
-			fallback, err = generation.NewOpenAIProvider(cfg.Providers.Generation.OpenAIAPIKey, cfg.Providers.Generation.OpenAIModel)
+		case "openai", "local":
+			fallback, err = generation.NewOpenAIProvider(
+				cfg.Providers.Generation.OpenAIAPIKey,
+				cfg.Providers.Generation.OpenAIModel,
+				cfg.Providers.Generation.OpenAIBaseURL,
+			)
 		default:
 			logger.Warn("unknown fallback generation provider, skipping", "provider", cfg.Providers.Generation.Fallback)
 		}
@@ -552,7 +576,7 @@ func initGenerator(cfg *config.Config, logger *slog.Logger) (providers.Generatio
 
 	// Return primary provider with fallback
 	logger.Info("generation provider initialized",
-		"primary", cfg.Providers.Generation.Primary,
+		"provider", cfg.Providers.Generation.Provider,
 		"has_fallback", fallback != nil,
 	)
 

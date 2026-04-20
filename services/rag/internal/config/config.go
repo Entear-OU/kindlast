@@ -59,11 +59,12 @@ type ProvidersConfig struct {
 
 // GenerationConfig holds generation provider configuration
 type GenerationConfig struct {
-	Primary         string // "anthropic" or "openai"
+	Provider        string // "anthropic", "openai", or "local"
 	Fallback        string
 	AnthropicAPIKey string
 	AnthropicModel  string
 	OpenAIAPIKey    string
+	OpenAIBaseURL   string // For local models (LMstudio)
 	OpenAIModel     string
 	Temperature     float32
 	MaxTokens       int
@@ -72,9 +73,10 @@ type GenerationConfig struct {
 
 // EmbeddingConfig holds embedding provider configuration
 type EmbeddingConfig struct {
-	Primary        string // "openai" or "cohere"
+	Provider       string // "openai", "cohere", or "local"
 	Fallback       string
 	OpenAIAPIKey   string
+	OpenAIBaseURL  string // For local models (LMstudio)
 	OpenAIModel    string
 	CohereAPIKey   string
 	CohereModel    string
@@ -84,7 +86,8 @@ type EmbeddingConfig struct {
 
 // RerankingConfig holds reranking provider configuration
 type RerankingConfig struct {
-	Primary      string // "cohere" or "jina"
+	Enabled      bool   // Whether reranking is enabled
+	Provider     string // "cohere" or "jina"
 	Fallback     string
 	CohereAPIKey string
 	CohereModel  string
@@ -125,30 +128,35 @@ func Load() (*Config, error) {
 		},
 		Providers: ProvidersConfig{
 			Generation: GenerationConfig{
-				Primary:         getEnv("GENERATION_PRIMARY", "anthropic"),
-				Fallback:        getEnv("GENERATION_FALLBACK", "openai"),
-				AnthropicAPIKey: requireEnv("ANTHROPIC_API_KEY"),
+				Provider:        getEnv("RAG_PROVIDER", "anthropic"),
+				Fallback:        getEnv("RAG_FALLBACK", "openai"),
+				AnthropicAPIKey: getEnv("ANTHROPIC_API_KEY", ""),
 				AnthropicModel:  getEnv("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929"),
-				OpenAIAPIKey:    requireEnv("OPENAI_API_KEY"),
-				OpenAIModel:     getEnv("OPENAI_MODEL", "gpt-4o"),
-				Temperature:     getFloat32Env("GENERATION_TEMPERATURE", 0.3),
-				MaxTokens:       getIntEnv("GENERATION_MAX_TOKENS", 4096),
-				Timeout:         getDurationEnv("GENERATION_TIMEOUT", 60*time.Second),
+				OpenAIAPIKey:    getEnv("OPENAI_API_KEY", ""),
+				OpenAIBaseURL:   getEnv("OPENAI_API_BASE_URL", ""), // For LMstudio: http://host.docker.internal:1234/v1
+				OpenAIModel:     getEnv("RAG_MODEL", getEnv("OPENAI_MODEL", "gpt-4o")),
+				Temperature:     getFloat32Env("RAG_TEMPERATURE", 0.3),
+				MaxTokens:       getIntEnv("RAG_MAX_TOKENS", 4096),
+				Timeout:         getDurationEnv("RAG_TIMEOUT", 60*time.Second),
 			},
 			Embedding: EmbeddingConfig{
-				Primary:      getEnv("EMBEDDING_PRIMARY", "openai"),
+				Provider:     getEnv("EMBEDDING_PROVIDER", "openai"),
 				Fallback:     getEnv("EMBEDDING_FALLBACK", "cohere"),
-				OpenAIAPIKey: requireEnv("OPENAI_API_KEY"),
-				OpenAIModel:  getEnv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large"),
-				CohereAPIKey: requireEnv("COHERE_API_KEY"),
+				OpenAIAPIKey: getEnv("OPENAI_API_KEY", ""),
+				OpenAIBaseURL: getEnv("EMBEDDING_BASE_URL",
+					getEnv("OPENAI_API_BASE_URL", "")), // Fallback to same as generation
+				OpenAIModel:  getEnv("EMBEDDING_MODEL", "text-embedding-3-large"),
+				CohereAPIKey: getEnv("COHERE_API_KEY", ""),
 				CohereModel:  getEnv("COHERE_EMBEDDING_MODEL", "embed-multilingual-v3.0"),
-				Dimensions:   getIntEnv("EMBEDDING_DIMENSIONS", 3072),
+				Dimensions:   getIntEnv("EMBEDDING_DIMENSION",
+					getIntEnv("EMBEDDING_DIMENSIONS", 3072)),
 				Timeout:      getDurationEnv("EMBEDDING_TIMEOUT", 30*time.Second),
 			},
 			Reranking: RerankingConfig{
-				Primary:      getEnv("RERANKING_PRIMARY", "cohere"),
-				Fallback:     getEnv("RERANKING_FALLBACK", "jina"),
-				CohereAPIKey: requireEnv("COHERE_API_KEY"),
+				Enabled:      getBoolEnv("RERANK_ENABLED", true),
+				Provider:     getEnv("RERANK_PROVIDER", "cohere"),
+				Fallback:     getEnv("RERANK_FALLBACK", "jina"),
+				CohereAPIKey: getEnv("COHERE_API_KEY", ""),
 				CohereModel:  getEnv("COHERE_RERANKING_MODEL", "rerank-v3.5"),
 				JinaAPIKey:   getEnv("JINA_API_KEY", ""),
 				JinaModel:    getEnv("JINA_RERANKING_MODEL", "jina-reranker-v2-base-multilingual"),
@@ -190,15 +198,46 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("postgres DSN is required")
 	}
 
-	// Provider validation
-	if c.Providers.Generation.AnthropicAPIKey == "" && c.Providers.Generation.OpenAIAPIKey == "" {
-		return fmt.Errorf("at least one generation provider API key is required")
+	// Provider validation - only required if not using local providers
+	gen := c.Providers.Generation
+	if gen.Provider == "local" {
+		if gen.OpenAIBaseURL == "" {
+			return fmt.Errorf("OPENAI_API_BASE_URL is required when using local generation provider")
+		}
+	} else {
+		// Cloud providers require API keys
+		if gen.Provider == "anthropic" && gen.AnthropicAPIKey == "" {
+			return fmt.Errorf("ANTHROPIC_API_KEY is required when using anthropic provider")
+		}
+		if gen.Provider == "openai" && gen.OpenAIAPIKey == "" {
+			return fmt.Errorf("OPENAI_API_KEY is required when using openai provider")
+		}
 	}
-	if c.Providers.Embedding.OpenAIAPIKey == "" && c.Providers.Embedding.CohereAPIKey == "" {
-		return fmt.Errorf("at least one embedding provider API key is required")
+
+	emb := c.Providers.Embedding
+	if emb.Provider == "local" {
+		if emb.OpenAIBaseURL == "" {
+			return fmt.Errorf("EMBEDDING_BASE_URL or OPENAI_API_BASE_URL is required when using local embedding provider")
+		}
+	} else {
+		// Cloud providers require API keys
+		if emb.Provider == "openai" && emb.OpenAIAPIKey == "" {
+			return fmt.Errorf("OPENAI_API_KEY is required when using openai embedding provider")
+		}
+		if emb.Provider == "cohere" && emb.CohereAPIKey == "" {
+			return fmt.Errorf("COHERE_API_KEY is required when using cohere embedding provider")
+		}
 	}
-	if c.Providers.Reranking.CohereAPIKey == "" && c.Providers.Reranking.JinaAPIKey == "" {
-		return fmt.Errorf("at least one reranking provider API key is required")
+
+	// Reranking validation - only if enabled
+	if c.Providers.Reranking.Enabled {
+		rerank := c.Providers.Reranking
+		if rerank.Provider == "cohere" && rerank.CohereAPIKey == "" {
+			return fmt.Errorf("COHERE_API_KEY is required when reranking is enabled with cohere provider")
+		}
+		if rerank.Provider == "jina" && rerank.JinaAPIKey == "" {
+			return fmt.Errorf("JINA_API_KEY is required when reranking is enabled with jina provider")
+		}
 	}
 
 	return nil
@@ -243,6 +282,15 @@ func getDurationEnv(key string, defaultValue time.Duration) time.Duration {
 	if value := os.Getenv(key); value != "" {
 		if duration, err := time.ParseDuration(value); err == nil {
 			return duration
+		}
+	}
+	return defaultValue
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
 		}
 	}
 	return defaultValue

@@ -24,6 +24,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-w -s -X main.version=${VERSION}" \
     -o rag ./cmd/server
 
+# Busybox for wget (used in health checks)
+FROM busybox:1.36-musl AS busybox
+
 # Final stage: scratch for minimal attack surface
 FROM scratch
 
@@ -32,6 +35,9 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy timezone data for proper time handling
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# Copy wget for health checks
+COPY --from=busybox /bin/wget /usr/local/bin/wget
 
 # Copy the binary
 COPY --from=builder /app/rag /rag
@@ -44,6 +50,6 @@ USER 1001
 
 # Health check endpoint
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/rag", "healthcheck"] || exit 1
+    CMD ["/usr/local/bin/wget", "-qO-", "http://localhost:8081/health"]
 
 ENTRYPOINT ["/rag"]

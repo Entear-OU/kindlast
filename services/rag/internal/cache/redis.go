@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/entear/kindlast/services/rag/internal/retrieval"
@@ -26,8 +27,17 @@ type RedisCache struct {
 	ttl    time.Duration
 }
 
-// NewRedisCache creates a new Redis cache client
+// NewRedisCache creates a new Redis cache client.
+// addr can be a host:port string or a redis:// URI.
 func NewRedisCache(addr string, password string, db int) (*RedisCache, error) {
+	// If addr is a redis:// URI, extract host:port
+	if u, err := url.Parse(addr); err == nil && (u.Scheme == "redis" || u.Scheme == "rediss") {
+		addr = u.Host
+		if addr == "" {
+			addr = "localhost:6379"
+		}
+	}
+
 	client := redis.NewClient(&redis.Options{
 		Addr:         addr,
 		Password:     password,

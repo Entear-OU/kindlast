@@ -2,7 +2,6 @@ package embedding
 
 import (
 	"context"
-	"errors"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -16,17 +15,31 @@ type OpenAIProvider struct {
 }
 
 // NewOpenAIProvider creates a new OpenAI embedding provider
-func NewOpenAIProvider(apiKey string, model string) (*OpenAIProvider, error) {
-	if apiKey == "" {
-		return nil, errors.New("openai API key is required")
-	}
-
+// For local models (LMstudio), pass baseURL like "http://localhost:1234/v1"
+// apiKey can be empty for local models
+func NewOpenAIProvider(apiKey string, model string, baseURL string) (*OpenAIProvider, error) {
 	modelEnum := openai.EmbeddingModelTextEmbedding3Large
 	if model != "" {
 		modelEnum = openai.EmbeddingModel(model)
 	}
 
-	client := openai.NewClient(option.WithAPIKey(apiKey))
+	// Build client options
+	opts := []option.RequestOption{}
+
+	// API key is optional for local models (LMstudio)
+	if apiKey != "" {
+		opts = append(opts, option.WithAPIKey(apiKey))
+	} else {
+		// LMstudio doesn't need auth, but the SDK requires *something*
+		opts = append(opts, option.WithAPIKey("not-needed"))
+	}
+
+	// Override base URL for local models
+	if baseURL != "" {
+		opts = append(opts, option.WithBaseURL(baseURL))
+	}
+
+	client := openai.NewClient(opts...)
 
 	return &OpenAIProvider{
 		client: &client,

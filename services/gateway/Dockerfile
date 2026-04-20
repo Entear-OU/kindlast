@@ -22,6 +22,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o gateway \
     cmd/server/main.go
 
+# Build healthcheck binary
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -a \
+    -installsuffix cgo \
+    -ldflags="-w -s -extldflags '-static'" \
+    -trimpath \
+    -o healthcheck \
+    cmd/healthcheck/main.go
+
 # Runtime stage - using distroless for minimal attack surface
 FROM gcr.io/distroless/static-debian12:nonroot
 
@@ -30,6 +39,9 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy binary from builder
 COPY --from=builder /app/gateway /gateway
+
+# Copy healthcheck binary from builder
+COPY --from=builder /app/healthcheck /healthcheck
 
 # Use non-root user (distroless nonroot user)
 USER nonroot:nonroot
