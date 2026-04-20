@@ -28,11 +28,22 @@ const DEFAULT_CONFIG: ApiConfig = {
 };
 
 /**
- * Get API configuration with environment overrides
+ * Get API configuration with environment overrides.
+ * Uses internal URL for server-side requests (Docker network) and
+ * public URL for client-side requests (browser).
  */
 export function getApiConfig(): ApiConfig {
+  // For server-side requests, use internal URL if available (Docker network)
+  // For client-side requests, use public URL (browser access)
+  const isServer = typeof window === 'undefined';
+  const internalUrl = process.env.API_URL_INTERNAL;
+  const publicUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_CONFIG.baseUrl;
+
+  // Use internal URL for server-side, public URL for client-side
+  const baseUrl = isServer && internalUrl ? internalUrl : publicUrl;
+
   return {
-    baseUrl: process.env.NEXT_PUBLIC_API_URL || DEFAULT_CONFIG.baseUrl,
+    baseUrl,
     timeout: parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || String(DEFAULT_CONFIG.timeout), 10),
     tokenExpiryBuffer: parseInt(
       process.env.NEXT_PUBLIC_TOKEN_EXPIRY_BUFFER || String(DEFAULT_CONFIG.tokenExpiryBuffer),
