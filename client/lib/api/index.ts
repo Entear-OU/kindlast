@@ -27,14 +27,12 @@ export {
   loginAndStore,
   registerAndStore,
   getCurrentUser,
-  exchangeSupabaseToken,
   refreshGatewayToken,
   storeGatewayTokens,
   getGatewayToken,
   getGatewayRefreshToken,
   clearGatewayTokens,
   getValidGatewayToken,
-  authenticateWithGateway,
 } from './auth';
 
 // API client

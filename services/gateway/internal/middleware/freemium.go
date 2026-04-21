@@ -47,7 +47,8 @@ func Freemium(redisClient *redis.Client, logger *slog.Logger) func(next http.Han
 			}
 
 			// For streaming responses, add plan headers for downstream services
-			if r.Header.Get("Accept") == "text/event-stream" {
+			// Use Contains to handle Accept headers with parameters (e.g., "text/event-stream; charset=utf-8")
+			if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 				r.Header.Set("X-User-Plan", user.Plan)
 				citationLimit := getCitationLimitForPlan(user.Plan)
 				r.Header.Set("X-Citation-Limit", fmt.Sprintf("%d", citationLimit))

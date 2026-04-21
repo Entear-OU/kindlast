@@ -10,21 +10,19 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
-// Mock useStreamingQuery hook
-const mockExecuteQuery = vi.fn()
+// Mock useComplianceQuery hook
+const mockSubmitQuery = vi.fn()
 const mockReset = vi.fn()
-const mockAbort = vi.fn()
 
-vi.mock('@/hooks/use-streaming-query', () => ({
-  useStreamingQuery: vi.fn(() => ({
-    data: '',
+vi.mock('@/hooks/use-compliance-query', () => ({
+  useComplianceQuery: vi.fn(() => ({
+    answer: '',
     citations: [],
-    isStreaming: false,
+    isLoading: false,
     error: null,
     metadata: null,
-    executeQuery: mockExecuteQuery,
+    submitQuery: mockSubmitQuery,
     reset: mockReset,
-    abort: mockAbort,
   })),
 }))
 
@@ -66,12 +64,12 @@ vi.mock('@/components/query', () => ({
   ),
   AnswerStream: ({
     content,
-    isStreaming,
+    isLoading,
     error,
     onRetry,
   }: {
     content: string
-    isStreaming: boolean
+    isLoading: boolean
     error?: Error | null
     onRetry?: () => void
   }) => (
@@ -84,7 +82,7 @@ vi.mock('@/components/query', () => ({
       ) : (
         <>
           <div data-testid="answer-content">{content}</div>
-          {isStreaming && <span data-testid="streaming-indicator">Loading...</span>}
+          {isLoading && <span data-testid="streaming-indicator">Loading...</span>}
         </>
       )}
     </div>
@@ -141,7 +139,7 @@ global.fetch = mockFetch
 
 // Import after mocks
 import QueryPage from '@/app/(dashboard)/dashboard/query/page'
-import { useStreamingQuery } from '@/hooks/use-streaming-query'
+import { useComplianceQuery } from '@/hooks/use-compliance-query'
 
 describe('QueryPage', () => {
   beforeEach(() => {
@@ -309,7 +307,7 @@ describe('QueryPage', () => {
       await user.click(submitButton)
 
       expect(mockReset).toHaveBeenCalled()
-      expect(mockExecuteQuery).toHaveBeenCalledWith('What is GDPR?')
+      expect(mockSubmitQuery).toHaveBeenCalledWith('What is GDPR?', 'gdpr')
     })
 
     it('increments daily query count on submission', async () => {
@@ -335,15 +333,14 @@ describe('QueryPage', () => {
 
   describe('streaming response', () => {
     it('shows answer stream when there is content', async () => {
-      vi.mocked(useStreamingQuery).mockReturnValue({
-        data: 'This is the answer about GDPR.',
+      vi.mocked(useComplianceQuery).mockReturnValue({
+        answer: 'This is the answer about GDPR.',
         citations: [],
-        isStreaming: false,
+        isLoading: false,
         error: null,
         metadata: null,
-        executeQuery: mockExecuteQuery,
+        submitQuery: mockSubmitQuery,
         reset: mockReset,
-        abort: mockAbort,
       })
 
       render(<QueryPage />)
@@ -357,15 +354,14 @@ describe('QueryPage', () => {
     })
 
     it('shows streaming indicator while streaming', async () => {
-      vi.mocked(useStreamingQuery).mockReturnValue({
-        data: 'Partial answer...',
+      vi.mocked(useComplianceQuery).mockReturnValue({
+        answer: 'Partial answer...',
         citations: [],
-        isStreaming: true,
+        isLoading: true,
         error: null,
         metadata: null,
-        executeQuery: mockExecuteQuery,
+        submitQuery: mockSubmitQuery,
         reset: mockReset,
-        abort: mockAbort,
       })
 
       render(<QueryPage />)
@@ -378,18 +374,17 @@ describe('QueryPage', () => {
 
   describe('citations display', () => {
     it('shows citation list when citations are available', async () => {
-      vi.mocked(useStreamingQuery).mockReturnValue({
-        data: 'Answer with citations.',
+      vi.mocked(useComplianceQuery).mockReturnValue({
+        answer: 'Answer with citations.',
         citations: [
-          { source: 'EUR-Lex', url: 'https://eur-lex.europa.eu/1', title: 'GDPR', excerpt: 'Test' },
-          { source: 'EDPB', url: 'https://edpb.europa.eu/1', title: 'Guidelines', excerpt: 'Test' },
+          { source: 'EUR-Lex', url: 'https://eur-lex.europa.eu/1', title: 'GDPR', excerpt: 'Test', relevance: 0.85 },
+          { source: 'EDPB', url: 'https://edpb.europa.eu/1', title: 'Guidelines', excerpt: 'Test', relevance: 0.8 },
         ],
-        isStreaming: false,
+        isLoading: false,
         error: null,
-        metadata: { maxRelevance: 0.85 },
-        executeQuery: mockExecuteQuery,
+        metadata: { maxRelevance: 0.85, confidenceOk: true, citationCount: 2 },
+        submitQuery: mockSubmitQuery,
         reset: mockReset,
-        abort: mockAbort,
       })
 
       render(<QueryPage />)
@@ -402,15 +397,14 @@ describe('QueryPage', () => {
 
   describe('error handling', () => {
     it('displays error message when query fails', async () => {
-      vi.mocked(useStreamingQuery).mockReturnValue({
-        data: '',
+      vi.mocked(useComplianceQuery).mockReturnValue({
+        answer: '',
         citations: [],
-        isStreaming: false,
+        isLoading: false,
         error: 'Failed to fetch response',
         metadata: null,
-        executeQuery: mockExecuteQuery,
+        submitQuery: mockSubmitQuery,
         reset: mockReset,
-        abort: mockAbort,
       })
 
       render(<QueryPage />)
@@ -475,17 +469,16 @@ describe('QueryPage', () => {
 
   describe('two-column layout', () => {
     it('renders with grid layout for answer and citations', async () => {
-      vi.mocked(useStreamingQuery).mockReturnValue({
-        data: 'Answer content.',
+      vi.mocked(useComplianceQuery).mockReturnValue({
+        answer: 'Answer content.',
         citations: [
-          { source: 'EUR-Lex', url: 'https://eur-lex.europa.eu/1', title: 'GDPR', excerpt: 'Test' },
+          { source: 'EUR-Lex', url: 'https://eur-lex.europa.eu/1', title: 'GDPR', excerpt: 'Test', relevance: 0.85 },
         ],
-        isStreaming: false,
+        isLoading: false,
         error: null,
-        metadata: { maxRelevance: 0.85 },
-        executeQuery: mockExecuteQuery,
+        metadata: { maxRelevance: 0.85, confidenceOk: true, citationCount: 1 },
+        submitQuery: mockSubmitQuery,
         reset: mockReset,
-        abort: mockAbort,
       })
 
       const { container } = render(<QueryPage />)

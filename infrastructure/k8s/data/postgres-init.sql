@@ -24,29 +24,31 @@ CREATE TABLE subscriptions (
 
 -- Parent chunks (large context for generation)
 CREATE TABLE parent_chunks (
-  id TEXT PRIMARY KEY,                -- deterministic UUID from doc_id + chunk_index
-  doc_id TEXT NOT NULL,
-  source_url TEXT NOT NULL,
+  id VARCHAR(36) PRIMARY KEY,
+  doc_id VARCHAR(36) NOT NULL,
   text TEXT NOT NULL,
-  document_title TEXT,
-  scraped_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  section_title TEXT,
+  source_url TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  is_table BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_parent_chunks_doc_id ON parent_chunks(doc_id);
 
--- Ingestion log (per-document, per-run)
+-- Ingestion log (per-document, tracks latest status with upsert)
 CREATE TABLE ingestion_log (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  doc_id TEXT NOT NULL,
+  id SERIAL PRIMARY KEY,
+  doc_id VARCHAR(36) NOT NULL UNIQUE,
   source_url TEXT NOT NULL,
   chunk_count INT,
-  content_hash TEXT,
-  status TEXT NOT NULL,               -- success | failed | skipped
+  content_hash VARCHAR(64) NOT NULL,
+  status VARCHAR(20) NOT NULL,        -- success | failed | skipped
   error_message TEXT,
-  run_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX idx_ingestion_log_doc_id ON ingestion_log(doc_id);
-CREATE INDEX idx_ingestion_log_run_at ON ingestion_log(run_at);
+CREATE INDEX idx_ingestion_log_source_url ON ingestion_log(source_url);
 
 -- Query audit log
 CREATE TABLE query_log (
@@ -72,13 +74,14 @@ CREATE TABLE response_feedback (
 
 -- Dead letter queue for failed ingestion
 CREATE TABLE ingestion_dead_letter (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id SERIAL PRIMARY KEY,
   source_url TEXT NOT NULL,
-  failure_count INT DEFAULT 1,
-  last_error TEXT,
-  last_attempted_at TIMESTAMPTZ DEFAULT NOW(),
-  resolved BOOLEAN DEFAULT FALSE
+  error_message TEXT NOT NULL,
+  retry_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_retry_at TIMESTAMPTZ
 );
+CREATE INDEX idx_dead_letter_source_url ON ingestion_dead_letter(source_url);
 
 -- =============================================
 -- DPO COPILOT TABLES

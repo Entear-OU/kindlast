@@ -26,9 +26,10 @@ import type {
 
 // Legacy configuration (for backward compatibility)
 // Use internal URL for server-side requests (Docker network)
+// Falls back to NEXT_PUBLIC_API_URL for local development without Docker
 const isServer = typeof window === 'undefined'
 const GATEWAY_URL = isServer
-  ? (process.env.API_URL_INTERNAL || process.env.GATEWAY_URL || 'http://gateway:8080')
+  ? (process.env.API_URL_INTERNAL || process.env.GATEWAY_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY || ''
 

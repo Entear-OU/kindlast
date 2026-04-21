@@ -85,6 +85,12 @@ func FreemiumMiddleware(enforcer *Enforcer) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Skip interception for streaming (SSE) requests - they need http.Flusher
+			if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Create response interceptor
 			interceptor := &responseInterceptor{
 				ResponseWriter: w,

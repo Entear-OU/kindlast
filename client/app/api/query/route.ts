@@ -1,6 +1,46 @@
 import { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
+import { createUIMessageStream, createUIMessageStreamResponse } from 'ai'
 import { getApiConfig, buildApiUrl } from '@/lib/api/config'
+
+// Types matching backend SSE events
+interface RAGChunk {
+  type: 'content' | 'citation' | 'metadata' | 'error' | 'done'
+  text?: string
+  citation?: {
+    source: string
+    title: string
+    url: string
+    excerpt: string
+    relevance: number
+  }
+  metadata?: {
+    confidenceOk: boolean
+    maxRelevance: number
+    citationCount: number
+  }
+  error?: string
+}
+
+// Parse SSE event from RAG service
+function parseSSEEvent(event: string): RAGChunk | null {
+  const lines = event.split('\n')
+  let data: string | null = null
+
+  for (const line of lines) {
+    if (line.startsWith('data:')) {
+      data = line.slice(5).trim()
+    }
+  }
+
+  if (!data) return null
+
+  try {
+    return JSON.parse(data) as RAGChunk
+  } catch {
+    return null
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,15 +58,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const gatewayUrl = buildApiUrl('/api/v1/query', config)
 
-    // Forward the request to the gateway with auth
+    // Request streaming from backend
     const response = await fetch(gatewayUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
-        'Accept': body.stream ? 'text/event-stream' : 'application/json',
+        'Accept': 'text/event-stream',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, stream: true }),
     })
 
     if (!response.ok) {
@@ -37,24 +77,124 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // For streaming responses, pipe through the SSE stream
-    if (body.stream && response.body) {
-      return new Response(response.body, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      })
+    if (!response.body) {
+      return new Response(
+        JSON.stringify({ error: 'No response body' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
     }
 
-    // For non-streaming responses, return JSON
-    const data = await response.json()
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    // Create UI message stream for AI SDK compatibility
+    const stream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        const reader = response.body!.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        const citations: RAGChunk['citation'][] = []
+        let metadata: RAGChunk['metadata'] | null = null
+        const textId = `text-${Date.now()}`
+        let textStarted = false
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const events = buffer.split('\n\n')
+            buffer = events.pop() || ''
+
+            for (const event of events) {
+              if (!event.trim()) continue
+
+              const chunk = parseSSEEvent(event)
+              if (!chunk) continue
+
+              switch (chunk.type) {
+                case 'content':
+                  if (chunk.text) {
+                    // Start text block on first content
+                    if (!textStarted) {
+                      writer.write({ type: 'text-start', id: textId })
+                      textStarted = true
+                    }
+                    // Stream text delta
+                    writer.write({ type: 'text-delta', id: textId, delta: chunk.text })
+                  }
+                  break
+
+                case 'citation':
+                  if (chunk.citation) {
+                    citations.push(chunk.citation)
+                  }
+                  break
+
+                case 'metadata':
+                  if (chunk.metadata) {
+                    metadata = chunk.metadata
+                  }
+                  break
+
+                case 'error':
+                  if (chunk.error) {
+                    // Send error as data part
+                    writer.write({
+                      type: 'data-error' as const,
+                      id: 'error',
+                      data: { message: chunk.error },
+                    })
+                  }
+                  break
+
+                case 'done':
+                  // End text block
+                  if (textStarted) {
+                    writer.write({ type: 'text-end', id: textId })
+                  }
+                  // Send citations as data part
+                  if (citations.length > 0) {
+                    writer.write({
+                      type: 'data-citations' as const,
+                      id: 'citations',
+                      data: { citations },
+                    })
+                  }
+                  // Send metadata as data part
+                  if (metadata) {
+                    writer.write({
+                      type: 'data-metadata' as const,
+                      id: 'metadata',
+                      data: metadata,
+                    })
+                  }
+                  break
+              }
+            }
+          }
+
+          // Process remaining buffer and ensure text is closed
+          if (buffer.trim()) {
+            const chunk = parseSSEEvent(buffer)
+            if (chunk?.type === 'content' && chunk.text) {
+              if (!textStarted) {
+                writer.write({ type: 'text-start', id: textId })
+                textStarted = true
+              }
+              writer.write({ type: 'text-delta', id: textId, delta: chunk.text })
+            }
+          }
+
+          // Ensure text block is closed
+          if (textStarted) {
+            writer.write({ type: 'text-end', id: textId })
+          }
+        } finally {
+          reader.releaseLock()
+        }
+      },
     })
+
+    return createUIMessageStreamResponse({ stream })
   } catch (error) {
     console.error('Query proxy error:', error)
     return new Response(

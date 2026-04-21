@@ -17,8 +17,9 @@ COPY services/ingestion/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# Download spaCy model
-RUN python -m spacy download en_core_web_lg
+# Download spaCy models (lg for embeddings, sm for unstructured library)
+RUN python -m spacy download en_core_web_lg \
+    && python -m spacy download en_core_web_sm
 
 # Final stage
 FROM python:3.12-slim

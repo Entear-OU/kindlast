@@ -7,11 +7,11 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
-interface AnswerStreamProps {
+export interface AnswerStreamProps {
   /** Accumulated markdown text content */
   content: string
-  /** Whether streaming is currently active */
-  isStreaming: boolean
+  /** Whether loading/streaming is currently active */
+  isLoading: boolean
   /** Confidence score (0-1), shows warning when < 0.72 */
   confidence?: number
   /** Error state to display */
@@ -31,7 +31,7 @@ interface AnswerStreamProps {
  */
 export function AnswerStream({
   content,
-  isStreaming,
+  isLoading,
   confidence,
   error,
   onRetry,
@@ -84,7 +84,7 @@ export function AnswerStream({
   }
 
   // Show loading skeleton when waiting for first chunk
-  if (!content && isStreaming) {
+  if (!content && isLoading) {
     return (
       <div data-testid="loading-skeleton" className="space-y-3">
         <Skeleton className="h-4 w-full" />
@@ -103,7 +103,7 @@ export function AnswerStream({
       data-testid="answer-stream"
       className={cn(
         'space-y-4',
-        isStreaming && 'animate-in fade-in-0 duration-300'
+        isLoading && 'animate-in fade-in-0 duration-300'
       )}
     >
       {showLowConfidenceWarning && (
@@ -126,7 +126,7 @@ export function AnswerStream({
         <ReactMarkdown components={markdownComponents}>
           {content}
         </ReactMarkdown>
-        {isStreaming && (
+        {isLoading && (
           <span
             data-testid="streaming-cursor"
             className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-current"

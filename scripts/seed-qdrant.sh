@@ -6,15 +6,24 @@
 # Usage:
 #   QDRANT_HOST=localhost:6333 ./scripts/seed-qdrant.sh
 #
+# Environment variables:
+#   QDRANT_HOST          - Qdrant server address (default: localhost:6333)
+#   EMBEDDING_DIMENSION  - Vector dimension for OpenAI/local embeddings (default: 3072)
+#   COHERE_EMBEDDING_DIMENSION - Vector dimension for Cohere embeddings (default: 1024)
+#
 # Collections created:
-#   - kindlast_openai_prod: 3072-dim vectors (text-embedding-3-large) + BM25 sparse
-#   - kindlast_cohere_prod: 1024-dim vectors (embed-multilingual-v3) + BM25 sparse
-#   - kindlast_processors: 3072-dim vectors (processor profile embeddings)
+#   - kindlast_openai_prod: EMBEDDING_DIMENSION vectors + BM25 sparse
+#   - kindlast_cohere_prod: COHERE_EMBEDDING_DIMENSION vectors + BM25 sparse
+#   - kindlast_processors: EMBEDDING_DIMENSION vectors (processor profile embeddings)
 
 set -e
 
 QDRANT_HOST="${QDRANT_HOST:-localhost:6333}"
 QDRANT_URL="http://${QDRANT_HOST}"
+
+# Embedding dimensions (configurable via .env.local)
+EMBEDDING_DIMENSION="${EMBEDDING_DIMENSION:-3072}"
+COHERE_EMBEDDING_DIMENSION="${COHERE_EMBEDDING_DIMENSION:-1024}"
 
 echo "Qdrant Collection Setup"
 echo "======================="
@@ -65,19 +74,21 @@ create_collection() {
 # - Cosine distance metric
 # - BM25 sparse vectors with IDF modifier for hybrid search
 echo ""
+echo "Using embedding dimensions: ${EMBEDDING_DIMENSION} (OpenAI/local), ${COHERE_EMBEDDING_DIMENSION} (Cohere)"
+echo ""
 echo "1/3 Processing kindlast_openai_prod..."
-create_collection "kindlast_openai_prod" '{
-    "vectors": {
-        "size": 3072,
-        "distance": "Cosine"
+create_collection "kindlast_openai_prod" "{
+    \"vectors\": {
+        \"size\": ${EMBEDDING_DIMENSION},
+        \"distance\": \"Cosine\"
     },
-    "sparse_vectors": {
-        "bm25": {
-            "modifier": "idf"
+    \"sparse_vectors\": {
+        \"bm25\": {
+            \"modifier\": \"idf\"
         }
     },
-    "replication_factor": 1
-}'
+    \"replication_factor\": 1
+}"
 
 # Collection 2: kindlast_cohere_prod
 # - 1024-dimensional vectors for embed-multilingual-v3
@@ -85,18 +96,18 @@ create_collection "kindlast_openai_prod" '{
 # - BM25 sparse vectors with IDF modifier for hybrid search
 echo ""
 echo "2/3 Processing kindlast_cohere_prod..."
-create_collection "kindlast_cohere_prod" '{
-    "vectors": {
-        "size": 1024,
-        "distance": "Cosine"
+create_collection "kindlast_cohere_prod" "{
+    \"vectors\": {
+        \"size\": ${COHERE_EMBEDDING_DIMENSION},
+        \"distance\": \"Cosine\"
     },
-    "sparse_vectors": {
-        "bm25": {
-            "modifier": "idf"
+    \"sparse_vectors\": {
+        \"bm25\": {
+            \"modifier\": \"idf\"
         }
     },
-    "replication_factor": 1
-}'
+    \"replication_factor\": 1
+}"
 
 # Collection 3: kindlast_processors
 # - 3072-dimensional vectors (processor profile embeddings using OpenAI)
@@ -104,13 +115,13 @@ create_collection "kindlast_cohere_prod" '{
 # - No sparse vectors (semantic search only for fuzzy matching)
 echo ""
 echo "3/3 Processing kindlast_processors..."
-create_collection "kindlast_processors" '{
-    "vectors": {
-        "size": 3072,
-        "distance": "Cosine"
+create_collection "kindlast_processors" "{
+    \"vectors\": {
+        \"size\": ${EMBEDDING_DIMENSION},
+        \"distance\": \"Cosine\"
     },
-    "replication_factor": 1
-}'
+    \"replication_factor\": 1
+}"
 
 echo ""
 echo "======================="

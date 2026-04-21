@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useStreamingQuery } from '@/hooks/use-streaming-query'
+import { useComplianceQuery, type QueryTopic } from '@/hooks/use-compliance-query'
 import {
   QueryInput,
   AnswerStream,
@@ -101,16 +101,16 @@ export default function QueryPage() {
   const [queryHistory, setQueryHistory] = useState<QueryHistoryItem[]>([])
   const [dailyQueryCount, setDailyQueryCount] = useState<DailyQueryCount>({ date: '', count: 0 })
 
-  // Initialize the streaming query hook with topic
+  // Initialize the compliance query hook (uses Vercel AI SDK)
   const {
-    data: answer,
+    answer,
     citations,
-    isStreaming,
+    isLoading,
     error,
     metadata,
-    executeQuery,
+    submitQuery,
     reset,
-  } = useStreamingQuery({ topic: currentTopic })
+  } = useComplianceQuery()
 
   // Load settings on mount
   useEffect(() => {
@@ -188,9 +188,9 @@ export default function QueryPage() {
       reset()
       saveQueryToHistory(query)
       setDailyQueryCount(incrementDailyQueryCount())
-      executeQuery(query)
+      submitQuery(query, topic as QueryTopic)
     },
-    [executeQuery, reset, saveQueryToHistory, isRateLimited]
+    [submitQuery, reset, saveQueryToHistory, isRateLimited]
   )
 
   // Handle selecting a query from history
@@ -218,7 +218,7 @@ export default function QueryPage() {
     }
   }
 
-  const isDone = !isStreaming && answer.length > 0
+  const isDone = !isLoading && answer.length > 0
   const hasError = error !== null
 
   return (
@@ -285,23 +285,23 @@ export default function QueryPage() {
             value={queryValue}
             onChange={setQueryValue}
             onSubmit={handleSubmit}
-            isLoading={isStreaming}
+            isLoading={isLoading}
             disabled={settingsLoading || isRateLimited}
           />
 
           {/* Two-column layout for answer and citations */}
-          {(isStreaming || isDone || hasError) && (
+          {(isLoading || isDone || hasError) && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Answer column */}
               <div className="lg:col-span-2">
                 <AnswerStream
                   content={answer}
-                  isStreaming={isStreaming}
+                  isLoading={isLoading}
                   confidence={metadata?.maxRelevance}
                   error={error ? new Error(error) : null}
                   onRetry={() => {
                     reset()
-                    executeQuery(queryValue)
+                    submitQuery(queryValue, currentTopic as QueryTopic)
                   }}
                 />
                 {metadata && isDone && (

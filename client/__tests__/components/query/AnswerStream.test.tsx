@@ -8,7 +8,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="This is **bold** and *italic* text."
-          isStreaming={false}
+          isLoading={false}
         />
       )
       expect(screen.getByText('bold')).toBeInTheDocument()
@@ -19,7 +19,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Here is some `inline code` text."
-          isStreaming={false}
+          isLoading={false}
         />
       )
       expect(screen.getByText('inline code')).toBeInTheDocument()
@@ -32,7 +32,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content={listContent}
-          isStreaming={false}
+          isLoading={false}
         />
       )
       expect(screen.getByText('Item one')).toBeInTheDocument()
@@ -44,7 +44,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="# Main Heading\n\nSome text content."
-          isStreaming={false}
+          isLoading={false}
         />
       )
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
@@ -54,7 +54,7 @@ describe('AnswerStream', () => {
 
     it('renders empty state when content is empty', () => {
       const { container } = render(
-        <AnswerStream content="" isStreaming={false} />
+        <AnswerStream content="" isLoading={false} />
       )
       expect(container.querySelector('[data-testid="answer-content"]')).toBeInTheDocument()
     })
@@ -63,7 +63,7 @@ describe('AnswerStream', () => {
   describe('streaming cursor', () => {
     it('shows blinking cursor when streaming is active', () => {
       const { container } = render(
-        <AnswerStream content="Some content" isStreaming={true} />
+        <AnswerStream content="Some content" isLoading={true} />
       )
       const cursor = container.querySelector('[data-testid="streaming-cursor"]')
       expect(cursor).toBeInTheDocument()
@@ -71,7 +71,7 @@ describe('AnswerStream', () => {
 
     it('hides cursor when streaming is complete', () => {
       const { container } = render(
-        <AnswerStream content="Final content" isStreaming={false} />
+        <AnswerStream content="Final content" isLoading={false} />
       )
       const cursor = container.querySelector('[data-testid="streaming-cursor"]')
       expect(cursor).not.toBeInTheDocument()
@@ -83,7 +83,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="This is a claim [1] with a citation."
-          isStreaming={false}
+          isLoading={false}
         />
       )
       const citation = screen.getByRole('link', { name: '[1]' })
@@ -95,7 +95,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="First claim [1] and second claim [2] with citations."
-          isStreaming={false}
+          isLoading={false}
         />
       )
       const citation1 = screen.getByRole('link', { name: '[1]' })
@@ -108,7 +108,7 @@ describe('AnswerStream', () => {
       const { container } = render(
         <AnswerStream
           content="Citation here [3] in text."
-          isStreaming={false}
+          isLoading={false}
         />
       )
       const superscript = container.querySelector('sup')
@@ -119,7 +119,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Many citations [10] and [12] in the text."
-          isStreaming={false}
+          isLoading={false}
         />
       )
       const citation10 = screen.getByRole('link', { name: '[10]' })
@@ -134,7 +134,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Some answer content"
-          isStreaming={false}
+          isLoading={false}
           confidence={0.65}
         />
       )
@@ -147,7 +147,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Some answer content"
-          isStreaming={false}
+          isLoading={false}
           confidence={0.71}
         />
       )
@@ -160,7 +160,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Some answer content"
-          isStreaming={false}
+          isLoading={false}
           confidence={0.72}
         />
       )
@@ -173,7 +173,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Some answer content"
-          isStreaming={false}
+          isLoading={false}
           confidence={0.95}
         />
       )
@@ -186,7 +186,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Some answer content"
-          isStreaming={false}
+          isLoading={false}
         />
       )
       expect(
@@ -198,7 +198,7 @@ describe('AnswerStream', () => {
   describe('loading skeleton', () => {
     it('shows loading skeleton when content is empty and streaming', () => {
       const { container } = render(
-        <AnswerStream content="" isStreaming={true} />
+        <AnswerStream content="" isLoading={true} />
       )
       const skeleton = container.querySelector('[data-testid="loading-skeleton"]')
       expect(skeleton).toBeInTheDocument()
@@ -206,7 +206,7 @@ describe('AnswerStream', () => {
 
     it('hides loading skeleton when content is present', () => {
       const { container } = render(
-        <AnswerStream content="Some content" isStreaming={true} />
+        <AnswerStream content="Some content" isLoading={true} />
       )
       const skeleton = container.querySelector('[data-testid="loading-skeleton"]')
       expect(skeleton).not.toBeInTheDocument()
@@ -214,7 +214,7 @@ describe('AnswerStream', () => {
 
     it('shows multiple skeleton lines for loading state', () => {
       const { container } = render(
-        <AnswerStream content="" isStreaming={true} />
+        <AnswerStream content="" isLoading={true} />
       )
       const skeletonLines = container.querySelectorAll('[data-slot="skeleton"]')
       expect(skeletonLines.length).toBeGreaterThanOrEqual(3)
@@ -227,7 +227,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content=""
-          isStreaming={false}
+          isLoading={false}
           error={error}
         />
       )
@@ -240,7 +240,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content=""
-          isStreaming={false}
+          isLoading={false}
           error={error}
           onRetry={onRetry}
         />
@@ -254,7 +254,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content=""
-          isStreaming={false}
+          isLoading={false}
           error={error}
           onRetry={onRetry}
         />
@@ -268,7 +268,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content=""
-          isStreaming={false}
+          isLoading={false}
           error={error}
         />
       )
@@ -280,7 +280,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Some partial content"
-          isStreaming={false}
+          isLoading={false}
           error={error}
         />
       )
@@ -291,7 +291,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content="Some content"
-          isStreaming={false}
+          isLoading={false}
           error={null}
         />
       )
@@ -302,7 +302,7 @@ describe('AnswerStream', () => {
   describe('text animation', () => {
     it('applies animation class to container when streaming', () => {
       const { container } = render(
-        <AnswerStream content="Content" isStreaming={true} />
+        <AnswerStream content="Content" isLoading={true} />
       )
       const answerContainer = container.querySelector('[data-testid="answer-stream"]')
       expect(answerContainer).toHaveClass('animate-in')
@@ -312,7 +312,7 @@ describe('AnswerStream', () => {
   describe('accessibility', () => {
     it('has appropriate aria-live attribute for streaming content', () => {
       const { container } = render(
-        <AnswerStream content="Streaming..." isStreaming={true} />
+        <AnswerStream content="Streaming..." isLoading={true} />
       )
       const liveRegion = container.querySelector('[aria-live]')
       expect(liveRegion).toHaveAttribute('aria-live', 'polite')
@@ -323,7 +323,7 @@ describe('AnswerStream', () => {
       render(
         <AnswerStream
           content=""
-          isStreaming={false}
+          isLoading={false}
           error={error}
         />
       )
