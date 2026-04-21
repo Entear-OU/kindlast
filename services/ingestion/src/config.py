@@ -23,7 +23,14 @@ class Config(BaseSettings):
     embedding_base_url: str = Field(default="", description="Embedding API base URL (for local models like LMstudio)")
     openai_api_base_url: str = Field(default="", description="(Deprecated) Use EMBEDDING_BASE_URL instead")
     cohere_api_key: str = Field(default="", description="Cohere API key for embeddings")
+
+    # Scraper providers
+    scraper_provider: Literal["firecrawl", "tavily"] = Field(
+        default="firecrawl",
+        description="Scraper provider: firecrawl or tavily"
+    )
     firecrawl_api_key: str = Field(default="", description="Firecrawl API key for web scraping")
+    tavily_api_key: str = Field(default="", description="Tavily API key for web scraping")
 
     # Infrastructure
     qdrant_host: str = Field(default="localhost", description="Qdrant vector database host")
@@ -92,6 +99,14 @@ class Config(BaseSettings):
         default=500, ge=0, le=10000,
         description="Delay between Firecrawl requests in ms"
     )
+    tavily_delay_ms: int = Field(
+        default=500, ge=0, le=10000,
+        description="Delay between Tavily requests in ms"
+    )
+    tavily_extract_depth: Literal["basic", "advanced"] = Field(
+        default="basic",
+        description="Tavily extraction depth: basic (faster) or advanced (JS rendering)"
+    )
     openai_rpm_limit: int = Field(
         default=3000, ge=1,
         description="OpenAI requests per minute limit"
@@ -149,8 +164,13 @@ class Config(BaseSettings):
             if not self.cohere_api_key:
                 errors.append("COHERE_API_KEY is required when using cohere embedding provider")
 
-        if not self.firecrawl_api_key:
-            errors.append("FIRECRAWL_API_KEY is required")
+        # Validate scraper provider configuration
+        if self.scraper_provider == "firecrawl":
+            if not self.firecrawl_api_key:
+                errors.append("FIRECRAWL_API_KEY is required when using firecrawl scraper")
+        elif self.scraper_provider == "tavily":
+            if not self.tavily_api_key:
+                errors.append("TAVILY_API_KEY is required when using tavily scraper")
         if not self.postgres_dsn:
             errors.append("POSTGRES_DSN is required")
 

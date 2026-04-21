@@ -6,7 +6,7 @@ from qdrant_client import QdrantClient
 
 from src.config import Config
 from src.sources import SOURCES, get_sources_by_tier
-from src.pipeline.scraper import Scraper
+from src.pipeline.scraper import ScraperProvider, FirecrawlScraper, TavilyScraper
 from src.pipeline.parser import Parser
 from src.pipeline.chunker import Chunker
 from src.pipeline.embedder import OpenAIEmbedder, CohereEmbedder
@@ -16,6 +16,18 @@ from src.utils.hashing import get_content_hash, make_doc_id
 from src.utils.logging import get_logger
 
 log = get_logger(__name__)
+
+
+def create_scraper(config: Config) -> ScraperProvider:
+    """Create the appropriate scraper based on SCRAPER_PROVIDER config."""
+    provider = config.scraper_provider
+
+    if provider == "tavily":
+        log.info("using_tavily_scraper", extract_depth=config.tavily_extract_depth)
+        return TavilyScraper(config)
+    else:  # firecrawl (default)
+        log.info("using_firecrawl_scraper")
+        return FirecrawlScraper(config)
 
 
 def create_embedder(config: Config) -> OpenAIEmbedder | CohereEmbedder:
@@ -178,7 +190,7 @@ def run():
 
     config.validate_required()
 
-    scraper = Scraper(config)
+    scraper = create_scraper(config)
     parser = Parser()
     chunker = Chunker(config)
     # Use single embedder based on EMBEDDING_PROVIDER config

@@ -13,6 +13,7 @@ dependencies = [
     "psycopg2-binary>=2.9.9",
     "structlog>=24.1.0",
     "firecrawl-py>=4.22.2",
+    "tavily-python>=0.7.23",
 ]
 
 [project.optional-dependencies]
