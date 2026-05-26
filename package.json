@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "ingest:gdpr": "tsx scripts/ingest-gdpr.ts"
+    "ingest:gdpr": "tsx scripts/ingest-regulation.ts data/corpus/gdpr.json",
+    "ingest:ai-act": "tsx scripts/ingest-regulation.ts data/corpus/eu-ai-act.json"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",
