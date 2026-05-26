@@ -9,7 +9,7 @@ vi.mock('@supabase/ssr', () => ({
 describe('lib/supabase/client', () => {
   beforeEach(() => {
     vi.stubEnv('SUPABASE_URL', 'https://test.supabase.co')
-    vi.stubEnv('SUPABASE_ANON_KEY', 'test-anon-key')
+    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_test')
     mockCreateBrowserClient.mockClear()
   })
 
@@ -24,7 +24,7 @@ describe('lib/supabase/client', () => {
 
     expect(mockCreateBrowserClient).toHaveBeenCalledWith(
       'https://test.supabase.co',
-      'test-anon-key'
+      'sb_publishable_test'
     )
   })
 

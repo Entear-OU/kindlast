@@ -20,7 +20,7 @@ vi.mock('next/headers', () => ({
 describe('lib/supabase/server', () => {
   beforeEach(() => {
     vi.stubEnv('SUPABASE_URL', 'https://test.supabase.co')
-    vi.stubEnv('SUPABASE_ANON_KEY', 'test-anon-key')
+    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_test')
     mockCreateServerClient.mockClear()
     mockCookieStore.getAll.mockClear()
     mockCookieStore.set.mockClear()
@@ -37,7 +37,7 @@ describe('lib/supabase/server', () => {
 
     expect(mockCreateServerClient).toHaveBeenCalledWith(
       'https://test.supabase.co',
-      'test-anon-key',
+      'sb_publishable_test',
       expect.objectContaining({
         cookies: expect.objectContaining({
           getAll: expect.any(Function),
