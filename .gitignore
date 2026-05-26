@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env
 
+# supabase CLI runtime state (also covered by supabase/.gitignore once ENT-41 lands)
+supabase/.temp/
+supabase/.branches/
+
 # vercel
 .vercel
 
