@@ -2,23 +2,30 @@ import { openai } from '@ai-sdk/openai'
 import {
   convertToModelMessages,
   createIdGenerator,
+  hasToolCall,
   streamText,
+  tool,
   type UIMessage,
 } from 'ai'
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 
+import { extractComplianceProfile, type TranscriptTurn } from '@/lib/onboarding/extraction'
 import {
   appendMessages,
   getOrCreateActiveSession,
   loadTranscript,
+  markSessionCompleted,
   messagesToPersist,
+  persistComplianceProfile,
+  textFromUIMessage,
   uiMessageFromRow,
 } from '@/lib/onboarding/persistence'
 import { ONBOARDING_SYSTEM_PROMPT } from '@/lib/onboarding/system-prompt'
 import { createClient } from '@/lib/supabase/server'
 
 /**
- * Onboarding chat — POST `/api/onboarding/chat` (ENT-44).
+ * Onboarding chat — POST `/api/onboarding/chat` (ENT-44 + ENT-45).
  *
  * Wire shape (set by `prepareSendMessagesRequest` on the client transport):
  *
@@ -30,6 +37,13 @@ import { createClient } from '@/lib/supabase/server'
  * Persistence runs inside `toUIMessageStreamResponse({ onFinish })` and uses
  * `consumeStream()` so the assistant turn still lands in the DB even when
  * the client disconnects mid-stream.
+ *
+ * Finalization (ENT-45): the agent has a `complete_onboarding` tool it calls
+ * when it judges the interview complete. The tool's `execute` runs the
+ * structured-extraction pass against the entire transcript, persists the
+ * `compliance_profiles` row, and flips the session to `completed`. We stop
+ * the model loop with `hasToolCall(...)` so the SDK does not loop back to
+ * the model with the tool result.
  */
 
 // Server-side stable IDs are required for persistence to round-trip.
@@ -63,6 +77,34 @@ export async function POST(req: Request) {
   const previousMessages: UIMessage[] = transcriptRows.map(uiMessageFromRow)
   const allMessages: UIMessage[] = [...previousMessages, body.message]
 
+  // The agent calls this when it judges the interview complete. The tool is
+  // zero-arg by design: the extraction pass reads the full transcript with
+  // its own focused system prompt, so the interviewer model never has to
+  // emit structured JSON inline (its job is conversation, not parsing).
+  const completeOnboarding = tool({
+    description:
+      'Finalise the onboarding interview. Call this once you have clear answers for all six required topics (product/service, personal data + data subjects, EU jurisdictions, AI tools, DPO status, ROPA status). Do this AFTER you emit your short wrap-up sentence to the founder.',
+    inputSchema: z.object({}),
+    execute: async () => {
+      const transcript: TranscriptTurn[] = allMessages
+        .map((message) => ({
+          role: message.role as 'user' | 'assistant',
+          content: textFromUIMessage(message),
+        }))
+        .filter((turn) => turn.content.trim() !== '' || turn.role === 'user')
+
+      const profile = await extractComplianceProfile(transcript)
+      await persistComplianceProfile(supabase, {
+        sessionId,
+        userId: user.id,
+        profile,
+      })
+      await markSessionCompleted(supabase, sessionId)
+
+      return { status: 'completed' as const }
+    },
+  })
+
   // Use the Responses API (default for `@ai-sdk/openai`'s `openai()` callable).
   // OpenAI project keys can be scoped to /responses only, so this is the
   // safer default for environments where the user might issue a narrow key.
@@ -70,6 +112,8 @@ export async function POST(req: Request) {
     model: openai(MODEL_ID),
     system: ONBOARDING_SYSTEM_PROMPT,
     messages: await convertToModelMessages(allMessages),
+    tools: { complete_onboarding: completeOnboarding },
+    stopWhen: hasToolCall('complete_onboarding'),
   })
 
   return result.toUIMessageStreamResponse({

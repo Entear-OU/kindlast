@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UIMessage } from 'ai'
 
+import type { ComplianceProfile } from './extraction'
+
 /**
  * Data-access helpers for the conversational onboarding flow (ENT-44).
  *
@@ -167,4 +169,97 @@ export function uiMessageFromRow(row: OnboardingMessageRow): UIMessage {
     role: row.role,
     parts: [{ type: 'text', text: row.content }],
   } as UIMessage
+}
+
+export type ComplianceProfileRow = {
+  id: string
+  session_id: string
+  user_id: string
+  industry: string
+  eu_jurisdictions: string[]
+  data_categories: string[]
+  data_subjects: string[]
+  ai_systems: string[]
+  has_dpo: 'yes' | 'no' | 'unsure'
+  has_ropa: 'yes' | 'no' | 'unsure'
+  transfers_outside_eu: 'yes' | 'no' | 'unsure'
+  transfer_destinations: string[]
+  vendor_list: string
+  staff_count: number | null
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Insert a `compliance_profiles` row for a session (ENT-45).
+ *
+ * Single insert — atomic per-call. The DB's unique constraint on `session_id`
+ * means a duplicate call (e.g. tool fired twice mid-stream) gets rejected
+ * rather than producing two profile rows for one interview.
+ *
+ * Returns the inserted row so callers can include it in a response payload
+ * without a follow-up read.
+ */
+export async function persistComplianceProfile(
+  supabase: SupabaseClient,
+  args: {
+    sessionId: string
+    userId: string
+    profile: ComplianceProfile
+  },
+): Promise<ComplianceProfileRow> {
+  const row = {
+    session_id: args.sessionId,
+    user_id: args.userId,
+    industry: args.profile.industry,
+    eu_jurisdictions: args.profile.euJurisdictions,
+    data_categories: args.profile.dataCategories,
+    data_subjects: args.profile.dataSubjects,
+    ai_systems: args.profile.aiSystems,
+    has_dpo: args.profile.hasDpo,
+    has_ropa: args.profile.hasRopa,
+    transfers_outside_eu: args.profile.transfersOutsideEu,
+    transfer_destinations: args.profile.transferDestinations,
+    vendor_list: args.profile.vendorList,
+    staff_count: args.profile.staffCount,
+  }
+
+  const { data, error } = await supabase
+    .from('compliance_profiles')
+    .insert(row)
+    .select(
+      'id, session_id, user_id, industry, eu_jurisdictions, data_categories, data_subjects, ai_systems, has_dpo, has_ropa, transfers_outside_eu, transfer_destinations, vendor_list, staff_count, created_at, updated_at',
+    )
+    .single()
+
+  if (error || !data) {
+    throw new Error(
+      `persistComplianceProfile: insert failed: ${error?.message ?? 'no row returned'}`,
+    )
+  }
+  return data as ComplianceProfileRow
+}
+
+/**
+ * Mark a session completed (ENT-45 — sibling to `persistComplianceProfile`).
+ *
+ * Separate from the profile insert because Supabase JS has no transaction
+ * primitive: if the profile insert succeeds and this call fails, the profile
+ * row is still the authoritative signal that onboarding finished (a downstream
+ * reader can treat "session has a profile" as equivalent to "completed"). The
+ * status flip is best-effort UX — it lets `getOrCreateActiveSession` open a
+ * fresh session for the next re-interview without a manual cleanup step.
+ */
+export async function markSessionCompleted(
+  supabase: SupabaseClient,
+  sessionId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('onboarding_sessions')
+    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .eq('id', sessionId)
+
+  if (error) {
+    throw new Error(`markSessionCompleted(${sessionId}): ${error.message}`)
+  }
 }
