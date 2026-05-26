@@ -2,7 +2,7 @@ import { openai } from '@ai-sdk/openai'
 import {
   convertToModelMessages,
   createIdGenerator,
-  hasToolCall,
+  stepCountIs,
   streamText,
   tool,
   type UIMessage,
@@ -39,11 +39,11 @@ import { createClient } from '@/lib/supabase/server'
  * the client disconnects mid-stream.
  *
  * Finalization (ENT-45): the agent has a `complete_onboarding` tool it calls
- * when it judges the interview complete. The tool's `execute` runs the
- * structured-extraction pass against the entire transcript, persists the
- * `compliance_profiles` row, and flips the session to `completed`. We stop
- * the model loop with `hasToolCall(...)` so the SDK does not loop back to
- * the model with the tool result.
+ * when it judges the interview complete. Its `inputSchema` makes the agent
+ * tick off each of the six required topics; the server rechecks (a) that
+ * every topic is ticked and (b) that the transcript actually has enough
+ * user turns to back the claim — premature calls return `too_early` and
+ * the model gets a second step to correct itself.
  */
 
 // Server-side stable IDs are required for persistence to round-trip.
@@ -77,21 +77,68 @@ export async function POST(req: Request) {
   const previousMessages: UIMessage[] = transcriptRows.map(uiMessageFromRow)
   const allMessages: UIMessage[] = [...previousMessages, body.message]
 
-  // The agent calls this when it judges the interview complete. The tool is
-  // zero-arg by design: the extraction pass reads the full transcript with
-  // its own focused system prompt, so the interviewer model never has to
-  // emit structured JSON inline (its job is conversation, not parsing).
+  // The agent calls this when it judges the interview complete. It must
+  // explicitly check off each of the six required topics in `topicsCovered`,
+  // so a premature call surfaces as a missing topic rather than a corrupt
+  // extraction. The extraction itself is a separate `generateObject` pass
+  // with its own focused prompt — see `lib/onboarding/extraction.ts`.
   const completeOnboarding = tool({
     description:
-      'Finalise the onboarding interview. Call this once you have clear answers for all six required topics (product/service, personal data + data subjects, EU jurisdictions, AI tools, DPO status, ROPA status). Do this AFTER you emit your short wrap-up sentence to the founder.',
-    inputSchema: z.object({}),
-    execute: async () => {
+      'Finalise the onboarding interview. You MUST have already asked about, and received a substantive answer for, every required topic. Pass true for a topic only when the founder has actually answered that specific question in their own words. If any topic is false, do not call this tool — ask the founder about the missing topic instead. Never call this tool on your first reply or before the founder has answered at least four turns.',
+    inputSchema: z.object({
+      topicsCovered: z.object({
+        productOrService: z
+          .boolean()
+          .describe('Founder has explained what the company does in their own words.'),
+        personalDataAndSubjects: z
+          .boolean()
+          .describe('Founder has named both what data is collected and from whom.'),
+        euJurisdictions: z
+          .boolean()
+          .describe('Founder has named the EU/EEA countries their users / data subjects are in.'),
+        aiTools: z
+          .boolean()
+          .describe('Founder has said which AI tools are in use, internal or product.'),
+        dpoStatus: z
+          .boolean()
+          .describe('Founder has answered whether they have a Data Protection Officer.'),
+        ropaStatus: z
+          .boolean()
+          .describe('Founder has answered whether they have a Record of Processing Activities.'),
+      }),
+    }),
+    execute: async ({ topicsCovered }) => {
+      const missing = Object.entries(topicsCovered)
+        .filter(([, covered]) => !covered)
+        .map(([topic]) => topic)
+      if (missing.length > 0) {
+        return {
+          status: 'too_early' as const,
+          missing,
+          message:
+            'You marked some topics as not covered. Ask the founder about the missing topics, then call this tool again once each is answered.',
+        }
+      }
+
       const transcript: TranscriptTurn[] = allMessages
         .map((message) => ({
           role: message.role as 'user' | 'assistant',
           content: textFromUIMessage(message),
         }))
         .filter((turn) => turn.content.trim() !== '' || turn.role === 'user')
+
+      // Belt-and-braces: even if the model claims every topic is covered, a
+      // transcript with fewer than four user turns can't plausibly carry
+      // answers to six topics. Refuse instead of producing a placeholder
+      // profile the founder will have to re-do later.
+      const userTurns = transcript.filter((turn) => turn.role === 'user').length
+      if (userTurns < 4) {
+        return {
+          status: 'too_early' as const,
+          missing: [],
+          message: `Only ${userTurns} user turn(s) so far. Keep interviewing — call this tool only after the founder has substantively answered all six topics.`,
+        }
+      }
 
       const profile = await extractComplianceProfile(transcript)
       await persistComplianceProfile(supabase, {
@@ -113,7 +160,10 @@ export async function POST(req: Request) {
     system: ONBOARDING_SYSTEM_PROMPT,
     messages: await convertToModelMessages(allMessages),
     tools: { complete_onboarding: completeOnboarding },
-    stopWhen: hasToolCall('complete_onboarding'),
+    // Allow a second model step so the agent can react to a `too_early`
+    // tool result — either by asking the missing topic or by acknowledging
+    // a `completed` finalisation — rather than stopping silently.
+    stopWhen: stepCountIs(2),
   })
 
   return result.toUIMessageStreamResponse({
