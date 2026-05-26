@@ -133,6 +133,33 @@ export function textFromUIMessage(message: UIMessage): string {
     .join('')
 }
 
+/**
+ * Project an AI SDK `UIMessage[]` into the `{role, content}` rows the
+ * persister accepts, dropping assistant turns whose flattened text is empty
+ * or whitespace-only (ENT-87).
+ *
+ * Why drop assistant turns? When `streamText` errors mid-flight (e.g. a
+ * model-side 401 or rate limit), `toUIMessageStreamResponse.onFinish` still
+ * fires — but the assistant `UIMessage` arrives with no rendered text parts.
+ * Persisting that row poisons every subsequent prompt (the LLM sees `""` as
+ * its last assistant turn) and re-renders an empty bubble on resume.
+ *
+ * User turns are kept verbatim: the founder did interact, and preserving
+ * the row lets a retry resume from the same input.
+ */
+export function messagesToPersist(
+  messages: ReadonlyArray<UIMessage>,
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const rows: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  for (const message of messages) {
+    const role = message.role as 'user' | 'assistant'
+    const content = textFromUIMessage(message)
+    if (role === 'assistant' && content.trim() === '') continue
+    rows.push({ role, content })
+  }
+  return rows
+}
+
 /** Hydrate a transcript row back into an AI SDK `UIMessage` for `initialMessages`. */
 export function uiMessageFromRow(row: OnboardingMessageRow): UIMessage {
   return {
