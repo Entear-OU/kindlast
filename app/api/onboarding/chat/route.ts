@@ -21,6 +21,7 @@ import {
   textFromUIMessage,
   uiMessageFromRow,
 } from '@/lib/onboarding/persistence'
+import { computePostureSummary } from '@/lib/onboarding/posture-summary'
 import { ONBOARDING_SYSTEM_PROMPT } from '@/lib/onboarding/system-prompt'
 import { createClient } from '@/lib/supabase/server'
 
@@ -160,7 +161,12 @@ export async function POST(req: Request) {
       })
       await markSessionCompleted(supabase, sessionId)
 
-      return { status: 'completed' as const }
+      // ENT-46: deterministic posture projection — return it inline so the
+      // client can render the summary card without a follow-up fetch. The
+      // server page also computes the same summary on reload via
+      // `loadComplianceProfile`, so the card survives a refresh.
+      const summary = computePostureSummary(profile)
+      return { status: 'completed' as const, summary }
     },
   })
 
