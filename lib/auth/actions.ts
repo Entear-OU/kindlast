@@ -19,7 +19,7 @@ export async function signUp(formData: FormData) {
     return { error: error.message }
   }
 
-  redirect('/dashboard')
+  redirect('/onboarding')
 }
 
 export async function signIn(formData: FormData) {
@@ -37,7 +37,7 @@ export async function signIn(formData: FormData) {
     return { error: error.message }
   }
 
-  redirect('/dashboard')
+  redirect('/onboarding')
 }
 
 export async function signInWithGoogle() {

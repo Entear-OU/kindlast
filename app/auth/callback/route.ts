@@ -17,5 +17,5 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/login', origin))
   }
 
-  return NextResponse.redirect(new URL('/dashboard', origin))
+  return NextResponse.redirect(new URL('/onboarding', origin))
 }

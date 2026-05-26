@@ -36,7 +36,7 @@ describe('Auth Callback Route', () => {
     vi.clearAllMocks()
   })
 
-  it('exchanges code for session and redirects to /dashboard', async () => {
+  it('exchanges code for session and redirects to /onboarding', async () => {
     const { GET } = await import('@/app/auth/callback/route')
 
     mockExchangeCodeForSession.mockResolvedValue({
@@ -48,7 +48,7 @@ describe('Auth Callback Route', () => {
     const response = await GET(request)
 
     expect(mockExchangeCodeForSession).toHaveBeenCalledWith('test-code')
-    expect(response.url).toContain('/dashboard')
+    expect(response.url).toContain('/onboarding')
   })
 
   it('redirects to /login when no code is provided', async () => {

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored from the AI Elements shadcn registry — owned by upstream.
+    // We patch only where types collide with @base-ui/react (see prompt-input.tsx).
+    "components/ai-elements/**",
   ]),
 ]);
 

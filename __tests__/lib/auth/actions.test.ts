@@ -59,7 +59,7 @@ describe('Auth Actions', () => {
       })
     })
 
-    it('redirects to /dashboard on successful signup', async () => {
+    it('redirects to /onboarding on successful signup', async () => {
       const { signUp } = await import('@/lib/auth/actions')
 
       mockSignUp.mockResolvedValue({ data: { user: { id: '123' } }, error: null })
@@ -70,7 +70,7 @@ describe('Auth Actions', () => {
 
       await signUp(formData)
 
-      expect(mockRedirect).toHaveBeenCalledWith('/dashboard')
+      expect(mockRedirect).toHaveBeenCalledWith('/onboarding')
     })
 
     it('returns error message on signup failure', async () => {
@@ -113,7 +113,7 @@ describe('Auth Actions', () => {
       })
     })
 
-    it('redirects to /dashboard on successful sign in', async () => {
+    it('redirects to /onboarding on successful sign in', async () => {
       const { signIn } = await import('@/lib/auth/actions')
 
       mockSignInWithPassword.mockResolvedValue({
@@ -127,7 +127,7 @@ describe('Auth Actions', () => {
 
       await signIn(formData)
 
-      expect(mockRedirect).toHaveBeenCalledWith('/dashboard')
+      expect(mockRedirect).toHaveBeenCalledWith('/onboarding')
     })
 
     it('returns error message on sign in failure', async () => {
