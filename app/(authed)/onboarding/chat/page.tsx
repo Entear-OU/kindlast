@@ -5,9 +5,12 @@ import { redirect } from 'next/navigation'
 import {
   appendMessages,
   getOrCreateActiveSession,
+  loadComplianceProfile,
   loadTranscript,
+  profileFromRow,
   uiMessageFromRow,
 } from '@/lib/onboarding/persistence'
+import { computePostureSummary, type PostureSummary } from '@/lib/onboarding/posture-summary'
 import { ONBOARDING_SYSTEM_PROMPT } from '@/lib/onboarding/system-prompt'
 import { createClient } from '@/lib/supabase/server'
 
@@ -42,9 +45,30 @@ export default async function OnboardingChatPage() {
 
     const newRows = await loadTranscript(supabase, sessionId)
     const initialMessages: UIMessage[] = newRows.map(uiMessageFromRow)
-    return <OnboardingChat sessionId={sessionId} initialMessages={initialMessages} />
+    return (
+      <OnboardingChat
+        sessionId={sessionId}
+        initialMessages={initialMessages}
+        initialSummary={null}
+      />
+    )
   }
 
+  // ENT-46: hydrate the posture card from the persisted compliance profile
+  // on reload. The tool-result `parts` aren't stored in `onboarding_messages`
+  // (we only persist text turns), so without this lookup a refresh after
+  // completion would drop the card.
+  const profileRow = await loadComplianceProfile(supabase, sessionId)
+  const initialSummary: PostureSummary | null = profileRow
+    ? computePostureSummary(profileFromRow(profileRow))
+    : null
+
   const initialMessages: UIMessage[] = rows.map(uiMessageFromRow)
-  return <OnboardingChat sessionId={sessionId} initialMessages={initialMessages} />
+  return (
+    <OnboardingChat
+      sessionId={sessionId}
+      initialMessages={initialMessages}
+      initialSummary={initialSummary}
+    />
+  )
 }

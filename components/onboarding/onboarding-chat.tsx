@@ -18,6 +18,9 @@ import {
 } from '@/components/ai-elements/prompt-input'
 import { Button } from '@/components/ui/button'
 
+import { PostureSummaryCard } from '@/components/onboarding/posture-summary-card'
+import type { PostureSummary } from '@/lib/onboarding/posture-summary'
+
 function DraftingIndicator() {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
@@ -36,9 +39,11 @@ function DraftingIndicator() {
 export function OnboardingChat({
   sessionId,
   initialMessages,
+  initialSummary,
 }: {
   sessionId: string
   initialMessages: UIMessage[]
+  initialSummary: PostureSummary | null
 }) {
   const [input, setInput] = useState('')
   const pendingInputRef = useRef<string | null>(null)
@@ -55,7 +60,39 @@ export function OnboardingChat({
     }),
   })
 
+  // Walk the message parts for a `complete_onboarding` tool result. We pick
+  // the latest `output-available` part with `status === 'completed'` so a
+  // streamed completion mid-session overrides the server-loaded summary.
+  // The server-provided `initialSummary` is the fallback for page reloads.
+  const liveSummary = useMemo<PostureSummary | null>(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i]
+      for (const part of message.parts) {
+        const partType = part.type as string
+        const isCompleteTool =
+          partType === 'tool-complete_onboarding' ||
+          (partType === 'dynamic-tool' &&
+            (part as { toolName?: string }).toolName === 'complete_onboarding')
+        if (!isCompleteTool) continue
+        const output = (part as { output?: unknown }).output as
+          | { status?: string; summary?: PostureSummary }
+          | undefined
+        if (output && output.status === 'completed' && output.summary) {
+          return output.summary
+        }
+      }
+    }
+    return null
+  }, [messages])
+
+  const summary = liveSummary ?? initialSummary
+  const isCompleted = summary !== null
+
+  // The "drafting" indicator only fires when the tool is in-flight — once
+  // `summary` is set, the card takes its place and we never want both
+  // visible at the same time.
   const isDrafting = useMemo(() => {
+    if (isCompleted) return false
     for (const message of messages) {
       for (const part of message.parts) {
         const partType = part.type as string
@@ -69,7 +106,7 @@ export function OnboardingChat({
       }
     }
     return false
-  }, [messages])
+  }, [messages, isCompleted])
 
   const lastMessage = messages[messages.length - 1]
   useEffect(() => {
@@ -85,10 +122,14 @@ export function OnboardingChat({
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, status])
+  }, [messages, status, summary])
 
   const showError = status === 'error'
-  const inputDisabled = isDrafting || status !== 'ready'
+  // After completion the session is `completed` server-side; if we left
+  // the input enabled, the next message would silently create a fresh
+  // `in_progress` session via `getOrCreateActiveSession` — and the founder
+  // would find themselves being re-interviewed. Lock it instead.
+  const inputDisabled = isCompleted || isDrafting || status !== 'ready'
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col px-4 pb-4 pt-6">
@@ -109,6 +150,7 @@ export function OnboardingChat({
             )
           })}
           {isDrafting && status !== 'ready' && <DraftingIndicator />}
+          {summary && <PostureSummaryCard summary={summary} />}
         </div>
       </div>
 
@@ -137,39 +179,41 @@ export function OnboardingChat({
         </div>
       )}
 
-      <div className="shrink-0 pb-2">
-        <PromptInput
-          className={`rounded-full border bg-background shadow-[0_1px_8px_rgba(0,0,0,0.06)] [&_[data-slot=input-group]]:h-auto [&_[data-slot=input-group]]:items-center [&_[data-slot=input-group]]:rounded-full [&_[data-slot=input-group]]:border-none [&_[data-slot=input-group-addon]]:static [&_[data-slot=input-group-addon]]:w-auto [&_[data-slot=input-group-addon]]:p-0 [&_[data-slot=input-group-addon]]:pr-2 ${isDrafting ? 'pointer-events-none opacity-50' : ''}`}
-          onSubmit={({ text }) => {
-            if (isDrafting) return
-            const trimmed = text.trim()
-            if (!trimmed) return
-            pendingInputRef.current = trimmed
-            sendMessage({ text: trimmed })
-          }}
-        >
-          <PromptInputBody>
-            <PromptInputTextarea
-              className="min-h-0 px-5 py-2.5 text-sm"
-              placeholder={isDrafting ? 'Drafting in progress…' : 'Type your answer…'}
-              value={input}
-              disabled={isDrafting}
-              style={{ fieldSizing: 'normal' } as unknown as React.CSSProperties}
-              onChange={(event) => setInput(event.currentTarget.value)}
-            />
-            <PromptInputFooter>
-              <div />
-              <PromptInputSubmit
-                status={status}
-                disabled={!input.trim() || inputDisabled}
-                className="size-8 rounded-full"
-              >
-                <ArrowUpIcon className="size-4" />
-              </PromptInputSubmit>
-            </PromptInputFooter>
-          </PromptInputBody>
-        </PromptInput>
-      </div>
+      {!isCompleted && (
+        <div className="shrink-0 pb-2">
+          <PromptInput
+            className={`rounded-full border bg-background shadow-[0_1px_8px_rgba(0,0,0,0.06)] [&_[data-slot=input-group]]:h-auto [&_[data-slot=input-group]]:items-center [&_[data-slot=input-group]]:rounded-full [&_[data-slot=input-group]]:border-none [&_[data-slot=input-group-addon]]:static [&_[data-slot=input-group-addon]]:w-auto [&_[data-slot=input-group-addon]]:p-0 [&_[data-slot=input-group-addon]]:pr-2 ${isDrafting ? 'pointer-events-none opacity-50' : ''}`}
+            onSubmit={({ text }) => {
+              if (isDrafting) return
+              const trimmed = text.trim()
+              if (!trimmed) return
+              pendingInputRef.current = trimmed
+              sendMessage({ text: trimmed })
+            }}
+          >
+            <PromptInputBody>
+              <PromptInputTextarea
+                className="min-h-0 px-5 py-2.5 text-sm"
+                placeholder={isDrafting ? 'Drafting in progress…' : 'Type your answer…'}
+                value={input}
+                disabled={isDrafting}
+                style={{ fieldSizing: 'normal' } as unknown as React.CSSProperties}
+                onChange={(event) => setInput(event.currentTarget.value)}
+              />
+              <PromptInputFooter>
+                <div />
+                <PromptInputSubmit
+                  status={status}
+                  disabled={!input.trim() || inputDisabled}
+                  className="size-8 rounded-full"
+                >
+                  <ArrowUpIcon className="size-4" />
+                </PromptInputSubmit>
+              </PromptInputFooter>
+            </PromptInputBody>
+          </PromptInput>
+        </div>
+      )}
     </main>
   )
 }

@@ -241,6 +241,52 @@ export async function persistComplianceProfile(
 }
 
 /**
+ * Load the compliance profile for a session, or `null` if none exists yet.
+ *
+ * Used by `app/(authed)/onboarding/chat/page.tsx` (ENT-46) to hydrate the
+ * inline posture summary card on page reload — without this, refreshing
+ * the chat after completion would drop the card because tool-result parts
+ * aren't persisted in `onboarding_messages`.
+ */
+export async function loadComplianceProfile(
+  supabase: SupabaseClient,
+  sessionId: string,
+): Promise<ComplianceProfileRow | null> {
+  const { data, error } = await supabase
+    .from('compliance_profiles')
+    .select(
+      'id, session_id, user_id, industry, eu_jurisdictions, data_categories, data_subjects, ai_systems, has_dpo, has_ropa, transfers_outside_eu, transfer_destinations, vendor_list, staff_count, created_at, updated_at',
+    )
+    .eq('session_id', sessionId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`loadComplianceProfile(${sessionId}): ${error.message}`)
+  }
+  return (data as ComplianceProfileRow | null) ?? null
+}
+
+/**
+ * Reverse mapping for `loadComplianceProfile` — converts a row's snake_case
+ * shape back to the camelCase `ComplianceProfile` the projection consumes.
+ */
+export function profileFromRow(row: ComplianceProfileRow): ComplianceProfile {
+  return {
+    industry: row.industry,
+    euJurisdictions: row.eu_jurisdictions,
+    dataCategories: row.data_categories,
+    dataSubjects: row.data_subjects,
+    aiSystems: row.ai_systems,
+    hasDpo: row.has_dpo,
+    hasRopa: row.has_ropa,
+    transfersOutsideEu: row.transfers_outside_eu,
+    transferDestinations: row.transfer_destinations,
+    vendorList: row.vendor_list,
+    staffCount: row.staff_count,
+  }
+}
+
+/**
  * Mark a session completed (ENT-45 — sibling to `persistComplianceProfile`).
  *
  * Separate from the profile insert because Supabase JS has no transaction

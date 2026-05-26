@@ -60,7 +60,7 @@ describe('OnboardingChat — error banner + retry (ENT-88)', () => {
 
   it('does not render the error banner while status is ready', () => {
     mockUseChat({ status: 'ready' })
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull()
@@ -68,7 +68,7 @@ describe('OnboardingChat — error banner + retry (ENT-88)', () => {
 
   it('renders an inline error banner with a Retry button when status is error', () => {
     mockUseChat({ status: 'error', error: new Error('boom') })
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     const banner = screen.getByRole('alert')
     expect(banner).toBeInTheDocument()
@@ -83,7 +83,7 @@ describe('OnboardingChat — error banner + retry (ENT-88)', () => {
     mockUseChat({ status: 'error', error: new Error('boom'), regenerate })
 
     const user = userEvent.setup()
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     await user.click(screen.getByRole('button', { name: /retry/i }))
     expect(regenerate).toHaveBeenCalledTimes(1)
@@ -98,7 +98,7 @@ describe('OnboardingChat — error banner + retry (ENT-88)', () => {
 
     const user = userEvent.setup()
     const { rerender } = render(
-      <OnboardingChat sessionId="s1" initialMessages={[]} />,
+      <OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />,
     )
 
     const textarea = screen.getByRole('textbox')
@@ -120,7 +120,7 @@ describe('OnboardingChat — error banner + retry (ENT-88)', () => {
         },
       ],
     })
-    rerender(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    rerender(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     // Textarea is still the same element after rerender; user can fix &
     // resubmit, or click Retry to replay the existing user turn.

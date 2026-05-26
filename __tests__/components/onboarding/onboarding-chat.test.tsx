@@ -58,7 +58,7 @@ describe('OnboardingChat', () => {
 
   it('disables the submit button while the input is empty', () => {
     mockUseChat()
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     const submit = screen.getByRole('button', { name: /submit/i })
     expect(submit).toBeDisabled()
@@ -67,7 +67,7 @@ describe('OnboardingChat', () => {
   it('keeps the submit button disabled when the input is whitespace only', async () => {
     mockUseChat()
     const user = userEvent.setup()
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     await user.type(screen.getByRole('textbox'), '   ')
     expect(screen.getByRole('button', { name: /submit/i })).toBeDisabled()
@@ -76,7 +76,7 @@ describe('OnboardingChat', () => {
   it('enables the submit button once the input has non-whitespace content', async () => {
     mockUseChat()
     const user = userEvent.setup()
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     await user.type(screen.getByRole('textbox'), 'we sell SaaS')
     expect(screen.getByRole('button', { name: /submit/i })).toBeEnabled()
@@ -86,7 +86,7 @@ describe('OnboardingChat', () => {
     const sendMessage = vi.fn()
     mockUseChat({ sendMessage })
     const user = userEvent.setup()
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     await user.type(screen.getByRole('textbox'), '  we sell SaaS  ')
     await user.click(screen.getByRole('button', { name: /submit/i }))
@@ -99,7 +99,7 @@ describe('OnboardingChat', () => {
     // status. Asserting via accessible name keeps the test resilient to the
     // icon swap (Spinner / SquareIcon / CornerDownLeftIcon).
     mockUseChat({ status: 'streaming' })
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     expect(screen.getByRole('button', { name: /stop/i })).toBeInTheDocument()
   })
@@ -120,7 +120,7 @@ describe('OnboardingChat', () => {
       ],
     })
 
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     expect(
       screen.getByText('We build SME accounting tools.'),
