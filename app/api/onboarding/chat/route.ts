@@ -30,6 +30,18 @@ import { createClient } from '@/lib/supabase/server'
  * Persistence runs inside `toUIMessageStreamResponse({ onFinish })` and uses
  * `consumeStream()` so the assistant turn still lands in the DB even when
  * the client disconnects mid-stream.
+ *
+ * Known dev-only quirk (ENT-89): the very first POST after a fresh
+ * `pnpm dev` start can land an assistant message with its content
+ * concatenated twice (cold Turbopack compile re-running the stream
+ * consumer mid-request — `compile: ~1s` shows up in the route log).
+ * Subsequent turns are clean. A `next build` does not reproduce: prod
+ * pre-compiles every route handler so there's no mid-request compile
+ * window for the stream to be doubled in. No defensive dedupe is added
+ * here — the suspected fault is in the dev runtime, not our code, and
+ * the canonical fix is "use `pnpm start` for any verification that
+ * depends on cold-path timing".
+ * Refs: https://linear.app/entear/issue/ENT-89.
  */
 
 // Server-side stable IDs are required for persistence to round-trip.
