@@ -23,6 +23,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // ENT-90: redirect authenticated `/dashboard*` to `/onboarding`. The
+  // legacy dashboard was removed in ENT-40 and the real one lands with
+  // ENT-46; until then stale bookmarks would render Next.js's not-found.
+  // Swap this for a profile-aware check once `compliance_profiles` exists.
+  if (user && pathname.startsWith('/dashboard')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/onboarding'
+    return NextResponse.redirect(url)
+  }
+
   return supabaseResponse
 }
 
