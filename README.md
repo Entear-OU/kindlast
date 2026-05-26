@@ -1,28 +1,16 @@
 # Kindlast
 
-AI-powered GDPR & EU AI Act compliance platform for EU SMEs.
+DPO Copilot for EU SMEs — an agentic compliance workspace currently being rebuilt per the [ENT-30 backend foundation epic](https://linear.app/entear/issue/ENT-30/epic-backend-foundation-and-cleanup).
 
-**Two regulations, one platform, zero guesswork.**
-
-## Features
-
-- **GDPR Compliance Assessment** — AI-powered gap analysis with actionable recommendations
-- **Compliance Score Dashboard** — 0-100 score with color-coded risk levels
-- **Findings & Recommendations** — Detailed findings with specific GDPR article references
-- **EU AI Act Risk Classification** — Classify AI systems by risk tier (premium)
-- **PDF Compliance Report** — Audit-ready PDF export (premium)
-- **Freemium Model** — Free tier with core features, premium at €49/mo
+> ⚠️ The previous one-shot GDPR/AI Act assessment flow has been retired (ENT-40). The agentic surface is in active development; the sections below describe only what's currently in the repo.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 15 (App Router) |
+| Framework | Next.js 16 (App Router) |
 | UI | shadcn/ui + Tailwind CSS v4 |
-| AI | Vercel AI SDK + Google Gemini 2.5 Flash |
-| Database | Supabase (Postgres + Auth + RLS) |
-| Payments | Stripe (Checkout + Customer Portal) |
-| PDF Export | @react-pdf/renderer |
+| Database | Supabase (Postgres + Auth + RLS + pgvector) |
 | Validation | Zod |
 | Testing | Vitest + React Testing Library |
 
@@ -31,25 +19,21 @@ AI-powered GDPR & EU AI Act compliance platform for EU SMEs.
 ### Prerequisites
 
 - Node.js 18+
-- pnpm
-- Supabase project
-- Google AI API key (Gemini)
-- Stripe account (test mode)
+- [pnpm](https://pnpm.io)
+- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) (`brew install supabase/tap/supabase` on macOS)
+- Docker Desktop (required by `supabase start` for the local stack)
 
 ### Setup
 
 ```bash
-# Install dependencies
+# Install JS dependencies
 pnpm install
 
 # Copy environment variables
-cp .env.example .env.local
-# Fill in your API keys in .env.local
+cp .env.example .env
+# Fill in SUPABASE_URL + SUPABASE_PUBLISHABLE_KEY in .env
 
-# Run database migration
-# Apply supabase/migrations/001_initial_schema.sql to your Supabase project
-
-# Start development server
+# Start the Next.js dev server
 pnpm dev
 ```
 
@@ -58,87 +42,83 @@ pnpm dev
 | Variable | Description |
 |----------|-------------|
 | `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI API key for Gemini |
-| `STRIPE_SECRET_KEY` | Stripe secret key |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
-| `STRIPE_PRICE_ID_PREMIUM` | Stripe Price ID for premium plan |
-| `NEXT_PUBLIC_APP_URL` | App URL (e.g., `http://localhost:3000`) |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) key |
+| `SUPABASE_SECRET_KEY` | Supabase secret key (server-side only) |
+
+## Supabase Local Workflow
+
+All schema changes flow through **versioned migrations** committed to `supabase/migrations/`. Never apply DDL directly to the remote project — go through the CLI.
+
+### One-time setup
+
+```bash
+# Authenticate the CLI with your Supabase account
+supabase login
+
+# Link this checkout to the remote project (already initialised; only needed once per machine)
+supabase link --project-ref kstdusioclkgffyfpesu
+```
+
+### Day-to-day
+
+```bash
+# Boot the local Postgres + Studio + Auth stack
+supabase start
+
+# Apply pending migrations to your local database
+supabase db reset                    # nuke + replay all migrations from scratch
+# or
+supabase migration up                # apply only new migrations
+
+# Create a new migration
+supabase migration new <slug>        # produces supabase/migrations/<timestamp>_<slug>.sql
+
+# Push committed migrations to the remote project (after PR merge)
+supabase db push --dry-run           # always preview first
+supabase db push                     # actually apply
+
+# Stop the local stack
+supabase stop
+```
+
+Local Studio runs at <http://localhost:54323>; local API at <http://localhost:54321>.
 
 ## Development
 
 ```bash
-# Run tests
-pnpm test
-
-# Run tests in watch mode
-pnpm test:watch
-
-# Run tests with coverage
-pnpm test:coverage
-
-# Build for production
-pnpm build
-
-# Start production server
-pnpm start
-
-# Lint
-pnpm lint
+pnpm dev              # Next.js dev server
+pnpm build            # production build
+pnpm start            # production server
+pnpm lint             # ESLint
+pnpm test             # Vitest (run once)
+pnpm test:watch       # Vitest watch mode
+pnpm test:coverage    # with coverage report
 ```
 
 ## Project Structure
 
 ```
 app/
-├── (public)/           # Public pages (landing, login, pricing)
-├── (dashboard)/        # Protected dashboard pages
-│   └── dashboard/
-│       ├── onboarding/ # 4-step onboarding wizard
-│       ├── findings/   # Compliance findings list
-│       ├── ai-act/     # AI Act classification (premium)
-│       ├── export/     # PDF report export (premium)
-│       └── settings/   # Profile & billing settings
-├── api/
-│   ├── assess/         # GDPR assessment endpoint
-│   ├── classify/       # AI Act classification endpoint
-│   ├── export/         # PDF generation endpoint
-│   └── webhooks/stripe # Stripe webhook handler
+├── (public)/           # Public-facing pages (landing, login)
 └── auth/callback/      # OAuth callback
 
 lib/
-├── ai/                 # AI assessment & classification
 ├── auth/               # Auth server actions
-├── pdf/                # PDF report template
-├── schemas/            # Zod validation schemas
-├── stripe/             # Stripe utilities
-├── subscription/       # Premium gating
-├── supabase/           # Supabase client helpers & queries
-└── types/              # TypeScript type definitions
+├── supabase/           # Supabase client/server/middleware helpers
+└── utils.ts            # Shared utilities
 
 components/
-├── ai-act/             # AI Act risk tier components
-├── dashboard/          # Dashboard UI components
-├── findings/           # Finding cards & filters
 ├── landing/            # Landing page sections
-├── onboarding/         # Onboarding wizard steps
-├── premium/            # Upgrade prompt
 └── ui/                 # shadcn/ui base components
+
+supabase/
+├── config.toml         # Supabase CLI project config (committed)
+└── migrations/         # Versioned schema migrations
 ```
 
 ## Testing
 
-The project follows test-driven development (TDD). Tests are written with Vitest and React Testing Library.
-
-```bash
-pnpm test           # 38 test suites, 197 tests
-```
-
-## Legal Disclaimer
-
-Kindlast provides AI-generated compliance guidance for educational and planning purposes. It is not a substitute for professional legal advice. For binding compliance determinations, consult a qualified data protection attorney or certified DPO.
+The project follows test-driven development (TDD) per [CLAUDE.md](./CLAUDE.md). Tests use Vitest + React Testing Library; database/RLS work is exercised against a local Supabase instance (see [ENT-43](https://linear.app/entear/issue/ENT-43/establish-supabase-backed-integration-test-scaffold)).
 
 ## License
 
