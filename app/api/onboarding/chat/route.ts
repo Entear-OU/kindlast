@@ -11,7 +11,7 @@ import {
   appendMessages,
   getOrCreateActiveSession,
   loadTranscript,
-  textFromUIMessage,
+  messagesToPersist,
   uiMessageFromRow,
 } from '@/lib/onboarding/persistence'
 import { ONBOARDING_SYSTEM_PROMPT } from '@/lib/onboarding/system-prompt'
@@ -77,16 +77,16 @@ export async function POST(req: Request) {
     generateMessageId,
     onFinish: async ({ messages }) => {
       // `messages` is the full updated transcript (previous + new user + new
-      // assistant). Append only the rows that aren't in the DB yet.
+      // assistant). Append only the rows that aren't in the DB yet, and let
+      // `messagesToPersist` drop empty assistant turns from failed model
+      // calls (ENT-87) so the next prompt's context stays clean.
       const newMessages = messages.slice(previousMessages.length)
-      if (newMessages.length === 0) return
+      const rows = messagesToPersist(newMessages)
+      if (rows.length === 0) return
       await appendMessages(supabase, {
         sessionId,
         userId: user.id,
-        messages: newMessages.map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: textFromUIMessage(m),
-        })),
+        messages: rows,
       })
     },
   })
