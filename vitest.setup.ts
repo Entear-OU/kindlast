@@ -13,3 +13,10 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   }
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver
 }
+
+// jsdom doesn't implement `Element.prototype.scrollTo`, which `OnboardingChat`
+// calls in a passive effect to keep the latest turn in view. Stub it as a no-op
+// so component tests don't crash on first commit.
+if (typeof Element !== 'undefined' && typeof Element.prototype.scrollTo !== 'function') {
+  Element.prototype.scrollTo = function scrollToStub() {}
+}

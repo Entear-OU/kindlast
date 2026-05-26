@@ -56,16 +56,6 @@ describe('OnboardingChat', () => {
     useChatMock.mockReset()
   })
 
-  it('renders the empty-state copy when initialMessages is empty', () => {
-    mockUseChat({ messages: [] })
-    render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
-
-    expect(screen.getByText(/ready when you are/i)).toBeInTheDocument()
-    expect(
-      screen.getByText(/type a quick hello to begin/i),
-    ).toBeInTheDocument()
-  })
-
   it('disables the submit button while the input is empty', () => {
     mockUseChat()
     render(<OnboardingChat sessionId="s1" initialMessages={[]} />)
@@ -138,7 +128,5 @@ describe('OnboardingChat', () => {
     expect(
       screen.getByText(/which countries do you serve\?/i),
     ).toBeInTheDocument()
-    // Empty-state copy should NOT show when messages are present.
-    expect(screen.queryByText(/ready when you are/i)).toBeNull()
   })
 })

@@ -2,19 +2,12 @@
 
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type UIMessage } from 'ai'
-import { AlertCircleIcon, RotateCcwIcon } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { AlertCircleIcon, ArrowUpIcon, RotateCcwIcon } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation'
 import {
   Message,
   MessageContent,
-  MessageResponse,
 } from '@/components/ai-elements/message'
 import {
   PromptInput,
@@ -25,24 +18,21 @@ import {
 } from '@/components/ai-elements/prompt-input'
 import { Button } from '@/components/ui/button'
 
-/**
- * Conversational onboarding chat (ENT-44, client component).
- *
- * AI SDK v6 streaming with `useChat` + AI Elements UI primitives.
- *
- * Wire shape: only the newest user turn is sent to the server on each
- * submission (`prepareSendMessagesRequest`). The server is the source of
- * truth for the active session, so resume works without the URL carrying
- * any identifier — server-side `getOrCreateActiveSession` resolves it from
- * the authenticated user.
- *
- * Failure handling (ENT-88): a server-side `streamText` failure flips
- * `useChat().status` to `'error'`. We surface that as an inline banner
- * above the prompt with a Retry control (replays via `regenerate`) and
- * keep the user's typed text in the textarea so a hand-edit is also
- * possible. The clear-on-success is now an effect that fires once the
- * next assistant turn lands, instead of an unconditional clear at submit.
- */
+function DraftingIndicator() {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <div className="flex gap-1">
+        <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:0ms]" />
+        <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:150ms]" />
+        <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:300ms]" />
+      </div>
+      <span className="text-sm text-muted-foreground">
+        Drafting your compliance posture…
+      </span>
+    </div>
+  )
+}
+
 export function OnboardingChat({
   sessionId,
   initialMessages,
@@ -51,25 +41,36 @@ export function OnboardingChat({
   initialMessages: UIMessage[]
 }) {
   const [input, setInput] = useState('')
-  // Tracks the text we've just submitted; the clear-on-success effect uses
-  // it to know whether the textarea still contains a pending submission.
   const pendingInputRef = useRef<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const { messages, sendMessage, regenerate, status, error } = useChat({
     id: sessionId,
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: '/api/onboarding/chat',
-      // Send only the newest message — server loads the prior transcript.
       prepareSendMessagesRequest({ messages }) {
         return { body: { message: messages[messages.length - 1] } }
       },
     }),
   })
 
-  // Clear the textarea only once the next assistant turn has streamed in.
-  // If the call failed, `status` skips straight from `submitted`/`streaming`
-  // to `'error'` without an assistant message, and we leave `input` intact.
+  const isDrafting = useMemo(() => {
+    for (const message of messages) {
+      for (const part of message.parts) {
+        const partType = part.type as string
+        if (
+          partType === 'tool-complete_onboarding' ||
+          (partType === 'dynamic-tool' &&
+            (part as { toolName?: string }).toolName === 'complete_onboarding')
+        ) {
+          return true
+        }
+      }
+    }
+    return false
+  }, [messages])
+
   const lastMessage = messages[messages.length - 1]
   useEffect(() => {
     if (
@@ -82,68 +83,43 @@ export function OnboardingChat({
     }
   }, [status, lastMessage])
 
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages, status])
+
   const showError = status === 'error'
+  const inputDisabled = isDrafting || status !== 'ready'
 
   return (
-    <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 py-6">
-      <header className="mb-4 flex flex-col gap-1">
-        <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-          Onboarding
-        </p>
-        <h1 className="text-balance font-black text-2xl tracking-tight">
-          Let&apos;s build your compliance posture.
-        </h1>
-        <p className="text-muted-foreground text-sm">
-          Six plain-language questions, about five to ten minutes. Your answers stay private and
-          map to your initial GDPR and EU AI Act profile.
-        </p>
-      </header>
-
-      <Conversation className="flex-1 rounded-lg border">
-        <ConversationContent>
-          {messages.length === 0 ? (
-            <ConversationEmptyState
-              title="Ready when you are."
-              description="Type a quick hello to begin — the agent will take it from there."
-            />
-          ) : (
-            messages.map((message) => (
+    <main className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col px-4 pb-4 pt-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-6 py-4">
+          {messages.map((message) => {
+            const text = message.parts
+              .filter((p) => p.type === 'text')
+              .map((p) => (p as { type: 'text'; text: string }).text)
+              .join('')
+            if (!text) return null
+            return (
               <Message key={message.id} from={message.role}>
                 <MessageContent>
-                  {message.role === 'assistant' ? (
-                    <MessageResponse>
-                      {message.parts
-                        .filter((p) => p.type === 'text')
-                        .map((p) => (p as { type: 'text'; text: string }).text)
-                        .join('')}
-                    </MessageResponse>
-                  ) : (
-                    message.parts
-                      .filter((p) => p.type === 'text')
-                      .map((p) => (p as { type: 'text'; text: string }).text)
-                      .join('')
-                  )}
+                  <p className="whitespace-pre-wrap">{text}</p>
                 </MessageContent>
               </Message>
-            ))
-          )}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
+            )
+          })}
+          {isDrafting && status !== 'ready' && <DraftingIndicator />}
+        </div>
+      </div>
 
       {showError && (
         <div
           role="alert"
-          className="mt-4 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
+          className="mb-3 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
         >
           <AlertCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
           <div className="flex-1">
-            <p className="font-medium text-foreground">
-              Something went wrong — try again.
-            </p>
-            <p className="text-muted-foreground">
-              Your last answer is still in the box below. We didn&apos;t lose it.
-            </p>
+            <p className="font-medium text-foreground">Something went wrong.</p>
           </div>
           <Button
             type="button"
@@ -155,37 +131,45 @@ export function OnboardingChat({
             <RotateCcwIcon className="mr-1.5 size-3.5" aria-hidden />
             Retry
           </Button>
-          {/* Surface the underlying message only when meaningful — used for
-              dev visibility; the founder-facing copy is above. */}
           {error?.message && (
             <span className="sr-only">Error: {error.message}</span>
           )}
         </div>
       )}
 
-      <PromptInput
-        className="mt-4"
-        onSubmit={({ text }) => {
-          const trimmed = text.trim()
-          if (!trimmed) return
-          pendingInputRef.current = trimmed
-          sendMessage({ text: trimmed })
-          // Don't clear `input` here — the effect above clears it only after
-          // a successful round-trip so the user can resend on failure.
-        }}
-      >
-        <PromptInputBody>
-          <PromptInputTextarea
-            placeholder="Type your answer…"
-            value={input}
-            onChange={(event) => setInput(event.currentTarget.value)}
-          />
-          <PromptInputFooter>
-            <div />
-            <PromptInputSubmit status={status} disabled={!input.trim()} />
-          </PromptInputFooter>
-        </PromptInputBody>
-      </PromptInput>
+      <div className="shrink-0 pb-2">
+        <PromptInput
+          className={`rounded-full border bg-background shadow-[0_1px_8px_rgba(0,0,0,0.06)] [&_[data-slot=input-group]]:h-auto [&_[data-slot=input-group]]:items-center [&_[data-slot=input-group]]:rounded-full [&_[data-slot=input-group]]:border-none [&_[data-slot=input-group-addon]]:static [&_[data-slot=input-group-addon]]:w-auto [&_[data-slot=input-group-addon]]:p-0 [&_[data-slot=input-group-addon]]:pr-2 ${isDrafting ? 'pointer-events-none opacity-50' : ''}`}
+          onSubmit={({ text }) => {
+            if (isDrafting) return
+            const trimmed = text.trim()
+            if (!trimmed) return
+            pendingInputRef.current = trimmed
+            sendMessage({ text: trimmed })
+          }}
+        >
+          <PromptInputBody>
+            <PromptInputTextarea
+              className="min-h-0 px-5 py-2.5 text-sm"
+              placeholder={isDrafting ? 'Drafting in progress…' : 'Type your answer…'}
+              value={input}
+              disabled={isDrafting}
+              style={{ fieldSizing: 'normal' } as unknown as React.CSSProperties}
+              onChange={(event) => setInput(event.currentTarget.value)}
+            />
+            <PromptInputFooter>
+              <div />
+              <PromptInputSubmit
+                status={status}
+                disabled={!input.trim() || inputDisabled}
+                className="size-8 rounded-full"
+              >
+                <ArrowUpIcon className="size-4" />
+              </PromptInputSubmit>
+            </PromptInputFooter>
+          </PromptInputBody>
+        </PromptInput>
+      </div>
     </main>
   )
 }
