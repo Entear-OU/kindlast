@@ -196,3 +196,125 @@ describe('parseRegulationData — article paragraphs (ENT-95)', () => {
     expect(parsed.articles).toHaveLength(2)
   })
 })
+
+describe('parseRegulationData — annexes + effective dates (ENT-96)', () => {
+  const withAnnex = () => ({
+    ...validInput(),
+    annexes: [
+      {
+        label: 'III',
+        heading: 'High-risk AI systems referred to in Article 6(2)',
+        body: 'High-risk AI systems pursuant to Article 6(2) are listed below.',
+        effectiveDate: '2026-08-02',
+        items: [
+          { label: '1', heading: 'Biometrics', body: 'Biometric body.', ordering: 1 },
+          { label: '1(a)', body: 'Remote biometric identification systems.', ordering: 2 },
+          { label: '2', heading: 'Critical infrastructure', body: 'Critical infrastructure body.', ordering: 3 },
+        ],
+      },
+    ],
+  })
+
+  it('accepts a document with annexes[]', () => {
+    const parsed = parseRegulationData(withAnnex())
+    expect(parsed.annexes).toHaveLength(1)
+    expect(parsed.annexes![0]!.label).toBe('III')
+    expect(parsed.annexes![0]!.items).toHaveLength(3)
+  })
+
+  it('accepts payloads without annexes[] (back-compat for GDPR)', () => {
+    const parsed = parseRegulationData(validInput())
+    expect(parsed.annexes).toBeUndefined()
+  })
+
+  it('rejects duplicate annex labels within a document', () => {
+    const bad = withAnnex()
+    bad.annexes = [bad.annexes![0]!, { ...bad.annexes![0]! }]
+    expect(() => parseRegulationData(bad)).toThrow(/duplicate.*annex/i)
+  })
+
+  it('rejects duplicate item labels within an annex', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.items = [
+      { label: '1', body: 'a', ordering: 1 },
+      { label: '1', body: 'b', ordering: 2 },
+    ]
+    expect(() => parseRegulationData(bad)).toThrow(/duplicate.*item/i)
+  })
+
+  it('rejects a non-ISO annex effectiveDate', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.effectiveDate = '2026/08/02'
+    expect(() => parseRegulationData(bad)).toThrow(/effectiveDate/i)
+  })
+
+  it('rejects empty item bodies', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.items[0]!.body = ''
+    expect(() => parseRegulationData(bad)).toThrow()
+  })
+
+  it('rejects empty annex labels', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.label = ''
+    expect(() => parseRegulationData(bad)).toThrow()
+  })
+
+  it('accepts items with no heading (sub-items skip the field)', () => {
+    const parsed = parseRegulationData(withAnnex())
+    const subItem = parsed.annexes![0]!.items.find((i) => i.label === '1(a)')
+    expect(subItem).toBeDefined()
+    expect(subItem!.heading).toBeUndefined()
+  })
+
+  it('accepts an article with effectiveDate', () => {
+    const parsed = parseRegulationData({
+      ...validInput(),
+      articles: [
+        {
+          articleNumber: 4,
+          heading: 'AI literacy',
+          body: 'Providers and deployers shall take measures.',
+          effectiveDate: '2025-02-02',
+        },
+      ],
+    })
+    expect(parsed.articles[0]!.effectiveDate).toBe('2025-02-02')
+  })
+
+  it('rejects a non-ISO article effectiveDate', () => {
+    const bad = {
+      ...validInput(),
+      articles: [
+        {
+          articleNumber: 4,
+          heading: 'AI literacy',
+          body: '…',
+          effectiveDate: '02/02/2025',
+        },
+      ],
+    }
+    expect(() => parseRegulationData(bad)).toThrow(/effectiveDate/i)
+  })
+
+  it('allows item.effectiveDate to override the annex-level effectiveDate', () => {
+    // Useful for the rare case where a single Annex III item carves out a
+    // different deadline. The DB column is nullable per-item; the validator
+    // accepts it without requiring the override.
+    const parsed = parseRegulationData({
+      ...validInput(),
+      annexes: [
+        {
+          label: 'III',
+          heading: 'h',
+          body: 'b',
+          effectiveDate: '2026-08-02',
+          items: [
+            { label: '1', heading: 'X', body: 'b', ordering: 1, effectiveDate: '2027-01-01' },
+          ],
+        },
+      ],
+    })
+    expect(parsed.annexes![0]!.items[0]!.effectiveDate).toBe('2027-01-01')
+  })
+})

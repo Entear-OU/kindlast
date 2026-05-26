@@ -32,7 +32,8 @@
           "body": "Providers and deployers of AI systems shall take measures to ensure, to their best extent, a sufficient level of AI literacy of their staff and other persons dealing with the operation and use of AI systems on their behalf, taking into account their technical knowledge, experience, education and training and the context the AI systems are to be used in, and considering the persons or groups of persons on whom the AI systems are to be used.",
           "ordering": 1
         }
-      ]
+      ],
+      "effectiveDate": "2025-02-02"
     },
     {
       "articleNumber": 5,
@@ -2049,6 +2050,184 @@
     {
       "recitalNumber": 180,
       "body": "The European Data Protection Supervisor and the European Data Protection Board were consulted in accordance with Article 42(1) and (2) of Regulation (EU) 2018/1725 and delivered their joint opinion on 18 June 2021."
+    }
+  ],
+  "annexes": [
+    {
+      "label": "III",
+      "heading": "High-risk AI systems referred to in Article 6(2)",
+      "body": "High-risk AI systems pursuant to Article 6(2) are the AI systems listed in any of the following areas:",
+      "effectiveDate": "2026-08-02",
+      "items": [
+        {
+          "label": "1",
+          "heading": "Biometrics",
+          "body": "Biometrics, in so far as their use is permitted under relevant Union or national law:",
+          "ordering": 1
+        },
+        {
+          "label": "1(a)",
+          "body": "Remote biometric identification systems. This shall not include AI systems intended to be used for biometric verification the sole purpose of which is to confirm that a specific natural person is the person he or she claims to be;",
+          "ordering": 2
+        },
+        {
+          "label": "1(b)",
+          "body": "AI systems intended to be used for biometric categorisation, according to sensitive or protected attributes or characteristics based on the inference of those attributes or characteristics;",
+          "ordering": 3
+        },
+        {
+          "label": "1(c)",
+          "body": "AI systems intended to be used for emotion recognition.",
+          "ordering": 4
+        },
+        {
+          "label": "2",
+          "heading": "Critical infrastructure",
+          "body": "Critical infrastructure: AI systems intended to be used as safety components in the management and operation of critical digital infrastructure, road traffic, or in the supply of water, gas, heating or electricity.",
+          "ordering": 5
+        },
+        {
+          "label": "3",
+          "heading": "Education and vocational training",
+          "body": "Education and vocational training:",
+          "ordering": 6
+        },
+        {
+          "label": "3(a)",
+          "body": "AI systems intended to be used to determine access or admission or to assign natural persons to educational and vocational training institutions at all levels;",
+          "ordering": 7
+        },
+        {
+          "label": "3(b)",
+          "body": "AI systems intended to be used to evaluate learning outcomes, including when those outcomes are used to steer the learning process of natural persons in educational and vocational training institutions at all levels;",
+          "ordering": 8
+        },
+        {
+          "label": "3(c)",
+          "body": "AI systems intended to be used for the purpose of assessing the appropriate level of education that an individual will receive or will be able to access, in the context of or within educational and vocational training institutions at all levels;",
+          "ordering": 9
+        },
+        {
+          "label": "3(d)",
+          "body": "AI systems intended to be used for monitoring and detecting prohibited behaviour of students during tests in the context of or within educational and vocational training institutions at all levels.",
+          "ordering": 10
+        },
+        {
+          "label": "4",
+          "heading": "Employment, workers’ management and access to self-employment",
+          "body": "Employment, workers’ management and access to self-employment:",
+          "ordering": 11
+        },
+        {
+          "label": "4(a)",
+          "body": "AI systems intended to be used for the recruitment or selection of natural persons, in particular to place targeted job advertisements, to analyse and filter job applications, and to evaluate candidates;",
+          "ordering": 12
+        },
+        {
+          "label": "4(b)",
+          "body": "AI systems intended to be used to make decisions affecting terms of work-related relationships, the promotion or termination of work-related contractual relationships, to allocate tasks based on individual behaviour or personal traits or characteristics or to monitor and evaluate the performance and behaviour of persons in such relationships.",
+          "ordering": 13
+        },
+        {
+          "label": "5",
+          "heading": "Access to and enjoyment of essential private services and essential public services and benefits",
+          "body": "Access to and enjoyment of essential private services and essential public services and benefits:",
+          "ordering": 14
+        },
+        {
+          "label": "5(a)",
+          "body": "AI systems intended to be used by public authorities or on behalf of public authorities to evaluate the eligibility of natural persons for essential public assistance benefits and services, including healthcare services, as well as to grant, reduce, revoke, or reclaim such benefits and services;",
+          "ordering": 15
+        },
+        {
+          "label": "5(b)",
+          "body": "AI systems intended to be used to evaluate the creditworthiness of natural persons or establish their credit score, with the exception of AI systems used for the purpose of detecting financial fraud;",
+          "ordering": 16
+        },
+        {
+          "label": "5(c)",
+          "body": "AI systems intended to be used for risk assessment and pricing in relation to natural persons in the case of life and health insurance;",
+          "ordering": 17
+        },
+        {
+          "label": "5(d)",
+          "body": "AI systems intended to evaluate and classify emergency calls by natural persons or to be used to dispatch, or to establish priority in the dispatching of, emergency first response services, including by police, firefighters and medical aid, as well as of emergency healthcare patient triage systems.",
+          "ordering": 18
+        },
+        {
+          "label": "6",
+          "heading": "Law enforcement",
+          "body": "Law enforcement, in so far as their use is permitted under relevant Union or national law:",
+          "ordering": 19
+        },
+        {
+          "label": "6(a)",
+          "body": "AI systems intended to be used by or on behalf of law enforcement authorities, or by Union institutions, bodies, offices or agencies in support of law enforcement authorities or on their behalf to assess the risk of a natural person becoming the victim of criminal offences;",
+          "ordering": 20
+        },
+        {
+          "label": "6(b)",
+          "body": "AI systems intended to be used by or on behalf of law enforcement authorities or by Union institutions, bodies, offices or agencies in support of law enforcement authorities as polygraphs or similar tools;",
+          "ordering": 21
+        },
+        {
+          "label": "6(c)",
+          "body": "AI systems intended to be used by or on behalf of law enforcement authorities, or by Union institutions, bodies, offices or agencies, in support of law enforcement authorities to evaluate the reliability of evidence in the course of the investigation or prosecution of criminal offences;",
+          "ordering": 22
+        },
+        {
+          "label": "6(d)",
+          "body": "AI systems intended to be used by law enforcement authorities or on their behalf or by Union institutions, bodies, offices or agencies in support of law enforcement authorities for assessing the risk of a natural person offending or re-offending not solely on the basis of the profiling of natural persons as referred to in Article 3(4) of Directive (EU) 2016/680, or to assess personality traits and characteristics or past criminal behaviour of natural persons or groups;",
+          "ordering": 23
+        },
+        {
+          "label": "6(e)",
+          "body": "AI systems intended to be used by or on behalf of law enforcement authorities or by Union institutions, bodies, offices or agencies in support of law enforcement authorities for the profiling of natural persons as referred to in Article 3(4) of Directive (EU) 2016/680 in the course of the detection, investigation or prosecution of criminal offences.",
+          "ordering": 24
+        },
+        {
+          "label": "7",
+          "heading": "Migration, asylum and border control management",
+          "body": "Migration, asylum and border control management, in so far as their use is permitted under relevant Union or national law:",
+          "ordering": 25
+        },
+        {
+          "label": "7(a)",
+          "body": "AI systems intended to be used by or on behalf of competent public authorities or by Union institutions, bodies, offices or agencies as polygraphs or similar tools;",
+          "ordering": 26
+        },
+        {
+          "label": "7(b)",
+          "body": "AI systems intended to be used by or on behalf of competent public authorities or by Union institutions, bodies, offices or agencies to assess a risk, including a security risk, a risk of irregular migration, or a health risk, posed by a natural person who intends to enter or who has entered into the territory of a Member State;",
+          "ordering": 27
+        },
+        {
+          "label": "7(c)",
+          "body": "AI systems intended to be used by or on behalf of competent public authorities or by Union institutions, bodies, offices or agencies to assist competent public authorities for the examination of applications for asylum, visa or residence permits and for associated complaints with regard to the eligibility of the natural persons applying for a status, including related assessments of the reliability of evidence;",
+          "ordering": 28
+        },
+        {
+          "label": "7(d)",
+          "body": "AI systems intended to be used by or on behalf of competent public authorities, or by Union institutions, bodies, offices or agencies, in the context of migration, asylum or border control management, for the purpose of detecting, recognising or identifying natural persons, with the exception of the verification of travel documents.",
+          "ordering": 29
+        },
+        {
+          "label": "8",
+          "heading": "Administration of justice and democratic processes",
+          "body": "Administration of justice and democratic processes:",
+          "ordering": 30
+        },
+        {
+          "label": "8(a)",
+          "body": "AI systems intended to be used by a judicial authority or on their behalf to assist a judicial authority in researching and interpreting facts and the law and in applying the law to a concrete set of facts, or to be used in a similar way in alternative dispute resolution;",
+          "ordering": 31
+        },
+        {
+          "label": "8(b)",
+          "body": "AI systems intended to be used for influencing the outcome of an election or referendum or the voting behaviour of natural persons in the exercise of their vote in elections or referenda. This does not include AI systems to the output of which natural persons are not directly exposed, such as tools used to organise, optimise or structure political campaigns from an administrative or logistical point of view.",
+          "ordering": 32
+        }
+      ]
     }
   ]
 }

@@ -94,6 +94,9 @@ describe.skipIf(!supabaseRunning)('regulatory corpus schema (ENT-48)', () => {
         'body',
         'created_at',
         'updated_at',
+        // effective_date added by ENT-96 — nullable, default null. Pre-ENT-96
+        // rows continue to ingest unchanged.
+        'effective_date',
       ])
     })
 
