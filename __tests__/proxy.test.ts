@@ -118,7 +118,9 @@ describe('Proxy', () => {
     expect(response).toBe(supabaseResponse)
   })
 
-  it('allows authenticated users to access /dashboard', async () => {
+  it('redirects authenticated users from /dashboard to /onboarding', async () => {
+    // ENT-90: until ENT-46 lands a real `/dashboard`, the legacy route would
+    // 404. Redirect to /onboarding so stale bookmarks land somewhere useful.
     const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
@@ -132,10 +134,34 @@ describe('Proxy', () => {
     })
 
     const request = createRequest('/dashboard')
-    const response = await proxy(request)
+    await proxy(request)
 
-    expect(NextResponse.redirect).not.toHaveBeenCalled()
-    expect(response).toBe(supabaseResponse)
+    expect(NextResponse.redirect).toHaveBeenCalled()
+    const redirectCall = vi.mocked(NextResponse.redirect).mock.calls[0]
+    expect(redirectCall[0].toString()).toContain('/onboarding')
+  })
+
+  it('redirects authenticated users from /dashboard/sub-path to /onboarding', async () => {
+    // Catches any nested `/dashboard/*` link that might still float around
+    // (e.g. older marketing copy).
+    const { proxy } = await import('@/proxy')
+    const { NextResponse } = await import('next/server')
+
+    const supabaseResponse = {
+      cookies: { set: vi.fn() },
+      headers: new Headers(),
+    }
+    mockUpdateSession.mockResolvedValue({
+      supabaseResponse,
+      user: { id: '123', email: 'test@example.com' },
+    })
+
+    const request = createRequest('/dashboard/settings')
+    await proxy(request)
+
+    expect(NextResponse.redirect).toHaveBeenCalled()
+    const redirectCall = vi.mocked(NextResponse.redirect).mock.calls[0]
+    expect(redirectCall[0].toString()).toContain('/onboarding')
   })
 
   it('allows unauthenticated users to access /login', async () => {
