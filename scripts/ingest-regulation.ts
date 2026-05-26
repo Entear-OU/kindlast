@@ -98,7 +98,7 @@ async function main(): Promise<void> {
   console.log(
     `ingest(${slug}): done — document ${result.documentId}, ` +
       `${result.articlesUpserted} articles, ${result.recitalsUpserted} recitals, ` +
-      `${result.linksUpserted} links upserted.`,
+      `${result.paragraphsUpserted} paragraphs, ${result.linksUpserted} links upserted.`,
   )
 }
 

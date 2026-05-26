@@ -42,10 +42,20 @@ const DocumentSchema = z.object({
   officialUrl: z.string().url('document.officialUrl must be a valid URL'),
 })
 
+const ArticleParagraphSchema = z.object({
+  label: z.string().min(1),
+  body: z.string().min(1),
+  ordering: z.number().int().nonnegative(),
+})
+
 const ArticleSchema = z.object({
   articleNumber: z.number().int().positive(),
   heading: z.string().min(1),
   body: z.string().min(1),
+  // Optional sub-paragraph rows for citation-grain Analyst output (ENT-95).
+  // Articles without sub-paragraphs (most of GDPR + most AI Act articles)
+  // simply omit the field; the body alone is the row.
+  paragraphs: z.array(ArticleParagraphSchema).optional(),
 })
 
 const RecitalSchema = z.object({
@@ -87,6 +97,23 @@ export const RegulationDataSchema = BaseSchema.superRefine((data, ctx) => {
       })
     }
     articleNumbers.add(article.articleNumber)
+
+    // Paragraph labels must be unique within their parent article — the DB's
+    // unique (article_id, paragraph_label) would catch this, but failing
+    // here keeps half-written corpus state out of the picture.
+    if (article.paragraphs) {
+      const paragraphLabels = new Set<string>()
+      for (const paragraph of article.paragraphs) {
+        if (paragraphLabels.has(paragraph.label)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['articles'],
+            message: `article ${article.articleNumber}: duplicate paragraph label ${paragraph.label}`,
+          })
+        }
+        paragraphLabels.add(paragraph.label)
+      }
+    }
   }
 
   const recitalNumbers = new Set<number>()
@@ -126,6 +153,7 @@ export type IngestResult = {
   articlesUpserted: number
   recitalsUpserted: number
   linksUpserted: number
+  paragraphsUpserted: number
 }
 
 /**
@@ -151,6 +179,11 @@ export async function ingestRegulation(
   const documentId = await upsertDocument(supabase, data.document)
   const articleIdByNumber = await upsertArticles(supabase, documentId, data.articles)
   const recitalIdByNumber = await upsertRecitals(supabase, documentId, data.recitals)
+  const paragraphsUpserted = await upsertArticleParagraphs(
+    supabase,
+    data.articles,
+    articleIdByNumber,
+  )
 
   let linksUpserted = 0
   if (data.articleRecitals && data.articleRecitals.length > 0) {
@@ -167,6 +200,7 @@ export async function ingestRegulation(
     articlesUpserted: articleIdByNumber.size,
     recitalsUpserted: recitalIdByNumber.size,
     linksUpserted,
+    paragraphsUpserted,
   }
 }
 
@@ -256,6 +290,51 @@ async function upsertRecitals(
     idByNumber.set(row.recital_number, row.id)
   }
   return idByNumber
+}
+
+async function upsertArticleParagraphs(
+  supabase: SupabaseClient,
+  articles: RegulationData['articles'],
+  articleIdByNumber: ReadonlyMap<number, string>,
+): Promise<number> {
+  // Flatten all (article, paragraphs[]) pairs into a single upsert. One round
+  // trip instead of one-per-article keeps the ingest cheap even at AI-Act
+  // scale where ~13 articles get expanded.
+  const rows: Array<{
+    article_id: string
+    paragraph_label: string
+    body: string
+    ordering: number
+  }> = []
+  for (const article of articles) {
+    if (!article.paragraphs || article.paragraphs.length === 0) continue
+    const articleId = articleIdByNumber.get(article.articleNumber)
+    if (!articleId) {
+      throw new Error(
+        `ingestRegulation: cannot upsert paragraphs for article ${article.articleNumber} — id not in map`,
+      )
+    }
+    for (const paragraph of article.paragraphs) {
+      rows.push({
+        article_id: articleId,
+        paragraph_label: paragraph.label,
+        body: paragraph.body,
+        ordering: paragraph.ordering,
+      })
+    }
+  }
+
+  if (rows.length === 0) return 0
+
+  const { data, error } = await supabase
+    .from('regulatory_article_paragraphs')
+    .upsert(rows, { onConflict: 'article_id,paragraph_label' })
+    .select('article_id')
+
+  if (error) {
+    throw new Error(`ingestRegulation: paragraph upsert failed: ${error.message}`)
+  }
+  return data?.length ?? 0
 }
 
 async function upsertArticleRecitals(

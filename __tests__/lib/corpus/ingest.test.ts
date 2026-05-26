@@ -116,3 +116,83 @@ describe('parseRegulationData', () => {
     expect(() => parseRegulationData(bad)).toThrow()
   })
 })
+
+describe('parseRegulationData — article paragraphs (ENT-95)', () => {
+  const withParagraphs = () => ({
+    ...validInput(),
+    articles: [
+      {
+        articleNumber: 6,
+        heading: 'Classification',
+        body: 'Top-level body.',
+        paragraphs: [
+          { label: '1', body: 'Lead-in sentence.', ordering: 1 },
+          { label: '1(a)', body: 'Sub-point a.', ordering: 2 },
+          { label: '1(b)', body: 'Sub-point b.', ordering: 3 },
+        ],
+      },
+    ],
+  })
+
+  it('accepts an article with paragraphs[]', () => {
+    const parsed = parseRegulationData(withParagraphs())
+    expect(parsed.articles[0]!.paragraphs).toHaveLength(3)
+    expect(parsed.articles[0]!.paragraphs![1]!.label).toBe('1(a)')
+  })
+
+  it('accepts articles without paragraphs (back-compat for GDPR shape)', () => {
+    // GDPR's snapshot has no paragraphs field — must still parse.
+    const parsed = parseRegulationData(validInput())
+    expect(parsed.articles[0]!.paragraphs).toBeUndefined()
+  })
+
+  it('rejects duplicate paragraph labels within an article (would silently merge on upsert)', () => {
+    const bad = withParagraphs()
+    bad.articles[0]!.paragraphs = [
+      { label: '1', body: 'first', ordering: 1 },
+      { label: '1', body: 'second', ordering: 2 },
+    ]
+    expect(() => parseRegulationData(bad)).toThrow(/duplicate.*paragraph/i)
+  })
+
+  it('rejects empty paragraph labels', () => {
+    const bad = withParagraphs()
+    bad.articles[0]!.paragraphs![0]!.label = ''
+    expect(() => parseRegulationData(bad)).toThrow()
+  })
+
+  it('rejects empty paragraph bodies', () => {
+    const bad = withParagraphs()
+    bad.articles[0]!.paragraphs![0]!.body = ''
+    expect(() => parseRegulationData(bad)).toThrow()
+  })
+
+  it('rejects negative paragraph ordering', () => {
+    const bad = withParagraphs()
+    bad.articles[0]!.paragraphs![0]!.ordering = -1
+    expect(() => parseRegulationData(bad)).toThrow()
+  })
+
+  it('allows the same paragraph_label across different articles', () => {
+    // Natural key is (article_id, paragraph_label) — Article 4's "1" and
+    // Article 6's "1" must both be accepted.
+    const parsed = parseRegulationData({
+      ...validInput(),
+      articles: [
+        {
+          articleNumber: 4,
+          heading: 'X',
+          body: '…',
+          paragraphs: [{ label: '1', body: 'a', ordering: 1 }],
+        },
+        {
+          articleNumber: 6,
+          heading: 'Y',
+          body: '…',
+          paragraphs: [{ label: '1', body: 'b', ordering: 1 }],
+        },
+      ],
+    })
+    expect(parsed.articles).toHaveLength(2)
+  })
+})
