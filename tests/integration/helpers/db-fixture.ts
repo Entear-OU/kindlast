@@ -46,3 +46,23 @@ export async function dropFixtureSql(sql: string): Promise<void> {
     )
   }
 }
+
+/**
+ * Run a `select` (or any returning statement) directly against the local DB.
+ * Use sparingly — most tests should go through Supabase clients so RLS is in
+ * the loop. Schema-level inspection (extensions, triggers, functions) has no
+ * Supabase-client equivalent, so direct queries are the pragmatic option.
+ */
+export async function querySql<Row extends Record<string, unknown> = Record<string, unknown>>(
+  sql: string,
+  params: ReadonlyArray<unknown> = [],
+): Promise<Row[]> {
+  const client = new Client({ connectionString: LOCAL_DB_URL })
+  await client.connect()
+  try {
+    const result = await client.query<Row>(sql, [...params])
+    return result.rows
+  } finally {
+    await client.end()
+  }
+}
