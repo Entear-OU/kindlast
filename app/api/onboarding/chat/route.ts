@@ -44,6 +44,18 @@ import { createClient } from '@/lib/supabase/server'
  * every topic is ticked and (b) that the transcript actually has enough
  * user turns to back the claim — premature calls return `too_early` and
  * the model gets a second step to correct itself.
+ *
+ * Known dev-only quirk (ENT-89): the very first POST after a fresh
+ * `pnpm dev` start can land an assistant message with its content
+ * concatenated twice (cold Turbopack compile re-running the stream
+ * consumer mid-request — `compile: ~1s` shows up in the route log).
+ * Subsequent turns are clean. A `next build` does not reproduce: prod
+ * pre-compiles every route handler so there's no mid-request compile
+ * window for the stream to be doubled in. No defensive dedupe is added
+ * here — the suspected fault is in the dev runtime, not our code, and
+ * the canonical fix is "use `pnpm start` for any verification that
+ * depends on cold-path timing".
+ * Refs: https://linear.app/entear/issue/ENT-89.
  */
 
 // Server-side stable IDs are required for persistence to round-trip.
