@@ -56,7 +56,10 @@ describe('Proxy', () => {
     expect(redirectCall[0].toString()).toContain('/login')
   })
 
-  it('redirects authenticated users from /login to /dashboard', async () => {
+  it('redirects authenticated users from /login to /onboarding', async () => {
+    // Until ENT-45 lands compliance_profiles, the post-login destination is
+    // /onboarding for every authenticated user — getOrCreateActiveSession
+    // there picks up an in-progress session or starts a fresh one.
     const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
@@ -74,7 +77,45 @@ describe('Proxy', () => {
 
     expect(NextResponse.redirect).toHaveBeenCalled()
     const redirectCall = vi.mocked(NextResponse.redirect).mock.calls[0]
-    expect(redirectCall[0].toString()).toContain('/dashboard')
+    expect(redirectCall[0].toString()).toContain('/onboarding')
+  })
+
+  it('redirects unauthenticated users from /onboarding to /login', async () => {
+    const { proxy } = await import('@/proxy')
+    const { NextResponse } = await import('next/server')
+
+    const supabaseResponse = {
+      cookies: { set: vi.fn() },
+      headers: new Headers(),
+    }
+    mockUpdateSession.mockResolvedValue({ supabaseResponse, user: null })
+
+    const request = createRequest('/onboarding')
+    await proxy(request)
+
+    expect(NextResponse.redirect).toHaveBeenCalled()
+    const redirectCall = vi.mocked(NextResponse.redirect).mock.calls[0]
+    expect(redirectCall[0].toString()).toContain('/login')
+  })
+
+  it('allows authenticated users to access /onboarding', async () => {
+    const { proxy } = await import('@/proxy')
+    const { NextResponse } = await import('next/server')
+
+    const supabaseResponse = {
+      cookies: { set: vi.fn() },
+      headers: new Headers(),
+    }
+    mockUpdateSession.mockResolvedValue({
+      supabaseResponse,
+      user: { id: '123', email: 'test@example.com' },
+    })
+
+    const request = createRequest('/onboarding')
+    const response = await proxy(request)
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled()
+    expect(response).toBe(supabaseResponse)
   })
 
   it('allows authenticated users to access /dashboard', async () => {
