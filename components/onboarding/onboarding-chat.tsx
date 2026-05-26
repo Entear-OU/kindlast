@@ -56,7 +56,7 @@ export function OnboardingChat({
   })
 
   return (
-    <main className="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col px-4 py-6">
+    <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 py-6">
       <header className="mb-4 flex flex-col gap-1">
         <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
           Onboarding
