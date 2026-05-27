@@ -1,0 +1,183 @@
+{
+  "guidelines": [
+    {
+      "slug": "edpb-05-2020-consent",
+      "publisher": "EDPB",
+      "title": "Guidelines 05/2020 on consent under Regulation 2016/679",
+      "adoptedDate": "2020-05-04",
+      "version": "1.1",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-052020-consent-under-regulation-2016679_en",
+      "topicTags": ["consent", "lawful-basis"]
+    },
+    {
+      "slug": "edpb-07-2020-controller-processor",
+      "publisher": "EDPB",
+      "title": "Guidelines 07/2020 on the concepts of controller and processor in the GDPR",
+      "adoptedDate": "2021-07-07",
+      "version": "2.1",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-072020-concepts-controller-and-processor-gdpr_en",
+      "topicTags": ["controller", "processor"]
+    },
+    {
+      "slug": "edpb-2-2019-article-6-1-b",
+      "publisher": "EDPB",
+      "title": "Guidelines 2/2019 on the processing of personal data under Article 6(1)(b) GDPR in the context of the provision of online services to data subjects",
+      "adoptedDate": "2019-10-08",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-22019-processing-personal-data-under-article-61b_en",
+      "topicTags": ["lawful-basis", "contract"]
+    },
+    {
+      "slug": "wp29-wp260-transparency",
+      "publisher": "WP29",
+      "title": "Guidelines on transparency under Regulation 2016/679 (WP260 rev.01) — endorsed by the EDPB",
+      "adoptedDate": "2018-04-11",
+      "version": "rev.01",
+      "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/622227/en",
+      "topicTags": ["transparency", "notice"]
+    },
+    {
+      "slug": "edpb-4-2019-article-25-data-protection-by-design",
+      "publisher": "EDPB",
+      "title": "Guidelines 4/2019 on Article 25 Data Protection by Design and by Default",
+      "adoptedDate": "2020-10-20",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-42019-article-25-data-protection-design-and_en",
+      "topicTags": ["privacy-by-design"]
+    },
+    {
+      "slug": "edpb-01-2022-right-of-access",
+      "publisher": "EDPB",
+      "title": "Guidelines 01/2022 on data subject rights — Right of access",
+      "adoptedDate": "2023-03-28",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-012022-data-subject-rights-right-access_en",
+      "topicTags": ["dsar", "subject-rights"]
+    },
+    {
+      "slug": "wp29-wp242-data-portability",
+      "publisher": "WP29",
+      "title": "Guidelines on the right to data portability (WP242 rev.01) — endorsed by the EDPB",
+      "adoptedDate": "2017-04-05",
+      "version": "rev.01",
+      "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/611233/en",
+      "topicTags": ["dsar", "portability"]
+    },
+    {
+      "slug": "wp29-wp248-dpia",
+      "publisher": "WP29",
+      "title": "Guidelines on Data Protection Impact Assessment (DPIA) and determining whether processing is 'likely to result in a high risk' (WP248 rev.01) — endorsed by the EDPB",
+      "adoptedDate": "2017-10-04",
+      "version": "rev.01",
+      "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/611236/en",
+      "topicTags": ["dpia", "risk-assessment"]
+    },
+    {
+      "slug": "wp29-wp251-automated-decisions-profiling",
+      "publisher": "WP29",
+      "title": "Guidelines on Automated individual decision-making and Profiling for the purposes of Regulation 2016/679 (WP251 rev.01) — endorsed by the EDPB",
+      "adoptedDate": "2018-02-06",
+      "version": "rev.01",
+      "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/612053/en",
+      "topicTags": ["profiling", "automated-decisions", "ai"]
+    },
+    {
+      "slug": "wp29-wp243-dpo",
+      "publisher": "WP29",
+      "title": "Guidelines on Data Protection Officers ('DPOs') (WP243 rev.01) — endorsed by the EDPB",
+      "adoptedDate": "2017-04-05",
+      "version": "rev.01",
+      "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/612048/en",
+      "topicTags": ["dpo"]
+    },
+    {
+      "slug": "edpb-9-2022-breach-notification",
+      "publisher": "EDPB",
+      "title": "Guidelines 9/2022 on personal data breach notification under GDPR",
+      "adoptedDate": "2023-03-28",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-92022-personal-data-breach-notification-under_en",
+      "topicTags": ["breach", "notification"]
+    },
+    {
+      "slug": "edpb-01-2021-breach-notification-examples",
+      "publisher": "EDPB",
+      "title": "Guidelines 01/2021 on Examples regarding personal data breach notification",
+      "adoptedDate": "2022-12-14",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-012021-examples-regarding-personal-data-breach_en",
+      "topicTags": ["breach", "examples"]
+    },
+    {
+      "slug": "edpb-05-2021-interplay-article-3-chapter-v",
+      "publisher": "EDPB",
+      "title": "Guidelines 05/2021 on the Interplay between the application of Article 3 and the provisions on international transfers as per Chapter V of the GDPR",
+      "adoptedDate": "2023-02-14",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-052021-interplay-between-application-article-3_en",
+      "topicTags": ["transfers", "territorial-scope"]
+    },
+    {
+      "slug": "edpb-2-2018-article-49-derogations",
+      "publisher": "EDPB",
+      "title": "Guidelines 2/2018 on derogations of Article 49 under Regulation 2016/679",
+      "adoptedDate": "2018-05-25",
+      "version": "1.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-22018-derogations-article-49-under-regulation_en",
+      "topicTags": ["transfers", "derogations"]
+    },
+    {
+      "slug": "edpb-2-2023-eprivacy-article-5-3",
+      "publisher": "EDPB",
+      "title": "Guidelines 2/2023 on Technical Scope of Art. 5(3) of ePrivacy Directive",
+      "adoptedDate": "2024-10-07",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-22023-technical-scope-art-53-eprivacy-directive_en",
+      "topicTags": ["cookies", "eprivacy"]
+    },
+    {
+      "slug": "edpb-3-2019-video-devices",
+      "publisher": "EDPB",
+      "title": "Guidelines 3/2019 on processing of personal data through video devices",
+      "adoptedDate": "2020-01-29",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-32019-processing-personal-data-through-video_en",
+      "topicTags": ["cctv", "video-surveillance"]
+    },
+    {
+      "slug": "edpb-3-2018-territorial-scope",
+      "publisher": "EDPB",
+      "title": "Guidelines 3/2018 on the territorial scope of the GDPR (Article 3)",
+      "adoptedDate": "2019-11-12",
+      "version": "2.1",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-32018-territorial-scope-gdpr-article-3-version_en",
+      "topicTags": ["territorial-scope"]
+    },
+    {
+      "slug": "edpb-8-2020-social-media-targeting",
+      "publisher": "EDPB",
+      "title": "Guidelines 8/2020 on the targeting of social media users",
+      "adoptedDate": "2021-04-13",
+      "version": "2.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-082020-targeting-social-media-users_en",
+      "topicTags": ["marketing", "social-media", "profiling"]
+    },
+    {
+      "slug": "wp29-wp217-legitimate-interests",
+      "publisher": "WP29",
+      "title": "Opinion 06/2014 on the notion of legitimate interests of the data controller under Article 7 of Directive 95/46/EC (WP217) — referenced for legitimate interests assessments under GDPR Article 6(1)(f)",
+      "adoptedDate": "2014-04-09",
+      "sourceUrl": "https://ec.europa.eu/justice/article-29/documentation/opinion-recommendation/files/2014/wp217_en.pdf",
+      "topicTags": ["lawful-basis", "legitimate-interests"]
+    },
+    {
+      "slug": "edpb-opinion-28-2024-ai-models",
+      "publisher": "EDPB",
+      "title": "Opinion 28/2024 on certain data protection aspects related to the processing of personal data in the context of AI models",
+      "adoptedDate": "2024-12-17",
+      "version": "1.0",
+      "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/opinion-board-art-64/opinion-282024-certain-data-protection-aspects_en",
+      "topicTags": ["ai", "ai-models", "legitimate-interests"]
+    }
+  ]
+}
