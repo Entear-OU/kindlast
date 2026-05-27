@@ -66,7 +66,7 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
   })
 
   describe('regulatory_annexes — schema shape', () => {
-    it('has the expected columns including effective_date', async () => {
+    it('has the expected columns including effective_date and summary (not body)', async () => {
       const cols = await querySql<{ column_name: string; is_nullable: string }>(
         `select column_name, is_nullable
            from information_schema.columns
@@ -78,7 +78,7 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
         'document_id',
         'annex_label',
         'heading',
-        'body',
+        'summary',
         'effective_date',
         'created_at',
         'updated_at',
@@ -89,7 +89,7 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
   })
 
   describe('regulatory_annex_items — schema shape', () => {
-    it('has the expected columns; heading is nullable', async () => {
+    it('has the expected columns; heading is nullable; summary not body', async () => {
       const cols = await querySql<{ column_name: string; is_nullable: string }>(
         `select column_name, is_nullable
            from information_schema.columns
@@ -101,7 +101,7 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
         'annex_id',
         'item_label',
         'heading',
-        'body',
+        'summary',
         'effective_date',
         'ordering',
         'created_at',
@@ -148,13 +148,19 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
   })
 
   describe('row-level security', () => {
+    // Fixture summaries are ≥100 chars so they satisfy the CHECK constraint.
+    const ANNEX_SUMMARY =
+      'Annex III enumerates AI use cases the Regulation designates high-risk under Article 6(2). Listed systems trigger Articles 9–17 obligations.'
+    const ITEM_SUMMARY =
+      'Category 1 — Biometrics: AI systems used to identify, categorise, or recognise the emotional state of natural persons, subject to applicable Union or Member State law.'
+
     it('allows anon read of annexes + items', async () => {
       await applyFixtureSql(/* sql */ `
-        insert into public.regulatory_annexes (document_id, annex_label, heading, body, effective_date)
-        values ('${documentId}', 'III', 'High-risk AI systems', 'preamble.', '2026-08-02')
+        insert into public.regulatory_annexes (document_id, annex_label, heading, summary, effective_date)
+        values ('${documentId}', 'III', 'High-risk AI systems', '${ANNEX_SUMMARY}', '2026-08-02')
         on conflict (document_id, annex_label) do nothing;
-        insert into public.regulatory_annex_items (annex_id, item_label, heading, body, ordering)
-        select a.id, '1', 'Biometrics', 'Biometric body.', 1
+        insert into public.regulatory_annex_items (annex_id, item_label, heading, summary, ordering)
+        select a.id, '1', 'Biometrics', '${ITEM_SUMMARY}', 1
           from public.regulatory_annexes a
           where a.document_id = '${documentId}' and a.annex_label = 'III'
         on conflict (annex_id, item_label) do nothing;
@@ -177,7 +183,7 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
         document_id: documentId,
         annex_label: 'should-not-write',
         heading: 'x',
-        body: 'x',
+        summary: ANNEX_SUMMARY,
       })
       expect(error).not.toBeNull()
       expect(error?.message.toLowerCase()).toMatch(/row-level security|policy|permission/)
@@ -188,7 +194,7 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
       const { error } = await anon.from('regulatory_annex_items').insert({
         annex_id: documentId, // any UUID — the rejection should be RLS, not FK
         item_label: 'x',
-        body: 'x',
+        summary: ITEM_SUMMARY,
         ordering: 0,
       })
       expect(error).not.toBeNull()
@@ -202,7 +208,7 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
           document_id: documentId,
           annex_label: 'III',
           heading: 'High-risk AI systems (updated)',
-          body: 'preamble (updated).',
+          summary: ANNEX_SUMMARY,
           effective_date: '2026-08-02',
         },
         { onConflict: 'document_id,annex_label' },
@@ -212,11 +218,15 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
   })
 
   describe('uniqueness + cascade', () => {
+    // Local fixture summaries — long enough to clear the CHECK constraint.
+    const FIX_SUMMARY =
+      'Fixture summary covering the high-risk use case category for test purposes; not a verbatim OJ extract — used only to satisfy the CHECK length floor.'
+
     it('enforces unique (document_id, annex_label)', async () => {
       await expect(
         applyFixtureSql(/* sql */ `
-          insert into public.regulatory_annexes (document_id, annex_label, heading, body)
-          values ('${documentId}', 'III', 'duplicate', 'duplicate');
+          insert into public.regulatory_annexes (document_id, annex_label, heading, summary)
+          values ('${documentId}', 'III', 'duplicate', '${FIX_SUMMARY}');
         `),
       ).rejects.toThrow(/duplicate|unique/i)
     })
@@ -229,14 +239,14 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
       const annexId = annexRows[0]!.id
 
       await applyFixtureSql(/* sql */ `
-        insert into public.regulatory_annex_items (annex_id, item_label, body, ordering)
-        values ('${annexId}', '1(a)', 'first', 99)
+        insert into public.regulatory_annex_items (annex_id, item_label, summary, ordering)
+        values ('${annexId}', '1(a)', '${FIX_SUMMARY}', 99)
         on conflict (annex_id, item_label) do nothing;
       `)
       await expect(
         applyFixtureSql(/* sql */ `
-          insert into public.regulatory_annex_items (annex_id, item_label, body, ordering)
-          values ('${annexId}', '1(a)', 'second', 100);
+          insert into public.regulatory_annex_items (annex_id, item_label, summary, ordering)
+          values ('${annexId}', '1(a)', '${FIX_SUMMARY}', 100);
         `),
       ).rejects.toThrow(/duplicate|unique/i)
     })
@@ -247,11 +257,11 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
         delete from public.regulatory_documents where celex_number = '${ISO_CELEX}';
         insert into public.regulatory_documents (celex_number, title, short_title, version_date, official_url)
         values ('${ISO_CELEX}', 'c', 'c', '2024-07-12', 'https://example.invalid/c');
-        insert into public.regulatory_annexes (document_id, annex_label, heading, body)
-        select d.id, 'X', 'h', 'b' from public.regulatory_documents d
+        insert into public.regulatory_annexes (document_id, annex_label, heading, summary)
+        select d.id, 'X', 'h', '${FIX_SUMMARY}' from public.regulatory_documents d
         where d.celex_number = '${ISO_CELEX}';
-        insert into public.regulatory_annex_items (annex_id, item_label, body, ordering)
-        select a.id, '1', 'b', 1 from public.regulatory_annexes a
+        insert into public.regulatory_annex_items (annex_id, item_label, summary, ordering)
+        select a.id, '1', '${FIX_SUMMARY}', 1 from public.regulatory_annexes a
         join public.regulatory_documents d on d.id = a.document_id
         where d.celex_number = '${ISO_CELEX}';
       `)
@@ -293,11 +303,13 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
                          references public.regulatory_documents(id) on delete cascade,
         annex_label    text        not null,
         heading        text        not null,
-        body           text        not null default '',
+        summary        text        not null,
         effective_date date,
         created_at     timestamptz not null default now(),
         updated_at     timestamptz not null default now(),
-        unique (document_id, annex_label)
+        unique (document_id, annex_label),
+        constraint regulatory_annexes_summary_length
+          check (char_length(summary) between 100 and 2000)
       );
       alter table public.regulatory_annexes enable row level security;
       drop policy if exists "regulatory_annexes_select_public" on public.regulatory_annexes;

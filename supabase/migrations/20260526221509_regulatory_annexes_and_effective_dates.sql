@@ -15,6 +15,17 @@
 --      normalise. We model dates per-row rather than per-document because
 --      the schedule is genuinely sparse and per-article.
 --
+-- Architecture note — progressive disclosure (ENT-32 update 2026-05-27):
+--   These tables follow the catalog shape (no verbatim `body` columns) the
+--   rest of the corpus is converging on. Each row carries a curated
+--   `summary` (~100-2000 chars) used as the LLM's routing artifact. At
+--   citation time the Analyst scans summaries in context, picks the
+--   relevant `(annex_label, item_label)` natural key, and fetches verbatim
+--   OJ text from `regulatory_documents.official_url` via a Tavily /
+--   Firecrawl-backed websearch tool. No local mirror of normative prose.
+--   See project memory `project-progressive-disclosure-corpus` for the
+--   full rationale, and the parent epic ENT-32 for the audit trail.
+--
 -- Annex labels are TEXT (e.g. "III", not 3) because the OJ uses Roman
 -- numerals — preserving them makes the citation "Annex III" trivial.
 -- Item labels are TEXT for the same reason as paragraph labels
@@ -22,7 +33,7 @@
 --
 -- `regulatory_annex_items.heading` is nullable because in the OJ only the
 -- top-level item (e.g. category 1 "Biometrics") has a heading; sub-items
--- (1(a), 1(b), …) only have body text.
+-- (1(a), 1(b), …) only have summary text.
 --
 -- RLS follows the corpus convention (ENT-48): public read, no write
 -- policies — only the service-role ingestion path writes.
@@ -45,11 +56,13 @@ create table if not exists public.regulatory_annexes (
                    references public.regulatory_documents(id) on delete cascade,
   annex_label    text        not null,
   heading        text        not null,
-  body           text        not null default '',
+  summary        text        not null,
   effective_date date,
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now(),
-  unique (document_id, annex_label)
+  unique (document_id, annex_label),
+  constraint regulatory_annexes_summary_length
+    check (char_length(summary) between 100 and 2000)
 );
 
 create index if not exists regulatory_annexes_document_idx
@@ -74,12 +87,14 @@ create table if not exists public.regulatory_annex_items (
                    references public.regulatory_annexes(id) on delete cascade,
   item_label     text        not null,
   heading        text,
-  body           text        not null,
+  summary        text        not null,
   effective_date date,
   ordering       int         not null,
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now(),
-  unique (annex_id, item_label)
+  unique (annex_id, item_label),
+  constraint regulatory_annex_items_summary_length
+    check (char_length(summary) between 100 and 2000)
 );
 
 create index if not exists regulatory_annex_items_annex_idx

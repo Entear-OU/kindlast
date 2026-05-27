@@ -68,12 +68,26 @@ const ArticleSchema = z.object({
     .optional(),
 })
 
+// Annex + item rows follow the progressive disclosure pattern (ENT-32
+// architecture update, 2026-05-27): no verbatim OJ text is stored. Each
+// row carries a curated `summary` (100–2000 chars) that the LLM scans in
+// context to decide which `(annex_label, item_label)` to cite. The
+// Analyst then fetches verbatim text from the document's official_url
+// at runtime via a Tavily/Firecrawl-backed websearch tool. The DB
+// matches the same length bounds via a CHECK constraint — failing here
+// in the validator gives curators a clear pointer to the offending row.
+const SUMMARY_MIN = 100
+const SUMMARY_MAX = 2000
+
 const AnnexItemSchema = z.object({
   label: z.string().min(1),
   // Only top-level items (e.g. Annex III categories 1..8) have a heading
-  // in the OJ. Sub-items (1(a), 1(b)) just have body text.
+  // in the OJ. Sub-items (1(a), 1(b)) just have summary text.
   heading: z.string().min(1).optional(),
-  body: z.string().min(1),
+  summary: z
+    .string()
+    .min(SUMMARY_MIN, `annex item.summary must be at least ${SUMMARY_MIN} characters`)
+    .max(SUMMARY_MAX, `annex item.summary must be at most ${SUMMARY_MAX} characters`),
   ordering: z.number().int().nonnegative(),
   effectiveDate: z
     .string()
@@ -84,7 +98,10 @@ const AnnexItemSchema = z.object({
 const AnnexSchema = z.object({
   label: z.string().min(1),
   heading: z.string().min(1),
-  body: z.string(),
+  summary: z
+    .string()
+    .min(SUMMARY_MIN, `annex.summary must be at least ${SUMMARY_MIN} characters`)
+    .max(SUMMARY_MAX, `annex.summary must be at most ${SUMMARY_MAX} characters`),
   effectiveDate: z
     .string()
     .regex(ISO_DATE_RE, 'annex.effectiveDate must be ISO date (YYYY-MM-DD)')
@@ -423,7 +440,7 @@ async function upsertAnnexes(
     document_id: documentId,
     annex_label: a.label,
     heading: a.heading,
-    body: a.body,
+    summary: a.summary,
     effective_date: a.effectiveDate ?? null,
   }))
 
@@ -454,7 +471,7 @@ async function upsertAnnexItems(
     annex_id: string
     item_label: string
     heading: string | null
-    body: string
+    summary: string
     ordering: number
     effective_date: string | null
   }> = []
@@ -470,7 +487,7 @@ async function upsertAnnexItems(
         annex_id: annexId,
         item_label: item.label,
         heading: item.heading ?? null,
-        body: item.body,
+        summary: item.summary,
         ordering: item.ordering,
         // Item-level effectiveDate overrides the annex-level value when set;
         // null is treated by readers as "inherit the annex default".

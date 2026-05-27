@@ -118,12 +118,30 @@ describe('data/corpus/eu-ai-act.json (ENT-94)', () => {
     expect(topLevelLabels).toEqual(['1', '2', '3', '4', '5', '6', '7', '8'])
   })
 
-  it('makes Annex III(1)(a) (remote biometric ID) individually addressable', () => {
+  it('makes Annex III(1)(a) (remote biometric ID) individually addressable with a routing summary', () => {
     const data = parseRegulationData(loadSnapshot('data/corpus/eu-ai-act.json'))
     const annex = data.annexes!.find((a) => a.label === 'III')!
     const oneA = annex.items.find((i) => i.label === '1(a)')
     expect(oneA, 'Annex III item 1(a) missing').toBeDefined()
-    expect(oneA!.body.toLowerCase()).toContain('biometric')
+    // Summary is the LLM routing artifact — must mention the use case
+    // (biometric identification) so it's selectable from context.
+    expect(oneA!.summary.toLowerCase()).toContain('biometric')
+    expect(oneA!.summary.length).toBeGreaterThanOrEqual(100)
+  })
+
+  it('every annex + annex item ships a progressive-disclosure summary (ENT-32 architecture)', () => {
+    // No `body` mirror — every row carries only its curated summary plus
+    // the document-level source_url for runtime fetch. See migration
+    // 20260526221509_regulatory_annexes_and_effective_dates.sql.
+    const data = parseRegulationData(loadSnapshot('data/corpus/eu-ai-act.json'))
+    const annex = data.annexes!.find((a) => a.label === 'III')!
+    expect(annex.summary.length).toBeGreaterThanOrEqual(100)
+    for (const item of annex.items) {
+      expect(
+        item.summary.length,
+        `annex item ${item.label} summary below 100-char floor`,
+      ).toBeGreaterThanOrEqual(100)
+    }
   })
 
   it('stamps Article 4 with the AI literacy effective date (2025-02-02)', () => {

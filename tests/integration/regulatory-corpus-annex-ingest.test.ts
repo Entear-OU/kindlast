@@ -26,6 +26,17 @@ const supabaseRunning = await isLocalSupabaseReachable()
 
 const FIXTURE_CELEX = '_TEST_ENT96_annex_ingest'
 
+// Fixture summaries ≥100 chars so they clear the progressive-disclosure
+// length floor enforced by both the Zod schema and the DB CHECK.
+const ANNEX_SUMMARY =
+  'Annex III enumerates AI use cases the Regulation designates high-risk under Article 6(2). Listed systems trigger Articles 9–17 obligations.'
+const ITEM_1_SUMMARY =
+  'Category 1 — Biometrics: AI systems that identify, categorise, or recognise the emotional state of natural persons (fixture).'
+const ITEM_1A_SUMMARY =
+  'Annex III 1(a) — Remote biometric identification systems; excludes one-to-one verification used solely to confirm identity (fixture).'
+const ITEM_2_SUMMARY =
+  'Annex III 2 — Critical infrastructure: AI used as a safety component in road traffic, water, gas, heating, or electricity supply (fixture).'
+
 const samplePayload = (): RegulationData => ({
   document: {
     title: 'Annex ingest fixture',
@@ -52,12 +63,12 @@ const samplePayload = (): RegulationData => ({
     {
       label: 'III',
       heading: 'High-risk AI systems referred to in Article 6(2)',
-      body: 'High-risk AI systems pursuant to Article 6(2) are listed below.',
+      summary: ANNEX_SUMMARY,
       effectiveDate: '2026-08-02',
       items: [
-        { label: '1', heading: 'Biometrics', body: 'Biometric body.', ordering: 1 },
-        { label: '1(a)', body: 'Remote biometric identification systems.', ordering: 2 },
-        { label: '2', heading: 'Critical infrastructure', body: 'CI body.', ordering: 3 },
+        { label: '1', heading: 'Biometrics', summary: ITEM_1_SUMMARY, ordering: 1 },
+        { label: '1(a)', summary: ITEM_1A_SUMMARY, ordering: 2 },
+        { label: '2', heading: 'Critical infrastructure', summary: ITEM_2_SUMMARY, ordering: 3 },
       ],
     },
   ],
@@ -131,16 +142,18 @@ describe.skipIf(!supabaseRunning)('ingestRegulation — annexes + effective date
     expect(counts[0]).toEqual({ annexes: 1, items: 3 })
   })
 
-  it('overwrites annex item body in place when content changes (last write wins)', async () => {
+  it('overwrites annex item summary in place when content changes (last write wins)', async () => {
     const service = createServiceRoleClient()
     await ingestRegulation(service, samplePayload())
 
+    const REVISED_SUMMARY =
+      'REVISED Annex III 1(a) — Remote biometric identification systems summary, updated by a curator to reflect new guidance (≥100 chars).'
     const changed = samplePayload()
-    changed.annexes![0]!.items[1]!.body = 'REVISED biometric identification body.'
+    changed.annexes![0]!.items[1]!.summary = REVISED_SUMMARY
     await ingestRegulation(service, changed)
 
-    const rows = await querySql<{ body: string }>(
-      `select i.body
+    const rows = await querySql<{ summary: string }>(
+      `select i.summary
          from public.regulatory_annex_items i
          join public.regulatory_annexes a on a.id = i.annex_id
          join public.regulatory_documents d on d.id = a.document_id
@@ -148,7 +161,7 @@ describe.skipIf(!supabaseRunning)('ingestRegulation — annexes + effective date
       [FIXTURE_CELEX, '1(a)'],
     )
     expect(rows).toHaveLength(1)
-    expect(rows[0]!.body).toBe('REVISED biometric identification body.')
+    expect(rows[0]!.summary).toBe(REVISED_SUMMARY)
   })
 
   it('item.effectiveDate overrides the annex-level effectiveDate at the row level', async () => {

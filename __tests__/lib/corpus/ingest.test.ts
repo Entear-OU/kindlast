@@ -198,18 +198,30 @@ describe('parseRegulationData — article paragraphs (ENT-95)', () => {
 })
 
 describe('parseRegulationData — annexes + effective dates (ENT-96)', () => {
+  // Sample summaries are deliberately ≥100 chars to satisfy the
+  // progressive-disclosure length constraint without padding noise.
+  // Each one is a recognisable real-world routing artifact.
+  const ANNEX_SUMMARY =
+    'Annex III enumerates AI use cases the Regulation designates high-risk under Article 6(2). Listed systems trigger Articles 9–17 obligations: risk management, data governance, transparency, post-market monitoring, conformity assessment, and EU-database registration.'
+  const ITEM_1_SUMMARY =
+    'Category 1 — Biometrics: AI systems that identify, categorise, or recognise emotional state in natural persons, in so far as Union or Member State law permits the use. Covers remote biometric identification, biometric categorisation by sensitive attributes, and emotion recognition.'
+  const ITEM_1A_SUMMARY =
+    'Annex III 1(a) — Remote biometric identification systems. Excludes one-to-one verification used solely to confirm a natural person is who they claim to be. Risk concern: large-scale identification in public spaces, surveillance overreach. Triggers DPIA + transparency notice for deployers.'
+  const ITEM_2_SUMMARY =
+    'Annex III 2 — Critical infrastructure: AI used as a safety component in management/operation of critical digital infrastructure, road traffic, or water/gas/heating/electricity supply. Risk concern: cascading failures from AI-driven control of safety-critical systems.'
+
   const withAnnex = () => ({
     ...validInput(),
     annexes: [
       {
         label: 'III',
         heading: 'High-risk AI systems referred to in Article 6(2)',
-        body: 'High-risk AI systems pursuant to Article 6(2) are listed below.',
+        summary: ANNEX_SUMMARY,
         effectiveDate: '2026-08-02',
         items: [
-          { label: '1', heading: 'Biometrics', body: 'Biometric body.', ordering: 1 },
-          { label: '1(a)', body: 'Remote biometric identification systems.', ordering: 2 },
-          { label: '2', heading: 'Critical infrastructure', body: 'Critical infrastructure body.', ordering: 3 },
+          { label: '1', heading: 'Biometrics', summary: ITEM_1_SUMMARY, ordering: 1 },
+          { label: '1(a)', summary: ITEM_1A_SUMMARY, ordering: 2 },
+          { label: '2', heading: 'Critical infrastructure', summary: ITEM_2_SUMMARY, ordering: 3 },
         ],
       },
     ],
@@ -236,8 +248,8 @@ describe('parseRegulationData — annexes + effective dates (ENT-96)', () => {
   it('rejects duplicate item labels within an annex', () => {
     const bad = withAnnex()
     bad.annexes![0]!.items = [
-      { label: '1', body: 'a', ordering: 1 },
-      { label: '1', body: 'b', ordering: 2 },
+      { label: '1', summary: ITEM_1_SUMMARY, ordering: 1 },
+      { label: '1', summary: ITEM_2_SUMMARY, ordering: 2 },
     ]
     expect(() => parseRegulationData(bad)).toThrow(/duplicate.*item/i)
   })
@@ -248,16 +260,31 @@ describe('parseRegulationData — annexes + effective dates (ENT-96)', () => {
     expect(() => parseRegulationData(bad)).toThrow(/effectiveDate/i)
   })
 
-  it('rejects empty item bodies', () => {
-    const bad = withAnnex()
-    bad.annexes![0]!.items[0]!.body = ''
-    expect(() => parseRegulationData(bad)).toThrow()
-  })
-
   it('rejects empty annex labels', () => {
     const bad = withAnnex()
     bad.annexes![0]!.label = ''
     expect(() => parseRegulationData(bad)).toThrow()
+  })
+
+  it('rejects an annex summary shorter than the progressive-disclosure floor (100 chars)', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.summary = 'too short'
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
+  })
+
+  it('rejects an annex item summary shorter than the progressive-disclosure floor', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.items[0]!.summary = 'too short'
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
+  })
+
+  it('rejects an annex summary longer than the ceiling (2000 chars)', () => {
+    // The ceiling keeps summaries scannable in LLM context; if a curator
+    // needs more, they should split into sub-items rather than balloon a
+    // single row.
+    const bad = withAnnex()
+    bad.annexes![0]!.summary = 'a'.repeat(2001)
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
   })
 
   it('accepts items with no heading (sub-items skip the field)', () => {
@@ -307,10 +334,16 @@ describe('parseRegulationData — annexes + effective dates (ENT-96)', () => {
         {
           label: 'III',
           heading: 'h',
-          body: 'b',
+          summary: ANNEX_SUMMARY,
           effectiveDate: '2026-08-02',
           items: [
-            { label: '1', heading: 'X', body: 'b', ordering: 1, effectiveDate: '2027-01-01' },
+            {
+              label: '1',
+              heading: 'X',
+              summary: ITEM_1_SUMMARY,
+              ordering: 1,
+              effectiveDate: '2027-01-01',
+            },
           ],
         },
       ],

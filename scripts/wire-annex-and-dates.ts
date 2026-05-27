@@ -31,15 +31,21 @@ const ANNEX_III_PATH = 'data/corpus/eu-ai-act-annex-iii.json'
 
 const ARTICLE_4_EFFECTIVE_DATE = '2025-02-02'
 
+// Note: this script is historical — it ran once to merge a standalone
+// annex JSON into the AI Act snapshot and then deleted the source file.
+// The `summary` field reflects the progressive-disclosure shape adopted
+// in the ENT-32 architecture update (2026-05-27); if the script is ever
+// re-run, the standalone annex JSON must use `summary` (≥100 chars), not
+// the legacy `body` field.
 type Annex = {
   label: string
   heading: string
-  body: string
+  summary: string
   effectiveDate?: string
   items: Array<{
     label: string
     heading?: string
-    body: string
+    summary: string
     ordering: number
     effectiveDate?: string
   }>
@@ -85,7 +91,7 @@ function main(): void {
     const merged: Annex = {
       label: annexFile.annex.label,
       heading: annexFile.annex.heading,
-      body: annexFile.annex.body,
+      summary: annexFile.annex.summary,
       effectiveDate: annexFile.annex.effectiveDate,
       items: annexFile.items,
     }
