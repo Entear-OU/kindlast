@@ -53,7 +53,7 @@ describe('data/corpus/eu-ai-act.json (ENT-94)', () => {
     // Article 4's heading varies across mirrors ("AI literacy") but the
     // word literacy is invariant.
     expect(article4!.heading.toLowerCase()).toContain('literacy')
-    expect(article4!.body.toLowerCase()).toContain('ai literacy')
+    expect(article4!.summary.toLowerCase()).toContain('ai literacy')
   })
 
   it('enriches MVP-critical articles with addressable paragraph rows (ENT-95)', () => {

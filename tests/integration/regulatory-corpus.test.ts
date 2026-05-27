@@ -79,28 +79,28 @@ describe.skipIf(!supabaseRunning)('regulatory corpus schema (ENT-48)', () => {
       ])
     })
 
-    it('regulatory_articles has the expected columns + FK to documents', async () => {
+    it('regulatory_articles has the expected columns + FK to documents (summary, not body)', async () => {
       const cols = await querySql<{ column_name: string }>(
         `select column_name
          from information_schema.columns
          where table_schema = 'public' and table_name = 'regulatory_articles'
          order by ordinal_position`,
       )
+      // body dropped by ENT-97; replaced with summary (progressive disclosure).
+      // effective_date appended by ENT-96.
       expect(cols.map((c) => c.column_name)).toEqual([
         'id',
         'document_id',
         'article_number',
         'heading',
-        'body',
         'created_at',
         'updated_at',
-        // effective_date added by ENT-96 — nullable, default null. Pre-ENT-96
-        // rows continue to ingest unchanged.
         'effective_date',
+        'summary',
       ])
     })
 
-    it('regulatory_recitals has the expected columns + FK to documents', async () => {
+    it('regulatory_recitals has the expected columns + FK to documents (summary, not body)', async () => {
       const cols = await querySql<{ column_name: string }>(
         `select column_name
          from information_schema.columns
@@ -111,9 +111,9 @@ describe.skipIf(!supabaseRunning)('regulatory corpus schema (ENT-48)', () => {
         'id',
         'document_id',
         'recital_number',
-        'body',
         'created_at',
         'updated_at',
+        'summary',
       ])
     })
 
@@ -233,6 +233,10 @@ describe.skipIf(!supabaseRunning)('regulatory corpus schema (ENT-48)', () => {
   })
 
   describe('uniqueness + cascades', () => {
+    // Fixture summaries ≥1 char to clear the DB CHECK (which permits 1..2000
+     // for placeholder backfill; Zod is the real 100-char floor on ingest).
+    const FIX_SUMMARY = 'fixture summary'
+
     it('enforces unique (document_id, article_number)', async () => {
       const docs = await querySql<{ id: string }>(
         `select id from public.regulatory_documents where celex_number = $1`,
@@ -241,15 +245,15 @@ describe.skipIf(!supabaseRunning)('regulatory corpus schema (ENT-48)', () => {
       const docId = docs[0]!.id
 
       await applyFixtureSql(/* sql */ `
-        insert into public.regulatory_articles (document_id, article_number, heading, body)
-        values ('${docId}', ${FIXTURE_ARTICLE_NO}, 'h', 'b')
+        insert into public.regulatory_articles (document_id, article_number, heading, summary)
+        values ('${docId}', ${FIXTURE_ARTICLE_NO}, 'h', '${FIX_SUMMARY}')
         on conflict (document_id, article_number) do nothing;
       `)
 
       await expect(
         applyFixtureSql(/* sql */ `
-          insert into public.regulatory_articles (document_id, article_number, heading, body)
-          values ('${docId}', ${FIXTURE_ARTICLE_NO}, 'h2', 'b2');
+          insert into public.regulatory_articles (document_id, article_number, heading, summary)
+          values ('${docId}', ${FIXTURE_ARTICLE_NO}, 'h2', '${FIX_SUMMARY}');
         `),
       ).rejects.toThrow(/duplicate|unique/i)
     })
@@ -262,15 +266,15 @@ describe.skipIf(!supabaseRunning)('regulatory corpus schema (ENT-48)', () => {
       const docId = docs[0]!.id
 
       await applyFixtureSql(/* sql */ `
-        insert into public.regulatory_recitals (document_id, recital_number, body)
-        values ('${docId}', ${FIXTURE_RECITAL_NO}, 'b')
+        insert into public.regulatory_recitals (document_id, recital_number, summary)
+        values ('${docId}', ${FIXTURE_RECITAL_NO}, '${FIX_SUMMARY}')
         on conflict (document_id, recital_number) do nothing;
       `)
 
       await expect(
         applyFixtureSql(/* sql */ `
-          insert into public.regulatory_recitals (document_id, recital_number, body)
-          values ('${docId}', ${FIXTURE_RECITAL_NO}, 'b2');
+          insert into public.regulatory_recitals (document_id, recital_number, summary)
+          values ('${docId}', ${FIXTURE_RECITAL_NO}, '${FIX_SUMMARY}');
         `),
       ).rejects.toThrow(/duplicate|unique/i)
     })
@@ -295,10 +299,10 @@ describe.skipIf(!supabaseRunning)('regulatory corpus schema (ENT-48)', () => {
       const docId = docs[0]!.id
 
       await applyFixtureSql(/* sql */ `
-        insert into public.regulatory_articles (document_id, article_number, heading, body)
-          values ('${docId}', 1, 'h', 'b');
-        insert into public.regulatory_recitals (document_id, recital_number, body)
-          values ('${docId}', 1, 'b');
+        insert into public.regulatory_articles (document_id, article_number, heading, summary)
+          values ('${docId}', 1, 'h', '${FIX_SUMMARY}');
+        insert into public.regulatory_recitals (document_id, recital_number, summary)
+          values ('${docId}', 1, '${FIX_SUMMARY}');
         insert into public.regulatory_article_recitals (article_id, recital_id)
           select a.id, r.id
           from public.regulatory_articles a, public.regulatory_recitals r

@@ -37,6 +37,20 @@ const supabaseRunning = await isLocalSupabaseReachable()
 
 const FIXTURE_CELEX = '_TEST_ENT48_ingest_celex'
 
+// Fixture summaries ≥100 chars so they clear the Zod validator floor
+// (DB CHECK on these tables is relaxed to 1..2000 to allow the migration
+// placeholder backfill; the validator is the strict guard on ingest).
+const ARTICLE_1_SUMMARY =
+  'Article 1 (fixture) — Subject-matter and objectives. Establishes the scope and aim of the test regulation for the ingest idempotency suite.'
+const ARTICLE_2_SUMMARY =
+  'Article 2 (fixture) — Material scope. Frames what processing the test regulation covers for the purpose of the ingest idempotency suite.'
+const ARTICLE_3_SUMMARY =
+  'Article 3 (fixture) — Territorial scope. Defines extraterritorial reach for the test regulation used by the ingest idempotency suite.'
+const RECITAL_1_SUMMARY =
+  'Recital 1 (fixture). Frames the protection of natural persons regarding personal data as a fundamental right within the test regulation.'
+const RECITAL_2_SUMMARY =
+  'Recital 2 (fixture). Notes the cross-border nature of data flows and the need for harmonised rules across the Member States.'
+
 const samplePayload = (): RegulationData => ({
   document: {
     title: 'Test regulation (Entear test fixture)',
@@ -46,13 +60,13 @@ const samplePayload = (): RegulationData => ({
     officialUrl: 'https://example.invalid/test-regulation',
   },
   articles: [
-    { articleNumber: 1, heading: 'Subject-matter', body: 'Article 1 body — initial.' },
-    { articleNumber: 2, heading: 'Material scope', body: 'Article 2 body — initial.' },
-    { articleNumber: 3, heading: 'Territorial scope', body: 'Article 3 body — initial.' },
+    { articleNumber: 1, heading: 'Subject-matter', summary: ARTICLE_1_SUMMARY },
+    { articleNumber: 2, heading: 'Material scope', summary: ARTICLE_2_SUMMARY },
+    { articleNumber: 3, heading: 'Territorial scope', summary: ARTICLE_3_SUMMARY },
   ],
   recitals: [
-    { recitalNumber: 1, body: 'Recital 1 body.' },
-    { recitalNumber: 2, body: 'Recital 2 body.' },
+    { recitalNumber: 1, summary: RECITAL_1_SUMMARY },
+    { recitalNumber: 2, summary: RECITAL_2_SUMMARY },
   ],
 })
 
@@ -120,23 +134,25 @@ describe.skipIf(!supabaseRunning)('ingestRegulation (ENT-48)', () => {
     expect(after[0]).toEqual(before[0])
   })
 
-  it('overwrites article body in place when content changes (last write wins)', async () => {
+  it('overwrites article summary in place when content changes (last write wins)', async () => {
     const service = createServiceRoleClient()
     await ingestRegulation(service, samplePayload())
 
+    const REVISED_SUMMARY =
+      'Article 1 (fixture) — REVISED. Subject-matter description has been updated by a curator to reflect new guidance; the row must overwrite in place.'
     const changed = samplePayload()
-    changed.articles[0]!.body = 'Article 1 body — REVISED text.'
+    changed.articles[0]!.summary = REVISED_SUMMARY
     await ingestRegulation(service, changed)
 
-    const rows = await querySql<{ body: string }>(
-      `select a.body
+    const rows = await querySql<{ summary: string }>(
+      `select a.summary
          from public.regulatory_articles a
          join public.regulatory_documents d on d.id = a.document_id
          where d.celex_number = $1 and a.article_number = 1`,
       [FIXTURE_CELEX],
     )
     expect(rows).toHaveLength(1)
-    expect(rows[0]!.body).toBe('Article 1 body — REVISED text.')
+    expect(rows[0]!.summary).toBe(REVISED_SUMMARY)
 
     // Sanity: still only one row for that article number.
     const cnt = await querySql<{ c: number }>(

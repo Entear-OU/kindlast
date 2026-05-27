@@ -12,7 +12,7 @@ import { z } from 'zod'
  *
  *   regulatory_articles
  *     ↑ (document_id, article_number) is the natural key — re-ingest merges
- *       by article number; body changes overwrite (last write wins).
+ *       by article number; summary changes overwrite (last write wins).
  *
  *   regulatory_recitals
  *     ↑ same shape as articles.
@@ -42,21 +42,38 @@ const DocumentSchema = z.object({
   officialUrl: z.string().url('document.officialUrl must be a valid URL'),
 })
 
-const ArticleParagraphSchema = z.object({
-  label: z.string().min(1),
-  body: z.string().min(1),
-  ordering: z.number().int().nonnegative(),
-})
+// Article / recital / paragraph rows follow the progressive disclosure pattern
+// adopted on ENT-32 and completed under ENT-97: no verbatim OJ text is stored.
+// Each row carries a curated `summary` (100–2000 chars) that the LLM scans
+// in context to decide which natural key to cite. The Analyst fetches
+// verbatim text from the document's `official_url` at runtime via a
+// Tavily/Firecrawl-backed websearch tool. The DB matches the same length
+// bounds via a CHECK constraint — failing here in the validator gives
+// curators a clear pointer to the offending row.
+const SUMMARY_MIN = 100
+const SUMMARY_MAX = 2000
+
+const SummarySchema = (label: string) =>
+  z
+    .string()
+    .min(SUMMARY_MIN, `${label}.summary must be at least ${SUMMARY_MIN} characters`)
+    .max(SUMMARY_MAX, `${label}.summary must be at most ${SUMMARY_MAX} characters`)
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+const ArticleParagraphSchema = z.object({
+  label: z.string().min(1),
+  summary: SummarySchema('article paragraph'),
+  ordering: z.number().int().nonnegative(),
+})
 
 const ArticleSchema = z.object({
   articleNumber: z.number().int().positive(),
   heading: z.string().min(1),
-  body: z.string().min(1),
+  summary: SummarySchema('article'),
   // Optional sub-paragraph rows for citation-grain Analyst output (ENT-95).
   // Articles without sub-paragraphs (most of GDPR + most AI Act articles)
-  // simply omit the field; the body alone is the row.
+  // simply omit the field; the article summary alone is the row.
   paragraphs: z.array(ArticleParagraphSchema).optional(),
   // Per-article effective date (ENT-96). Null/omitted falls back to the
   // document's `version_date` at query time. Used for the EU AI Act's
@@ -68,26 +85,12 @@ const ArticleSchema = z.object({
     .optional(),
 })
 
-// Annex + item rows follow the progressive disclosure pattern (ENT-32
-// architecture update, 2026-05-27): no verbatim OJ text is stored. Each
-// row carries a curated `summary` (100–2000 chars) that the LLM scans in
-// context to decide which `(annex_label, item_label)` to cite. The
-// Analyst then fetches verbatim text from the document's official_url
-// at runtime via a Tavily/Firecrawl-backed websearch tool. The DB
-// matches the same length bounds via a CHECK constraint — failing here
-// in the validator gives curators a clear pointer to the offending row.
-const SUMMARY_MIN = 100
-const SUMMARY_MAX = 2000
-
 const AnnexItemSchema = z.object({
   label: z.string().min(1),
   // Only top-level items (e.g. Annex III categories 1..8) have a heading
   // in the OJ. Sub-items (1(a), 1(b)) just have summary text.
   heading: z.string().min(1).optional(),
-  summary: z
-    .string()
-    .min(SUMMARY_MIN, `annex item.summary must be at least ${SUMMARY_MIN} characters`)
-    .max(SUMMARY_MAX, `annex item.summary must be at most ${SUMMARY_MAX} characters`),
+  summary: SummarySchema('annex item'),
   ordering: z.number().int().nonnegative(),
   effectiveDate: z
     .string()
@@ -98,10 +101,7 @@ const AnnexItemSchema = z.object({
 const AnnexSchema = z.object({
   label: z.string().min(1),
   heading: z.string().min(1),
-  summary: z
-    .string()
-    .min(SUMMARY_MIN, `annex.summary must be at least ${SUMMARY_MIN} characters`)
-    .max(SUMMARY_MAX, `annex.summary must be at most ${SUMMARY_MAX} characters`),
+  summary: SummarySchema('annex'),
   effectiveDate: z
     .string()
     .regex(ISO_DATE_RE, 'annex.effectiveDate must be ISO date (YYYY-MM-DD)')
@@ -111,7 +111,7 @@ const AnnexSchema = z.object({
 
 const RecitalSchema = z.object({
   recitalNumber: z.number().int().positive(),
-  body: z.string().min(1),
+  summary: SummarySchema('recital'),
 })
 
 const ArticleRecitalLinkSchema = z.object({
@@ -333,7 +333,7 @@ async function upsertArticles(
     document_id: documentId,
     article_number: a.articleNumber,
     heading: a.heading,
-    body: a.body,
+    summary: a.summary,
     effective_date: a.effectiveDate ?? null,
   }))
 
@@ -365,7 +365,7 @@ async function upsertRecitals(
   const rows = recitals.map((r) => ({
     document_id: documentId,
     recital_number: r.recitalNumber,
-    body: r.body,
+    summary: r.summary,
   }))
 
   const { data, error } = await supabase
@@ -397,7 +397,7 @@ async function upsertArticleParagraphs(
   const rows: Array<{
     article_id: string
     paragraph_label: string
-    body: string
+    summary: string
     ordering: number
   }> = []
   for (const article of articles) {
@@ -412,7 +412,7 @@ async function upsertArticleParagraphs(
       rows.push({
         article_id: articleId,
         paragraph_label: paragraph.label,
-        body: paragraph.body,
+        summary: paragraph.summary,
         ordering: paragraph.ordering,
       })
     }
