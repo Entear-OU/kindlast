@@ -5,9 +5,10 @@ import { Features } from '@/components/landing/features'
 describe('Features', () => {
   it('renders the section heading', () => {
     render(<Features />)
-    expect(
-      screen.getByText(/Everything you need for EU compliance/i)
-    ).toBeInTheDocument()
+    // Heading is split with a <br /> between "Everything you need" and
+    // "for EU compliance", so match each fragment independently.
+    expect(screen.getByText(/Everything you need/i)).toBeInTheDocument()
+    expect(screen.getByText(/for EU compliance/i)).toBeInTheDocument()
   })
 
   it('renders the GDPR assessment feature', () => {
@@ -25,7 +26,7 @@ describe('Features', () => {
 
   it('renders the compliance score feature', () => {
     render(<Features />)
-    expect(screen.getByText('Compliance Score & Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Compliance Score')).toBeInTheDocument()
   })
 
   it('renders the PDF export feature', () => {
@@ -49,9 +50,17 @@ describe('Features', () => {
     expect(cards).toHaveLength(6)
   })
 
-  it('renders highlight labels for premium features', () => {
+  it('highlights accent features with an additional detail paragraph', () => {
+    // The original "Premium" badge UI was redesigned into bento-grid accent
+    // cards (GDPR + AI Act) that render an extra detail paragraph beneath
+    // the description. This test pins that behaviour so a future refactor
+    // can't silently flatten the visual hierarchy.
     render(<Features />)
-    const premiumBadges = screen.getAllByText('Premium')
-    expect(premiumBadges.length).toBeGreaterThanOrEqual(2)
+    expect(
+      screen.getByText(/article-level findings/i)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/documentation requirements/i)
+    ).toBeInTheDocument()
   })
 })
