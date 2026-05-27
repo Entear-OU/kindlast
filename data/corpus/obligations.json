@@ -1,0 +1,255 @@
+{
+  "obligations": [
+    {
+      "slug": "gdpr-art-30-ropa",
+      "title": "Records of Processing Activities (ROPA)",
+      "summary": "Article 30 GDPR — Controllers (and processors) must maintain a written record of processing activities under their responsibility, including purposes, categories of data subjects and data, recipients, third-country transfers, retention schedules, and a general description of technical and organisational security measures. The 250-employee exemption in Article 30(5) is narrow — it does not apply where processing is not occasional, involves special categories, or is likely to result in a risk to data subjects — so most SMEs cannot rely on it.",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 30
+      },
+      "appliesWhen": { "role": "controller" },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["ropa", "documentation", "accountability"]
+    },
+    {
+      "slug": "gdpr-art-35-dpia",
+      "title": "Data Protection Impact Assessment (DPIA) for high-risk processing",
+      "summary": "Article 35 GDPR — Before processing that is likely to result in a high risk to the rights and freedoms of natural persons, the controller must carry out a Data Protection Impact Assessment. Triggers include systematic and extensive evaluation of personal aspects (including profiling) producing legal effects, large-scale processing of special categories or criminal-conviction data, and systematic monitoring of publicly accessible areas. National supervisory authorities publish DPIA blacklists under Art 35(4); consult yours.",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 35
+      },
+      "appliesWhen": {
+        "role": "controller",
+        "thresholds": { "high_risk": true }
+      },
+      "severity": "high",
+      "recurrence": "ad-hoc",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["dpia", "risk", "profiling"]
+    },
+    {
+      "slug": "gdpr-art-33-breach-notification",
+      "title": "Personal data breach notification to the supervisory authority (72 hours)",
+      "summary": "Article 33 GDPR — The controller must notify the competent supervisory authority of a personal data breach without undue delay and, where feasible, no later than 72 hours after becoming aware of it. The 72-hour window starts at the moment of awareness, not at detection by an automated system. If the breach is unlikely to result in a risk to natural persons the notification can be skipped; the controller's reasoning must still be documented under Art 33(5). Processors notify the controller without undue delay under Art 33(2).",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 33
+      },
+      "appliesWhen": { "role": "controller" },
+      "severity": "high",
+      "dueWithinDays": 0,
+      "recurrence": "on-event",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["breach", "notification", "incident-response"]
+    },
+    {
+      "slug": "gdpr-art-34-breach-communication",
+      "title": "Communication of a personal data breach to the data subject",
+      "summary": "Article 34 GDPR — When a personal data breach is likely to result in a high risk to the rights and freedoms of natural persons, the controller must communicate the breach to the affected data subjects without undue delay. Article 34(3) lists exceptions: appropriate prior protection (encryption), subsequent risk-mitigating measures, or disproportionate effort (in which case a public communication suffices). Independent of the Article 33 supervisory-authority notification — both can apply to the same incident.",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 34
+      },
+      "appliesWhen": {
+        "role": "controller",
+        "thresholds": { "high_risk": true }
+      },
+      "severity": "high",
+      "recurrence": "on-event",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["breach", "data-subject", "incident-response"]
+    },
+    {
+      "slug": "gdpr-art-37-dpo-appointment",
+      "title": "Designation of a Data Protection Officer (DPO)",
+      "summary": "Article 37 GDPR — A controller or processor must designate a DPO where (a) processing is carried out by a public authority, (b) the core activities require regular and systematic monitoring of data subjects on a large scale, or (c) the core activities consist of large-scale processing of special categories or criminal-conviction data. Member State law may add further mandatory cases. Voluntary designations are permitted but trigger the full Article 38–39 duty stack — Article 39 lists the DPO's tasks (advising, monitoring compliance, DPIA cooperation, supervisory-authority liaison).",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 37
+      },
+      "appliesWhen": {
+        "role": "controller",
+        "thresholds": { "large_scale_monitoring": true }
+      },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["dpo", "governance", "accountability"]
+    },
+    {
+      "slug": "gdpr-art-6-lawful-basis",
+      "title": "Lawful basis for processing personal data",
+      "summary": "Article 6 GDPR — Processing personal data is lawful only if at least one of six bases applies: consent, contract necessity, legal obligation, vital interests, public task, or legitimate interests. The chosen basis must be identified before processing starts and surfaced in the Article 13/14 transparency notice. Switching basis mid-flight is generally disallowed (see EDPB Guidelines 5/2020 on consent §121). Public authorities cannot rely on legitimate interests for their core tasks (Art 6(1)(f) closing sentence).",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 6
+      },
+      "appliesWhen": { "role": "controller" },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["lawful-basis", "consent", "principles"]
+    },
+    {
+      "slug": "gdpr-art-7-consent-conditions",
+      "title": "Conditions for consent (where consent is the lawful basis)",
+      "summary": "Article 7 GDPR — Where processing is based on consent, the controller must be able to demonstrate that consent was given (Art 7(1)). Consent must be a freely given, specific, informed, and unambiguous indication via a clear affirmative action (Art 4(11)). Withdrawal must be as easy as giving consent (Art 7(3)); pre-ticked boxes are invalid (Rec. 32). Consent is presumed not freely given where there is a clear imbalance between data subject and controller (employer/employee, public authority).",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 7
+      },
+      "appliesWhen": {
+        "role": "controller",
+        "lawful_basis_includes": "consent"
+      },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["consent", "lawful-basis"]
+    },
+    {
+      "slug": "gdpr-arts-12-22-data-subject-rights",
+      "title": "Data subject rights (information, access, rectification, erasure, restriction, portability, objection)",
+      "summary": "Articles 12–22 GDPR — Controllers must facilitate the exercise of data subject rights: transparent information under Articles 12–14, access under Article 15, rectification under Article 16, erasure (\"right to be forgotten\") under Article 17, restriction under Article 18, notification of recipients under Article 19, portability under Article 20, objection under Article 21, and safeguards against solely automated decisions under Article 22. Standard response window is one month (Art 12(3)), extendable by two months for complex requests. No fee for manifestly unfounded or excessive requests — a fee or refusal must be justified.",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 12
+      },
+      "appliesWhen": { "role": "controller" },
+      "severity": "high",
+      "dueWithinDays": 30,
+      "recurrence": "on-event",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["data-subject-rights", "dsar", "transparency"]
+    },
+    {
+      "slug": "gdpr-art-32-security-of-processing",
+      "title": "Security of processing — technical and organisational measures",
+      "summary": "Article 32 GDPR — Controllers and processors must implement appropriate technical and organisational measures (TOMs) to ensure a level of security appropriate to the risk, taking into account the state of the art, costs, and the nature/scope/context/purposes of processing. The non-exhaustive list in Art 32(1) names pseudonymisation, encryption, confidentiality/integrity/availability/resilience, the ability to restore access after an incident, and a process for regularly testing and evaluating effectiveness. Adherence to an approved Article 40 code of conduct or Article 42 certification can be evidence of compliance.",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 32
+      },
+      "appliesWhen": { "role": "controller" },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["security", "toms", "encryption"]
+    },
+    {
+      "slug": "gdpr-chapter-v-international-transfers",
+      "title": "International transfers to third countries — Chapter V safeguards",
+      "summary": "Articles 44–49 GDPR — Personal data transfers to a country outside the EEA require either an adequacy decision (Art 45), appropriate safeguards (Art 46 — Standard Contractual Clauses, Binding Corporate Rules, approved codes/certifications), or a narrow Article 49 derogation. Schrems II (CJEU C-311/18) requires a Transfer Impact Assessment to evaluate whether the target country's surveillance laws undermine SCC protections; supplementary measures may be needed. The EU-US Data Privacy Framework (July 2023 adequacy decision) covers certified US importers.",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 44
+      },
+      "appliesWhen": {
+        "role": "controller",
+        "thresholds": { "cross_border_transfers": true }
+      },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["transfers", "scc", "third-country"]
+    },
+    {
+      "slug": "gdpr-art-28-processor-contracts",
+      "title": "Controller–processor contracts (Article 28 DPAs)",
+      "summary": "Article 28 GDPR — Where a controller engages a processor, the processing must be governed by a written contract (the Data Processing Agreement) binding the processor to a defined list of duties: process only on documented instructions, ensure confidentiality, take Article 32 security measures, engage sub-processors only with prior controller authorisation, assist with data subject rights and breach handling, and delete or return data at the end of the engagement. The European Commission published SCC-style Article 28 template clauses in Decision 2021/915.",
+      "citation": {
+        "kind": "article",
+        "celex": "32016R0679",
+        "articleNumber": 28
+      },
+      "appliesWhen": {
+        "role": "controller",
+        "engages_processor": true
+      },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2018-05-25",
+      "topicTags": ["processor", "contracts", "vendor-management"]
+    },
+    {
+      "slug": "ai-act-art-4-ai-literacy",
+      "title": "AI literacy for staff who operate or are affected by AI systems",
+      "summary": "Article 4 EU AI Act — Providers and deployers of AI systems must take measures to ensure, to their best extent, a sufficient level of AI literacy of their staff and other persons dealing with the operation and use of AI systems on their behalf. The measures must take into account the persons' technical knowledge, experience, education, training, the context in which the AI systems are used, and the persons or groups of persons on which the AI systems will be used. In force since 2 February 2025 (one of the earliest AI Act provisions to apply).",
+      "citation": {
+        "kind": "article",
+        "celex": "32024R1689",
+        "articleNumber": 4
+      },
+      "appliesWhen": { "role": "deployer" },
+      "severity": "medium",
+      "recurrence": "continuous",
+      "effectiveDate": "2025-02-02",
+      "topicTags": ["ai-act", "ai-literacy", "training"]
+    },
+    {
+      "slug": "ai-act-art-26-deployer-obligations",
+      "title": "Deployer obligations for high-risk AI systems",
+      "summary": "Article 26 EU AI Act — Deployers of high-risk AI systems must use the system in accordance with the provider's instructions for use, assign human oversight to natural persons with appropriate competence (Art 26(2)), monitor operation, keep automatically generated logs for at least six months (Art 26(6)), inform workers and their representatives before putting a high-risk system into service in the workplace (Art 26(7)), and conduct a fundamental rights impact assessment under Article 27 where applicable. Most Article 26 duties apply from 2 August 2026.",
+      "citation": {
+        "kind": "article",
+        "celex": "32024R1689",
+        "articleNumber": 26
+      },
+      "appliesWhen": {
+        "role": "deployer",
+        "thresholds": { "high_risk": true }
+      },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2026-08-02",
+      "topicTags": ["ai-act", "high-risk", "deployer"]
+    },
+    {
+      "slug": "ai-act-annex-iii-high-risk-systems",
+      "title": "High-risk system classification under Annex III",
+      "summary": "Annex III EU AI Act — Standalone AI systems falling under one of eight enumerated use-case areas are designated high-risk under Article 6(2): biometrics, critical infrastructure, education and vocational training, employment and worker management, access to essential services, law enforcement, migration and border control, and administration of justice and democratic processes. High-risk classification triggers the full Articles 9–17 obligation stack (risk management, data governance, technical documentation, record-keeping, transparency, human oversight, accuracy/robustness/cybersecurity). Annex III obligations apply from 2 August 2026 (subject to any Digital Omnibus deferral).",
+      "citation": {
+        "kind": "annex",
+        "celex": "32024R1689",
+        "annexLabel": "III"
+      },
+      "appliesWhen": {
+        "role": "provider",
+        "thresholds": { "high_risk": true }
+      },
+      "severity": "high",
+      "recurrence": "continuous",
+      "effectiveDate": "2026-08-02",
+      "topicTags": ["ai-act", "high-risk", "annex-iii"]
+    },
+    {
+      "slug": "ai-act-art-50-transparency",
+      "title": "Transparency obligations for certain AI systems (deepfakes, chatbots, emotion recognition)",
+      "summary": "Article 50 EU AI Act — Providers of AI systems intended to interact directly with natural persons must design the system so that affected persons are informed they are interacting with an AI (chatbot disclosure). Deployers of emotion-recognition or biometric-categorisation systems must inform exposed persons. Deployers of generative AI producing image/audio/video content constituting deepfakes must disclose the artificial origin; text published on matters of public interest is similarly disclosable unless under editorial control. Article 50 duties apply from 2 August 2026.",
+      "citation": {
+        "kind": "article",
+        "celex": "32024R1689",
+        "articleNumber": 50
+      },
+      "appliesWhen": { "role": "deployer" },
+      "severity": "medium",
+      "recurrence": "continuous",
+      "effectiveDate": "2026-08-02",
+      "topicTags": ["ai-act", "transparency", "deepfake"]
+    }
+  ]
+}
