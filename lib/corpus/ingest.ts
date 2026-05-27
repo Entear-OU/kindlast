@@ -48,6 +48,8 @@ const ArticleParagraphSchema = z.object({
   ordering: z.number().int().nonnegative(),
 })
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
 const ArticleSchema = z.object({
   articleNumber: z.number().int().positive(),
   heading: z.string().min(1),
@@ -56,6 +58,55 @@ const ArticleSchema = z.object({
   // Articles without sub-paragraphs (most of GDPR + most AI Act articles)
   // simply omit the field; the body alone is the row.
   paragraphs: z.array(ArticleParagraphSchema).optional(),
+  // Per-article effective date (ENT-96). Null/omitted falls back to the
+  // document's `version_date` at query time. Used for the EU AI Act's
+  // staged enforcement schedule (Article 4 from 2025-02-02, most other
+  // articles from 2026-08-02, etc.).
+  effectiveDate: z
+    .string()
+    .regex(ISO_DATE_RE, 'article.effectiveDate must be ISO date (YYYY-MM-DD)')
+    .optional(),
+})
+
+// Annex + item rows follow the progressive disclosure pattern (ENT-32
+// architecture update, 2026-05-27): no verbatim OJ text is stored. Each
+// row carries a curated `summary` (100–2000 chars) that the LLM scans in
+// context to decide which `(annex_label, item_label)` to cite. The
+// Analyst then fetches verbatim text from the document's official_url
+// at runtime via a Tavily/Firecrawl-backed websearch tool. The DB
+// matches the same length bounds via a CHECK constraint — failing here
+// in the validator gives curators a clear pointer to the offending row.
+const SUMMARY_MIN = 100
+const SUMMARY_MAX = 2000
+
+const AnnexItemSchema = z.object({
+  label: z.string().min(1),
+  // Only top-level items (e.g. Annex III categories 1..8) have a heading
+  // in the OJ. Sub-items (1(a), 1(b)) just have summary text.
+  heading: z.string().min(1).optional(),
+  summary: z
+    .string()
+    .min(SUMMARY_MIN, `annex item.summary must be at least ${SUMMARY_MIN} characters`)
+    .max(SUMMARY_MAX, `annex item.summary must be at most ${SUMMARY_MAX} characters`),
+  ordering: z.number().int().nonnegative(),
+  effectiveDate: z
+    .string()
+    .regex(ISO_DATE_RE, 'annex item.effectiveDate must be ISO date (YYYY-MM-DD)')
+    .optional(),
+})
+
+const AnnexSchema = z.object({
+  label: z.string().min(1),
+  heading: z.string().min(1),
+  summary: z
+    .string()
+    .min(SUMMARY_MIN, `annex.summary must be at least ${SUMMARY_MIN} characters`)
+    .max(SUMMARY_MAX, `annex.summary must be at most ${SUMMARY_MAX} characters`),
+  effectiveDate: z
+    .string()
+    .regex(ISO_DATE_RE, 'annex.effectiveDate must be ISO date (YYYY-MM-DD)')
+    .optional(),
+  items: z.array(AnnexItemSchema),
 })
 
 const RecitalSchema = z.object({
@@ -73,6 +124,9 @@ const BaseSchema = z.object({
   articles: z.array(ArticleSchema).min(1, 'at least one article is required'),
   recitals: z.array(RecitalSchema),
   articleRecitals: z.array(ArticleRecitalLinkSchema).optional(),
+  // Optional annexes (ENT-96). EU AI Act has Annex III at MVP scope;
+  // regulations without annexes (GDPR) just omit the field.
+  annexes: z.array(AnnexSchema).optional(),
 })
 
 /**
@@ -144,6 +198,33 @@ export const RegulationDataSchema = BaseSchema.superRefine((data, ctx) => {
       })
     }
   }
+
+  // Annex + item label uniqueness within a document and within an annex.
+  // The DB's unique constraints would catch duplicates, but failing here
+  // avoids half-written corpus state on a malformed snapshot.
+  const annexLabels = new Set<string>()
+  for (const annex of data.annexes ?? []) {
+    if (annexLabels.has(annex.label)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['annexes'],
+        message: `duplicate annex label ${annex.label}`,
+      })
+    }
+    annexLabels.add(annex.label)
+
+    const itemLabels = new Set<string>()
+    for (const item of annex.items) {
+      if (itemLabels.has(item.label)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['annexes'],
+          message: `annex ${annex.label}: duplicate item label ${item.label}`,
+        })
+      }
+      itemLabels.add(item.label)
+    }
+  }
 })
 
 export type RegulationData = z.infer<typeof RegulationDataSchema>
@@ -154,6 +235,8 @@ export type IngestResult = {
   recitalsUpserted: number
   linksUpserted: number
   paragraphsUpserted: number
+  annexesUpserted: number
+  annexItemsUpserted: number
 }
 
 /**
@@ -195,12 +278,22 @@ export async function ingestRegulation(
     )
   }
 
+  let annexesUpserted = 0
+  let annexItemsUpserted = 0
+  if (data.annexes && data.annexes.length > 0) {
+    const annexIdByLabel = await upsertAnnexes(supabase, documentId, data.annexes)
+    annexesUpserted = annexIdByLabel.size
+    annexItemsUpserted = await upsertAnnexItems(supabase, data.annexes, annexIdByLabel)
+  }
+
   return {
     documentId,
     articlesUpserted: articleIdByNumber.size,
     recitalsUpserted: recitalIdByNumber.size,
     linksUpserted,
     paragraphsUpserted,
+    annexesUpserted,
+    annexItemsUpserted,
   }
 }
 
@@ -241,6 +334,7 @@ async function upsertArticles(
     article_number: a.articleNumber,
     heading: a.heading,
     body: a.body,
+    effective_date: a.effectiveDate ?? null,
   }))
 
   const { data, error } = await supabase
@@ -333,6 +427,84 @@ async function upsertArticleParagraphs(
 
   if (error) {
     throw new Error(`ingestRegulation: paragraph upsert failed: ${error.message}`)
+  }
+  return data?.length ?? 0
+}
+
+async function upsertAnnexes(
+  supabase: SupabaseClient,
+  documentId: string,
+  annexes: NonNullable<RegulationData['annexes']>,
+): Promise<Map<string, string>> {
+  const rows = annexes.map((a) => ({
+    document_id: documentId,
+    annex_label: a.label,
+    heading: a.heading,
+    summary: a.summary,
+    effective_date: a.effectiveDate ?? null,
+  }))
+
+  const { data, error } = await supabase
+    .from('regulatory_annexes')
+    .upsert(rows, { onConflict: 'document_id,annex_label' })
+    .select('id, annex_label')
+
+  if (error || !data) {
+    throw new Error(
+      `ingestRegulation: annex upsert failed: ${error?.message ?? 'no rows returned'}`,
+    )
+  }
+
+  const idByLabel = new Map<string, string>()
+  for (const row of data as Array<{ id: string; annex_label: string }>) {
+    idByLabel.set(row.annex_label, row.id)
+  }
+  return idByLabel
+}
+
+async function upsertAnnexItems(
+  supabase: SupabaseClient,
+  annexes: NonNullable<RegulationData['annexes']>,
+  annexIdByLabel: ReadonlyMap<string, string>,
+): Promise<number> {
+  const rows: Array<{
+    annex_id: string
+    item_label: string
+    heading: string | null
+    summary: string
+    ordering: number
+    effective_date: string | null
+  }> = []
+  for (const annex of annexes) {
+    const annexId = annexIdByLabel.get(annex.label)
+    if (!annexId) {
+      throw new Error(
+        `ingestRegulation: cannot upsert items for annex ${annex.label} — id not in map`,
+      )
+    }
+    for (const item of annex.items) {
+      rows.push({
+        annex_id: annexId,
+        item_label: item.label,
+        heading: item.heading ?? null,
+        summary: item.summary,
+        ordering: item.ordering,
+        // Item-level effectiveDate overrides the annex-level value when set;
+        // null is treated by readers as "inherit the annex default".
+        effective_date: item.effectiveDate ?? null,
+      })
+    }
+  }
+
+  if (rows.length === 0) return 0
+
+  const { data, error } = await supabase
+    .from('regulatory_annex_items')
+    .upsert(rows, { onConflict: 'annex_id,item_label' })
+    .select('annex_id')
+
+  if (error) {
+    throw new Error(`ingestRegulation: annex item upsert failed: ${error.message}`)
   }
   return data?.length ?? 0
 }

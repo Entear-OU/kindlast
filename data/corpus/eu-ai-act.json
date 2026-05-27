@@ -32,7 +32,8 @@
           "body": "Providers and deployers of AI systems shall take measures to ensure, to their best extent, a sufficient level of AI literacy of their staff and other persons dealing with the operation and use of AI systems on their behalf, taking into account their technical knowledge, experience, education and training and the context the AI systems are to be used in, and considering the persons or groups of persons on whom the AI systems are to be used.",
           "ordering": 1
         }
-      ]
+      ],
+      "effectiveDate": "2025-02-02"
     },
     {
       "articleNumber": 5,
@@ -2049,6 +2050,184 @@
     {
       "recitalNumber": 180,
       "body": "The European Data Protection Supervisor and the European Data Protection Board were consulted in accordance with Article 42(1) and (2) of Regulation (EU) 2018/1725 and delivered their joint opinion on 18 June 2021."
+    }
+  ],
+  "annexes": [
+    {
+      "label": "III",
+      "heading": "High-risk AI systems referred to in Article 6(2)",
+      "summary": "Annex III enumerates the AI use cases that the Regulation classifies as high-risk under Article 6(2). Listed systems are subject to the full Chapter III Section 2 regime: risk management (Art 9), data governance (Art 10), technical documentation (Art 11), record-keeping (Art 12), transparency to deployers (Art 13), human oversight (Art 14), accuracy/robustness/cybersecurity (Art 15), and the provider/deployer split in Articles 16, 26 and 27. Providers run a conformity assessment, draw up an EU declaration, affix the CE marking, register the system in the EU database, and run post-market monitoring. Annex III becomes generally applicable from 2 August 2026. The Commission may amend the list under Article 7; this snapshot reflects the original adoption text.",
+      "effectiveDate": "2026-08-02",
+      "items": [
+        {
+          "label": "1",
+          "heading": "Biometrics",
+          "summary": "Category 1 — Biometrics. Covers AI that identifies natural persons remotely, categorises them by sensitive or protected attributes, or recognises their emotional state, where Union or Member State law permits the use. Sub-items 1(a)–(c) carve out the specific high-risk subtypes. Many adjacent practices are outright prohibited under Article 5 (e.g. emotion recognition at work and in education, biometric categorisation by race or political opinion). SME-relevant deployment scenarios include identity verification at venues, time-and-attendance systems, and customer analytics — many of which fall outside Annex III if scoped to one-to-one verification (see 1(a) carve-out).",
+          "ordering": 1
+        },
+        {
+          "label": "1(a)",
+          "summary": "Annex III 1(a) — Remote biometric identification systems. Compare a person's biometric data against a reference database (e.g. CCTV-fed face matching) to identify them without active cooperation. Explicitly excludes one-to-one verification used solely to confirm a person is who they claim to be (e.g. phone-unlock face ID, bank login fingerprint) — this carve-out is the most common SME-relevant boundary. Risk concern: large-scale surveillance, false positives in public spaces. Provider obligations include data governance for the reference dataset (Art 10), accuracy/robustness/bias evaluation (Art 15), human-oversight design (Art 14), and CE marking before placing on the market. Deployers must run a fundamental rights impact assessment under Article 27 and register the system in the EU database (Art 49(8)).",
+          "ordering": 2
+        },
+        {
+          "label": "1(b)",
+          "summary": "Annex III 1(b) — Biometric categorisation by sensitive or protected attributes. AI that infers attributes such as religion, political opinion, trade-union membership, sex life, or sexual orientation from biometric data. Distinct from the Article 5 prohibition (which bans inferring race, political opinion, trade-union membership, religious beliefs, sex life, or sexual orientation outright in many contexts) — this Annex III entry covers categorisation by other sensitive attributes that remain permissible under Article 5. Risk concern: discriminatory targeting, profiling drift into prohibited attributes. Triggers full Chapter III Section 2 obligations plus a deployer FRIA (Art 27) given the protected-attribute exposure.",
+          "ordering": 3
+        },
+        {
+          "label": "1(c)",
+          "summary": "Annex III 1(c) — Emotion recognition systems. AI that infers a person's emotional state from biometric data — facial expression, voice tone, posture. Article 5(1)(f) prohibits use in workplaces and educational institutions except for safety or medical reasons; Annex III 1(c) covers the remaining permissible deployments (retail analytics, security screening, market research). Risk concern: contested scientific validity, false inferences with material consequences, lack of transparency to subjects. Providers and deployers face the full high-risk regime; deployers must inform exposed natural persons under Article 50(3) regardless of any high-risk classification.",
+          "ordering": 4
+        },
+        {
+          "label": "2",
+          "heading": "Critical infrastructure",
+          "summary": "Annex III 2 — Critical infrastructure. AI used as a safety component in the management or operation of critical digital infrastructure, road traffic, or the supply of water, gas, heating, or electricity. The 'safety component' framing is narrower than general use — AI assisting administrative functions of utility companies is not in scope unless its failure would compromise physical safety. Risk concern: cascading failures from AI-driven control of safety-critical systems. Triggers Article 9 risk management with particular emphasis on cybersecurity (Art 15(4)) and human oversight (Art 14). NIS 2 and sector-specific safety regimes apply in parallel.",
+          "ordering": 5
+        },
+        {
+          "label": "3",
+          "heading": "Education and vocational training",
+          "summary": "Category 3 — Education and vocational training. Covers AI used to determine access or admission (3(a)), evaluate learning outcomes (3(b)), assess appropriate education level (3(c)), and monitor for prohibited behaviour during tests (3(d)). Common SME-relevant systems include automated proctoring tools, admission scoring, and adaptive-learning platforms that influence progression. Risk concern: lifelong opportunity foreclosure from automated decisions on educational access. Article 5(1)(f) prohibits emotion recognition in educational settings — a 'stress detection' feature can flip a proctoring tool from Annex III high-risk to outright prohibited.",
+          "ordering": 6
+        },
+        {
+          "label": "3(a)",
+          "summary": "Annex III 3(a) — Access or admission. AI determining whether natural persons gain access to or are assigned to educational and vocational training institutions at all levels. Risk concern: opaque or biased gating of educational opportunity. Common in university admissions, scholarship allocation, and corporate training tracks. Deployer FRIA under Article 27 effectively mandatory given protected-group exposure. Article 14 human oversight must allow review/override of individual decisions; Article 13 transparency requires the affected applicant know an AI was involved in the decision.",
+          "ordering": 7
+        },
+        {
+          "label": "3(b)",
+          "summary": "Annex III 3(b) — Evaluate learning outcomes, including AI-driven assessments used to steer the learning process. Covers automated grading, formative-assessment engines, and adaptive-learning platforms whose outputs route students through different content tracks. Risk concern: compounding bias in early-stage assessments that shape later opportunities. Particularly sensitive where outcomes feed admission, certification, or eligibility decisions covered by 3(a) and 3(c). Article 10 data governance must address representativeness of training data across student populations.",
+          "ordering": 8
+        },
+        {
+          "label": "3(c)",
+          "summary": "Annex III 3(c) — Assess the appropriate level of education an individual will receive or be able to access. Covers placement systems, tracking algorithms, and AI tools that recommend a curricular path or qualification. Risk concern: locking learners into low-opportunity tracks based on early or limited data. Deployer FRIA under Article 27; Article 14 oversight must allow human override of placement decisions; Article 13 transparency obligations to learners and (where applicable) parents or guardians.",
+          "ordering": 9
+        },
+        {
+          "label": "3(d)",
+          "summary": "Annex III 3(d) — Monitoring and detecting prohibited behaviour of students during tests. Online proctoring, plagiarism detection used during exams, AI-driven invigilation tools. Risk concern: false positives with disciplinary consequences, intrusive monitoring (eye-tracking, room scans). Note: Article 5(1)(f) bars emotion recognition in education — a 'stress detection' feature can flip a proctoring tool from Annex III high-risk to outright prohibited. Deployers must give clear advance notice under Article 13/50 to affected students.",
+          "ordering": 10
+        },
+        {
+          "label": "4",
+          "heading": "Employment, workers' management and access to self-employment",
+          "summary": "Category 4 — Employment, workers' management and access to self-employment. Covers AI used for recruitment/selection (4(a)) and for decisions affecting terms, promotion, termination, task allocation, or performance monitoring (4(b)). SME-critical: any HR-tech tool from CV screening to algorithmic scheduling potentially in scope. Risk concern: opaque adverse decisions on livelihood. Article 5(1)(f) prohibits emotion recognition at work — a workforce-analytics tool that scores employee 'engagement' from camera input is prohibited, not just high-risk. Worker-information obligations under Article 26(7) require deployers to inform workers before deployment.",
+          "ordering": 11
+        },
+        {
+          "label": "4(a)",
+          "summary": "Annex III 4(a) — Recruitment or selection AI. CV screening, application filtering, candidate scoring, and AI used to place targeted job advertisements (algorithmic targeting that determines who sees a vacancy). Risk concern: discrimination against protected classes amplified by historical hiring data. Deployer FRIA mandatory (Art 27); Article 26(7) requires informing affected workers and worker representatives before deployment; GDPR Article 22 automated-decisions rules also apply where the system makes solely-automated decisions with significant effect.",
+          "ordering": 12
+        },
+        {
+          "label": "4(b)",
+          "summary": "Annex III 4(b) — Decisions affecting terms of work-related relationships, promotion, termination, task allocation by individual traits, or performance monitoring. Covers algorithmic scheduling, productivity scoring, gig-platform routing, and AI-driven performance reviews. Risk concern: continuous surveillance, opaque adverse outcomes affecting livelihood. Article 26(7) worker-information rights; Article 14 human oversight must allow review of individual decisions; emotion recognition in this context is prohibited under Article 5(1)(f). Trade-union consultation and Member State labour-law obligations apply in parallel.",
+          "ordering": 13
+        },
+        {
+          "label": "5",
+          "heading": "Access to and enjoyment of essential private services and essential public services and benefits",
+          "summary": "Category 5 — Access to and enjoyment of essential private services and essential public services and benefits. Covers public-benefit eligibility (5(a)), creditworthiness scoring (5(b)), life and health insurance risk pricing (5(c)), and emergency-call triage/dispatch (5(d)). SME-relevant primarily in fintech, insurtech, and healthtech contexts. Risk concern: exclusion from essential services compounding social disadvantage. Deployer FRIA under Article 27 effectively mandatory across this category.",
+          "ordering": 14
+        },
+        {
+          "label": "5(a)",
+          "summary": "Annex III 5(a) — Public-assistance eligibility AI. Used by public authorities (or those acting on their behalf) to evaluate eligibility for essential public assistance benefits and services (including healthcare), and to grant, reduce, revoke, or reclaim such benefits. Risk concern: erroneous benefit cuts to vulnerable populations; the Dutch 'toeslagenaffaire' is the cautionary precedent. Deployer FRIA mandatory; Article 86 right to explanation of individual decisions applies; affected persons can complain to a market surveillance authority under Article 85.",
+          "ordering": 15
+        },
+        {
+          "label": "5(b)",
+          "summary": "Annex III 5(b) — Creditworthiness evaluation or credit-score generation AI. Covers consumer credit decisions, loan underwriting, and credit-score outputs. Explicit carve-out: AI used solely to detect financial fraud is NOT in this category. Risk concern: opaque credit denial, demographic disparate impact. Particularly SME-relevant for lending fintechs and BNPL operators. Article 86 right to explanation of an individual credit decision applies; GDPR Article 22 also bites where the decision is solely automated. Consumer Credit Directive II overlays additional pre-contractual information duties.",
+          "ordering": 16
+        },
+        {
+          "label": "5(c)",
+          "summary": "Annex III 5(c) — Risk assessment and pricing in life and health insurance. Pricing engines, underwriting AI, and risk classification for life or health policies. General property or motor insurance is NOT in scope. Risk concern: discriminatory pricing on health-state proxies; potential conflict with anti-discrimination law. Solvency II governance obligations apply in parallel; Article 14 human oversight must permit individual underwriting decisions to be reviewed; Article 10 data governance is acute given the protected-attribute exposure (health, genetic data).",
+          "ordering": 17
+        },
+        {
+          "label": "5(d)",
+          "summary": "Annex III 5(d) — Emergency-call triage and dispatch AI. Evaluates and classifies emergency calls, dispatches or prioritises emergency response (police, fire, medical), and emergency healthcare patient triage. Risk concern: misclassifying urgency leads to life-threatening delays. Article 14 human oversight is the critical control — a dispatcher must remain in the loop. Article 9 risk management must address availability/uptime; Article 15 cybersecurity given the safety-critical role. Medical-device regulation (MDR) may apply in parallel to triage components.",
+          "ordering": 18
+        },
+        {
+          "label": "6",
+          "heading": "Law enforcement",
+          "summary": "Category 6 — Law enforcement. Covers victim-risk assessment (6(a)), polygraph-style tools (6(b)), evidence reliability evaluation (6(c)), individual offending or re-offending risk (6(d)), and profiling during detection/investigation/prosecution (6(e)). Use permitted only where consistent with Union or Member State law. Note: many adjacent uses are prohibited under Article 5 (real-time remote biometric ID in public spaces, predictive policing of individuals based on profiling alone, social scoring). Risk concern: liberty and presumption-of-innocence implications; well-documented historical bias in law-enforcement data.",
+          "ordering": 19
+        },
+        {
+          "label": "6(a)",
+          "summary": "Annex III 6(a) — Victim-risk AI. Used by or for law enforcement to assess the risk of a natural person becoming the victim of criminal offences (e.g. domestic-violence risk scoring, victim-of-crime probability models). Risk concern: paternalistic or discriminatory targeting of communities flagged as 'at risk'. Deployer FRIA mandatory; Law Enforcement Directive (2016/680) governance applies in parallel; Article 14 oversight must keep individual outreach or intervention decisions human-made.",
+          "ordering": 20
+        },
+        {
+          "label": "6(b)",
+          "summary": "Annex III 6(b) — Polygraph or similar tools used by or for law enforcement. AI-driven deception detection, voice-stress analysis, or micro-expression scoring used during investigative interviews. Risk concern: scientific reliability of the underlying signals is contested; false positives can materially affect suspects and witnesses. Article 10 data governance must document training-data representativeness; Article 13 transparency obligations to subjects exposed to the system. Some Member States prohibit polygraph evidence outright — local-law check required.",
+          "ordering": 21
+        },
+        {
+          "label": "6(c)",
+          "summary": "Annex III 6(c) — Evidence reliability evaluation AI. Used by or for law enforcement to assess the reliability of evidence in investigation or prosecution. Includes AI weighing the credibility of forensic outputs or witness statements. Risk concern: opaque influence on prosecutorial decision-making. Article 14 oversight must place a human at the decision point; the Law Enforcement Directive requires the data-protection rights of suspects and other parties to be preserved through any AI-mediated assessment.",
+          "ordering": 22
+        },
+        {
+          "label": "6(d)",
+          "summary": "Annex III 6(d) — Risk of offending or re-offending assessment AI; or AI assessing personality traits, characteristics, or past criminal behaviour of natural persons or groups. Explicitly excludes systems that rely solely on profiling under LED Article 3(4) — those are governed by Article 5 prohibitions instead. Risk concern: 'COMPAS-style' tools shaping sentencing or supervision decisions, demographic-bias amplification. Deployer FRIA mandatory; Article 86 right to explanation; LED rules on automated decisions apply alongside Article 14 oversight.",
+          "ordering": 23
+        },
+        {
+          "label": "6(e)",
+          "summary": "Annex III 6(e) — Profiling of natural persons (LED Article 3(4)) by or for law enforcement during detection, investigation, or prosecution of criminal offences. Distinct from 6(d): this is profiling used in active enforcement, not generic risk scoring. Risk concern: disproportionate targeting of demographics, chilling effects on rights of assembly and expression. Article 27 FRIA mandatory; LED transparency rules apply; Article 5(1)(d) prohibits predictive policing based solely on profiling — boundary check required.",
+          "ordering": 24
+        },
+        {
+          "label": "7",
+          "heading": "Migration, asylum and border control management",
+          "summary": "Category 7 — Migration, asylum and border control management. Covers polygraph tools (7(a)), risk assessment of entrants (7(b)), application-examination assistance (7(c)), and identification in the migration context excluding travel-document verification (7(d)). Use permitted only where consistent with Union or Member State law. Risk concern: high-stakes decisions on protection rights, presumed power imbalance, downstream Schengen-database effects. Coverage explicitly excludes AI used solely for travel-document verification — the most common SME-adjacent use case (e.g. e-gate document checks) tends to fall outside Annex III.",
+          "ordering": 25
+        },
+        {
+          "label": "7(a)",
+          "summary": "Annex III 7(a) — Polygraph or similar tools used by or for competent public authorities in the migration context. Examples: AI-driven credibility scoring of asylum-interview testimony. Risk concern: contested scientific validity used to deny protection rights. Article 10 data governance, Article 13 transparency, Article 14 oversight all critical; the Law Enforcement Directive and asylum-procedures rules apply in parallel.",
+          "ordering": 26
+        },
+        {
+          "label": "7(b)",
+          "summary": "Annex III 7(b) — Risk-assessment AI for entrants. Assesses security risk, irregular-migration risk, or health risk posed by a person intending to enter or who has entered a Member State. Common deployments: pre-travel screening, automated risk flags at border crossings. Risk concern: opaque adverse decisions affecting fundamental rights; downstream cascade into other systems (visas, residence permits). Article 27 FRIA mandatory; Article 86 right to explanation; Article 14 human oversight must keep entry decisions reviewable.",
+          "ordering": 27
+        },
+        {
+          "label": "7(c)",
+          "summary": "Annex III 7(c) — AI assisting competent public authorities to examine applications for asylum, visa, or residence permits and associated complaints, including assessments of the reliability of evidence supporting an application. Risk concern: protection-claims decided by AI-influenced scoring, vulnerable applicants. Article 14 oversight must put a human at the decision point; Article 86 right to explanation for the applicant; LED, asylum-procedures, and visa-code obligations apply in parallel.",
+          "ordering": 28
+        },
+        {
+          "label": "7(d)",
+          "summary": "Annex III 7(d) — Identification of natural persons by competent authorities in the migration, asylum, or border-control context. Excludes the verification of travel documents — the most common e-gate use case is outside Annex III. Risk concern: misidentification leading to wrongful detention or refusal of entry. Article 9 risk management with particular attention to accuracy under field conditions; Article 14 human oversight; Article 13 transparency on accuracy limits to operators.",
+          "ordering": 29
+        },
+        {
+          "label": "8",
+          "heading": "Administration of justice and democratic processes",
+          "summary": "Category 8 — Administration of justice and democratic processes. Covers AI assisting judicial authorities in research and application of law (8(a)) and AI influencing election or referendum outcomes or voting behaviour (8(b)). The 8(b) carve-out for purely administrative or logistical political-campaign tools is important — most SME-relevant civic-tech sits in that excluded zone.",
+          "ordering": 30
+        },
+        {
+          "label": "8(a)",
+          "summary": "Annex III 8(a) — AI assisting a judicial authority in researching and interpreting facts and the law, applying the law to concrete facts, or used similarly in alternative dispute resolution. Includes legal-research copilots and AI-drafted opinions used internally by judges or arbitrators. Risk concern: erosion of judicial independence, opaque influence on rulings. Article 14 oversight: the AI never decides — the judge does. Article 13 transparency must clarify the AI role to all parties. Note: practitioner tools used by lawyers (not by judges) fall outside this entry.",
+          "ordering": 31
+        },
+        {
+          "label": "8(b)",
+          "summary": "Annex III 8(b) — AI intended to influence the outcome of an election or referendum or the voting behaviour of natural persons in elections or referenda. Covers micro-targeted political messaging, AI-driven persuasion campaigns aimed at individual voters. Explicit carve-out: AI to which natural persons are NOT directly exposed (campaign analytics, logistics, organisation tools) is OUT of Annex III — most SME civic-tech lives in that excluded zone. Risk concern: information integrity, manipulation of democratic processes. Deployers must run a FRIA (Art 27); Article 50 transparency obligations to exposed voters apply; the Digital Services Act overlays advertising-transparency duties.",
+          "ordering": 32
+        }
+      ]
     }
   ]
 }

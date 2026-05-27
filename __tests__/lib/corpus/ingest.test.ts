@@ -196,3 +196,158 @@ describe('parseRegulationData — article paragraphs (ENT-95)', () => {
     expect(parsed.articles).toHaveLength(2)
   })
 })
+
+describe('parseRegulationData — annexes + effective dates (ENT-96)', () => {
+  // Sample summaries are deliberately ≥100 chars to satisfy the
+  // progressive-disclosure length constraint without padding noise.
+  // Each one is a recognisable real-world routing artifact.
+  const ANNEX_SUMMARY =
+    'Annex III enumerates AI use cases the Regulation designates high-risk under Article 6(2). Listed systems trigger Articles 9–17 obligations: risk management, data governance, transparency, post-market monitoring, conformity assessment, and EU-database registration.'
+  const ITEM_1_SUMMARY =
+    'Category 1 — Biometrics: AI systems that identify, categorise, or recognise emotional state in natural persons, in so far as Union or Member State law permits the use. Covers remote biometric identification, biometric categorisation by sensitive attributes, and emotion recognition.'
+  const ITEM_1A_SUMMARY =
+    'Annex III 1(a) — Remote biometric identification systems. Excludes one-to-one verification used solely to confirm a natural person is who they claim to be. Risk concern: large-scale identification in public spaces, surveillance overreach. Triggers DPIA + transparency notice for deployers.'
+  const ITEM_2_SUMMARY =
+    'Annex III 2 — Critical infrastructure: AI used as a safety component in management/operation of critical digital infrastructure, road traffic, or water/gas/heating/electricity supply. Risk concern: cascading failures from AI-driven control of safety-critical systems.'
+
+  const withAnnex = () => ({
+    ...validInput(),
+    annexes: [
+      {
+        label: 'III',
+        heading: 'High-risk AI systems referred to in Article 6(2)',
+        summary: ANNEX_SUMMARY,
+        effectiveDate: '2026-08-02',
+        items: [
+          { label: '1', heading: 'Biometrics', summary: ITEM_1_SUMMARY, ordering: 1 },
+          { label: '1(a)', summary: ITEM_1A_SUMMARY, ordering: 2 },
+          { label: '2', heading: 'Critical infrastructure', summary: ITEM_2_SUMMARY, ordering: 3 },
+        ],
+      },
+    ],
+  })
+
+  it('accepts a document with annexes[]', () => {
+    const parsed = parseRegulationData(withAnnex())
+    expect(parsed.annexes).toHaveLength(1)
+    expect(parsed.annexes![0]!.label).toBe('III')
+    expect(parsed.annexes![0]!.items).toHaveLength(3)
+  })
+
+  it('accepts payloads without annexes[] (back-compat for GDPR)', () => {
+    const parsed = parseRegulationData(validInput())
+    expect(parsed.annexes).toBeUndefined()
+  })
+
+  it('rejects duplicate annex labels within a document', () => {
+    const bad = withAnnex()
+    bad.annexes = [bad.annexes![0]!, { ...bad.annexes![0]! }]
+    expect(() => parseRegulationData(bad)).toThrow(/duplicate.*annex/i)
+  })
+
+  it('rejects duplicate item labels within an annex', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.items = [
+      { label: '1', summary: ITEM_1_SUMMARY, ordering: 1 },
+      { label: '1', summary: ITEM_2_SUMMARY, ordering: 2 },
+    ]
+    expect(() => parseRegulationData(bad)).toThrow(/duplicate.*item/i)
+  })
+
+  it('rejects a non-ISO annex effectiveDate', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.effectiveDate = '2026/08/02'
+    expect(() => parseRegulationData(bad)).toThrow(/effectiveDate/i)
+  })
+
+  it('rejects empty annex labels', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.label = ''
+    expect(() => parseRegulationData(bad)).toThrow()
+  })
+
+  it('rejects an annex summary shorter than the progressive-disclosure floor (100 chars)', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.summary = 'too short'
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
+  })
+
+  it('rejects an annex item summary shorter than the progressive-disclosure floor', () => {
+    const bad = withAnnex()
+    bad.annexes![0]!.items[0]!.summary = 'too short'
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
+  })
+
+  it('rejects an annex summary longer than the ceiling (2000 chars)', () => {
+    // The ceiling keeps summaries scannable in LLM context; if a curator
+    // needs more, they should split into sub-items rather than balloon a
+    // single row.
+    const bad = withAnnex()
+    bad.annexes![0]!.summary = 'a'.repeat(2001)
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
+  })
+
+  it('accepts items with no heading (sub-items skip the field)', () => {
+    const parsed = parseRegulationData(withAnnex())
+    const subItem = parsed.annexes![0]!.items.find((i) => i.label === '1(a)')
+    expect(subItem).toBeDefined()
+    expect(subItem!.heading).toBeUndefined()
+  })
+
+  it('accepts an article with effectiveDate', () => {
+    const parsed = parseRegulationData({
+      ...validInput(),
+      articles: [
+        {
+          articleNumber: 4,
+          heading: 'AI literacy',
+          body: 'Providers and deployers shall take measures.',
+          effectiveDate: '2025-02-02',
+        },
+      ],
+    })
+    expect(parsed.articles[0]!.effectiveDate).toBe('2025-02-02')
+  })
+
+  it('rejects a non-ISO article effectiveDate', () => {
+    const bad = {
+      ...validInput(),
+      articles: [
+        {
+          articleNumber: 4,
+          heading: 'AI literacy',
+          body: '…',
+          effectiveDate: '02/02/2025',
+        },
+      ],
+    }
+    expect(() => parseRegulationData(bad)).toThrow(/effectiveDate/i)
+  })
+
+  it('allows item.effectiveDate to override the annex-level effectiveDate', () => {
+    // Useful for the rare case where a single Annex III item carves out a
+    // different deadline. The DB column is nullable per-item; the validator
+    // accepts it without requiring the override.
+    const parsed = parseRegulationData({
+      ...validInput(),
+      annexes: [
+        {
+          label: 'III',
+          heading: 'h',
+          summary: ANNEX_SUMMARY,
+          effectiveDate: '2026-08-02',
+          items: [
+            {
+              label: '1',
+              heading: 'X',
+              summary: ITEM_1_SUMMARY,
+              ordering: 1,
+              effectiveDate: '2027-01-01',
+            },
+          ],
+        },
+      ],
+    })
+    expect(parsed.annexes![0]!.items[0]!.effectiveDate).toBe('2027-01-01')
+  })
+})

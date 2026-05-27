@@ -102,6 +102,67 @@ describe('data/corpus/eu-ai-act.json (ENT-94)', () => {
       ).toBeUndefined()
     }
   })
+
+  it('captures Annex III with the 8 OJ high-risk use case categories (ENT-96)', () => {
+    const data = parseRegulationData(loadSnapshot('data/corpus/eu-ai-act.json'))
+    const annex = data.annexes?.find((a) => a.label === 'III')
+    expect(annex, 'Annex III missing').toBeDefined()
+    expect(annex!.heading.toLowerCase()).toContain('high-risk')
+    expect(annex!.effectiveDate).toBe('2026-08-02')
+
+    // Top-level categories 1..8 must all be present and discoverable by label.
+    const topLevelLabels = annex!.items
+      .filter((i) => !i.label.includes('('))
+      .map((i) => i.label)
+      .sort((a, b) => Number(a) - Number(b))
+    expect(topLevelLabels).toEqual(['1', '2', '3', '4', '5', '6', '7', '8'])
+  })
+
+  it('makes Annex III(1)(a) (remote biometric ID) individually addressable with a routing summary', () => {
+    const data = parseRegulationData(loadSnapshot('data/corpus/eu-ai-act.json'))
+    const annex = data.annexes!.find((a) => a.label === 'III')!
+    const oneA = annex.items.find((i) => i.label === '1(a)')
+    expect(oneA, 'Annex III item 1(a) missing').toBeDefined()
+    // Summary is the LLM routing artifact — must mention the use case
+    // (biometric identification) so it's selectable from context.
+    expect(oneA!.summary.toLowerCase()).toContain('biometric')
+    expect(oneA!.summary.length).toBeGreaterThanOrEqual(100)
+  })
+
+  it('every annex + annex item ships a progressive-disclosure summary (ENT-32 architecture)', () => {
+    // No `body` mirror — every row carries only its curated summary plus
+    // the document-level source_url for runtime fetch. See migration
+    // 20260526221509_regulatory_annexes_and_effective_dates.sql.
+    const data = parseRegulationData(loadSnapshot('data/corpus/eu-ai-act.json'))
+    const annex = data.annexes!.find((a) => a.label === 'III')!
+    expect(annex.summary.length).toBeGreaterThanOrEqual(100)
+    for (const item of annex.items) {
+      expect(
+        item.summary.length,
+        `annex item ${item.label} summary below 100-char floor`,
+      ).toBeGreaterThanOrEqual(100)
+    }
+  })
+
+  it('stamps Article 4 with the AI literacy effective date (2025-02-02)', () => {
+    const data = parseRegulationData(loadSnapshot('data/corpus/eu-ai-act.json'))
+    const article4 = data.articles.find((a) => a.articleNumber === 4)
+    expect(article4!.effectiveDate).toBe('2025-02-02')
+  })
+
+  it('leaves non-Article-4 articles without effectiveDate (scope guard for ENT-96)', () => {
+    // ENT-96 only stamps Article 4 + Annex III. Other AI Act articles fall
+    // back to the document's version_date at query time — their column
+    // stays null in the snapshot.
+    const data = parseRegulationData(loadSnapshot('data/corpus/eu-ai-act.json'))
+    for (const article of data.articles) {
+      if (article.articleNumber === 4) continue
+      expect(
+        article.effectiveDate,
+        `article ${article.articleNumber} unexpectedly has an effectiveDate`,
+      ).toBeUndefined()
+    }
+  })
 })
 
 describe('data/corpus/edpb-guidelines.json (ENT-50)', () => {
