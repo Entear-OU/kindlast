@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { parseGuidelinesData } from '@/lib/corpus/guidelines'
 import { parseRegulationData } from '@/lib/corpus/ingest'
 
 /**
@@ -100,5 +101,43 @@ describe('data/corpus/eu-ai-act.json (ENT-94)', () => {
         `article ${article.articleNumber} unexpectedly has paragraphs`,
       ).toBeUndefined()
     }
+  })
+})
+
+describe('data/corpus/edpb-guidelines.json (ENT-50)', () => {
+  it('parses with parseGuidelinesData and contains exactly 20 entries', () => {
+    // The AC mandates a curated list of 20 guidelines — the count is the
+    // spec, not an arbitrary fixture. Widening the set is a deliberate
+    // scope change that should land in a follow-up sub-issue.
+    const data = parseGuidelinesData(loadSnapshot('data/corpus/edpb-guidelines.json'))
+    expect(data.guidelines).toHaveLength(20)
+  })
+
+  it('covers every AC-required topic area at least once', () => {
+    // The AC enumerates "consent, transfers, DPO obligations, AI profiling,
+    // DSARs" as the spine of the curated set. The list may expand — these
+    // five are the floor.
+    const data = parseGuidelinesData(loadSnapshot('data/corpus/edpb-guidelines.json'))
+    const tags = new Set(data.guidelines.flatMap((g) => g.topicTags))
+    for (const required of ['consent', 'transfers', 'dpo', 'profiling', 'dsar']) {
+      expect(tags, `missing AC-required tag "${required}"`).toContain(required)
+    }
+  })
+
+  it('every guideline has both an adoptedDate and a sourceUrl (AC: title, publication date, source URL)', () => {
+    const data = parseGuidelinesData(loadSnapshot('data/corpus/edpb-guidelines.json'))
+    for (const g of data.guidelines) {
+      expect(g.adoptedDate, `${g.slug} missing adoptedDate`).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(g.sourceUrl, `${g.slug} missing sourceUrl`).toMatch(/^https?:\/\//)
+    }
+  })
+
+  it('all slugs are unique (idempotent ingest depends on the natural key)', () => {
+    // parseGuidelinesData already rejects duplicates, but assert it here so
+    // a regression in the validator can't silently produce a corpus where
+    // two rows compete for the same slug.
+    const data = parseGuidelinesData(loadSnapshot('data/corpus/edpb-guidelines.json'))
+    const slugs = data.guidelines.map((g) => g.slug)
+    expect(new Set(slugs).size).toBe(slugs.length)
   })
 })
