@@ -128,11 +128,11 @@ describe.skipIf(!supabaseRunning)('regulatory_annexes + items + effective_date (
 
     it('accepts both null and non-null values', async () => {
       await applyFixtureSql(/* sql */ `
-        insert into public.regulatory_articles (document_id, article_number, heading, body, effective_date)
-        values ('${documentId}', 1, 'h', 'b', '2025-02-02')
+        insert into public.regulatory_articles (document_id, article_number, heading, summary, effective_date)
+        values ('${documentId}', 1, 'h', 'fixture summary', '2025-02-02')
         on conflict (document_id, article_number) do nothing;
-        insert into public.regulatory_articles (document_id, article_number, heading, body)
-        values ('${documentId}', 2, 'h2', 'b2')
+        insert into public.regulatory_articles (document_id, article_number, heading, summary)
+        values ('${documentId}', 2, 'h2', 'fixture summary')
         on conflict (document_id, article_number) do nothing;
       `)
       const rows = await querySql<{ article_number: number; effective_date: string | null }>(

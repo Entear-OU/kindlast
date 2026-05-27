@@ -30,6 +30,22 @@ const supabaseRunning = await isLocalSupabaseReachable()
 
 const FIXTURE_CELEX = '_TEST_ENT95_paragraph_ingest'
 
+// Fixture summaries ≥100 chars so they clear the Zod validator floor.
+const ART_6_SUMMARY =
+  'Article 6 (fixture) — Classification rules. Numbered paragraphs with letter sub-points; mirrors the AI Act Article 6 shape used by the paragraph ingest idempotency suite.'
+const ART_99_SUMMARY =
+  'Article 99 (fixture) — No-paragraph article. Used to exercise the "article has no paragraphs[] field" branch of the paragraph ingest path.'
+const PARA_1_SUMMARY =
+  'Paragraph 1 (fixture) — Lead-in sentence introducing the classification rule structure used by the paragraph ingest idempotency suite.'
+const PARA_1A_SUMMARY =
+  'Paragraph 1(a) (fixture) — sub-point a content describing the first carve-out under the paragraph ingest fixture for ENT-95.'
+const PARA_1B_SUMMARY =
+  'Paragraph 1(b) (fixture) — sub-point b content describing the second carve-out under the paragraph ingest fixture for ENT-95.'
+const PARA_2_SUMMARY =
+  'Paragraph 2 (fixture) — second numbered paragraph for the paragraph ingest fixture used by the ingest idempotency suite.'
+const REC_1_SUMMARY =
+  'Recital 1 (fixture) — recital row used to satisfy the at-least-one-recital path in the paragraph ingest test fixture.'
+
 const samplePayload = (): RegulationData => ({
   document: {
     title: 'Paragraph ingest fixture',
@@ -42,21 +58,21 @@ const samplePayload = (): RegulationData => ({
     {
       articleNumber: 6,
       heading: 'Classification rules',
-      body: 'Mirrors Article 6 shape: numbered paragraphs with letter sub-points.',
+      summary: ART_6_SUMMARY,
       paragraphs: [
-        { label: '1', body: 'Lead-in sentence for paragraph 1.', ordering: 1 },
-        { label: '1(a)', body: 'Sub-point a body — initial.', ordering: 2 },
-        { label: '1(b)', body: 'Sub-point b body — initial.', ordering: 3 },
-        { label: '2', body: 'Paragraph 2 body.', ordering: 4 },
+        { label: '1', summary: PARA_1_SUMMARY, ordering: 1 },
+        { label: '1(a)', summary: PARA_1A_SUMMARY, ordering: 2 },
+        { label: '1(b)', summary: PARA_1B_SUMMARY, ordering: 3 },
+        { label: '2', summary: PARA_2_SUMMARY, ordering: 4 },
       ],
     },
     {
       articleNumber: 99,
       heading: 'No-paragraph article',
-      body: 'This article has no paragraphs field — exercises the no-paragraphs path.',
+      summary: ART_99_SUMMARY,
     },
   ],
-  recitals: [{ recitalNumber: 1, body: 'Recital fixture body.' }],
+  recitals: [{ recitalNumber: 1, summary: REC_1_SUMMARY }],
 })
 
 describe.skipIf(!supabaseRunning)('ingestRegulation — paragraphs (ENT-95)', () => {
@@ -104,16 +120,18 @@ describe.skipIf(!supabaseRunning)('ingestRegulation — paragraphs (ENT-95)', ()
     expect(rows[0]!.c).toBe(4)
   })
 
-  it('overwrites paragraph body in place when content changes (last write wins)', async () => {
+  it('overwrites paragraph summary in place when content changes (last write wins)', async () => {
     const service = createServiceRoleClient()
     await ingestRegulation(service, samplePayload())
 
+    const REVISED_SUMMARY =
+      'Paragraph 1(a) (fixture) — REVISED sub-point a summary, updated by a curator to reflect new guidance. Row must overwrite in place.'
     const changed = samplePayload()
-    changed.articles[0]!.paragraphs![1]!.body = 'Sub-point a body — REVISED.'
+    changed.articles[0]!.paragraphs![1]!.summary = REVISED_SUMMARY
     await ingestRegulation(service, changed)
 
-    const rows = await querySql<{ body: string }>(
-      `select p.body
+    const rows = await querySql<{ summary: string }>(
+      `select p.summary
          from public.regulatory_article_paragraphs p
          join public.regulatory_articles a on a.id = p.article_id
          join public.regulatory_documents d on d.id = a.document_id
@@ -123,7 +141,7 @@ describe.skipIf(!supabaseRunning)('ingestRegulation — paragraphs (ENT-95)', ()
       [FIXTURE_CELEX, '1(a)'],
     )
     expect(rows).toHaveLength(1)
-    expect(rows[0]!.body).toBe('Sub-point a body — REVISED.')
+    expect(rows[0]!.summary).toBe(REVISED_SUMMARY)
   })
 
   it('produces zero paragraph rows for articles without a paragraphs field', async () => {

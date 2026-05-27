@@ -9,10 +9,28 @@ import { parseRegulationData } from '@/lib/corpus/ingest'
  * the local Supabase stack in `tests/integration/regulatory-corpus-ingest.test.ts`
  * — RLS, unique constraints, and Postgres upsert semantics belong there.
  *
- * Here we just prove the front gate: the JSON snapshot at
- * `data/corpus/gdpr.json` (and any future regulation file) is rejected
- * early when malformed, so the ingest script never sends garbage to the DB.
+ * Here we just prove the front gate: malformed snapshots are rejected early
+ * so the ingest script never sends garbage to the DB.
+ *
+ * Architecture context (ENT-32 progressive disclosure, completed in ENT-97):
+ * each article / recital / paragraph / annex / annex item row carries a
+ * curated `summary` (100–2000 chars) — the LLM's routing artifact — not
+ * the verbatim OJ body. Sample summaries in this suite are ≥100 chars to
+ * satisfy the validator floor.
  */
+
+// Reusable summaries deliberately ≥100 chars; recognisable routing prose, not
+// padded placeholders.
+const ARTICLE_1_SUMMARY =
+  'Article 1 of the GDPR — Subject-matter and objectives. Establishes the Regulation\'s scope: protect natural persons regarding personal data processing and free movement of such data within the Union.'
+const ARTICLE_2_SUMMARY =
+  'Article 2 of the GDPR — Material scope. Frames what processing falls under the Regulation and carves out exclusions (purely personal/household activity, national security, law enforcement under LED 2016/680).'
+const ARTICLE_4_SUMMARY =
+  'Article 4 of the EU AI Act — AI literacy. Imposes a duty on providers and deployers to ensure sufficient AI literacy among staff who operate or are affected by their AI systems. Already in force since 2 February 2025.'
+const ARTICLE_6_SUMMARY =
+  'Article 6 of the EU AI Act — Classification rules for high-risk AI systems. Two prongs: Annex I product-safety route and Annex III standalone-system route. Carve-out in Art 6(3) for narrow procedural tasks. Determines whether Articles 9–17 obligations apply.'
+const RECITAL_1_SUMMARY =
+  'Recital 1 of the GDPR. Frames data protection as a fundamental right under Article 8 of the EU Charter; foundation for the human-rights reading of the Regulation. Cited when arguing the Regulation\'s objective and proportionality.'
 
 const validInput = () => ({
   document: {
@@ -23,10 +41,10 @@ const validInput = () => ({
     officialUrl: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
   },
   articles: [
-    { articleNumber: 1, heading: 'Subject-matter', body: 'This Regulation lays down rules…' },
-    { articleNumber: 2, heading: 'Material scope', body: '…' },
+    { articleNumber: 1, heading: 'Subject-matter', summary: ARTICLE_1_SUMMARY },
+    { articleNumber: 2, heading: 'Material scope', summary: ARTICLE_2_SUMMARY },
   ],
-  recitals: [{ recitalNumber: 1, body: 'The protection of natural persons…' }],
+  recitals: [{ recitalNumber: 1, summary: RECITAL_1_SUMMARY }],
 })
 
 describe('parseRegulationData', () => {
@@ -73,8 +91,8 @@ describe('parseRegulationData', () => {
   it('rejects duplicate articleNumbers (would silently merge on upsert)', () => {
     const bad = validInput()
     bad.articles = [
-      { articleNumber: 1, heading: 'A', body: 'a' },
-      { articleNumber: 1, heading: 'B', body: 'b' },
+      { articleNumber: 1, heading: 'A', summary: ARTICLE_1_SUMMARY },
+      { articleNumber: 1, heading: 'B', summary: ARTICLE_2_SUMMARY },
     ]
     expect(() => parseRegulationData(bad)).toThrow(/duplicate.*article/i)
   })
@@ -82,8 +100,8 @@ describe('parseRegulationData', () => {
   it('rejects duplicate recitalNumbers', () => {
     const bad = validInput()
     bad.recitals = [
-      { recitalNumber: 1, body: 'a' },
-      { recitalNumber: 1, body: 'b' },
+      { recitalNumber: 1, summary: RECITAL_1_SUMMARY },
+      { recitalNumber: 1, summary: RECITAL_1_SUMMARY },
     ]
     expect(() => parseRegulationData(bad)).toThrow(/duplicate.*recital/i)
   })
@@ -110,25 +128,44 @@ describe('parseRegulationData', () => {
     expect(() => parseRegulationData(bad)).toThrow()
   })
 
-  it('rejects empty article bodies', () => {
+  it('rejects an article summary shorter than the progressive-disclosure floor (100 chars)', () => {
     const bad = validInput()
-    bad.articles[0]!.body = ''
-    expect(() => parseRegulationData(bad)).toThrow()
+    bad.articles[0]!.summary = 'too short'
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
+  })
+
+  it('rejects a recital summary shorter than the progressive-disclosure floor', () => {
+    const bad = validInput()
+    bad.recitals[0]!.summary = 'too short'
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
+  })
+
+  it('rejects an article summary longer than the ceiling (2000 chars)', () => {
+    const bad = validInput()
+    bad.articles[0]!.summary = 'a'.repeat(2001)
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
   })
 })
 
-describe('parseRegulationData — article paragraphs (ENT-95)', () => {
+describe('parseRegulationData — article paragraphs (ENT-95 / ENT-97)', () => {
+  const PARA_1_SUMMARY =
+    'Article 6(1) of the EU AI Act — high-risk classification by Annex I or Annex III. A system is high-risk if it is a safety component of an Annex I product OR falls within an Annex III use case.'
+  const PARA_1A_SUMMARY =
+    'Article 6(1)(a) of the EU AI Act — Annex I product-safety prong. The system is a safety component of a regulated product covered by the Union harmonisation legislation in Annex I (machinery, medical devices, etc.).'
+  const PARA_1B_SUMMARY =
+    'Article 6(1)(b) of the EU AI Act — Annex III standalone-system prong. The system itself (not a safety component) falls within one of the Annex III high-risk use case categories.'
+
   const withParagraphs = () => ({
     ...validInput(),
     articles: [
       {
         articleNumber: 6,
         heading: 'Classification',
-        body: 'Top-level body.',
+        summary: ARTICLE_6_SUMMARY,
         paragraphs: [
-          { label: '1', body: 'Lead-in sentence.', ordering: 1 },
-          { label: '1(a)', body: 'Sub-point a.', ordering: 2 },
-          { label: '1(b)', body: 'Sub-point b.', ordering: 3 },
+          { label: '1', summary: PARA_1_SUMMARY, ordering: 1 },
+          { label: '1(a)', summary: PARA_1A_SUMMARY, ordering: 2 },
+          { label: '1(b)', summary: PARA_1B_SUMMARY, ordering: 3 },
         ],
       },
     ],
@@ -141,7 +178,7 @@ describe('parseRegulationData — article paragraphs (ENT-95)', () => {
   })
 
   it('accepts articles without paragraphs (back-compat for GDPR shape)', () => {
-    // GDPR's snapshot has no paragraphs field — must still parse.
+    // Articles without sub-paragraph rows just omit the field.
     const parsed = parseRegulationData(validInput())
     expect(parsed.articles[0]!.paragraphs).toBeUndefined()
   })
@@ -149,8 +186,8 @@ describe('parseRegulationData — article paragraphs (ENT-95)', () => {
   it('rejects duplicate paragraph labels within an article (would silently merge on upsert)', () => {
     const bad = withParagraphs()
     bad.articles[0]!.paragraphs = [
-      { label: '1', body: 'first', ordering: 1 },
-      { label: '1', body: 'second', ordering: 2 },
+      { label: '1', summary: PARA_1_SUMMARY, ordering: 1 },
+      { label: '1', summary: PARA_1A_SUMMARY, ordering: 2 },
     ]
     expect(() => parseRegulationData(bad)).toThrow(/duplicate.*paragraph/i)
   })
@@ -161,10 +198,10 @@ describe('parseRegulationData — article paragraphs (ENT-95)', () => {
     expect(() => parseRegulationData(bad)).toThrow()
   })
 
-  it('rejects empty paragraph bodies', () => {
+  it('rejects a paragraph summary shorter than the progressive-disclosure floor', () => {
     const bad = withParagraphs()
-    bad.articles[0]!.paragraphs![0]!.body = ''
-    expect(() => parseRegulationData(bad)).toThrow()
+    bad.articles[0]!.paragraphs![0]!.summary = 'too short'
+    expect(() => parseRegulationData(bad)).toThrow(/summary/i)
   })
 
   it('rejects negative paragraph ordering', () => {
@@ -181,15 +218,15 @@ describe('parseRegulationData — article paragraphs (ENT-95)', () => {
       articles: [
         {
           articleNumber: 4,
-          heading: 'X',
-          body: '…',
-          paragraphs: [{ label: '1', body: 'a', ordering: 1 }],
+          heading: 'AI literacy',
+          summary: ARTICLE_4_SUMMARY,
+          paragraphs: [{ label: '1', summary: PARA_1_SUMMARY, ordering: 1 }],
         },
         {
           articleNumber: 6,
-          heading: 'Y',
-          body: '…',
-          paragraphs: [{ label: '1', body: 'b', ordering: 1 }],
+          heading: 'Classification',
+          summary: ARTICLE_6_SUMMARY,
+          paragraphs: [{ label: '1', summary: PARA_1A_SUMMARY, ordering: 1 }],
         },
       ],
     })
@@ -301,7 +338,7 @@ describe('parseRegulationData — annexes + effective dates (ENT-96)', () => {
         {
           articleNumber: 4,
           heading: 'AI literacy',
-          body: 'Providers and deployers shall take measures.',
+          summary: ARTICLE_4_SUMMARY,
           effectiveDate: '2025-02-02',
         },
       ],
@@ -316,7 +353,7 @@ describe('parseRegulationData — annexes + effective dates (ENT-96)', () => {
         {
           articleNumber: 4,
           heading: 'AI literacy',
-          body: '…',
+          summary: ARTICLE_4_SUMMARY,
           effectiveDate: '02/02/2025',
         },
       ],

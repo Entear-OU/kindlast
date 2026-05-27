@@ -36,6 +36,12 @@ const ITEM_1A_SUMMARY =
   'Annex III 1(a) — Remote biometric identification systems; excludes one-to-one verification used solely to confirm identity (fixture).'
 const ITEM_2_SUMMARY =
   'Annex III 2 — Critical infrastructure: AI used as a safety component in road traffic, water, gas, heating, or electricity supply (fixture).'
+const ART_4_SUMMARY =
+  'Article 4 (fixture) — AI literacy. Providers and deployers must ensure sufficient AI literacy among staff (in force from 2 February 2025).'
+const ART_5_SUMMARY =
+  'Article 5 (fixture) — Prohibited practices. Marks the no-effective-date branch of the fixture (falls back to document version_date at query time).'
+const REC_1_SUMMARY =
+  'Recital 1 (fixture) — frames the Regulation\'s objective for the annex ingest test fixture; required so the recitals[] array has at least one row.'
 
 const samplePayload = (): RegulationData => ({
   document: {
@@ -49,16 +55,16 @@ const samplePayload = (): RegulationData => ({
     {
       articleNumber: 4,
       heading: 'AI literacy',
-      body: 'Providers and deployers shall take measures to ensure literacy.',
+      summary: ART_4_SUMMARY,
       effectiveDate: '2025-02-02',
     },
     {
       articleNumber: 5,
       heading: 'Prohibited practices',
-      body: 'No effective_date — falls back to document version_date.',
+      summary: ART_5_SUMMARY,
     },
   ],
-  recitals: [{ recitalNumber: 1, body: 'Recital body.' }],
+  recitals: [{ recitalNumber: 1, summary: REC_1_SUMMARY }],
   annexes: [
     {
       label: 'III',

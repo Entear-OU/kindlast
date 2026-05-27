@@ -32,6 +32,10 @@ const supabaseRunning = await isLocalSupabaseReachable()
 
 const FIXTURE_CELEX = '_TEST_ENT95_paragraphs_celex'
 
+// Short fixture summary — DB CHECK on legacy tables is 1..2000 (Zod is the
+// strict 100-char floor on ingest); short fixture strings keep the SQL terse.
+const FIX_SUMMARY = 'fixture summary'
+
 const SEED_SQL = /* sql */ `
   insert into public.regulatory_documents (
     celex_number, title, short_title, version_date, official_url
@@ -40,8 +44,8 @@ const SEED_SQL = /* sql */ `
     'https://example.invalid/p'
   ) on conflict (celex_number) do nothing;
 
-  insert into public.regulatory_articles (document_id, article_number, heading, body)
-  select d.id, 1, 'Test article', 'Lead body — not directly relevant.'
+  insert into public.regulatory_articles (document_id, article_number, heading, summary)
+  select d.id, 1, 'Test article', '${FIX_SUMMARY}'
   from public.regulatory_documents d
   where d.celex_number = '${FIXTURE_CELEX}'
   on conflict (document_id, article_number) do nothing;
@@ -79,14 +83,15 @@ describe.skipIf(!supabaseRunning)('regulatory_article_paragraphs schema (ENT-95)
            where table_schema = 'public' and table_name = 'regulatory_article_paragraphs'
            order by ordinal_position`,
       )
+      // body dropped by ENT-97; replaced with summary (progressive disclosure).
       expect(cols.map((c) => c.column_name)).toEqual([
         'id',
         'article_id',
         'paragraph_label',
-        'body',
         'ordering',
         'created_at',
         'updated_at',
+        'summary',
       ])
     })
   })
@@ -95,20 +100,20 @@ describe.skipIf(!supabaseRunning)('regulatory_article_paragraphs schema (ENT-95)
     it('allows anon read of paragraphs', async () => {
       // Seed a paragraph via direct pg (bypasses RLS), then read via anon.
       await applyFixtureSql(/* sql */ `
-        insert into public.regulatory_article_paragraphs (article_id, paragraph_label, body, ordering)
-        values ('${articleId}', '1', 'Paragraph 1 body.', 1)
+        insert into public.regulatory_article_paragraphs (article_id, paragraph_label, summary, ordering)
+        values ('${articleId}', '1', '${FIX_SUMMARY}', 1)
         on conflict (article_id, paragraph_label) do nothing;
       `)
 
       const anon = createAnonClient()
       const { data, error } = await anon
         .from('regulatory_article_paragraphs')
-        .select('paragraph_label, body, ordering')
+        .select('paragraph_label, summary, ordering')
         .eq('article_id', articleId)
         .eq('paragraph_label', '1')
         .single()
       expect(error).toBeNull()
-      expect(data?.body).toBe('Paragraph 1 body.')
+      expect(data?.summary).toBe(FIX_SUMMARY)
     })
 
     it('denies anon insert', async () => {
@@ -116,7 +121,7 @@ describe.skipIf(!supabaseRunning)('regulatory_article_paragraphs schema (ENT-95)
       const { error } = await anon.from('regulatory_article_paragraphs').insert({
         article_id: articleId,
         paragraph_label: 'should-not-write',
-        body: 'x',
+        summary: FIX_SUMMARY,
         ordering: 0,
       })
       expect(error).not.toBeNull()
@@ -129,7 +134,7 @@ describe.skipIf(!supabaseRunning)('regulatory_article_paragraphs schema (ENT-95)
         {
           article_id: articleId,
           paragraph_label: 'service-test',
-          body: 'inserted via service-role',
+          summary: 'inserted via service-role',
           ordering: 999,
         },
         { onConflict: 'article_id,paragraph_label' },
@@ -141,14 +146,14 @@ describe.skipIf(!supabaseRunning)('regulatory_article_paragraphs schema (ENT-95)
   describe('uniqueness + cascade', () => {
     it('enforces unique (article_id, paragraph_label) with mixed-format labels', async () => {
       await applyFixtureSql(/* sql */ `
-        insert into public.regulatory_article_paragraphs (article_id, paragraph_label, body, ordering)
-        values ('${articleId}', '2(a)', 'first', 1)
+        insert into public.regulatory_article_paragraphs (article_id, paragraph_label, summary, ordering)
+        values ('${articleId}', '2(a)', '${FIX_SUMMARY}', 1)
         on conflict (article_id, paragraph_label) do nothing;
       `)
       await expect(
         applyFixtureSql(/* sql */ `
-          insert into public.regulatory_article_paragraphs (article_id, paragraph_label, body, ordering)
-          values ('${articleId}', '2(a)', 'second', 2);
+          insert into public.regulatory_article_paragraphs (article_id, paragraph_label, summary, ordering)
+          values ('${articleId}', '2(a)', '${FIX_SUMMARY}', 2);
         `),
       ).rejects.toThrow(/duplicate|unique/i)
     })
@@ -162,11 +167,11 @@ describe.skipIf(!supabaseRunning)('regulatory_article_paragraphs schema (ENT-95)
         insert into public.regulatory_documents (
           celex_number, title, short_title, version_date, official_url
         ) values ('${ISO_CELEX}', 'c', 'c', '2024-07-12', 'https://example.invalid/c');
-        insert into public.regulatory_articles (document_id, article_number, heading, body)
-        select d.id, 1, 'h', 'b' from public.regulatory_documents d
+        insert into public.regulatory_articles (document_id, article_number, heading, summary)
+        select d.id, 1, 'h', '${FIX_SUMMARY}' from public.regulatory_documents d
         where d.celex_number = '${ISO_CELEX}';
-        insert into public.regulatory_article_paragraphs (article_id, paragraph_label, body, ordering)
-        select a.id, '1', 'b', 1 from public.regulatory_articles a
+        insert into public.regulatory_article_paragraphs (article_id, paragraph_label, summary, ordering)
+        select a.id, '1', '${FIX_SUMMARY}', 1 from public.regulatory_articles a
         join public.regulatory_documents d on d.id = a.document_id
         where d.celex_number = '${ISO_CELEX}';
       `)
@@ -202,7 +207,7 @@ describe.skipIf(!supabaseRunning)('regulatory_article_paragraphs schema (ENT-95)
         article_id      uuid        not null
                           references public.regulatory_articles(id) on delete cascade,
         paragraph_label text        not null,
-        body            text        not null,
+        summary         text        not null,
         ordering        int         not null,
         created_at      timestamptz not null default now(),
         updated_at      timestamptz not null default now(),

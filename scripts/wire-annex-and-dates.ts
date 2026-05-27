@@ -54,8 +54,8 @@ type Annex = {
 type Article = {
   articleNumber: number
   heading: string
-  body: string
-  paragraphs?: Array<{ label: string; body: string; ordering: number }>
+  summary: string
+  paragraphs?: Array<{ label: string; summary: string; ordering: number }>
   effectiveDate?: string
 }
 
