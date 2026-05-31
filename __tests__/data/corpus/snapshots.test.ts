@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { parseEnforcementData } from '@/lib/corpus/enforcement'
 import { parseGuidelinesData } from '@/lib/corpus/guidelines'
 import { parseRegulationData } from '@/lib/corpus/ingest'
 
@@ -199,6 +200,72 @@ describe('data/corpus/edpb-guidelines.json (ENT-50)', () => {
     // two rows compete for the same slug.
     const data = parseGuidelinesData(loadSnapshot('data/corpus/edpb-guidelines.json'))
     const slugs = data.guidelines.map((g) => g.slug)
+    expect(new Set(slugs).size).toBe(slugs.length)
+  })
+})
+
+describe('data/corpus/enforcement-decisions.json (ENT-99)', () => {
+  it('parses with parseEnforcementData and contains a curated landmark set', () => {
+    // The AC calls for ~20–25 landmark decisions. The floor is 20; widening
+    // the set is a deliberate scope change, not a drive-by edit.
+    const data = parseEnforcementData(loadSnapshot('data/corpus/enforcement-decisions.json'))
+    expect(data.decisions.length).toBeGreaterThanOrEqual(20)
+    expect(data.decisions.length).toBeLessThanOrEqual(25)
+  })
+
+  it('spans the named DPAs from the AC (ICO, CNIL, DPC, BfDI, AEPD, EDPB)', () => {
+    // PRD §9 names these supervisory authorities specifically. The federal
+    // BfDI, ICO, CNIL, DPC, AEPD and EDPB each appear under their exact
+    // label.
+    const data = parseEnforcementData(loadSnapshot('data/corpus/enforcement-decisions.json'))
+    const dpas = new Set(data.decisions.map((d) => d.dpa))
+    for (const required of ['ICO', 'CNIL', 'DPC', 'BfDI', 'AEPD', 'EDPB']) {
+      expect(dpas, `missing AC-required DPA "${required}"`).toContain(required)
+    }
+  })
+
+  it('represents the German state DPAs accurately (not all German enforcement is the federal BfDI)', () => {
+    // The PRD uses "BfDI" loosely, but the landmark German fines (Deutsche
+    // Wohnen, H&M) were issued by state authorities, not the federal
+    // commissioner. We label them accurately rather than collapsing them
+    // into "BfDI" — the dpa field must be citable.
+    const data = parseEnforcementData(loadSnapshot('data/corpus/enforcement-decisions.json'))
+    const dpas = new Set(data.decisions.map((d) => d.dpa))
+    expect(dpas).toContain('Datenschutz Berlin')
+    expect(dpas).toContain('Datenschutz Hamburg')
+  })
+
+  it('covers the core enforcement topic areas', () => {
+    // The corpus is only useful to the Analyst if it spans the obligations
+    // SMEs actually trip on. These are the spine; the set may expand.
+    const data = parseEnforcementData(loadSnapshot('data/corpus/enforcement-decisions.json'))
+    const tags = new Set(data.decisions.flatMap((d) => d.topicTags))
+    for (const required of ['consent', 'security', 'transfers', 'biometrics', 'children', 'dsar']) {
+      expect(tags, `missing core topic "${required}"`).toContain(required)
+    }
+  })
+
+  it('every decision has a decisionDate, sourceUrl, and at least one topic tag', () => {
+    const data = parseEnforcementData(loadSnapshot('data/corpus/enforcement-decisions.json'))
+    for (const d of data.decisions) {
+      expect(d.decisionDate, `${d.slug} missing decisionDate`).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(d.sourceUrl, `${d.slug} missing sourceUrl`).toMatch(/^https?:\/\//)
+      expect(d.topicTags.length, `${d.slug} has no topic tags`).toBeGreaterThanOrEqual(1)
+    }
+  })
+
+  it('links decisions to the GDPR articles they enforced (Analyst routing surface)', () => {
+    // The gdpr_articles array is what lets the Analyst answer "how has
+    // Article 6 been enforced?" — at least the fine-bearing decisions should
+    // carry article links. Allow a few cross-cutting decisions with none.
+    const data = parseEnforcementData(loadSnapshot('data/corpus/enforcement-decisions.json'))
+    const withArticles = data.decisions.filter((d) => d.gdprArticles.length > 0)
+    expect(withArticles.length).toBeGreaterThanOrEqual(data.decisions.length - 2)
+  })
+
+  it('all slugs are unique (idempotent ingest depends on the natural key)', () => {
+    const data = parseEnforcementData(loadSnapshot('data/corpus/enforcement-decisions.json'))
+    const slugs = data.decisions.map((d) => d.slug)
     expect(new Set(slugs).size).toBe(slugs.length)
   })
 })

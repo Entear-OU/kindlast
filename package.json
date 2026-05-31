@@ -14,6 +14,7 @@
     "ingest:ai-act": "tsx scripts/ingest-regulation.ts data/corpus/eu-ai-act.json",
     "ingest:edpb-guidelines": "tsx scripts/ingest-edpb-guidelines.ts data/corpus/edpb-guidelines.json",
     "ingest:obligations": "tsx scripts/ingest-obligations.ts data/corpus/obligations.json",
+    "ingest:enforcement": "tsx scripts/ingest-enforcement.ts data/corpus/enforcement-decisions.json",
     "wire:ai-act-annex": "tsx scripts/wire-annex-and-dates.ts"
   },
   "dependencies": {
