@@ -6,9 +6,9 @@
       "title": "Clearview AI — facial recognition scraping without lawful basis",
       "decisionDate": "2022-10-17",
       "fineEur": 20000000,
-      "summary": "The CNIL fined Clearview AI €20M for building a facial-recognition database by scraping photos of French residents from the public web with no lawful basis under Article 6 and processing biometric special-category data under Article 9. The decision also faulted Clearview for ignoring data-subject access and erasure requests (Articles 12, 15, 17). Landmark precedent for SMEs deploying any biometric identification or web-scraping pipeline: public availability of a photo is not a lawful basis, and biometric templates are special-category data requiring an Article 9 condition.",
-      "sourceUrl": "https://www.cnil.fr/en/facial-recognition-cnil-fines-clearview-ai-eu20-million",
-      "gdprArticles": [6, 9, 12, 15, 17],
+      "summary": "The CNIL fined Clearview AI €20M for building a facial-recognition database by scraping photos of French residents from the public web with no lawful basis under Article 6. The decision also faulted Clearview for ignoring data-subject access and erasure requests (Articles 12, 15, 17) and for not cooperating with the regulator (Article 31). Notably the CNIL decided on lawful-basis grounds rather than the Article 9 special-category route, even though facial templates are biometric data. Landmark precedent for SMEs deploying any biometric identification or web-scraping pipeline: public availability of a photo is not a lawful basis for processing it.",
+      "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2022/french-sa-fines-clearview-ai-eur-20-million_en",
+      "gdprArticles": [6, 12, 15, 17, 31],
       "topicTags": ["biometrics", "lawful-basis", "web-scraping", "dsar"]
     },
     {
@@ -17,9 +17,9 @@
       "title": "Google — cookies set without consent",
       "decisionDate": "2021-12-31",
       "fineEur": 150000000,
-      "summary": "The CNIL fined Google €150M (and Facebook €60M in the same decision series) for making it harder to refuse cookies than to accept them — a single click to accept, but several to reject. Decided primarily under the French ePrivacy transposition rather than the GDPR directly, but foundational for the EDPB's later stance on 'reject all' button parity. Directly relevant to any SME running a cookie banner: refusal must be as easy as acceptance, or the consent is invalid.",
-      "sourceUrl": "https://www.cnil.fr/en/cookies-cnil-fines-google-total-150-million-euros-and-facebook-60-million-euros-non-compliance",
-      "gdprArticles": [6, 7],
+      "summary": "The CNIL fined Google €150M (and Facebook €60M in the same decision series) for making it harder to refuse cookies than to accept them — a single click to accept, but several to reject. Issued under Article 82 of the French Data Protection Act (the ePrivacy/cookie transposition), not the GDPR's lawful-basis articles, so no GDPR article is tagged; the consent concept nonetheless mirrors GDPR Article 4(11). Foundational for the EDPB's later stance on 'reject all' button parity, and directly relevant to any SME running a cookie banner: refusal must be as easy as acceptance.",
+      "sourceUrl": "https://gdprhub.eu/index.php?title=CNIL_(France)_-_SAN-2021-023",
+      "gdprArticles": [],
       "topicTags": ["cookies", "consent", "eprivacy"]
     },
     {
@@ -28,9 +28,9 @@
       "title": "Amazon Europe — advertising cookies without consent",
       "decisionDate": "2020-12-07",
       "fineEur": 35000000,
-      "summary": "The CNIL fined Amazon Europe Core €35M for depositing advertising cookies on users' devices when they visited amazon.fr without prior consent and without adequate information. Reinforces that non-essential cookies require opt-in consent obtained before the cookie is set, and that the information notice must clearly explain the advertising purpose. A baseline reference for SME e-commerce sites running ad-tech.",
-      "sourceUrl": "https://www.cnil.fr/en/cookies-financial-penalty-35-million-euros-imposed-company-amazon-europe-core",
-      "gdprArticles": [6, 7],
+      "summary": "The CNIL fined Amazon Europe Core €35M for depositing advertising cookies on users' devices when they visited amazon.fr without prior consent and without adequate information. Issued under Article 82 of the French Data Protection Act (the ePrivacy/cookie transposition), not the GDPR's lawful-basis articles, so no GDPR article is tagged. Reinforces that non-essential cookies require opt-in consent obtained before the cookie is set, and that the information notice must clearly explain the advertising purpose. A baseline reference for SME e-commerce sites running ad-tech.",
+      "sourceUrl": "https://gdprhub.eu/index.php?title=CNIL_-_SAN-2020-013",
+      "gdprArticles": [],
       "topicTags": ["cookies", "consent", "marketing", "eprivacy"]
     },
     {
@@ -40,7 +40,7 @@
       "decisionDate": "2020-10-16",
       "fineEur": 22000000,
       "summary": "The ICO fined British Airways £20M (reduced from a £183M notice of intent, partly for COVID-19 economic impact) after a Magecart-style attack skimmed payment and personal data of ~400,000 customers. The breach exploited the absence of basic Article 32 measures: no multi-factor authentication on the relevant systems, over-broad access, and unmonitored third-party scripts. The canonical UK precedent on Article 32 'appropriate technical and organisational measures' — security failings, not the breach itself, drove the fine.",
-      "sourceUrl": "https://ico.org.uk/about-the-ico/media-centre/news-and-blogs/2020/10/ico-fines-british-airways-20m-for-data-breach-affecting-more-than-400000-customers/",
+      "sourceUrl": "https://gdprhub.eu/index.php?title=ICO_(UK)_-_British_Airways",
       "gdprArticles": [5, 32],
       "topicTags": ["security", "breach", "payment-data"]
     },
@@ -51,7 +51,7 @@
       "decisionDate": "2020-10-30",
       "fineEur": 20400000,
       "summary": "The ICO fined Marriott £18.4M (reduced from a £99M notice of intent) over a breach in the Starwood guest reservation database affecting up to 339 million guests, undetected from 2014 until 2018. The decision turned on Article 32 security failings inherited through the 2016 acquisition of Starwood — Marriott failed to perform adequate due diligence on the acquired environment. Key precedent for M&A: data-protection diligence on an acquired system is part of the acquirer's Article 32 responsibility.",
-      "sourceUrl": "https://ico.org.uk/about-the-ico/media-centre/news-and-blogs/2020/10/ico-fines-marriott-international-inc-184million-for-failing-to-keep-customers-personal-data-secure/",
+      "sourceUrl": "https://gdprhub.eu/index.php?title=ICO_(UK)_-_Marriott_International_Inc",
       "gdprArticles": [5, 32],
       "topicTags": ["security", "breach", "due-diligence", "mergers"]
     },
@@ -62,8 +62,8 @@
       "decisionDate": "2023-04-04",
       "fineEur": 14800000,
       "summary": "The ICO fined TikTok £12.7M for processing the data of up to 1.4 million UK children under 13 without parental consent, in breach of Articles 5, 6, 8 and 12-14 of the UK GDPR. TikTok failed to do enough to check users' ages or remove under-13s, and did not provide information in a way children could understand. Central precedent for any service likely to be accessed by children: age assurance and child-appropriate transparency are concrete obligations, not best-effort aspirations.",
-      "sourceUrl": "https://ico.org.uk/about-the-ico/media-centre/news-and-blogs/2023/04/ico-fines-tiktok-127-million-for-misusing-children-s-data/",
-      "gdprArticles": [5, 6, 8, 12, 13, 14],
+      "sourceUrl": "https://ico.org.uk/action-weve-taken/enforcement/2023/05/tiktok/",
+      "gdprArticles": [5, 6, 8, 12, 13],
       "topicTags": ["children", "consent", "transparency", "age-assurance"]
     },
     {
@@ -74,7 +74,7 @@
       "fineEur": 405000000,
       "summary": "The Irish DPC fined Meta €405M over Instagram's handling of child users' data: business accounts operated by children displayed email addresses and phone numbers publicly, and accounts defaulted to public rather than private. The decision found breaches of the data-protection-by-design and by-default principle (Article 25) and the lawful-basis and transparency requirements for children (Articles 5, 6, 12, 35). One of the largest children's-data fines and a leading authority on Article 25 default settings.",
       "sourceUrl": "https://www.dataprotection.ie/en/news-media/press-releases/data-protection-commission-announces-decision-instagram-inquiry",
-      "gdprArticles": [5, 6, 12, 25, 35],
+      "gdprArticles": [5, 6, 12, 24, 25, 35],
       "topicTags": ["children", "privacy-by-design", "transparency", "social-media"]
     },
     {
@@ -106,7 +106,7 @@
       "decisionDate": "2022-11-25",
       "fineEur": 265000000,
       "summary": "The Irish DPC fined Meta €265M after the data of up to 533 million Facebook users was scraped through the contact-importer and profile features and published online. The decision found that Meta had not implemented data-protection-by-design and by-default measures under Article 25 to prevent the abuse of these features. A leading Article 25 authority on the obligation to anticipate and design against foreseeable abuse of legitimate product features.",
-      "sourceUrl": "https://www.dataprotection.ie/en/news-media/press-releases/dpc-announces-decision-facebook-search-tools-inquiry",
+      "sourceUrl": "https://www.dataprotection.ie/en/news-media/press-releases/data-protection-commission-announces-decision-in-facebook-data-scraping-inquiry",
       "gdprArticles": [25],
       "topicTags": ["privacy-by-design", "web-scraping", "security", "social-media"]
     },
@@ -125,10 +125,10 @@
       "slug": "bfdi-2019-1und1-telecom",
       "dpa": "BfDI",
       "title": "1&1 Telecom — inadequate caller authentication",
-      "decisionDate": "2019-12-09",
+      "decisionDate": "2019-12-18",
       "fineEur": 9550000,
       "summary": "Germany's federal commissioner (BfDI) fined 1&1 Telecom €9.55M after its call-centre let callers obtain extensive customer data by giving only a name and date of birth, with no further authentication — a failure of the Article 32 duty to implement appropriate technical and organisational measures around access to personal data. A German court later reduced the fine to €900,000, but the BfDI's finding on weak identity verification stands as the leading authority on customer-authentication controls. Directly relevant to any SME with a phone or chat support channel that discloses account data.",
-      "sourceUrl": "https://www.bfdi.bund.de/SharedDocs/Pressemitteilungen/DE/2019/30_BfDIverhaengtGeldbusse1u1.html",
+      "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2019/bfdi-imposes-fines-telecommunications-service-providers_en",
       "gdprArticles": [32],
       "topicTags": ["security", "authentication", "customer-support"]
     },
@@ -139,7 +139,7 @@
       "decisionDate": "2020-10-01",
       "fineEur": 35300000,
       "summary": "The Hamburg DPA fined H&M €35.3M after managers at a service centre kept detailed notes on employees' private lives — illnesses, religious beliefs, family problems — gathered in 'welcome back' talks and informal chats, then used them in employment decisions. The decision found no lawful basis under Article 6 and unlawful processing of special-category data under Article 9. The leading European authority on employee monitoring and the limits of processing workers' personal information.",
-      "sourceUrl": "https://datenschutz-hamburg.de/pressemitteilungen/2020/10/2020-10-01-h-m-verfahren",
+      "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2020/hamburg-commissioner-fines-hm-353-million-euro-data-protection-violations_en",
       "gdprArticles": [5, 6, 9],
       "topicTags": ["employee-monitoring", "lawful-basis", "special-categories"]
     },
@@ -160,9 +160,9 @@
       "title": "Mercadona — facial recognition in supermarkets",
       "decisionDate": "2021-07-13",
       "fineEur": 2520000,
-      "summary": "The Spanish AEPD fined supermarket chain Mercadona €2.52M for deploying a facial-recognition system across dozens of stores to detect people with restraining orders, processing the biometric data of all customers and staff — including children — without a valid Article 9 basis and with a disproportionate, inadequate DPIA. A leading authority on biometric surveillance in retail and physical spaces: detecting a few barred individuals does not justify scanning every face.",
+      "summary": "The Spanish AEPD fined supermarket chain Mercadona €2.52M for deploying a facial-recognition system across dozens of stores to detect people with restraining orders, processing the biometric data of all customers and staff — including children — without a lawful basis under Article 6, without a valid Article 9 special-category condition, and with a disproportionate, inadequate DPIA under Article 35. A leading authority on biometric surveillance in retail and physical spaces: detecting a few barred individuals does not justify scanning every face.",
       "sourceUrl": "https://www.aepd.es/es/documento/ps-00120-2021.pdf",
-      "gdprArticles": [5, 6, 9, 35],
+      "gdprArticles": [6, 9, 35],
       "topicTags": ["biometrics", "special-categories", "dpia", "cctv"]
     },
     {
@@ -172,18 +172,18 @@
       "decisionDate": "2023-08-02",
       "fineEur": 345000000,
       "summary": "Following an EDPB Article 65 binding dispute resolution, the Irish DPC issued a €345M fine against TikTok over the processing of children's data: child accounts set to public by default, a 'family pairing' feature that let unverified adults enable direct messaging with teens, and dark-pattern nudges. The EDPB's intervention added findings on fairness (Article 5(1)(a)) the lead authority had not made. Illustrates both the consistency mechanism and the regulators' hard line on default settings and dark patterns affecting minors.",
-      "sourceUrl": "https://www.edpb.europa.eu/news/news/2023/edpb-binding-decision-tiktok_en",
+      "sourceUrl": "https://www.edpb.europa.eu/our-work-tools/our-documents/binding-decision-board-art-65/binding-decision-22023-dispute-submitted_en",
       "gdprArticles": [5, 24, 25],
       "topicTags": ["children", "privacy-by-design", "dark-patterns", "social-media"]
     },
     {
-      "slug": "dpc-2021-meta-wassily-breach",
+      "slug": "dpc-2020-twitter-breach",
       "dpa": "DPC",
-      "title": "Meta — failure to notify and document a breach",
-      "decisionDate": "2021-03-15",
+      "title": "Twitter International — failure to notify and document a breach",
+      "decisionDate": "2020-12-15",
       "fineEur": 450000,
-      "summary": "The Irish DPC fined Facebook (Meta) €450,000 over a series of personal-data breaches that it failed to notify to the supervisory authority within 72 hours and failed to document adequately, in breach of Articles 33(1) and 33(5). One of the first GDPR decisions squarely on the breach-notification clock and the internal-record obligation. Direct relevance to every SME's incident-response process: the 72-hour notification window and the duty to maintain an internal breach register are independently enforceable.",
-      "sourceUrl": "https://www.dataprotection.ie/en/news-media/press-releases/data-protection-commission-decision-facebook",
+      "summary": "The Irish DPC fined Twitter International Company €450,000 — its first cross-border GDPR fine as lead supervisory authority — for failing to notify the regulator within 72 hours and to adequately document a personal-data breach, in breach of Articles 33(1) and 33(5). The breach was a bug that left some Android users' protected tweets public. The fine was finalised through an EDPB Article 65 binding decision. A foundational authority on the breach-notification clock and the internal breach-register duty: both are independently enforceable, regardless of the breach's underlying severity.",
+      "sourceUrl": "https://www.dataprotection.ie/en/news-media/press-releases/data-protection-commission-announces-decision-twitter-inquiry",
       "gdprArticles": [33],
       "topicTags": ["breach", "notification", "documentation"]
     },
@@ -191,7 +191,7 @@
       "slug": "garante-2022-clearview-ai",
       "dpa": "Garante",
       "title": "Clearview AI — biometric monitoring of Italian residents",
-      "decisionDate": "2022-02-09",
+      "decisionDate": "2022-02-10",
       "fineEur": 20000000,
       "summary": "The Italian Garante fined Clearview AI €20M and ordered erasure of all biometric data of people in Italy, finding the company tracked individuals and processed biometric and geolocation data without a lawful basis (Articles 5, 6, 9) and breached transparency and purpose-limitation duties. Parallel to the CNIL's Clearview decision, it confirms a pan-European regulatory consensus: scraping public images to build biometric search tools has no lawful basis under the GDPR regardless of where the company is established.",
       "sourceUrl": "https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/9751362",
@@ -204,9 +204,9 @@
       "title": "Criteo — ad-tech profiling without valid consent",
       "decisionDate": "2023-06-15",
       "fineEur": 40000000,
-      "summary": "The CNIL fined ad-tech firm Criteo €40M for processing the data of billions of users for behavioural advertising without verifying that valid consent had been collected, and for failings on transparency, data-subject rights, and the joint-controller agreement requirement (Articles 6, 12-15, 26). The decision is a leading authority on accountability in the programmatic-advertising chain: a downstream processor of profiling data cannot simply assume its publisher partners obtained consent. Relevant to any SME participating in real-time-bidding ecosystems.",
-      "sourceUrl": "https://www.cnil.fr/en/cookies-cnil-fines-criteo-40-million-euros",
-      "gdprArticles": [6, 12, 13, 15, 26],
+      "summary": "The CNIL fined ad-tech firm Criteo €40M for processing the data of billions of users for behavioural advertising without being able to demonstrate that valid consent had been collected (Article 7 conditions for consent, not Article 6), and for failings on transparency (Articles 12-13), data-subject access and erasure (Articles 15, 17), and the joint-controller agreement requirement (Article 26). The decision is a leading authority on accountability in the programmatic-advertising chain: a downstream processor of profiling data cannot simply assume its publisher partners obtained consent. Relevant to any SME participating in real-time-bidding ecosystems.",
+      "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2023/personalised-advertising-french-sa-fined-criteo-eur-40000000_en",
+      "gdprArticles": [7, 12, 13, 15, 17, 26],
       "topicTags": ["marketing", "consent", "profiling", "joint-controllers"]
     },
     {
@@ -216,31 +216,31 @@
       "decisionDate": "2024-10-24",
       "fineEur": 310000000,
       "summary": "The Irish DPC fined LinkedIn €310M for processing members' personal data for behavioural analysis and targeted advertising without a valid lawful basis — its reliance on consent, legitimate interest, and contractual necessity (Article 6) all failed — and for transparency and fairness breaches (Articles 5, 13, 14). A recent, high-value authority confirming that none of the three favoured advertising bases works unless its specific conditions are genuinely met, and that fairness under Article 5(1)(a) is an independent ground of infringement.",
-      "sourceUrl": "https://www.dataprotection.ie/en/news-media/press-releases/dpc-fines-linkedin-ireland-eu310-million",
+      "sourceUrl": "https://www.dataprotection.ie/en/news-media/press-releases/irish-data-protection-commission-fines-linkedin-ireland-eu310-million",
       "gdprArticles": [5, 6, 13, 14],
       "topicTags": ["marketing", "lawful-basis", "profiling", "transparency"]
     },
     {
-      "slug": "aepd-2023-openbank-dsar",
+      "slug": "aepd-2020-vodafone-erasure",
       "dpa": "AEPD",
-      "title": "Failure to honour data-subject access and erasure rights",
-      "decisionDate": "2023-03-20",
-      "fineEur": 120000,
-      "summary": "The Spanish AEPD has issued a sustained line of fines against controllers that fail to respond to data-subject access, rectification and erasure requests within the one-month Article 12(3) window, or that demand disproportionate identification before acting. This representative decision underlines that the data-subject-rights machinery (Articles 15-17) is enforced on its own terms: silence or delay is itself an infringement, independent of any underlying processing fault. A practical benchmark for SME DSAR handling SLAs.",
-      "sourceUrl": "https://www.aepd.es/es/informes-y-resoluciones/resoluciones",
-      "gdprArticles": [12, 15, 16, 17],
+      "title": "Vodafone España — failure to honour a right-to-erasure request",
+      "decisionDate": "2020-07-16",
+      "fineEur": 75000,
+      "summary": "The Spanish AEPD fined Vodafone España €75,000 (procedure PS/00084/2020) under Article 6(1) — no lawful basis — for continuing to send marketing to a complainant's phone number after the data subject had exercised the right to erasure: once erasure was requested, Vodafone had no lawful basis to keep processing. A concrete precedent that ignoring a data-subject erasure request is enforceable, and that the regulator may frame the failure as unlawful processing rather than (or as well as) a rights breach. A practical benchmark for SME data-subject-rights handling SLAs.",
+      "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2020/spanish-data-protection-authority-aepd-imposes-fine-75000-eur-vodafone_en",
+      "gdprArticles": [6],
       "topicTags": ["dsar", "subject-rights", "erasure"]
     },
     {
-      "slug": "lfdi-baden-2023-ai-recruitment",
-      "dpa": "LfDI Baden-Württemberg",
-      "title": "Automated recruitment screening without Article 22 safeguards",
-      "decisionDate": "2023-09-12",
-      "fineEur": 300000,
-      "summary": "German supervisory authorities have begun enforcing against employers using automated CV-screening and candidate-scoring tools that make decisions producing legal or similarly significant effects without the Article 22 safeguards — no meaningful human review, no information about the logic involved, and no DPIA. This representative decision flags the intersection of GDPR Article 22 automated decision-making with the EU AI Act's high-risk classification of recruitment AI (Annex III(4)). Direct relevance to SMEs adopting HR-tech: solely-automated hiring decisions require human-in-the-loop and transparency by default.",
-      "sourceUrl": "https://www.baden-wuerttemberg.datenschutz.de/taetigkeitsberichte/",
-      "gdprArticles": [22, 35],
-      "topicTags": ["automated-decisions", "employment", "ai", "dpia"]
+      "slug": "naih-2022-budapest-bank-emotion-ai",
+      "dpa": "NAIH",
+      "title": "Budapest Bank — AI emotion analysis of customer calls",
+      "decisionDate": "2022-02-08",
+      "fineEur": 650000,
+      "summary": "The Hungarian DPA (NAIH) fined Budapest Bank ~€650,000 for running AI software nightly over recordings of all customer-service calls to infer each caller's emotional state and rank customers by likely dissatisfaction, with no information to data subjects, no way to object, and only a legitimate-interest basis that its own high-risk impact assessment did not adequately safeguard (Articles 5, 6, 12-13, 21, 24-25). A leading European authority on AI-driven affect recognition and automated profiling — directly relevant to any SME deploying call-analytics or emotion-AI, and a cautionary parallel to the EU AI Act's tight limits on emotion recognition.",
+      "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2022/data-protection-issues-arising-connection-use-artificial-intelligence_en",
+      "gdprArticles": [5, 6, 12, 13, 21, 24, 25],
+      "topicTags": ["ai", "profiling", "automated-decisions", "transparency"]
     }
   ]
 }
