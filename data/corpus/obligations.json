@@ -9,7 +9,7 @@
         "celex": "32016R0679",
         "articleNumber": 30
       },
-      "appliesWhen": { "role": "controller" },
+      "appliesWhen": { "role": "controller", "requires": ["ropa"] },
       "severity": "high",
       "recurrence": "continuous",
       "effectiveDate": "2018-05-25",
@@ -78,7 +78,8 @@
       },
       "appliesWhen": {
         "role": "controller",
-        "thresholds": { "large_scale_monitoring": true }
+        "thresholds": { "large_scale_monitoring": true },
+        "requires": ["dpo"]
       },
       "severity": "high",
       "recurrence": "continuous",
@@ -160,7 +161,8 @@
       },
       "appliesWhen": {
         "role": "controller",
-        "thresholds": { "cross_border_transfers": true }
+        "thresholds": { "cross_border_transfers": true },
+        "requires": ["transfer_safeguards"]
       },
       "severity": "high",
       "recurrence": "continuous",
@@ -194,7 +196,7 @@
         "celex": "32024R1689",
         "articleNumber": 4
       },
-      "appliesWhen": { "role": "deployer" },
+      "appliesWhen": { "role": "deployer", "requires": ["ai_register"] },
       "severity": "medium",
       "recurrence": "continuous",
       "effectiveDate": "2025-02-02",
