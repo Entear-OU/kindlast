@@ -17,9 +17,9 @@
       "title": "Google — cookies set without consent",
       "decisionDate": "2021-12-31",
       "fineEur": 150000000,
-      "summary": "The CNIL fined Google €150M (and Facebook €60M in the same decision series) for making it harder to refuse cookies than to accept them — a single click to accept, but several to reject. Decided primarily under the French ePrivacy transposition rather than the GDPR directly, but foundational for the EDPB's later stance on 'reject all' button parity. Directly relevant to any SME running a cookie banner: refusal must be as easy as acceptance, or the consent is invalid.",
+      "summary": "The CNIL fined Google €150M (and Facebook €60M in the same decision series) for making it harder to refuse cookies than to accept them — a single click to accept, but several to reject. Issued under Article 82 of the French Data Protection Act (the ePrivacy/cookie transposition), not the GDPR's lawful-basis articles, so no GDPR article is tagged; the consent concept nonetheless mirrors GDPR Article 4(11). Foundational for the EDPB's later stance on 'reject all' button parity, and directly relevant to any SME running a cookie banner: refusal must be as easy as acceptance.",
       "sourceUrl": "https://gdprhub.eu/index.php?title=CNIL_(France)_-_SAN-2021-023",
-      "gdprArticles": [6, 7],
+      "gdprArticles": [],
       "topicTags": ["cookies", "consent", "eprivacy"]
     },
     {
@@ -28,9 +28,9 @@
       "title": "Amazon Europe — advertising cookies without consent",
       "decisionDate": "2020-12-07",
       "fineEur": 35000000,
-      "summary": "The CNIL fined Amazon Europe Core €35M for depositing advertising cookies on users' devices when they visited amazon.fr without prior consent and without adequate information. Reinforces that non-essential cookies require opt-in consent obtained before the cookie is set, and that the information notice must clearly explain the advertising purpose. A baseline reference for SME e-commerce sites running ad-tech.",
+      "summary": "The CNIL fined Amazon Europe Core €35M for depositing advertising cookies on users' devices when they visited amazon.fr without prior consent and without adequate information. Issued under Article 82 of the French Data Protection Act (the ePrivacy/cookie transposition), not the GDPR's lawful-basis articles, so no GDPR article is tagged. Reinforces that non-essential cookies require opt-in consent obtained before the cookie is set, and that the information notice must clearly explain the advertising purpose. A baseline reference for SME e-commerce sites running ad-tech.",
       "sourceUrl": "https://gdprhub.eu/index.php?title=CNIL_-_SAN-2020-013",
-      "gdprArticles": [6, 7],
+      "gdprArticles": [],
       "topicTags": ["cookies", "consent", "marketing", "eprivacy"]
     },
     {
