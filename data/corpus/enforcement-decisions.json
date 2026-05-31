@@ -6,9 +6,9 @@
       "title": "Clearview AI — facial recognition scraping without lawful basis",
       "decisionDate": "2022-10-17",
       "fineEur": 20000000,
-      "summary": "The CNIL fined Clearview AI €20M for building a facial-recognition database by scraping photos of French residents from the public web with no lawful basis under Article 6 and processing biometric special-category data under Article 9. The decision also faulted Clearview for ignoring data-subject access and erasure requests (Articles 12, 15, 17). Landmark precedent for SMEs deploying any biometric identification or web-scraping pipeline: public availability of a photo is not a lawful basis, and biometric templates are special-category data requiring an Article 9 condition.",
+      "summary": "The CNIL fined Clearview AI €20M for building a facial-recognition database by scraping photos of French residents from the public web with no lawful basis under Article 6. The decision also faulted Clearview for ignoring data-subject access and erasure requests (Articles 12, 15, 17) and for not cooperating with the regulator (Article 31). Notably the CNIL decided on lawful-basis grounds rather than the Article 9 special-category route, even though facial templates are biometric data. Landmark precedent for SMEs deploying any biometric identification or web-scraping pipeline: public availability of a photo is not a lawful basis for processing it.",
       "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2022/french-sa-fines-clearview-ai-eur-20-million_en",
-      "gdprArticles": [6, 9, 12, 15, 17],
+      "gdprArticles": [6, 12, 15, 17, 31],
       "topicTags": ["biometrics", "lawful-basis", "web-scraping", "dsar"]
     },
     {
@@ -63,7 +63,7 @@
       "fineEur": 14800000,
       "summary": "The ICO fined TikTok £12.7M for processing the data of up to 1.4 million UK children under 13 without parental consent, in breach of Articles 5, 6, 8 and 12-14 of the UK GDPR. TikTok failed to do enough to check users' ages or remove under-13s, and did not provide information in a way children could understand. Central precedent for any service likely to be accessed by children: age assurance and child-appropriate transparency are concrete obligations, not best-effort aspirations.",
       "sourceUrl": "https://ico.org.uk/action-weve-taken/enforcement/2023/05/tiktok/",
-      "gdprArticles": [5, 6, 8, 12, 13, 14],
+      "gdprArticles": [5, 6, 8, 12, 13],
       "topicTags": ["children", "consent", "transparency", "age-assurance"]
     },
     {
@@ -74,7 +74,7 @@
       "fineEur": 405000000,
       "summary": "The Irish DPC fined Meta €405M over Instagram's handling of child users' data: business accounts operated by children displayed email addresses and phone numbers publicly, and accounts defaulted to public rather than private. The decision found breaches of the data-protection-by-design and by-default principle (Article 25) and the lawful-basis and transparency requirements for children (Articles 5, 6, 12, 35). One of the largest children's-data fines and a leading authority on Article 25 default settings.",
       "sourceUrl": "https://www.dataprotection.ie/en/news-media/press-releases/data-protection-commission-announces-decision-instagram-inquiry",
-      "gdprArticles": [5, 6, 12, 25, 35],
+      "gdprArticles": [5, 6, 12, 24, 25, 35],
       "topicTags": ["children", "privacy-by-design", "transparency", "social-media"]
     },
     {
@@ -125,7 +125,7 @@
       "slug": "bfdi-2019-1und1-telecom",
       "dpa": "BfDI",
       "title": "1&1 Telecom — inadequate caller authentication",
-      "decisionDate": "2019-12-09",
+      "decisionDate": "2019-12-18",
       "fineEur": 9550000,
       "summary": "Germany's federal commissioner (BfDI) fined 1&1 Telecom €9.55M after its call-centre let callers obtain extensive customer data by giving only a name and date of birth, with no further authentication — a failure of the Article 32 duty to implement appropriate technical and organisational measures around access to personal data. A German court later reduced the fine to €900,000, but the BfDI's finding on weak identity verification stands as the leading authority on customer-authentication controls. Directly relevant to any SME with a phone or chat support channel that discloses account data.",
       "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2019/bfdi-imposes-fines-telecommunications-service-providers_en",
@@ -160,9 +160,9 @@
       "title": "Mercadona — facial recognition in supermarkets",
       "decisionDate": "2021-07-13",
       "fineEur": 2520000,
-      "summary": "The Spanish AEPD fined supermarket chain Mercadona €2.52M for deploying a facial-recognition system across dozens of stores to detect people with restraining orders, processing the biometric data of all customers and staff — including children — without a valid Article 9 basis and with a disproportionate, inadequate DPIA. A leading authority on biometric surveillance in retail and physical spaces: detecting a few barred individuals does not justify scanning every face.",
+      "summary": "The Spanish AEPD fined supermarket chain Mercadona €2.52M for deploying a facial-recognition system across dozens of stores to detect people with restraining orders, processing the biometric data of all customers and staff — including children — without a lawful basis under Article 6, without a valid Article 9 special-category condition, and with a disproportionate, inadequate DPIA under Article 35. A leading authority on biometric surveillance in retail and physical spaces: detecting a few barred individuals does not justify scanning every face.",
       "sourceUrl": "https://www.aepd.es/es/documento/ps-00120-2021.pdf",
-      "gdprArticles": [5, 6, 9, 35],
+      "gdprArticles": [6, 9, 35],
       "topicTags": ["biometrics", "special-categories", "dpia", "cctv"]
     },
     {
@@ -191,7 +191,7 @@
       "slug": "garante-2022-clearview-ai",
       "dpa": "Garante",
       "title": "Clearview AI — biometric monitoring of Italian residents",
-      "decisionDate": "2022-02-09",
+      "decisionDate": "2022-02-10",
       "fineEur": 20000000,
       "summary": "The Italian Garante fined Clearview AI €20M and ordered erasure of all biometric data of people in Italy, finding the company tracked individuals and processed biometric and geolocation data without a lawful basis (Articles 5, 6, 9) and breached transparency and purpose-limitation duties. Parallel to the CNIL's Clearview decision, it confirms a pan-European regulatory consensus: scraping public images to build biometric search tools has no lawful basis under the GDPR regardless of where the company is established.",
       "sourceUrl": "https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/9751362",
@@ -204,9 +204,9 @@
       "title": "Criteo — ad-tech profiling without valid consent",
       "decisionDate": "2023-06-15",
       "fineEur": 40000000,
-      "summary": "The CNIL fined ad-tech firm Criteo €40M for processing the data of billions of users for behavioural advertising without verifying that valid consent had been collected, and for failings on transparency, data-subject rights, and the joint-controller agreement requirement (Articles 6, 12-15, 26). The decision is a leading authority on accountability in the programmatic-advertising chain: a downstream processor of profiling data cannot simply assume its publisher partners obtained consent. Relevant to any SME participating in real-time-bidding ecosystems.",
+      "summary": "The CNIL fined ad-tech firm Criteo €40M for processing the data of billions of users for behavioural advertising without being able to demonstrate that valid consent had been collected (Article 7 conditions for consent, not Article 6), and for failings on transparency (Articles 12-13), data-subject access and erasure (Articles 15, 17), and the joint-controller agreement requirement (Article 26). The decision is a leading authority on accountability in the programmatic-advertising chain: a downstream processor of profiling data cannot simply assume its publisher partners obtained consent. Relevant to any SME participating in real-time-bidding ecosystems.",
       "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2023/personalised-advertising-french-sa-fined-criteo-eur-40000000_en",
-      "gdprArticles": [6, 12, 13, 15, 26],
+      "gdprArticles": [7, 12, 13, 15, 17, 26],
       "topicTags": ["marketing", "consent", "profiling", "joint-controllers"]
     },
     {
@@ -226,9 +226,9 @@
       "title": "Vodafone España — failure to honour a right-to-erasure request",
       "decisionDate": "2020-07-16",
       "fineEur": 75000,
-      "summary": "The Spanish AEPD fined Vodafone España €75,000 (procedure PS/00084/2020) for continuing to process a complainant's phone number for marketing after the data subject had exercised the right to erasure, failing to give effect to the Article 17 request and the related Article 21 objection. A concrete precedent that ignoring or mishandling a data-subject erasure or objection request is itself an enforceable infringement, independent of any underlying processing fault. A practical benchmark for SME data-subject-rights handling SLAs.",
+      "summary": "The Spanish AEPD fined Vodafone España €75,000 (procedure PS/00084/2020) under Article 6(1) — no lawful basis — for continuing to send marketing to a complainant's phone number after the data subject had exercised the right to erasure: once erasure was requested, Vodafone had no lawful basis to keep processing. A concrete precedent that ignoring a data-subject erasure request is enforceable, and that the regulator may frame the failure as unlawful processing rather than (or as well as) a rights breach. A practical benchmark for SME data-subject-rights handling SLAs.",
       "sourceUrl": "https://www.edpb.europa.eu/news/national-news/2020/spanish-data-protection-authority-aepd-imposes-fine-75000-eur-vodafone_en",
-      "gdprArticles": [17, 21],
+      "gdprArticles": [6],
       "topicTags": ["dsar", "subject-rights", "erasure"]
     },
     {
