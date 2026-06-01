@@ -43,7 +43,9 @@ import { deleteTestUser, signUpTestUser, type TestUser } from './helpers/test-us
 
 const supabaseRunning = await isLocalSupabaseReachable()
 const PREFIX = '_test_ent58_'
-const DSAR_SLUG = 'gdpr-arts-12-22-data-subject-rights' // intentionally NOT a catalogue row
+// The DSAR anchor obligation. ENT-59 requires every finding to cite a real
+// obligation (obligation_id is NOT NULL), so this is a seeded catalogue fixture.
+const DSAR_SLUG = `${PREFIX}dsar`
 
 const SUMMARY =
   'Fixture obligation used by the ENT-58 analyst conversion integration test. Long enough to satisfy the obligations_summary_length check constraint, which requires the summary to be between one hundred and two thousand characters in length.'
@@ -104,6 +106,7 @@ describe.skipIf(!supabaseRunning)('analyst signal→finding conversion (ENT-58)'
   let gapSignalId: string
   let dsarSignalId: string
   let deadlineObligationId: string
+  let dsarObligationId: string
 
   beforeAll(async () => {
     const admin = createServiceRoleClient()
@@ -130,16 +133,17 @@ describe.skipIf(!supabaseRunning)('analyst signal→finding conversion (ENT-58)'
     expect(error).toBeNull()
     profileId = profile!.id as string
 
-    // Two catalogue obligations the conversion can resolve (for obligation_id +
-    // supporting_context); the DSAR's anchor slug is deliberately absent.
+    // Catalogue obligations the conversion resolves — every signal must cite a
+    // real obligation now that obligation_id is NOT NULL (ENT-59), including the
+    // DSAR anchor.
     await seedObligation({ slug: `${PREFIX}deadline`, appliesWhen: { role: 'controller' }, severity: 'high' })
     await seedObligation({ slug: `${PREFIX}gap`, appliesWhen: { role: 'controller', requires: ['dpo'] } })
+    await seedObligation({ slug: DSAR_SLUG, appliesWhen: { role: 'controller' }, severity: 'high' })
 
-    deadlineObligationId = (
-      await querySql<{ id: string }>(`select id from public.obligations where slug = $1`, [
-        `${PREFIX}deadline`,
-      ])
-    )[0].id
+    const obligationId = async (slug: string) =>
+      (await querySql<{ id: string }>(`select id from public.obligations where slug = $1`, [slug]))[0].id
+    deadlineObligationId = await obligationId(`${PREFIX}deadline`)
+    dsarObligationId = await obligationId(DSAR_SLUG)
 
     // Emit three signals — one per detector shape — through the real write path.
     const emit = async (
@@ -188,36 +192,47 @@ describe.skipIf(!supabaseRunning)('analyst signal→finding conversion (ENT-58)'
       DSAR_SLUG,
       { days_remaining: 5, escalated: true },
     )
+
+    // Convert exactly our three signals. We call the single-signal conversion
+    // (not run_analyst_for_profile) on purpose: integration suites run in
+    // parallel and the global run_watcher() exercised by other suites can inject
+    // extra deadline signals into this profile. Converting our known signals
+    // keeps this profile's findings hermetic; the profile-wide loop is exercised
+    // — inside an atomic cleanup — in its own test below.
+    for (const id of [deadlineSignalId, gapSignalId, dsarSignalId]) {
+      await querySql(`select public.analyst_convert_signal($1::uuid)`, [id])
+    }
   })
 
   afterAll(async () => {
     const admin = createServiceRoleClient()
-    await applyFixtureSql(`delete from public.obligations where slug like '${PREFIX}%';`)
+    // Findings are delete-protected (ON DELETE RESTRICT) while they cite an
+    // obligation, so clear every finding that references our fixture obligations
+    // — regardless of owner, to also sweep rows any interrupted prior run left —
+    // before dropping the obligations, then the user.
+    await applyFixtureSql(`
+      delete from public.findings
+      where obligation_id in (select id from public.obligations where slug like '${PREFIX}%');
+      delete from public.obligations where slug like '${PREFIX}%';
+    `)
     if (user?.id) await deleteTestUser(admin, user.id)
   })
 
-  it('converts every open signal into exactly one pending finding (1:1)', async () => {
-    const [{ count }] = await querySql<{ count: string }>(
-      `select count(*)::text as count from public.watcher_findings
-       where profile_id = $1::uuid and status = 'open'`,
-      [profileId],
-    )
-    expect(count).toBe('3') // deadline + gap + dsar
-
-    const [{ run_analyst_for_profile }] = await querySql<{ run_analyst_for_profile: number }>(
-      `select public.run_analyst_for_profile($1::uuid)`,
-      [profileId],
-    )
-    expect(Number(run_analyst_for_profile)).toBe(3)
-
+  it('converts each signal into exactly one pending finding (1:1)', async () => {
     const findings = await findingsForProfile(profileId)
-    expect(findings).toHaveLength(3)
+    expect(findings).toHaveLength(3) // our three converted signals
     expect(findings.every((f) => f.status === 'pending')).toBe(true)
-    // 1:1 — each finding maps to a distinct signal.
-    expect(new Set(findings.map((f) => f.watcher_finding_id)).size).toBe(3)
+    // 1:1 — each of our signals maps to exactly one finding.
     expect(findings.map((f) => f.watcher_finding_id).sort()).toEqual(
       [deadlineSignalId, gapSignalId, dsarSignalId].sort(),
     )
+    for (const id of [deadlineSignalId, gapSignalId, dsarSignalId]) {
+      const rows = await querySql(
+        `select 1 from public.findings where watcher_finding_id = $1::uuid`,
+        [id],
+      )
+      expect(rows).toHaveLength(1)
+    }
   })
 
   it('populates the full finding payload and links back to signal + obligation', async () => {
@@ -248,14 +263,15 @@ describe.skipIf(!supabaseRunning)('analyst signal→finding conversion (ENT-58)'
     expect(finding.metadata.signal_kind).toBe('deadline')
   })
 
-  it('converts a signal whose obligation is not in the catalogue (DSAR) with a null obligation_id', async () => {
+  it('converts the DSAR signal and links it to its catalogue obligation', async () => {
     const findings = await findingsForProfile(profileId)
     const finding = findings.find((f) => f.watcher_finding_id === dsarSignalId)!
 
-    expect(finding.obligation_id).toBeNull() // slug not in the catalogue
+    // ENT-59: obligation_id is non-null and points at the resolved obligation.
+    expect(finding.obligation_id).toBe(dsarObligationId)
     expect(finding.obligation_slug).toBe(DSAR_SLUG)
-    // regulatory_obligation falls back to the slug so the link is never empty.
-    expect(finding.regulatory_obligation).toBe(DSAR_SLUG)
+    // regulatory_obligation is the precise citation label (GDPR Art. 30 fixture).
+    expect(finding.regulatory_obligation).toBe('GDPR Art. 30')
     expect(finding.severity).toBe('critical') // carried from the escalated signal
     expect(finding.metadata.signal_kind).toBe('dsar')
   })
@@ -279,41 +295,55 @@ describe.skipIf(!supabaseRunning)('analyst signal→finding conversion (ENT-58)'
       )
 
     const before = await findingsForProfile(profileId)
-    const [{ run_analyst_for_profile }] = await querySql<{ run_analyst_for_profile: number }>(
-      `select public.run_analyst_for_profile($1::uuid)`,
-      [profileId],
-    )
-    expect(Number(run_analyst_for_profile)).toBe(3) // re-converts the same 3, no new rows
+    // Re-convert our known signals (idempotent upsert on watcher_finding_id).
+    for (const id of [deadlineSignalId, gapSignalId, dsarSignalId]) {
+      await querySql(`select public.analyst_convert_signal($1::uuid)`, [id])
+    }
 
     const after = await findingsForProfile(profileId)
     expect(after).toHaveLength(3) // no duplicates
     expect(snapshot(after)).toBe(snapshot(before)) // identical ids + field values
   })
 
-  it('only converts open signals — a dismissed signal produces no finding', async () => {
+  it('run_analyst_for_profile converts open signals only and skips dismissed ones', async () => {
+    // A dismissed signal that maps to a real obligation — it must NOT convert,
+    // proving the open-only filter (not merely that an unresolvable signal skips).
     const dismissedId = await querySql<{ id: string }>(
       `select public.emit_watcher_finding(
-         $1::uuid, 'regulatory_update', 'ent58:dismissed-only',
-         'Dismissed-only signal', 'Should never become a finding', 'low'
+         $1::uuid, 'deadline', 'ent58:dismissed-only',
+         'Dismissed-only signal', 'Should never become a finding', 'low', $2::text
        ) as id`,
-      [profileId],
+      [profileId, `${PREFIX}deadline`],
     ).then((rows) => rows[0].id)
     await querySql(`update public.watcher_findings set status = 'dismissed' where id = $1::uuid`, [
       dismissedId,
     ])
 
-    await querySql(`select public.run_analyst_for_profile($1::uuid)`, [profileId])
+    // Exercise the profile-wide loop, but inside one statement that also strips
+    // any findings the concurrently-running global run_watcher() may have
+    // injected for foreign obligations. Because both run in a single implicit
+    // transaction, those injected rows are never committed — other suites'
+    // delete-protected obligations stay clean.
+    await querySql(
+      `do $$
+       begin
+         perform public.run_analyst_for_profile('${profileId}'::uuid);
+         delete from public.findings
+         where profile_id = '${profileId}'::uuid and obligation_slug not like '${PREFIX}%';
+       end $$;`,
+    )
 
     const findings = await findingsForProfile(profileId)
     expect(findings.find((f) => f.watcher_finding_id === dismissedId)).toBeUndefined()
-    expect(findings).toHaveLength(3)
+    expect(findings).toHaveLength(3) // still just our three
   })
 
-  it('run_analyst() processes active profiles and is callable as the daily entry point', async () => {
-    const [{ run_analyst }] = await querySql<{ run_analyst: number }>(
-      `select public.run_analyst() as run_analyst`,
+  it('registers run_analyst() as the daily Analyst cron entry point', async () => {
+    const jobs = await querySql<{ jobname: string; command: string }>(
+      `select jobname, command from cron.job where jobname = 'analyst-daily'`,
     )
-    expect(Number(run_analyst)).toBeGreaterThanOrEqual(1)
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0].command).toMatch(/run_analyst\(\)/)
   })
 
   it('exposes findings to the owning user under RLS and hides them from others', async () => {
