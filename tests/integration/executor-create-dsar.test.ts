@@ -67,13 +67,20 @@ async function seedObligation(slug: string): Promise<void> {
   `)
 }
 
+// Each call needs a distinct signal: emit_watcher_finding dedups on
+// (profile_id, dedup_key) and analyst_convert_signal upserts the finding on
+// watcher_finding_id, so a constant key would hand every test the same
+// already-approved finding and the approval trigger would never re-fire.
+let findingSeq = 0
+
 /** Emit a signal and convert it to a finding, returning the finding id. */
 async function makeFinding(profileId: string, slug: string): Promise<string> {
+  const dedupKey = `gap:${slug}:${(findingSeq += 1)}`
   const [{ id: signalId }] = await querySql<{ id: string }>(
     `select public.emit_watcher_finding(
        $1::uuid, 'profile_gap', $2::text, $3::text, $4::text, 'high', $5::text, '{}'::jsonb
      ) as id`,
-    [profileId, `gap:${slug}`, `Profile gap: ${slug}`, 'A DSAR needs logging.', slug],
+    [profileId, dedupKey, `Profile gap: ${slug}`, 'A DSAR needs logging.', slug],
   )
   const [{ id: findingId }] = await querySql<{ id: string }>(
     `select public.analyst_convert_signal($1::uuid) as id`,
