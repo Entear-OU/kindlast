@@ -36,7 +36,7 @@ export default async function FindingDetailPage({
 
   const [chunks, plan] = await Promise.all([
     loadSupportingChunks(supabase, id),
-    getPlan(user.id),
+    getPlan(supabase, user.id),
   ])
 
   return (

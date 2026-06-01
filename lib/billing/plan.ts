@@ -1,15 +1,27 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 /**
- * Billing seam (ENT-63).
+ * Billing tier lookup (seam introduced ENT-63, made real in ENT-81).
  *
- * The product has no subscriptions store yet — that's ENT-81. Until then this is
- * the single place every tier decision flows through: it reports Pro for everyone,
- * so the feed's Approve path (which gates on the plan) works end-to-end while the
- * upgrade-prompt branch stays wired but dormant. When billing lands, ENT-81
- * replaces the body here with a real lookup and nothing else has to change.
+ * The single place every tier decision flows through. Reads the caller's own
+ * `subscriptions` row through an authenticated client, so the select-own RLS
+ * policy is the source of truth. The signup trigger guarantees a row exists, but
+ * this stays defensive: a missing row or a read error resolves to `free` — never
+ * an accidental Pro unlock.
  */
 
 export type Plan = 'free' | 'pro'
 
-export async function getPlan(_userId: string): Promise<Plan> {
-  return 'pro'
+export async function getPlan(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<Plan> {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('plan')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error || !data) return 'free'
+  return data.plan === 'pro' ? 'pro' : 'free'
 }
