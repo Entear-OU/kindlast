@@ -41,10 +41,16 @@ const PREFIX = '_test_ent55_'
 const SUMMARY =
   'Fixture obligation used by the ENT-55 deadline detector integration test. Long enough to satisfy the obligations_summary_length check constraint, which requires the summary to be between one hundred and two thousand characters in length.'
 
-/** Insert a fixture obligation with a controlled effective_date / applies_when. */
+/**
+ * Insert a fixture obligation with a controlled effective_date / applies_when.
+ *
+ * `effectiveOffsetDays` is relative to `current_date` (e.g. 15 = fifteen days
+ * out, -100 = already in force) rather than a hardcoded calendar date, so the
+ * 30-day-window assertions stay correct on every run regardless of today's date.
+ */
 async function seedObligation(opts: {
   slug: string
-  effectiveDate: string | null
+  effectiveOffsetDays: number | null
   appliesWhen: Record<string, unknown>
   severity?: string
 }): Promise<void> {
@@ -57,7 +63,7 @@ async function seedObligation(opts: {
        '32016R0679', 'article', 99,
        '${JSON.stringify(opts.appliesWhen)}'::jsonb,
        '${opts.severity ?? 'high'}',
-       ${opts.effectiveDate ? `'${opts.effectiveDate}'` : 'null'})
+       ${opts.effectiveOffsetDays === null ? 'null' : `(current_date + ${opts.effectiveOffsetDays})`})
     on conflict (slug) do update set
       effective_date = excluded.effective_date,
       applies_when   = excluded.applies_when,
@@ -97,25 +103,25 @@ describe.skipIf(!supabaseRunning)('watcher deadline detector (ENT-55)', () => {
     expect(error).toBeNull()
     profileId = profile!.id as string
 
-    // Obligations spanning the window boundaries (today = 2026-05-31).
+    // Obligations spanning the window boundaries, relative to today.
     await seedObligation({
       slug: `${PREFIX}near`, // 15 days out → flagged
-      effectiveDate: '2026-06-15',
+      effectiveOffsetDays: 15,
       appliesWhen: { role: 'controller' },
     })
     await seedObligation({
       slug: `${PREFIX}past`, // already in force → not flagged
-      effectiveDate: '2018-05-25',
+      effectiveOffsetDays: -100,
       appliesWhen: { role: 'controller' },
     })
     await seedObligation({
       slug: `${PREFIX}far`, // >30 days out → not flagged
-      effectiveDate: '2026-12-01',
+      effectiveOffsetDays: 60,
       appliesWhen: { role: 'controller' },
     })
     await seedObligation({
       slug: `${PREFIX}notapplicable`, // near, but only applies to 250+ employee orgs
-      effectiveDate: '2026-06-10',
+      effectiveOffsetDays: 9,
       appliesWhen: { thresholds: { employees_min: 250 } },
     })
   })
@@ -190,7 +196,7 @@ describe.skipIf(!supabaseRunning)('watcher deadline detector (ENT-55)', () => {
     expect(slugs).not.toContain(`${PREFIX}notapplicable`) // applies_when filtered it out
 
     const near = rows.find((r) => r.obligation_slug === `${PREFIX}near`)!
-    expect(near.metadata.days_remaining).toBe(15) // 2026-06-15 − 2026-05-31
+    expect(near.metadata.days_remaining).toBe(15) // seeded at current_date + 15
   })
 
   it('is idempotent — re-running the detector does not duplicate the open finding', async () => {
