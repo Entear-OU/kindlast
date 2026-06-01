@@ -1,11 +1,18 @@
 name: CI
 
-# Lint, typecheck, and the full Vitest suite — including the Supabase-backed
-# integration tests. Those suites self-skip when the local stack is unreachable
-# (describe.skipIf(isLocalSupabaseReachable)), so without a running stack CI
-# would go green having executed none of them. This workflow boots Supabase and
-# fails loudly if it isn't reachable, so integration coverage can never silently
-# disappear again.
+# Lint, typecheck, then tests in two gates:
+#
+#   1. Unit/component tests (pnpm test:unit, everything under __tests__/) run
+#      first and need no services, so a unit regression fails CI fast and is
+#      never entangled with — or skipped because of — the Supabase stack.
+#   2. Integration tests (pnpm test:integration, tests/integration/) run after
+#      booting Supabase.
+#
+# The integration suites self-skip when the local stack is unreachable
+# (describe.skipIf(isLocalSupabaseReachable)), so this workflow boots Supabase
+# and fails loudly if it isn't reachable — integration coverage can never
+# silently disappear. Splitting the steps also guarantees the unit tests always
+# run and must pass, even if the Supabase setup later fails.
 
 on:
   push:
@@ -50,6 +57,11 @@ jobs:
       - name: Typecheck
         run: pnpm exec tsc --noEmit
 
+      # Unit/component tests first — no services required, so this gate always
+      # runs and must pass regardless of whether the Supabase stack comes up.
+      - name: Unit tests
+        run: pnpm test:unit
+
       # Boots Postgres + Auth + PostgREST + Kong on the default local ports
       # (54321/54322) and applies every migration in supabase/migrations — the
       # same stack the integration helpers expect (well-known local keys).
@@ -72,8 +84,8 @@ jobs:
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             http://127.0.0.1:54321/auth/v1/health
 
-      - name: Test
-        run: pnpm test
+      - name: Integration tests
+        run: pnpm test:integration
 
       - name: Stop Supabase
         if: always()
