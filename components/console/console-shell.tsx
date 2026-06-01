@@ -25,7 +25,7 @@ import Link from 'next/link'
  * the eggshell marketing pages.
  */
 
-export type ConsoleRail = 'records' | 'alerts' | 'billing'
+export type ConsoleRail = 'records' | 'alerts' | 'billing' | 'settings'
 
 type RailItem = {
   key: ConsoleRail | 'dashboard' | 'documents' | 'assistant' | 'settings'
@@ -42,7 +42,7 @@ const RAIL: RailItem[] = [
   { key: 'documents', Icon: Copy, label: 'Documents' },
   { key: 'assistant', Icon: MessageSquare, label: 'Assistant' },
   { key: 'billing', Icon: CreditCard, label: 'Billing', href: '/billing' },
-  { key: 'settings', Icon: Settings, label: 'Settings' },
+  { key: 'settings', Icon: Settings, label: 'Settings', href: '/settings' },
 ]
 
 export function ConsoleShell({

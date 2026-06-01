@@ -98,7 +98,7 @@ describe('dispatchPendingNotifications (ENT-73)', () => {
     const tables: Tables = {
       notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
       findings: [baseFinding('f1', 'critical', 'u1')],
-      notification_preferences: [{ user_id: 'u1', email_frequency: 'immediate' }],
+      notification_preferences: [{ user_id: 'u1', min_severity_for_email: 'low' }],
     }
     const email = createCapturingEmailProvider()
     const supabase = makeFakeSupabase(tables, { u1: { email: 'founder@example.com' } })
@@ -113,12 +113,12 @@ describe('dispatchPendingNotifications (ENT-73)', () => {
     expect(tables.notification_outbox[0].sent_at).toBeTruthy()
   })
 
-  it('skips a finding gated out by the severity preference', async () => {
+  it('skips a finding below the min-severity floor', async () => {
     const tables: Tables = {
-      // low severity + 'immediate' (high+ only) → gated out
+      // low severity + medium floor → gated out
       notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
       findings: [baseFinding('f1', 'low', 'u1')],
-      notification_preferences: [{ user_id: 'u1', email_frequency: 'immediate' }],
+      notification_preferences: [{ user_id: 'u1', min_severity_for_email: 'medium' }],
     }
     const email = createCapturingEmailProvider()
     const supabase = makeFakeSupabase(tables, { u1: { email: 'founder@example.com' } })
@@ -130,9 +130,9 @@ describe('dispatchPendingNotifications (ENT-73)', () => {
     expect(tables.notification_outbox[0].status).toBe('skipped')
   })
 
-  it('defaults to daily frequency when no preference row exists', async () => {
+  it('defaults to the medium floor when no preference row exists', async () => {
     const tables: Tables = {
-      // medium + default 'daily' (medium+) → sends
+      // medium finding + default medium floor → sends
       notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
       findings: [baseFinding('f1', 'medium', 'u1')],
       notification_preferences: [],
@@ -144,11 +144,67 @@ describe('dispatchPendingNotifications (ENT-73)', () => {
     expect(summary.sent).toBe(1)
   })
 
+  it('holds a non-critical email during quiet hours (leaves it pending)', async () => {
+    const tables: Tables = {
+      notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
+      findings: [baseFinding('f1', 'high', 'u1')],
+      // 09:00–17:00 Tallinn quiet window; nowSeconds below is 12:00 local.
+      notification_preferences: [
+        { user_id: 'u1', min_severity_for_email: 'low', timezone: 'Europe/Tallinn', quiet_hours_start: '09:00', quiet_hours_end: '17:00' },
+      ],
+    }
+    const email = createCapturingEmailProvider()
+    const supabase = makeFakeSupabase(tables, { u1: { email: 'founder@example.com' } })
+
+    // 2024-01-01 10:00 UTC = 12:00 Tallinn → inside the window.
+    const summary = await dispatchPendingNotifications({
+      supabase, emailProvider: email, baseUrl: BASE, tokenSecret: SECRET,
+      nowSeconds: Math.floor(Date.UTC(2024, 0, 1, 10, 0, 0) / 1000),
+    })
+
+    expect(summary).toMatchObject({ sent: 0, skipped: 0, deferred: 1 })
+    expect(email.sent).toHaveLength(0)
+    // Left pending — not marked — so a later drain re-evaluates after the window.
+    expect(tables.notification_outbox[0].status).toBe('pending')
+  })
+
+  it('sends a critical email even during quiet hours', async () => {
+    const tables: Tables = {
+      notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
+      findings: [baseFinding('f1', 'critical', 'u1')],
+      notification_preferences: [
+        { user_id: 'u1', min_severity_for_email: 'low', timezone: 'Europe/Tallinn', quiet_hours_start: '09:00', quiet_hours_end: '17:00' },
+      ],
+    }
+    const email = createCapturingEmailProvider()
+    const supabase = makeFakeSupabase(tables, { u1: { email: 'founder@example.com' } })
+
+    const summary = await dispatchPendingNotifications({
+      supabase, emailProvider: email, baseUrl: BASE, tokenSecret: SECRET,
+      nowSeconds: Math.floor(Date.UTC(2024, 0, 1, 10, 0, 0) / 1000),
+    })
+    expect(summary.sent).toBe(1)
+    expect(email.sent).toHaveLength(1)
+  })
+
+  it('sends to the configured preference email over the auth email', async () => {
+    const tables: Tables = {
+      notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
+      findings: [baseFinding('f1', 'critical', 'u1')],
+      notification_preferences: [{ user_id: 'u1', min_severity_for_email: 'low', email: 'alerts@example.com' }],
+    }
+    const email = createCapturingEmailProvider()
+    const supabase = makeFakeSupabase(tables, { u1: { email: 'auth@example.com' } })
+
+    await dispatchPendingNotifications({ supabase, emailProvider: email, baseUrl: BASE, tokenSecret: SECRET })
+    expect(email.sent[0].to).toBe('alerts@example.com')
+  })
+
   it('does not drain rows that are already sent', async () => {
     const tables: Tables = {
       notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'sent', channel: 'email', attempts: 0 }],
       findings: [baseFinding('f1', 'critical', 'u1')],
-      notification_preferences: [{ user_id: 'u1', email_frequency: 'immediate' }],
+      notification_preferences: [{ user_id: 'u1', min_severity_for_email: 'low' }],
     }
     const email = createCapturingEmailProvider()
     const supabase = makeFakeSupabase(tables, { u1: { email: 'founder@example.com' } })
@@ -162,7 +218,7 @@ describe('dispatchPendingNotifications (ENT-73)', () => {
     const tables: Tables = {
       notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
       findings: [baseFinding('f1', 'critical', 'u1')],
-      notification_preferences: [{ user_id: 'u1', email_frequency: 'immediate' }],
+      notification_preferences: [{ user_id: 'u1', min_severity_for_email: 'low' }],
     }
     const email = createCapturingEmailProvider()
     const supabase = makeFakeSupabase(tables, { u1: { email: null } })
@@ -176,7 +232,7 @@ describe('dispatchPendingNotifications (ENT-73)', () => {
     const tables: Tables = {
       notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
       findings: [baseFinding('f1', 'critical', 'u1', { signal_kind: 'deadline' })],
-      notification_preferences: [{ user_id: 'u1', email_frequency: 'immediate' }],
+      notification_preferences: [{ user_id: 'u1', min_severity_for_email: 'low' }],
     }
     const email = createCapturingEmailProvider()
     const supabase = makeFakeSupabase(tables, { u1: { email: 'founder@example.com' } })

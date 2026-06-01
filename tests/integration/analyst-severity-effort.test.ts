@@ -196,11 +196,15 @@ describe.skipIf(!supabaseRunning)('notification preferences (ENT-61)', () => {
     if (other?.id) await deleteTestUser(admin, other.id)
   })
 
-  it('defaults email_frequency to daily and is readable only by its owner', async () => {
+  it('defaults min_severity_for_email to medium and is readable only by its owner', async () => {
     const owner = await createUserClient(user.email, user.password)
-    const inserted = await owner.from('notification_preferences').insert({ user_id: user.id }).select('email_frequency').single()
+    const inserted = await owner
+      .from('notification_preferences')
+      .insert({ user_id: user.id })
+      .select('min_severity_for_email')
+      .single()
     expect(inserted.error).toBeNull()
-    expect(inserted.data!.email_frequency).toBe('daily') // enum default
+    expect(inserted.data!.min_severity_for_email).toBe('medium') // ENT-76 default
 
     const own = await owner.from('notification_preferences').select('user_id').eq('user_id', user.id)
     expect(own.data ?? []).toHaveLength(1)
