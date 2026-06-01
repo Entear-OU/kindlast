@@ -1,20 +1,39 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { FindingsFeed } from '@/components/feed/findings-feed'
 import type { Finding } from '@/lib/feed/findings'
 
 /**
- * ENT-62 — RTL coverage for the Agent feed.
+ * ENT-62 (list) + ENT-63 (actions) — RTL coverage for the Agent feed.
  *
  *   * Renders each finding's detected text, obligation reference, severity +
- *     status chips, and proposed action.
- *   * Status and severity filters narrow the visible list.
- *   * Friendly all-clear empty state for a fresh user; filtered-empty state
- *     when filters exclude everything.
- *   * The obligation reference links to its citation URL when present.
+ *     status chips, and proposed action; status/severity filters narrow it.
+ *   * Pending cards carry one-tap Approve / Reject / Snooze; decided cards don't.
+ *   * Actions are optimistic: the row flips immediately, a failure rolls it back
+ *     and raises a toast.
+ *   * Reject reveals an optional reason textarea that is passed through.
+ *   * Free users get the Pro upgrade prompt on Approve instead of an Executor run.
  */
+
+const { approveMock, rejectMock, snoozeMock, toastSuccess, toastError } = vi.hoisted(() => ({
+  approveMock: vi.fn(),
+  rejectMock: vi.fn(),
+  snoozeMock: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
+
+vi.mock('@/app/(authed)/feed/actions', () => ({
+  approveFinding: approveMock,
+  rejectFinding: rejectMock,
+  snoozeFinding: snoozeMock,
+}))
+
+vi.mock('sonner', () => ({
+  toast: { success: toastSuccess, error: toastError },
+}))
 
 function finding(over: Partial<Finding> = {}): Finding {
   return {
@@ -27,12 +46,21 @@ function finding(over: Partial<Finding> = {}): Finding {
     obligation_slug: 'gdpr-art-28-processor-contracts',
     effort_estimate: 'hours',
     status: 'pending',
+    rejection_reason: null,
+    snoozed_until: null,
     created_at: '2026-06-01T10:00:00.000Z',
     ...over,
   }
 }
 
-describe('FindingsFeed (ENT-62)', () => {
+beforeEach(() => {
+  vi.clearAllMocks()
+  approveMock.mockResolvedValue({ ok: true })
+  rejectMock.mockResolvedValue({ ok: true })
+  snoozeMock.mockResolvedValue({ ok: true })
+})
+
+describe('FindingsFeed — list (ENT-62)', () => {
   it('renders each finding with its fields and chips', () => {
     render(
       <FindingsFeed
@@ -52,8 +80,6 @@ describe('FindingsFeed (ENT-62)', () => {
     expect(screen.getByText('No DPA on file for Stripe')).toBeInTheDocument()
     expect(screen.getByText('DSAR response due in 8 days')).toBeInTheDocument()
     expect(screen.getByText('Draft a Data Processing Agreement with Stripe.')).toBeInTheDocument()
-    // Severity + status chips are <span>s; the filter bar also has buttons with
-    // these labels, so scope to the card chips.
     expect(screen.getByText('Critical', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getAllByText('Pending', { selector: 'span' }).length).toBeGreaterThan(0)
   })
@@ -79,7 +105,6 @@ describe('FindingsFeed (ENT-62)', () => {
     )
     expect(screen.getByText('Approved one')).toBeInTheDocument()
 
-    // Click the "Approved" status filter chip (aria-pressed toggles).
     await user.click(screen.getByRole('button', { name: 'Approved', pressed: false }))
 
     expect(screen.queryByText('Pending one')).not.toBeInTheDocument()
@@ -112,5 +137,93 @@ describe('FindingsFeed (ENT-62)', () => {
     render(<FindingsFeed findings={[]} />)
     expect(screen.getByText('All clear')).toBeInTheDocument()
     expect(screen.getByText(/Watcher will let you know/i)).toBeInTheDocument()
+  })
+})
+
+describe('FindingsFeed — actions (ENT-63)', () => {
+  it('shows Approve / Reject / Snooze only on pending cards', () => {
+    render(
+      <FindingsFeed
+        findings={[
+          finding({ id: 'a', detected: 'Pending one', status: 'pending' }),
+          finding({ id: 'b', detected: 'Approved one', status: 'approved' }),
+        ]}
+      />,
+    )
+    // One pending card → one set of action controls.
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Snooze' })).toBeInTheDocument()
+  })
+
+  it('approves optimistically and fires the server action', async () => {
+    const user = userEvent.setup()
+    render(<FindingsFeed findings={[finding({ id: 'a', detected: 'Approve me' })]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+
+    expect(approveMock).toHaveBeenCalledWith('a')
+    // Optimistic: status flips, action buttons disappear.
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Approved', { selector: 'span' }).length).toBeGreaterThan(0)
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled())
+  })
+
+  it('rolls back and toasts when the action fails', async () => {
+    const user = userEvent.setup()
+    approveMock.mockResolvedValue({ ok: false, error: 'boom' })
+    render(<FindingsFeed findings={[finding({ id: 'a', detected: 'Approve me' })]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+
+    // Reverts to a pending card with its action buttons back.
+    await waitFor(() => expect(toastError).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+    expect(screen.getAllByText('Pending', { selector: 'span' }).length).toBeGreaterThan(0)
+  })
+
+  it('reject reveals an optional reason and passes it through', async () => {
+    const user = userEvent.setup()
+    render(<FindingsFeed findings={[finding({ id: 'a', detected: 'Reject me' })]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Reject' }))
+    const textarea = screen.getByLabelText(/Rejection reason/i)
+    await user.type(textarea, 'False positive')
+    await user.click(screen.getByRole('button', { name: 'Confirm reject' }))
+
+    expect(rejectMock).toHaveBeenCalledWith('a', 'False positive')
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled())
+  })
+
+  it('snoozes for the default 7 days', async () => {
+    const user = userEvent.setup()
+    render(<FindingsFeed findings={[finding({ id: 'a', detected: 'Snooze me' })]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Snooze' }))
+
+    expect(snoozeMock).toHaveBeenCalledWith('a', 7)
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalled())
+  })
+
+  it('snoozes for a chosen duration', async () => {
+    const user = userEvent.setup()
+    render(<FindingsFeed findings={[finding({ id: 'a', detected: 'Snooze me' })]} />)
+
+    await user.selectOptions(screen.getByLabelText('Snooze duration'), '30')
+    await user.click(screen.getByRole('button', { name: 'Snooze' }))
+
+    expect(snoozeMock).toHaveBeenCalledWith('a', 30)
+  })
+
+  it('shows the Pro upgrade prompt on Approve for Free users without firing the action', async () => {
+    const user = userEvent.setup()
+    render(<FindingsFeed plan="free" findings={[finding({ id: 'a', detected: 'Approve me' })]} />)
+
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+
+    expect(approveMock).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalled()
+    // Stays pending — no optimistic flip.
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
   })
 })

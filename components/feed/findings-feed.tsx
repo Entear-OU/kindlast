@@ -1,10 +1,15 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
+import { toast } from 'sonner'
 
+import { approveFinding, rejectFinding, snoozeFinding } from '@/app/(authed)/feed/actions'
+import type { Plan } from '@/lib/billing/plan'
 import {
+  DEFAULT_SNOOZE_DAYS,
   FEED_SEVERITIES,
   FEED_STATUSES,
+  SNOOZE_OPTIONS,
   filterFindings,
   severityChip,
   statusLabel,
@@ -14,12 +19,17 @@ import {
 } from '@/lib/feed/findings'
 
 /**
- * The Agent feed (ENT-62) — every finding the agents produced, newest first,
- * with status + severity filters and a friendly empty state. Read-only:
- * Approve / Reject / Snooze land in ENT-63.
+ * The Agent feed (ENT-62 list, ENT-63 actions) — every finding the agents
+ * produced, newest first, with status + severity filters and a friendly empty
+ * state. Pending cards carry one-tap Approve / Reject / Snooze.
  *
- * `pendingLimit` is the ENT-82 seam (Free-tier 3-pending cap). Unused here —
- * enforcement needs the subscriptions table (ENT-81).
+ * Actions are optimistic (AC): the card reflects the new status immediately, and
+ * a failure rolls the row back and raises a toast. The server action is the
+ * authority — the tier gate and ownership rules live there — so the optimistic
+ * flip is only a prediction the server confirms or rejects.
+ *
+ * `plan` (ENT-63 seam) renders the Pro affordance on Approve for Free users.
+ * Everyone is Pro until billing (ENT-81), so the gate is wired but dormant.
  */
 
 type StatusChoice = FindingStatus | 'all'
@@ -65,21 +75,85 @@ function FilterGroup<T extends string>({
 
 export function FindingsFeed({
   findings,
+  plan = 'pro',
 }: {
   findings: Finding[]
-  /** ENT-82 seam: cap visible pending findings on the Free tier. Not enforced yet. */
-  pendingLimit?: number
+  /** ENT-63 seam: render the Pro upgrade affordance on Approve for Free users. */
+  plan?: Plan
 }) {
+  const [items, setItems] = useState<Finding[]>(findings)
   const [status, setStatus] = useState<StatusChoice>('all')
   const [severity, setSeverity] = useState<SeverityChoice>('all')
+  const [pending, startTransition] = useTransition()
+  const [busyId, setBusyId] = useState<string | null>(null)
 
   const visible = useMemo(
-    () => filterFindings(findings, { status, severity }),
-    [findings, status, severity],
+    () => filterFindings(items, { status, severity }),
+    [items, status, severity],
   )
 
+  /**
+   * Optimistically patch a finding, run its server action, and roll the whole
+   * list back with a toast if the action fails. `patch` is the predicted row;
+   * `successMsg` is the confirmation toast.
+   */
+  function runAction(
+    id: string,
+    patch: Partial<Finding>,
+    action: () => Promise<{ ok: true } | { ok: false; error: string; upgrade?: boolean }>,
+    successMsg: string,
+  ) {
+    const snapshot = items
+    setBusyId(id)
+    setItems((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)))
+    startTransition(async () => {
+      const res = await action()
+      if (res.ok) {
+        toast.success(successMsg)
+      } else {
+        setItems(snapshot)
+        if (res.upgrade) {
+          toast.error('Approving is a Pro feature', {
+            description: 'Upgrade to let your agents act on this finding.',
+          })
+        } else {
+          toast.error('Something went wrong', { description: res.error })
+        }
+      }
+      setBusyId(null)
+    })
+  }
+
+  function onApprove(id: string) {
+    // Free users never reach the Executor — surface the upgrade prompt instead
+    // of an optimistic flip the server would only reject.
+    if (plan !== 'pro') {
+      toast.error('Approving is a Pro feature', {
+        description: 'Upgrade to let your agents act on this finding.',
+      })
+      return
+    }
+    runAction(id, { status: 'approved' }, () => approveFinding(id), 'Finding approved')
+  }
+
+  function onReject(id: string, reason: string) {
+    runAction(
+      id,
+      { status: 'rejected', rejection_reason: reason.trim() || null },
+      () => rejectFinding(id, reason),
+      'Finding rejected',
+    )
+  }
+
+  function onSnooze(id: string, days: number) {
+    // Only the status pill is shown optimistically; the concrete snoozed_until
+    // comes back from the server on the next load (and avoids an impure Date.now
+    // in render).
+    runAction(id, { status: 'snoozed' }, () => snoozeFinding(id, days), `Snoozed for ${days} days`)
+  }
+
   // Nothing has ever been detected — the friendly all-clear (AC).
-  if (findings.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 text-center">
         <p className="text-base font-medium text-zinc-200">All clear</p>
@@ -117,7 +191,14 @@ export function FindingsFeed({
       ) : (
         <ul className="flex flex-col gap-3">
           {visible.map((f) => (
-            <FindingCard key={f.id} finding={f} />
+            <FindingCard
+              key={f.id}
+              finding={f}
+              busy={pending && busyId === f.id}
+              onApprove={() => onApprove(f.id)}
+              onReject={(reason) => onReject(f.id, reason)}
+              onSnooze={(days) => onSnooze(f.id, days)}
+            />
           ))}
         </ul>
       )}
@@ -125,8 +206,27 @@ export function FindingsFeed({
   )
 }
 
-function FindingCard({ finding }: { finding: Finding }) {
+const actionBtn =
+  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50'
+
+function FindingCard({
+  finding,
+  busy,
+  onApprove,
+  onReject,
+  onSnooze,
+}: {
+  finding: Finding
+  busy: boolean
+  onApprove: () => void
+  onReject: (reason: string) => void
+  onSnooze: (days: number) => void
+}) {
   const sev = severityChip(finding.severity)
+  const [rejecting, setRejecting] = useState(false)
+  const [reason, setReason] = useState('')
+  const [snoozeDays, setSnoozeDays] = useState(DEFAULT_SNOOZE_DAYS)
+
   return (
     <li className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
       <div className="flex items-start justify-between gap-3">
@@ -162,6 +262,89 @@ function FindingCard({ finding }: { finding: Finding }) {
         <span aria-hidden="true">·</span>
         <span>Effort: {finding.effort_estimate}</span>
       </div>
+
+      {finding.status === 'pending' && (
+        <div className="mt-3 border-t border-white/5 pt-3">
+          {rejecting ? (
+            <div className="flex flex-col gap-2">
+              <textarea
+                aria-label="Rejection reason (optional)"
+                placeholder="Why are you rejecting this? (optional)"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#00C9A7] focus:outline-none"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onReject(reason)}
+                  disabled={busy}
+                  className={`${actionBtn} bg-rose-500/15 text-rose-300 hover:bg-rose-500/25`}
+                >
+                  Confirm reject
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejecting(false)
+                    setReason('')
+                  }}
+                  disabled={busy}
+                  className={`${actionBtn} text-zinc-400 hover:text-zinc-200`}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onApprove}
+                disabled={busy}
+                className={`${actionBtn} bg-[#00C9A7] text-zinc-950 hover:opacity-90`}
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => setRejecting(true)}
+                disabled={busy}
+                className={`${actionBtn} border border-white/10 text-zinc-300 hover:bg-white/5`}
+              >
+                Reject
+              </button>
+              <span className="ml-auto flex items-center gap-2">
+                <label className="sr-only" htmlFor={`snooze-${finding.id}`}>
+                  Snooze duration
+                </label>
+                <select
+                  id={`snooze-${finding.id}`}
+                  value={snoozeDays}
+                  onChange={(e) => setSnoozeDays(Number(e.target.value))}
+                  disabled={busy}
+                  className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-300 focus:border-[#00C9A7] focus:outline-none"
+                >
+                  {SNOOZE_OPTIONS.map((opt) => (
+                    <option key={opt.days} value={opt.days} className="bg-zinc-900">
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => onSnooze(snoozeDays)}
+                  disabled={busy}
+                  className={`${actionBtn} border border-white/10 text-zinc-300 hover:bg-white/5`}
+                >
+                  Snooze
+                </button>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </li>
   )
 }
