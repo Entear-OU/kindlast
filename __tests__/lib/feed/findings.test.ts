@@ -26,6 +26,8 @@ function finding(over: Partial<Finding> = {}): Finding {
     obligation_slug: 'gdpr-art-28-processor-contracts',
     effort_estimate: 'hours',
     status: 'pending',
+    rejection_reason: null,
+    snoozed_until: null,
     created_at: '2026-06-01T10:00:00.000Z',
     ...over,
   }

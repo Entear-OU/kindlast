@@ -71,6 +71,7 @@ interface FindingRow {
   status: string
   rejection_reason: string | null
   snoozed_until: string | null
+  [key: string]: unknown
 }
 
 const findingRow = (id: string) =>
