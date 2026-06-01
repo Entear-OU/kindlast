@@ -79,10 +79,10 @@ describe.skipIf(!supabaseRunning)('notification dispatcher (ENT-73)', () => {
       on conflict (slug) do nothing;
     `)
 
-    // 'immediate' gates to high+; critical always passes, low never does.
+    // Medium floor: critical passes, low is gated out (ENT-76).
     await admin
       .from('notification_preferences')
-      .upsert({ user_id: user.id, email_frequency: 'immediate' })
+      .upsert({ user_id: user.id, min_severity_for_email: 'medium' })
 
     criticalId = await makeFinding(profileId, `${PREFIX}ob`, 'critical')
     lowId = await makeFinding(profileId, `${PREFIX}ob`, 'low')

@@ -14,10 +14,14 @@ import { dispatchDeadlineAlerts } from '@/lib/notifications/deadline-dispatch'
 interface Tables {
   findings: Record<string, unknown>[]
   deadline_alert_log: Record<string, unknown>[]
+  notification_preferences?: Record<string, unknown>[]
 }
 
 function makeFake(tables: Tables, users: Record<string, { email: string | null }>) {
   function from(table: keyof Tables) {
+    // Unknown/empty tables (e.g. notification_preferences when no row is seeded)
+    // resolve empty → resolvePreferences falls back to defaults + auth email.
+    if (!tables[table]) tables[table] = []
     const filters: [string, unknown][] = []
     let op: 'select' | 'upsert' | 'delete' = 'select'
     let payload: Record<string, unknown> = {}
@@ -25,19 +29,20 @@ function makeFake(tables: Tables, users: Record<string, { email: string | null }
     const match = (r: Record<string, unknown>) => filters.every(([c, v]) => r[c] === v)
 
     function run() {
+      const rows = tables[table] as Record<string, unknown>[]
       if (op === 'upsert') {
-        const exists = tables[table].some(
+        const exists = rows.some(
           (r) => r.finding_id === payload.finding_id && r.threshold === payload.threshold,
         )
         if (exists && ignoreDuplicates) return { data: [], error: null }
-        tables[table].push({ ...payload })
+        rows.push({ ...payload })
         return { data: [{ ...payload }], error: null }
       }
       if (op === 'delete') {
-        tables[table] = tables[table].filter((r) => !match(r))
+        tables[table] = rows.filter((r) => !match(r))
         return { data: null, error: null }
       }
-      return { data: tables[table].filter(match), error: null }
+      return { data: rows.filter(match), error: null }
     }
 
     const b: Record<string, unknown> = {
@@ -57,6 +62,7 @@ function makeFake(tables: Tables, users: Record<string, { email: string | null }
         op = 'delete'
         return b
       },
+      maybeSingle: () => Promise.resolve({ data: (tables[table] ?? []).find(match) ?? null, error: null }),
       then: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => {
         try {
           resolve(run())
@@ -152,5 +158,16 @@ describe('dispatchDeadlineAlerts (ENT-75)', () => {
     const summary = await run(tables)
     expect(summary).toMatchObject({ sent: 0, skipped: 1 })
     expect(tables.deadline_alert_log).toHaveLength(0)
+  })
+
+  it('skips a user who opted out of deadline alerts (and does not claim the threshold)', async () => {
+    const tables: Tables = {
+      findings: [finding('f1', 7)],
+      deadline_alert_log: [],
+      notification_preferences: [{ user_id: 'u1', deadline_alerts_enabled: false }],
+    }
+    const summary = await run(tables)
+    expect(summary).toMatchObject({ sent: 0, skipped: 1 })
+    expect(tables.deadline_alert_log).toHaveLength(0) // not claimed → re-enable can still fire
   })
 })

@@ -20,10 +20,10 @@ import { getPlan } from '@/lib/billing/plan'
 import type { EmailProvider } from '@/lib/email/types'
 import type { FindingSeverity } from '@/lib/feed/findings'
 import { renderFindingEmail, type FindingEmailInput } from '@/lib/notifications/finding-email'
-import { shouldNotifyByEmail, type EmailFrequency } from '@/lib/notifications/preferences'
+import { loadResolvedPreferences } from '@/lib/notifications/load-preferences'
+import { inQuietHours, shouldEmailFinding } from '@/lib/notifications/preferences'
 
 const DEFAULT_LIMIT = 50
-const DEFAULT_FREQUENCY: EmailFrequency = 'daily'
 
 const FINDING_COLUMNS =
   'id,detected,severity,proposed_action,regulatory_obligation,citation_url,effort_estimate,user_id,metadata'
@@ -63,7 +63,11 @@ export interface DispatchSummary {
   sent: number
   skipped: number
   failed: number
+  /** Held by quiet hours — left pending, re-evaluated on the next drain. */
+  deferred: number
 }
+
+type RowOutcome = 'sent' | 'skipped' | 'deferred'
 
 export async function dispatchPendingNotifications(
   options: DispatchOptions,
@@ -77,7 +81,7 @@ export async function dispatchPendingNotifications(
   } = options
   const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000)
 
-  const summary: DispatchSummary = { processed: 0, sent: 0, skipped: 0, failed: 0 }
+  const summary: DispatchSummary = { processed: 0, sent: 0, skipped: 0, failed: 0, deferred: 0 }
 
   let pending = supabase
     .from('notification_outbox')
@@ -115,7 +119,7 @@ async function processRow(
     tokenSecret: string
     nowSeconds: number
   },
-): Promise<'sent' | 'skipped'> {
+): Promise<RowOutcome> {
   const { supabase, emailProvider, baseUrl, tokenSecret, nowSeconds } = ctx
 
   const { data: finding, error: findingError } = await supabase
@@ -135,44 +139,36 @@ async function processRow(
     return 'skipped'
   }
 
-  const frequency = await loadFrequency(supabase, row.user_id)
-  if (!shouldNotifyByEmail(finding.severity, frequency)) {
-    await mark(supabase, row.id, { status: 'skipped' })
+  const plan = await getPlan(supabase, row.user_id)
+  const prefs = await loadResolvedPreferences(supabase, row.user_id, plan)
+
+  // Severity floor (ENT-76). critical always passes.
+  if (!shouldEmailFinding(finding.severity, prefs.minSeverityForEmail)) {
+    await mark(supabase, row.id, { status: 'skipped', last_error: 'below min_severity_for_email' })
     return 'skipped'
   }
 
-  const email = await loadEmail(supabase, row.user_id)
-  if (!email) {
+  // Quiet hours (ENT-76): hold a non-critical email until the window ends by
+  // leaving the row pending — the next drain re-evaluates. Critical overrides.
+  if (
+    finding.severity !== 'critical' &&
+    inQuietHours(nowSeconds * 1000, prefs.timezone, prefs.quietHoursStart, prefs.quietHoursEnd)
+  ) {
+    return 'deferred'
+  }
+
+  if (!prefs.email) {
     // No deliverable address — skip rather than fail forever.
     await mark(supabase, row.id, { status: 'skipped', last_error: 'no email address' })
     return 'skipped'
   }
 
   // Free recipients get the weekly-briefing upsell footer (ENT-74).
-  const plan = await getPlan(supabase, row.user_id)
   const { subject, html, text } = renderFindingEmail(finding, { baseUrl, tokenSecret, nowSeconds, plan })
-  await emailProvider.send({ to: email, subject, html, text })
+  await emailProvider.send({ to: prefs.email, subject, html, text })
 
   await mark(supabase, row.id, { status: 'sent', sent_at: new Date().toISOString() })
   return 'sent'
-}
-
-async function loadFrequency(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<EmailFrequency> {
-  const { data } = await supabase
-    .from('notification_preferences')
-    .select('email_frequency')
-    .eq('user_id', userId)
-    .maybeSingle<{ email_frequency: EmailFrequency }>()
-  return data?.email_frequency ?? DEFAULT_FREQUENCY
-}
-
-async function loadEmail(supabase: SupabaseClient, userId: string): Promise<string | null> {
-  const { data, error } = await supabase.auth.admin.getUserById(userId)
-  if (error || !data?.user?.email) return null
-  return data.user.email
 }
 
 async function mark(

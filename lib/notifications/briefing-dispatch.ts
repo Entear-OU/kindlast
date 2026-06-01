@@ -94,13 +94,13 @@ export async function dispatchWeeklyBriefing(
   // Preferences in one read; a missing row means defaults (enabled, default tz).
   let prefsQuery = supabase
     .from('notification_preferences')
-    .select('user_id,timezone,weekly_briefing_enabled')
+    .select('user_id,timezone,weekly_briefing_enabled,email')
   if (options.userId) prefsQuery = prefsQuery.eq('user_id', options.userId)
   const { data: prefRows, error: prefsError } = await prefsQuery
   if (prefsError) throw new Error(`briefing: failed to read preferences: ${prefsError.message}`)
 
   const prefs = new Map(
-    ((prefRows ?? []) as { user_id: string; timezone: string | null; weekly_briefing_enabled: boolean }[]).map(
+    ((prefRows ?? []) as { user_id: string; timezone: string | null; weekly_briefing_enabled: boolean; email: string | null }[]).map(
       (r) => [r.user_id, r],
     ),
   )
@@ -135,7 +135,8 @@ export async function dispatchWeeklyBriefing(
     }
 
     try {
-      const email = await loadEmail(supabase, userId)
+      // Prefer the configured delivery address (ENT-76); fall back to auth email.
+      const email = pref?.email ?? (await loadEmail(supabase, userId))
       if (!email) {
         await releaseWeek(supabase, userId, periodStart)
         summary.skipped += 1

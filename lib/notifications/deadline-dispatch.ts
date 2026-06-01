@@ -17,6 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EmailProvider } from '@/lib/email/types'
 import { activeThreshold, type DeadlineThreshold } from '@/lib/notifications/deadline-alert'
 import { renderDeadlineEmail, type DeadlineEmailInput } from '@/lib/notifications/deadline-email'
+import { loadResolvedPreferences } from '@/lib/notifications/load-preferences'
 
 const DEADLINE_KINDS = ['deadline', 'dsar']
 
@@ -86,6 +87,14 @@ export async function dispatchDeadlineAlerts(
       continue
     }
 
+    // Opt-out + recipient (ENT-76). Check before claiming the threshold so a
+    // re-enable later can still fire it.
+    const prefs = await loadResolvedPreferences(supabase, finding.user_id)
+    if (!prefs.deadlineAlertsEnabled) {
+      summary.skipped += 1
+      continue
+    }
+
     const claimed = await claimThreshold(supabase, finding.id, threshold, finding.user_id)
     if (!claimed) {
       summary.skipped += 1
@@ -93,8 +102,7 @@ export async function dispatchDeadlineAlerts(
     }
 
     try {
-      const email = await loadEmail(supabase, finding.user_id)
-      if (!email) {
+      if (!prefs.email) {
         await releaseThreshold(supabase, finding.id, threshold)
         summary.skipped += 1
         continue
@@ -107,7 +115,7 @@ export async function dispatchDeadlineAlerts(
         daysRemaining: days,
         dueDate,
       })
-      await emailProvider.send({ to: email, subject, html, text })
+      await emailProvider.send({ to: prefs.email, subject, html, text })
       summary.sent += 1
     } catch {
       await releaseThreshold(supabase, finding.id, threshold)
@@ -145,10 +153,4 @@ async function releaseThreshold(
     .delete()
     .eq('finding_id', findingId)
     .eq('threshold', threshold)
-}
-
-async function loadEmail(supabase: SupabaseClient, userId: string): Promise<string | null> {
-  const { data, error } = await supabase.auth.admin.getUserById(userId)
-  if (error || !data?.user?.email) return null
-  return data.user.email
 }
