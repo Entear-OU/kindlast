@@ -297,3 +297,36 @@ describe('FindingsFeed — free-tier 3-finding cap (ENT-82)', () => {
     expect(shownMock).not.toHaveBeenCalled()
   })
 })
+
+describe('FindingsFeed — initial severity from URL (ENT-78)', () => {
+  it('pre-filters to the severity the dashboard counter linked to', () => {
+    render(
+      <FindingsFeed
+        initialSeverity="critical"
+        findings={[
+          finding({ id: 'crit', detected: 'Critical gap', severity: 'critical' }),
+          finding({ id: 'hi', detected: 'High gap', severity: 'high' }),
+        ]}
+      />,
+    )
+    // The Critical severity chip is pre-selected, and only the critical row shows.
+    expect(screen.getByRole('button', { name: 'Critical' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText('Critical gap')).toBeInTheDocument()
+    expect(screen.queryByText('High gap')).not.toBeInTheDocument()
+  })
+
+  it('defaults to All when no severity is given', () => {
+    render(<FindingsFeed findings={[finding({ detected: 'Some gap' })]} />)
+    // Both the Status and Severity groups default to their "All" option.
+    for (const all of screen.getAllByRole('button', { name: 'All' })) {
+      expect(all).toHaveAttribute('aria-pressed', 'true')
+    }
+    expect(screen.getByRole('button', { name: 'Critical' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+})

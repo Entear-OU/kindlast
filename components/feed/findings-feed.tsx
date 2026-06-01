@@ -85,14 +85,17 @@ function FilterGroup<T extends string>({
 export function FindingsFeed({
   findings,
   plan = 'pro',
+  initialSeverity = 'all',
 }: {
   findings: Finding[]
   /** ENT-63 seam: render the Pro upgrade affordance on Approve for Free users. */
   plan?: Plan
+  /** ENT-78: the severity to pre-select, from the dashboard counters' `?severity=`. */
+  initialSeverity?: SeverityChoice
 }) {
   const [items, setItems] = useState<Finding[]>(findings)
   const [status, setStatus] = useState<StatusChoice>('all')
-  const [severity, setSeverity] = useState<SeverityChoice>('all')
+  const [severity, setSeverity] = useState<SeverityChoice>(initialSeverity)
   const [pending, startTransition] = useTransition()
   const [busyId, setBusyId] = useState<string | null>(null)
   // ENT-83: the "Upgrade to act" modal a Free user sees when they tap Approve.
