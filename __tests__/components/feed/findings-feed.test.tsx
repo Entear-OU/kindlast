@@ -260,7 +260,7 @@ describe('FindingsFeed — free-tier 3-finding cap (ENT-82)', () => {
       screen.getByText('You have 5 findings waiting — upgrade to act on them'),
     ).toBeInTheDocument()
     const cta = screen.getByRole('link', { name: 'Upgrade to Pro' })
-    expect(cta).toHaveAttribute('href', '/billing')
+    expect(cta).toHaveAttribute('href', '/billing?returnTo=%2Ffeed')
   })
 
   it('fires the shown tracking event when the prompt renders', () => {
