@@ -21,11 +21,13 @@ export interface Finding {
   obligation_slug: string | null
   effort_estimate: 'minutes' | 'hours' | 'days'
   status: FindingStatus
+  rejection_reason: string | null
+  snoozed_until: string | null
   created_at: string
 }
 
 const COLUMNS =
-  'id,detected,severity,proposed_action,regulatory_obligation,citation_url,obligation_slug,effort_estimate,status,created_at'
+  'id,detected,severity,proposed_action,regulatory_obligation,citation_url,obligation_slug,effort_estimate,status,rejection_reason,snoozed_until,created_at'
 
 /**
  * Every finding for the user, newest first (AC: reverse-chronological by
@@ -53,6 +55,18 @@ export async function loadFindings(
 // once a completion state exists in the schema.
 export const FEED_STATUSES: FindingStatus[] = ['pending', 'approved', 'rejected', 'snoozed']
 export const FEED_SEVERITIES: FindingSeverity[] = ['critical', 'high', 'medium', 'low']
+
+/**
+ * Snooze duration presets the feed offers (AC: "configurable duration, default 7
+ * days"). The first entry is the default. Shared by the UI and the server action
+ * so the menu and the validated day-count never drift.
+ */
+export const SNOOZE_OPTIONS: { label: string; days: number }[] = [
+  { label: '7 days', days: 7 },
+  { label: '14 days', days: 14 },
+  { label: '30 days', days: 30 },
+]
+export const DEFAULT_SNOOZE_DAYS = SNOOZE_OPTIONS[0].days
 
 /**
  * Free-tier cap on visible pending findings (PRD §11). The seam only — ENT-62
