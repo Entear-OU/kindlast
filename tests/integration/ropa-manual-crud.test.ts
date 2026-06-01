@@ -142,6 +142,32 @@ describe.skipIf(!supabaseRunning)('ROPA manual create/edit (ENT-70)', () => {
     expect(rows).toHaveLength(3)
   })
 
+  it('does not cap a Pro user — the limit is enforced server-side per plan (ENT-84)', async () => {
+    const admin = createServiceRoleClient()
+    await applyFixtureSql(
+      `delete from public.processing_activities where user_id = '${user.id}'::uuid;`,
+    )
+    // Service role flips the plan (users can't write their own subscription).
+    await admin.from('subscriptions').update({ plan: 'pro' }).eq('user_id', user.id)
+
+    try {
+      for (const name of ['A', 'B', 'C', 'D', 'E']) {
+        expect((await add(name)).error).toBeNull()
+      }
+      const rows = await querySql(
+        `select 1 from public.processing_activities where user_id = $1::uuid`,
+        [user.id],
+      )
+      expect(rows).toHaveLength(5) // past the Free cap of 3
+    } finally {
+      // Restore the Free plan so later tests stay on a known baseline.
+      await admin.from('subscriptions').update({ plan: 'free' }).eq('user_id', user.id)
+      await applyFixtureSql(
+        `delete from public.processing_activities where user_id = '${user.id}'::uuid;`,
+      )
+    }
+  })
+
   it('does not let a founder edit another founder\'s activity', async () => {
     const admin = createServiceRoleClient()
     const { data: id } = await add('Mine')

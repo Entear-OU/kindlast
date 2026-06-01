@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 
 import { ComplianceRecordsShell } from '@/components/records/compliance-records-shell'
 import { RopaRegister } from '@/components/records/ropa-register'
+import { getPlan } from '@/lib/billing/plan'
 import { loadProcessingActivities } from '@/lib/records/ropa'
 import { createClient } from '@/lib/supabase/server'
 
@@ -18,11 +19,14 @@ export default async function RopaPage() {
     redirect('/login')
   }
 
-  const activities = await loadProcessingActivities(supabase, user.id)
+  const [activities, plan] = await Promise.all([
+    loadProcessingActivities(supabase, user.id),
+    getPlan(supabase, user.id),
+  ])
 
   return (
     <ComplianceRecordsShell activeTab="ropa">
-      <RopaRegister activities={activities} />
+      <RopaRegister activities={activities} plan={plan} />
     </ComplianceRecordsShell>
   )
 }
