@@ -16,19 +16,20 @@ import Link from 'next/link'
  * The dark, agentic shell every authed surface lives in: a left icon rail, a
  * header with the agent-status pill, an optional sub-nav slot, and a scrollable
  * body. Extracted from the records console (ENT-70) so the Agent feed (ENT-62)
- * can share the exact frame — the rail's Records, Alerts and Billing
- * destinations are real links, so the founder can move between the registers
- * (`/records/ropa`), the feed (`/feed`) and the upgrade page (`/billing`). The
- * rest of the rail is disabled until its surfaces land (Dashboard → ENT-37, etc.).
+ * can share the exact frame — the rail's Dashboard, Records, Alerts and Billing
+ * destinations are real links, so the founder can move between the posture
+ * dashboard (`/dashboard`), the registers (`/records/ropa`), the feed (`/feed`)
+ * and the upgrade page (`/billing`). The rest of the rail is disabled until its
+ * surfaces land (Documents, Assistant).
  *
  * Deliberately a dark surface independent of the global theme — distinct from
  * the eggshell marketing pages.
  */
 
-export type ConsoleRail = 'records' | 'alerts' | 'billing' | 'settings'
+export type ConsoleRail = 'dashboard' | 'records' | 'alerts' | 'billing' | 'settings'
 
 type RailItem = {
-  key: ConsoleRail | 'dashboard' | 'documents' | 'assistant' | 'settings'
+  key: ConsoleRail | 'documents' | 'assistant'
   Icon: LucideIcon
   label: string
   href?: string
@@ -37,7 +38,7 @@ type RailItem = {
 
 const RAIL: RailItem[] = [
   { key: 'records', Icon: Shield, label: 'Records', href: '/records/ropa' },
-  { key: 'dashboard', Icon: LayoutGrid, label: 'Dashboard' },
+  { key: 'dashboard', Icon: LayoutGrid, label: 'Dashboard', href: '/dashboard' },
   { key: 'alerts', Icon: Bell, label: 'Alerts', href: '/feed', badge: true },
   { key: 'documents', Icon: Copy, label: 'Documents' },
   { key: 'assistant', Icon: MessageSquare, label: 'Assistant' },
