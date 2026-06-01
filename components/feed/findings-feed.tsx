@@ -1,19 +1,23 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 
 import { approveFinding, rejectFinding, snoozeFinding } from '@/app/(authed)/feed/actions'
+import { trackUpgradeConverted, trackUpgradePromptShown } from '@/lib/analytics/track'
 import type { Plan } from '@/lib/billing/plan'
 import {
   DEFAULT_SNOOZE_DAYS,
   FEED_SEVERITIES,
   FEED_STATUSES,
+  FREE_FINDING_LIMIT,
   SNOOZE_OPTIONS,
   filterFindings,
+  gateFindings,
   severityChip,
   statusLabel,
+  upgradeWaitingMessage,
   type Finding,
   type FindingSeverity,
   type FindingStatus,
@@ -29,8 +33,10 @@ import {
  * authority — the tier gate and ownership rules live there — so the optimistic
  * flip is only a prediction the server confirms or rejects.
  *
- * `plan` (ENT-63 seam) renders the Pro affordance on Approve for Free users.
- * Everyone is Pro until billing (ENT-81), so the gate is wired but dormant.
+ * `plan` (ENT-63 seam, real since ENT-81) drives two Free-tier affordances: the
+ * Pro prompt on Approve, and the 3-finding cap (ENT-82) — Free sees the 3
+ * most-recent findings and the rest render as locked, blurred previews behind an
+ * upgrade prompt that carries the trigger context.
  */
 
 type StatusChoice = FindingStatus | 'all'
@@ -88,9 +94,13 @@ export function FindingsFeed({
   const [pending, startTransition] = useTransition()
   const [busyId, setBusyId] = useState<string | null>(null)
 
+  // Free-tier gate first (ENT-82): the 3 most-recent are actionable, the rest
+  // locked. Filters then narrow only the actionable set; the locked previews are
+  // a separate teaser below.
+  const gated = useMemo(() => gateFindings(items, plan), [items, plan])
   const visible = useMemo(
-    () => filterFindings(items, { status, severity }),
-    [items, status, severity],
+    () => filterFindings(gated.visible, { status, severity }),
+    [gated.visible, status, severity],
   )
 
   /**
@@ -203,6 +213,67 @@ export function FindingsFeed({
           ))}
         </ul>
       )}
+
+      {gated.lockedCount > 0 ? (
+        <LockedFindings
+          locked={gated.locked}
+          lockedCount={gated.lockedCount}
+          totalCount={gated.totalCount}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * The Free-tier lock (ENT-82): blurred, non-interactive previews of every
+ * finding beyond the cap, plus one upgrade prompt carrying the trigger context.
+ * Fires `upgrade_prompt_shown` on mount and `upgrade_prompt_converted` when the
+ * founder taps the CTA.
+ */
+function LockedFindings({
+  locked,
+  lockedCount,
+  totalCount,
+}: {
+  locked: Finding[]
+  lockedCount: number
+  totalCount: number
+}) {
+  useEffect(() => {
+    trackUpgradePromptShown({ source: 'finding_cap', lockedCount, totalCount })
+  }, [lockedCount, totalCount])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <ul aria-hidden="true" className="flex flex-col gap-3">
+        {locked.map((f) => (
+          <li
+            key={f.id}
+            className="pointer-events-none select-none rounded-xl border border-white/10 bg-white/[0.03] p-4 blur-sm"
+          >
+            <h3 className="text-sm font-semibold text-zinc-100">{f.detected}</h3>
+            <p className="mt-3 text-sm text-zinc-300">{f.proposed_action}</p>
+          </li>
+        ))}
+      </ul>
+
+      <div className="rounded-xl border border-[#00C9A7]/30 bg-[#00C9A7]/[0.06] p-4 text-center">
+        <p className="text-sm font-medium text-zinc-100">{upgradeWaitingMessage(totalCount)}</p>
+        <p className="mt-1 text-xs text-zinc-400">
+          Free shows your {FREE_FINDING_LIMIT} most-recent findings. Upgrade to Pro to see and act
+          on all of them.
+        </p>
+        <Link
+          href="/billing"
+          onClick={() =>
+            trackUpgradeConverted({ source: 'finding_cap', lockedCount, totalCount })
+          }
+          className="mt-3 inline-block rounded-md bg-[#00C9A7] px-4 py-1.5 text-sm font-medium text-zinc-950 transition-opacity hover:opacity-90"
+        >
+          Upgrade to Pro
+        </Link>
+      </div>
     </div>
   )
 }

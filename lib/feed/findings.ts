@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import type { Plan } from '@/lib/billing/plan'
+
 /**
  * Data access + presentation helpers for the Agent feed (ENT-62).
  *
@@ -69,11 +71,48 @@ export const SNOOZE_OPTIONS: { label: string; days: number }[] = [
 export const DEFAULT_SNOOZE_DAYS = SNOOZE_OPTIONS[0].days
 
 /**
- * Free-tier cap on visible pending findings (PRD §11). The seam only — ENT-62
- * shows everything; enforcement (blurred lock + upgrade prompt) is ENT-82, which
- * needs the `subscriptions` table from ENT-81 to know the user's plan.
+ * Free-tier cap (PRD §11, ENT-82): a Free account sees the FREE_FINDING_LIMIT
+ * most-recent findings; everything older is locked behind the upgrade prompt.
+ * The Analyst keeps writing — this gate is purely about what's visible/actionable.
  */
-export const FREE_PENDING_LIMIT = 3
+export const FREE_FINDING_LIMIT = 3
+
+export interface GatedFindings {
+  /** The findings a Free user can see and act on (Pro: all of them). */
+  visible: Finding[]
+  /** Findings locked behind the upgrade prompt (Pro: none). */
+  locked: Finding[]
+  lockedCount: number
+  totalCount: number
+}
+
+/**
+ * Split a finding list by tier. Pro sees everything; Free sees the
+ * FREE_FINDING_LIMIT most-recent and the rest are locked. `findings` is assumed
+ * reverse-chronological (loadFindings orders by created_at desc), so the head of
+ * the list is "most-recent".
+ */
+export function gateFindings(findings: Finding[], plan: Plan): GatedFindings {
+  if (plan === 'pro') {
+    return { visible: findings, locked: [], lockedCount: 0, totalCount: findings.length }
+  }
+  return {
+    visible: findings.slice(0, FREE_FINDING_LIMIT),
+    locked: findings.slice(FREE_FINDING_LIMIT),
+    lockedCount: Math.max(0, findings.length - FREE_FINDING_LIMIT),
+    totalCount: findings.length,
+  }
+}
+
+/**
+ * The upgrade prompt's trigger context (AC): counts every finding waiting so the
+ * prompt feels earned, not gratuitous — "You have 5 findings waiting — upgrade
+ * to act on them".
+ */
+export function upgradeWaitingMessage(totalCount: number): string {
+  const noun = totalCount === 1 ? 'finding' : 'findings'
+  return `You have ${totalCount} ${noun} waiting — upgrade to act on them`
+}
 
 export interface FeedFilter {
   status?: FindingStatus | 'all'

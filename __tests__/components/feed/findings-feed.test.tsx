@@ -17,18 +17,26 @@ import type { Finding } from '@/lib/feed/findings'
  *   * Free users get the Pro upgrade prompt on Approve instead of an Executor run.
  */
 
-const { approveMock, rejectMock, snoozeMock, toastSuccess, toastError } = vi.hoisted(() => ({
-  approveMock: vi.fn(),
-  rejectMock: vi.fn(),
-  snoozeMock: vi.fn(),
-  toastSuccess: vi.fn(),
-  toastError: vi.fn(),
-}))
+const { approveMock, rejectMock, snoozeMock, toastSuccess, toastError, shownMock, convertedMock } =
+  vi.hoisted(() => ({
+    approveMock: vi.fn(),
+    rejectMock: vi.fn(),
+    snoozeMock: vi.fn(),
+    toastSuccess: vi.fn(),
+    toastError: vi.fn(),
+    shownMock: vi.fn(),
+    convertedMock: vi.fn(),
+  }))
 
 vi.mock('@/app/(authed)/feed/actions', () => ({
   approveFinding: approveMock,
   rejectFinding: rejectMock,
   snoozeFinding: snoozeMock,
+}))
+
+vi.mock('@/lib/analytics/track', () => ({
+  trackUpgradePromptShown: shownMock,
+  trackUpgradeConverted: convertedMock,
 }))
 
 vi.mock('sonner', () => ({
@@ -225,5 +233,58 @@ describe('FindingsFeed — actions (ENT-63)', () => {
     expect(toastError).toHaveBeenCalled()
     // Stays pending — no optimistic flip.
     expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+  })
+})
+
+describe('FindingsFeed — free-tier 3-finding cap (ENT-82)', () => {
+  const five = Array.from({ length: 5 }, (_, i) =>
+    finding({ id: `f${i}`, detected: `Finding ${i}` }),
+  )
+
+  it('locks findings beyond the 3 most-recent for Free and shows the upgrade prompt', () => {
+    render(<FindingsFeed plan="free" findings={five} />)
+
+    // The 3 most-recent are interactive (each has an Approve button).
+    expect(screen.getAllByRole('button', { name: 'Approve' })).toHaveLength(3)
+    // The upgrade prompt carries the trigger context — all 5 are waiting.
+    expect(
+      screen.getByText('You have 5 findings waiting — upgrade to act on them'),
+    ).toBeInTheDocument()
+    const cta = screen.getByRole('link', { name: 'Upgrade to Pro' })
+    expect(cta).toHaveAttribute('href', '/billing')
+  })
+
+  it('fires the shown tracking event when the prompt renders', () => {
+    render(<FindingsFeed plan="free" findings={five} />)
+    expect(shownMock).toHaveBeenCalledWith({
+      source: 'finding_cap',
+      lockedCount: 2,
+      totalCount: 5,
+    })
+  })
+
+  it('fires the converted tracking event when the CTA is tapped', async () => {
+    const user = userEvent.setup()
+    render(<FindingsFeed plan="free" findings={five} />)
+
+    await user.click(screen.getByRole('link', { name: 'Upgrade to Pro' }))
+    expect(convertedMock).toHaveBeenCalledWith({
+      source: 'finding_cap',
+      lockedCount: 2,
+      totalCount: 5,
+    })
+  })
+
+  it('does not lock or prompt for Free at or under the cap', () => {
+    render(<FindingsFeed plan="free" findings={five.slice(0, 3)} />)
+    expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument()
+    expect(shownMock).not.toHaveBeenCalled()
+  })
+
+  it('shows everything to Pro with no upgrade prompt', () => {
+    render(<FindingsFeed plan="pro" findings={five} />)
+    expect(screen.getAllByRole('button', { name: 'Approve' })).toHaveLength(5)
+    expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument()
+    expect(shownMock).not.toHaveBeenCalled()
   })
 })
