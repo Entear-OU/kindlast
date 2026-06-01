@@ -47,7 +47,13 @@ export function getBillingProvider(options?: GetBillingProviderOptions): Billing
       if (!priceId) {
         throw new BillingProviderError('stripe', 'STRIPE_PRICE_ID is required')
       }
-      return createStripeProvider({ secretKey, priceId })
+      // webhookSecret is optional here — only parseWebhook requires it, and it
+      // raises a clear error if it's missing — so checkout still works without it.
+      return createStripeProvider({
+        secretKey,
+        priceId,
+        webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
+      })
     }
   }
 }
