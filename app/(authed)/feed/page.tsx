@@ -20,7 +20,10 @@ export default async function FeedPage() {
     redirect('/login')
   }
 
-  const [findings, plan] = await Promise.all([loadFindings(supabase, user.id), getPlan(user.id)])
+  const [findings, plan] = await Promise.all([
+    loadFindings(supabase, user.id),
+    getPlan(supabase, user.id),
+  ])
 
   return (
     <ConsoleShell activeRail="alerts" title="Agent feed">

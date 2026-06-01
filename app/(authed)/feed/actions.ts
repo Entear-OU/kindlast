@@ -16,8 +16,8 @@ import { createClient } from '@/lib/supabase/server'
  *
  * Approve carries an `upgrade` flag instead of an opaque error so the UI can
  * raise the Pro prompt rather than a generic failure toast. The tier check goes
- * through the `getPlan` seam (ENT-63) — everyone is Pro until billing (ENT-81),
- * so the gate is wired but dormant.
+ * through the `getPlan` seam (ENT-63), now backed by the real `subscriptions`
+ * lookup (ENT-81): Free users are gated, Pro users pass through.
  */
 
 export type FeedActionResult =
@@ -35,7 +35,7 @@ export async function approveFinding(id: string): Promise<FeedActionResult> {
 
   // Tier gate (AC: free users see the Pro upgrade prompt instead of firing the
   // Executor). Authoritative here, not in the client.
-  if ((await getPlan(user.id)) !== 'pro') {
+  if ((await getPlan(supabase, user.id)) !== 'pro') {
     return { ok: false, error: 'Approving a finding is a Pro feature.', upgrade: true }
   }
 
