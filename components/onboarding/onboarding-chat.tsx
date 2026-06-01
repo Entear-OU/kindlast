@@ -115,6 +115,10 @@ export function OnboardingChat({
       status === 'ready' &&
       lastMessage?.role === 'assistant'
     ) {
+      // Clear the input once the assistant has answered the just-sent turn.
+      // Guarded by the ref (set back to null immediately), so this runs at most
+      // once per send and can't cascade — intentional sync of async chat state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInput('')
       pendingInputRef.current = null
     }
