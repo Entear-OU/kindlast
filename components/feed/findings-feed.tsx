@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 
@@ -230,7 +231,14 @@ function FindingCard({
   return (
     <li className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-semibold text-zinc-100">{finding.detected}</h3>
+        <h3 className="text-sm font-semibold text-zinc-100">
+          <Link
+            href={`/feed/${finding.id}`}
+            className="hover:text-white hover:underline decoration-zinc-600 underline-offset-2"
+          >
+            {finding.detected}
+          </Link>
+        </h3>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${sev.className}`}>
           {sev.label}
         </span>
