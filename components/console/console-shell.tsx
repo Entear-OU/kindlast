@@ -1,6 +1,7 @@
 import {
   Bell,
   Copy,
+  CreditCard,
   LayoutGrid,
   MessageSquare,
   Settings,
@@ -15,16 +16,16 @@ import Link from 'next/link'
  * The dark, agentic shell every authed surface lives in: a left icon rail, a
  * header with the agent-status pill, an optional sub-nav slot, and a scrollable
  * body. Extracted from the records console (ENT-70) so the Agent feed (ENT-62)
- * can share the exact frame — the rail's Records and Alerts destinations are now
- * real links, so the founder can move between the registers (`/records/ropa`)
- * and the feed (`/feed`). The rest of the rail is disabled until its surfaces
- * land (Dashboard → ENT-37, etc.).
+ * can share the exact frame — the rail's Records, Alerts and Billing
+ * destinations are real links, so the founder can move between the registers
+ * (`/records/ropa`), the feed (`/feed`) and the upgrade page (`/billing`). The
+ * rest of the rail is disabled until its surfaces land (Dashboard → ENT-37, etc.).
  *
  * Deliberately a dark surface independent of the global theme — distinct from
  * the eggshell marketing pages.
  */
 
-export type ConsoleRail = 'records' | 'alerts'
+export type ConsoleRail = 'records' | 'alerts' | 'billing'
 
 type RailItem = {
   key: ConsoleRail | 'dashboard' | 'documents' | 'assistant' | 'settings'
@@ -40,6 +41,7 @@ const RAIL: RailItem[] = [
   { key: 'alerts', Icon: Bell, label: 'Alerts', href: '/feed', badge: true },
   { key: 'documents', Icon: Copy, label: 'Documents' },
   { key: 'assistant', Icon: MessageSquare, label: 'Assistant' },
+  { key: 'billing', Icon: CreditCard, label: 'Billing', href: '/billing' },
   { key: 'settings', Icon: Settings, label: 'Settings' },
 ]
 
