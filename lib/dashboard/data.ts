@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import {
+  buildUpcomingDeadlines,
+  type DeadlineFindingRow,
+  type UpcomingDeadline,
+} from './deadlines'
 import type { FindingSeverity } from '@/lib/feed/findings'
 import type { PostureDeadline, PostureInputs } from './posture'
 
@@ -55,4 +60,27 @@ export async function loadPostureInputs(
     }))
 
   return { openSeverities, deadlines }
+}
+
+/**
+ * The upcoming-deadlines list (ENT-79): every open deadline/DSAR finding,
+ * turned into a sorted, windowed list of dates the founder should plan around.
+ * RLS scopes the read to the owner; the windowing/sorting is pure
+ * (`buildUpcomingDeadlines`).
+ */
+export async function loadUpcomingDeadlines(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<UpcomingDeadline[]> {
+  const { data, error } = await supabase
+    .from('findings')
+    .select('id,severity,regulatory_obligation,detected,metadata')
+    .eq('user_id', userId)
+    .eq('status', 'pending')
+
+  if (error) {
+    throw new Error(`loadUpcomingDeadlines: ${error.message}`)
+  }
+
+  return buildUpcomingDeadlines((data ?? []) as DeadlineFindingRow[])
 }
