@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 
 import { BillingPlans } from '@/components/billing/billing-plans'
+import { ConsoleShell } from '@/components/console/console-shell'
 import { getPlan } from '@/lib/billing/plan'
 import { createClient } from '@/lib/supabase/server'
 
@@ -28,8 +29,10 @@ export default async function BillingPage({
   const [{ returnTo }, plan] = await Promise.all([searchParams, getPlan(supabase, user.id)])
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-10">
-      <BillingPlans plan={plan} returnTo={returnTo} />
-    </div>
+    <ConsoleShell activeRail="billing" title="Billing">
+      <div className="mx-auto w-full max-w-3xl">
+        <BillingPlans plan={plan} returnTo={returnTo} />
+      </div>
+    </ConsoleShell>
   )
 }
