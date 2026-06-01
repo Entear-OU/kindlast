@@ -6,14 +6,15 @@ import {
   Settings,
   Shield,
 } from 'lucide-react'
+import Link from 'next/link'
 
 /**
  * The "Compliance records" console shell (ENT-70 / epic ENT-35).
  *
  * The dark, agentic frame the register tabs live in: a left icon rail, a header
- * with the agent-status pill, and the tab bar across the record types. ENT-70
- * ships the ROPA tab; the others render but are disabled until their issues land
- * (AI systems → ENT-72, DSAR log → ENT-71; Vendors / AI literacy are later).
+ * with the agent-status pill, and the tab bar across the record types. Tabs with
+ * a route are links; the rest render disabled until their issues land (AI systems
+ * → ENT-72; Vendors / AI literacy are later).
  *
  * Deliberately a dark surface independent of the global theme — this is the
  * product's "console", a distinct visual key from the eggshell marketing pages.
@@ -21,11 +22,11 @@ import {
 
 export type RecordsTab = 'ropa' | 'ai-systems' | 'vendors' | 'dsar-log' | 'ai-literacy'
 
-const TABS: { key: RecordsTab; label: string }[] = [
-  { key: 'ropa', label: 'ROPA' },
+const TABS: { key: RecordsTab; label: string; href?: string }[] = [
+  { key: 'ropa', label: 'ROPA', href: '/records/ropa' },
   { key: 'ai-systems', label: 'AI systems' },
   { key: 'vendors', label: 'Vendors' },
-  { key: 'dsar-log', label: 'DSAR log' },
+  { key: 'dsar-log', label: 'DSAR log', href: '/records/dsar' },
   { key: 'ai-literacy', label: 'AI literacy' },
 ]
 
@@ -89,8 +90,24 @@ export function ComplianceRecordsShell({
         <div className="px-6">
           {/* Tab bar */}
           <div role="tablist" aria-label="Record types" className="flex flex-wrap gap-2">
-            {TABS.map(({ key, label }) => {
+            {TABS.map(({ key, label, href }) => {
               const isActive = key === activeTab
+              const activeClass = isActive
+                ? 'bg-white text-zinc-900'
+                : 'border border-white/10 text-zinc-300 hover:bg-white/5'
+              if (href && !isActive) {
+                return (
+                  <Link
+                    key={key}
+                    href={href}
+                    role="tab"
+                    aria-selected={false}
+                    className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${activeClass}`}
+                  >
+                    {label}
+                  </Link>
+                )
+              }
               return (
                 <button
                   key={key}
@@ -98,11 +115,9 @@ export function ComplianceRecordsShell({
                   role="tab"
                   aria-selected={isActive}
                   disabled={!isActive}
-                  title={isActive ? undefined : 'Coming soon'}
+                  title={isActive || href ? undefined : 'Coming soon'}
                   className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-white text-zinc-900'
-                      : 'border border-white/10 text-zinc-500'
+                    isActive ? 'bg-white text-zinc-900' : 'border border-white/10 text-zinc-500'
                   } ${isActive ? '' : 'cursor-not-allowed opacity-60'}`}
                 >
                   {label}
