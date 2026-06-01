@@ -29,7 +29,17 @@ export interface RenderFindingEmailOptions {
   tokenSecret: string
   /** Epoch seconds "now" — controls the CTA token expiry (testable). */
   nowSeconds: number
+  /**
+   * The recipient's plan. Free recipients get a single upsell footer for the
+   * Pro-only weekly briefing (ENT-74); Pro recipients see nothing extra.
+   * Defaults to 'pro' (no upsell) when omitted.
+   */
+  plan?: 'free' | 'pro'
 }
+
+/** The Free-tier upsell footer (ENT-74): one line, only for Free recipients. */
+const BRIEFING_UPSELL_TEXT =
+  'Upgrade to Pro for a weekly Monday compliance briefing — your whole posture in one email.'
 
 export interface RenderedEmail {
   subject: string
@@ -53,8 +63,9 @@ const EFFORT_LABEL: Record<Finding['effort_estimate'], string> = {
 
 export function renderFindingEmail(
   finding: FindingEmailInput,
-  { baseUrl, tokenSecret, nowSeconds }: RenderFindingEmailOptions,
+  { baseUrl, tokenSecret, nowSeconds, plan = 'pro' }: RenderFindingEmailOptions,
 ): RenderedEmail {
+  const showUpsell = plan === 'free'
   const severity = severityChip(finding.severity).label
   const subject = `[${severity}] ${finding.detected}`
 
@@ -91,6 +102,7 @@ export function renderFindingEmail(
     `Approve:        ${approveUrl}`,
     `Reject:         ${rejectUrl}`,
     `Remind me later: ${snoozeUrl}`,
+    ...(showUpsell ? ['', BRIEFING_UPSELL_TEXT] : []),
   ].join('\n')
 
   const citationHtml = finding.citation_url
@@ -122,6 +134,7 @@ export function renderFindingEmail(
         ${button(snoozeUrl, 'Remind me later', '#27272a', '#e5e7eb')}
       </div>
 
+      ${showUpsell ? `<p style="margin:24px 0 0;font-size:13px;line-height:1.5;color:#a1a1aa;border-top:1px solid #27272a;padding-top:16px;">${escapeHtml(BRIEFING_UPSELL_TEXT)} <a href="${escapeHtml(baseUrl)}" style="color:#6366f1;">Upgrade</a>.</p>` : ''}
       <p style="margin:24px 0 0;font-size:12px;color:#52525b;">Kindlast — your AI compliance co-pilot. These one-tap links are private to you.</p>
     </div>
   </body>

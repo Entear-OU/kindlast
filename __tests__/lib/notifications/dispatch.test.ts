@@ -20,7 +20,9 @@ interface Tables {
 
 function makeFakeSupabase(tables: Tables, users: Record<string, { email: string | null }>) {
   function query(table: keyof Tables) {
-    const rows = tables[table]
+    // Unknown tables (e.g. `subscriptions`, read by getPlan for the upsell
+    // footer) resolve empty → getPlan falls back to 'free'.
+    const rows = tables[table] ?? []
     const filters: [string, unknown][] = []
     let op: 'select' | 'update' = 'select'
     let patch: Record<string, unknown> = {}

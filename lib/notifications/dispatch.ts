@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { getPlan } from '@/lib/billing/plan'
 import type { EmailProvider } from '@/lib/email/types'
 import type { FindingSeverity } from '@/lib/feed/findings'
 import { renderFindingEmail, type FindingEmailInput } from '@/lib/notifications/finding-email'
@@ -131,7 +132,9 @@ async function processRow(
     return 'skipped'
   }
 
-  const { subject, html, text } = renderFindingEmail(finding, { baseUrl, tokenSecret, nowSeconds })
+  // Free recipients get the weekly-briefing upsell footer (ENT-74).
+  const plan = await getPlan(supabase, row.user_id)
+  const { subject, html, text } = renderFindingEmail(finding, { baseUrl, tokenSecret, nowSeconds, plan })
   await emailProvider.send({ to: email, subject, html, text })
 
   await mark(supabase, row.id, { status: 'sent', sent_at: new Date().toISOString() })

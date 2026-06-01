@@ -71,6 +71,19 @@ describe('renderFindingEmail (ENT-73)', () => {
     }
   })
 
+  it('adds the weekly-briefing upsell footer for a Free recipient', () => {
+    const free = renderFindingEmail(FINDING, { baseUrl: BASE, tokenSecret: SECRET, nowSeconds: NOW, plan: 'free' })
+    expect(free.text).toContain('Upgrade to Pro for a weekly Monday compliance briefing')
+    expect(free.html).toContain('weekly Monday compliance briefing')
+  })
+
+  it('omits the upsell for a Pro recipient (and by default)', () => {
+    const pro = renderFindingEmail(FINDING, { baseUrl: BASE, tokenSecret: SECRET, nowSeconds: NOW, plan: 'pro' })
+    expect(pro.text).not.toContain('Upgrade to Pro for a weekly')
+    // default (omitted plan) is pro → no upsell
+    expect(email.text).not.toContain('Upgrade to Pro for a weekly')
+  })
+
   it('escapes HTML in finding text to avoid breaking markup', () => {
     const xss = renderFindingEmail(
       { ...FINDING, detected: 'Tag <script>alert(1)</script> & "quotes"' },
