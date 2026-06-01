@@ -141,7 +141,10 @@ describe('RopaRegister (ENT-70)', () => {
     expect(screen.getByRole('button', { name: /add activity/i })).toBeDisabled()
     expect(screen.getByText(/3 of 3 manual activities used/i)).toBeInTheDocument()
     // The cap prompt offers a checkout CTA and fires the shown event.
-    expect(screen.getByRole('link', { name: /upgrade to pro/i })).toHaveAttribute('href', '/billing')
+    expect(screen.getByRole('link', { name: /upgrade to pro/i })).toHaveAttribute(
+      'href',
+      '/billing?returnTo=%2Frecords%2Fropa',
+    )
     expect(shownMock).toHaveBeenCalledWith({ source: 'ropa_cap', lockedCount: 0, totalCount: 3 })
   })
 

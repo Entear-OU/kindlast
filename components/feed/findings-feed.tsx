@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { approveFinding, rejectFinding, snoozeFinding } from '@/app/(authed)/feed/actions'
 import { UpgradeDialog } from '@/components/billing/upgrade-dialog'
 import { trackUpgradeConverted, trackUpgradePromptShown } from '@/lib/analytics/track'
+import { upgradeHref } from '@/lib/billing/upgrade-link'
 import type { Plan } from '@/lib/billing/plan'
 import {
   DEFAULT_SNOOZE_DAYS,
@@ -223,7 +224,12 @@ export function FindingsFeed({
         />
       ) : null}
 
-      <UpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} source="executor_approve" />
+      <UpgradeDialog
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        source="executor_approve"
+        returnTo="/feed"
+      />
     </div>
   )
 }
@@ -268,7 +274,7 @@ function LockedFindings({
           on all of them.
         </p>
         <Link
-          href="/billing"
+          href={upgradeHref('/feed')}
           onClick={() =>
             trackUpgradeConverted({ source: 'finding_cap', lockedCount, totalCount })
           }

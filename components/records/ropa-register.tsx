@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { addActivity, editActivity } from '@/app/(authed)/records/ropa/actions'
 import { trackUpgradeConverted, trackUpgradePromptShown } from '@/lib/analytics/track'
 import type { Plan } from '@/lib/billing/plan'
+import { upgradeHref } from '@/lib/billing/upgrade-link'
 import {
   deriveRopaStatus,
   formatUpdatedAt,
@@ -269,7 +270,7 @@ export function RopaRegister({
         <p className="text-xs text-amber-300/80">
           Free plan: {manualUsed} of {manualLimit} manual activities used.{' '}
           <Link
-            href="/billing"
+            href={upgradeHref('/records/ropa')}
             onClick={() =>
               trackUpgradeConverted({
                 source: 'ropa_cap',
@@ -353,7 +354,7 @@ export function RopaRegister({
                   <td className="py-3 text-right">
                     {lockedIds.has(a.id) ? (
                       <Link
-                        href="/billing"
+                        href={upgradeHref('/records/ropa')}
                         onClick={() =>
                           trackUpgradeConverted({
                             source: 'ropa_cap',

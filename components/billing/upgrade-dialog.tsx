@@ -8,6 +8,7 @@ import {
   trackUpgradePromptShown,
   type UpgradeSource,
 } from '@/lib/analytics/track'
+import { upgradeHref } from '@/lib/billing/upgrade-link'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Dialog,
@@ -42,12 +43,15 @@ export function UpgradeDialog({
   open,
   onOpenChange,
   source,
+  returnTo,
   title = APPROVE_UPGRADE_TITLE,
   description = APPROVE_UPGRADE_DESCRIPTION,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   source: UpgradeSource
+  /** Where checkout should return the user on success (the path they were on). */
+  returnTo?: string
   title?: string
   description?: string
 }) {
@@ -65,7 +69,7 @@ export function UpgradeDialog({
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Not now</DialogClose>
           <Link
-            href="/billing"
+            href={upgradeHref(returnTo)}
             onClick={() => trackUpgradeConverted({ source })}
             className={cn(buttonVariants())}
           >
