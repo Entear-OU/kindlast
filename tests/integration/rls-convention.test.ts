@@ -58,7 +58,7 @@ const DROP_SQL = /* sql */ `drop table if exists public._test_rls_fixture;`
 async function waitForPostgrestTable(
   admin: ReturnType<typeof createServiceRoleClient>,
   table: string,
-  attempts = 30,
+  attempts = 50,
 ): Promise<void> {
   for (let i = 0; i < attempts; i++) {
     const { error } = await admin.from(table).select('*', { head: true, count: 'exact' })
@@ -66,6 +66,25 @@ async function waitForPostgrestTable(
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error(`waitForPostgrestTable: ${table} never appeared in the PostgREST schema cache`)
+}
+
+/**
+ * Retry a PostgREST call while it reports PGRST205 ("table not in schema
+ * cache"). The `head` probe above only proves *one* PostgREST worker has picked
+ * up the schema reload; under a fast-booting stack a follow-up write can still
+ * land on another worker mid-reload and 205. Polling the actual operation makes
+ * the setup deterministic regardless of which worker serves it.
+ */
+async function withSchemaCacheRetry<T extends { error: { code?: string } | null }>(
+  op: () => PromiseLike<T>,
+  attempts = 30,
+): Promise<T> {
+  let result = await op()
+  for (let i = 0; i < attempts && result.error?.code === 'PGRST205'; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    result = await op()
+  }
+  return result
 }
 
 describe.skipIf(!supabaseRunning)('RLS convention (sample scaffold test)', () => {
@@ -82,13 +101,15 @@ describe.skipIf(!supabaseRunning)('RLS convention (sample scaffold test)', () =>
     userA = await signUpTestUser(admin)
     userB = await signUpTestUser(admin)
 
-    const { data, error } = await admin
-      .from('_test_rls_fixture')
-      .insert([
-        { user_id: userA.id, note: 'belongs to A' },
-        { user_id: userB.id, note: 'belongs to B' },
-      ])
-      .select('id, user_id')
+    const { data, error } = await withSchemaCacheRetry(() =>
+      admin
+        .from('_test_rls_fixture')
+        .insert([
+          { user_id: userA.id, note: 'belongs to A' },
+          { user_id: userB.id, note: 'belongs to B' },
+        ])
+        .select('id, user_id'),
+    )
     if (error) throw error
     userARowId = data!.find((row) => row.user_id === userA.id)!.id
   })
