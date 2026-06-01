@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   deriveRopaStatus,
   formatUpdatedAt,
+  lockedManualActivityIds,
   manualActivityCount,
+  ropaManualLimit,
+  ROPA_MANUAL_LIMIT,
   type ProcessingActivity,
 } from '@/lib/records/ropa'
 
@@ -65,6 +68,46 @@ describe('manualActivityCount (ENT-70)', () => {
       { ...base, id: '3', finding_id: null },
     ]
     expect(manualActivityCount(rows)).toBe(2)
+  })
+})
+
+describe('ropaManualLimit (free-tier cap, ENT-84)', () => {
+  it('caps Free at ROPA_MANUAL_LIMIT', () => {
+    expect(ropaManualLimit('free')).toBe(ROPA_MANUAL_LIMIT)
+  })
+
+  it('leaves Pro uncapped (null)', () => {
+    expect(ropaManualLimit('pro')).toBeNull()
+  })
+})
+
+describe('lockedManualActivityIds (read-only edge case, ENT-84)', () => {
+  const rows: ProcessingActivity[] = [
+    { ...base, id: 'm1', finding_id: null }, // newest manual — editable
+    { ...base, id: 'm2', finding_id: null },
+    { ...base, id: 'x1', finding_id: 'f1' }, // Executor row — never capped
+    { ...base, id: 'm3', finding_id: null },
+    { ...base, id: 'm4', finding_id: null }, // 4th manual — over the cap
+  ]
+
+  it('locks manual rows beyond the cap, keeping the most-recent editable', () => {
+    const locked = lockedManualActivityIds(rows, 3)
+    expect([...locked]).toEqual(['m4'])
+  })
+
+  it('never locks Executor-ratified rows', () => {
+    const locked = lockedManualActivityIds(rows, 1)
+    expect(locked.has('x1')).toBe(false)
+    // m2, m3, m4 are the manual rows beyond the first; m1 stays editable.
+    expect([...locked].sort()).toEqual(['m2', 'm3', 'm4'])
+  })
+
+  it('locks nothing when uncapped (Pro)', () => {
+    expect(lockedManualActivityIds(rows, null).size).toBe(0)
+  })
+
+  it('locks nothing when under the cap', () => {
+    expect(lockedManualActivityIds(rows, 5).size).toBe(0)
   })
 })
 

@@ -1,14 +1,18 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import { addActivity, editActivity } from '@/app/(authed)/records/ropa/actions'
+import { trackUpgradeConverted, trackUpgradePromptShown } from '@/lib/analytics/track'
+import type { Plan } from '@/lib/billing/plan'
 import {
   deriveRopaStatus,
   formatUpdatedAt,
+  lockedManualActivityIds,
   manualActivityCount,
-  ROPA_MANUAL_LIMIT,
+  ropaManualLimit,
   ROPA_STATUS_LABEL,
   type ProcessingActivity,
   type ProcessingActivityInput,
@@ -178,10 +182,11 @@ function ActivityForm({
 
 export function RopaRegister({
   activities,
-  manualLimit = ROPA_MANUAL_LIMIT,
+  plan = 'pro',
 }: {
   activities: ProcessingActivity[]
-  manualLimit?: number
+  /** Drives the Free-tier manual-activity cap (ENT-84). */
+  plan?: Plan
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -190,8 +195,21 @@ export function RopaRegister({
   const [draft, setDraft] = useState<RopaFormValues>(EMPTY)
   const [error, setError] = useState<string | null>(null)
 
+  // null = uncapped (Pro). Free is capped at ROPA_MANUAL_LIMIT manual rows.
+  const manualLimit = ropaManualLimit(plan)
   const manualUsed = manualActivityCount(activities)
-  const atManualCap = manualUsed >= manualLimit
+  const atManualCap = manualLimit !== null && manualUsed >= manualLimit
+  // Edge case: a downgrade can leave more manual rows than the cap — those go
+  // read-only with an upgrade hint instead of staying freely editable.
+  const lockedIds = lockedManualActivityIds(activities, manualLimit)
+
+  // Tracking (AC mirrors ENT-82/83): the cap prompt is "shown" once the Free
+  // user hits the limit.
+  useEffect(() => {
+    if (atManualCap) {
+      trackUpgradePromptShown({ source: 'ropa_cap', lockedCount: lockedIds.size, totalCount: manualUsed })
+    }
+  }, [atManualCap, lockedIds.size, manualUsed])
 
   function beginAdd() {
     setEditingId(null)
@@ -249,7 +267,21 @@ export function RopaRegister({
       </button>
       {atManualCap && (
         <p className="text-xs text-amber-300/80">
-          Free plan: {manualUsed} of {manualLimit} manual activities used. Upgrade to add more.
+          Free plan: {manualUsed} of {manualLimit} manual activities used.{' '}
+          <Link
+            href="/billing"
+            onClick={() =>
+              trackUpgradeConverted({
+                source: 'ropa_cap',
+                lockedCount: lockedIds.size,
+                totalCount: manualUsed,
+              })
+            }
+            className="font-medium text-[#00C9A7] underline-offset-2 hover:underline"
+          >
+            Upgrade to Pro
+          </Link>{' '}
+          to add more.
         </p>
       )}
     </div>
@@ -319,13 +351,30 @@ export function RopaRegister({
                   </td>
                   <td className="py-3 pr-4 text-zinc-400">{formatUpdatedAt(a.updated_at)}</td>
                   <td className="py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => beginEdit(a)}
-                      className="rounded-md px-2 py-1 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
-                    >
-                      Edit
-                    </button>
+                    {lockedIds.has(a.id) ? (
+                      <Link
+                        href="/billing"
+                        onClick={() =>
+                          trackUpgradeConverted({
+                            source: 'ropa_cap',
+                            lockedCount: lockedIds.size,
+                            totalCount: manualUsed,
+                          })
+                        }
+                        title="Over the Free-tier limit — upgrade to edit this activity"
+                        className="rounded-md px-2 py-1 text-xs text-amber-300/80 hover:bg-white/5"
+                      >
+                        Upgrade to edit
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(a)}
+                        className="rounded-md px-2 py-1 text-xs text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
+                      >
+                        Edit
+                      </button>
+                    )}
                   </td>
                 </tr>
               ),

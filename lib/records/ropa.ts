@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import type { Plan } from '@/lib/billing/plan'
+
 /**
  * Data access + presentation helpers for the ROPA register (ENT-70).
  *
@@ -39,6 +41,42 @@ export type RopaStatus = 'complete' | 'review_needed' | 'incomplete'
 
 /** Free-tier cap on *manual* activities. Mirrors `ropa_manual_activity_limit()`. */
 export const ROPA_MANUAL_LIMIT = 3
+
+/**
+ * Plan-aware manual-activity limit (ENT-84). Mirrors the DB's plan-aware
+ * `ropa_manual_activity_limit()`: `null` means uncapped (Pro), Free is capped at
+ * ROPA_MANUAL_LIMIT. The DB is the authority — this is the client mirror so the
+ * UI can disable "Add activity" and lock excess rows without a round-trip.
+ */
+export function ropaManualLimit(plan: Plan): number | null {
+  return plan === 'pro' ? null : ROPA_MANUAL_LIMIT
+}
+
+/**
+ * Free-tier edge case (ENT-84): a downgrade can leave more manual activities than
+ * the cap allows. The excess manual rows go read-only (with an upgrade hint)
+ * rather than letting the founder keep editing an over-quota register; the
+ * most-recent `limit` manual rows stay editable. Executor-ratified rows
+ * (finding_id set) are never capped, so they're always editable.
+ *
+ * `activities` is assumed in display order (loadProcessingActivities orders by
+ * updated_at desc), so the head of the manual rows is "most-recent". Returns the
+ * ids that should render read-only; empty when uncapped (Pro) or under the cap.
+ */
+export function lockedManualActivityIds(
+  activities: ProcessingActivity[],
+  limit: number | null,
+): Set<string> {
+  if (limit === null) return new Set()
+  const locked = new Set<string>()
+  let manualSeen = 0
+  for (const a of activities) {
+    if (a.finding_id !== null) continue
+    manualSeen += 1
+    if (manualSeen > limit) locked.add(a.id)
+  }
+  return locked
+}
 
 const COLUMNS =
   'id,name,purpose,legal_basis,data_categories,recipients,retention_period,finding_id,created_at,updated_at'

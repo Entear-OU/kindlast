@@ -30,6 +30,16 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: refreshMock }),
 }))
 
+const { shownMock, convertedMock } = vi.hoisted(() => ({
+  shownMock: vi.fn(),
+  convertedMock: vi.fn(),
+}))
+
+vi.mock('@/lib/analytics/track', () => ({
+  trackUpgradePromptShown: shownMock,
+  trackUpgradeConverted: convertedMock,
+}))
+
 function activity(over: Partial<ProcessingActivity> = {}): ProcessingActivity {
   return {
     id: 'a1',
@@ -50,6 +60,8 @@ beforeEach(() => {
   addActivityMock.mockReset().mockResolvedValue({ ok: true })
   editActivityMock.mockReset().mockResolvedValue({ ok: true })
   refreshMock.mockReset()
+  shownMock.mockReset()
+  convertedMock.mockReset()
 })
 
 describe('RopaRegister (ENT-70)', () => {
@@ -125,9 +137,44 @@ describe('RopaRegister (ENT-70)', () => {
       activity({ id: 'm3', finding_id: null }),
       activity({ id: 'x1', finding_id: 'f1' }), // Executor row — doesn't count
     ]
-    render(<RopaRegister activities={manual} />)
+    render(<RopaRegister plan="free" activities={manual} />)
     expect(screen.getByRole('button', { name: /add activity/i })).toBeDisabled()
     expect(screen.getByText(/3 of 3 manual activities used/i)).toBeInTheDocument()
+    // The cap prompt offers a checkout CTA and fires the shown event.
+    expect(screen.getByRole('link', { name: /upgrade to pro/i })).toHaveAttribute('href', '/billing')
+    expect(shownMock).toHaveBeenCalledWith({ source: 'ropa_cap', lockedCount: 0, totalCount: 3 })
+  })
+
+  it('does not cap a Pro user — Add activity stays enabled past 3', () => {
+    const manual = [
+      activity({ id: 'm1', finding_id: null }),
+      activity({ id: 'm2', finding_id: null }),
+      activity({ id: 'm3', finding_id: null }),
+      activity({ id: 'm4', finding_id: null }),
+    ]
+    render(<RopaRegister plan="pro" activities={manual} />)
+    expect(screen.getByRole('button', { name: /add activity/i })).toBeEnabled()
+    expect(screen.queryByText(/manual activities used/i)).not.toBeInTheDocument()
+    expect(shownMock).not.toHaveBeenCalled()
+  })
+
+  it('locks manual rows beyond the cap read-only for Free (downgrade edge case)', async () => {
+    const user = userEvent.setup()
+    const manual = [
+      activity({ id: 'm1', name: 'Newest', finding_id: null }),
+      activity({ id: 'm2', name: 'Mid', finding_id: null }),
+      activity({ id: 'm3', name: 'Old', finding_id: null }),
+      activity({ id: 'm4', name: 'Oldest', finding_id: null }), // over the cap
+    ]
+    render(<RopaRegister plan="free" activities={manual} />)
+
+    // 3 editable rows + 1 locked "Upgrade to edit".
+    expect(screen.getAllByRole('button', { name: /edit/i })).toHaveLength(3)
+    const upgradeLinks = screen.getAllByRole('link', { name: /upgrade to edit/i })
+    expect(upgradeLinks).toHaveLength(1)
+
+    await user.click(upgradeLinks[0])
+    expect(convertedMock).toHaveBeenCalledWith({ source: 'ropa_cap', lockedCount: 1, totalCount: 4 })
   })
 
   it('surfaces an action error without closing the form', async () => {
