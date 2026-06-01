@@ -2,8 +2,10 @@ import { redirect } from 'next/navigation'
 
 import { ConsoleShell } from '@/components/console/console-shell'
 import { PostureIndicator } from '@/components/dashboard/posture-indicator'
+import { SeverityCounters } from '@/components/dashboard/severity-counters'
 import { loadPostureInputs } from '@/lib/dashboard/data'
 import { computePosture } from '@/lib/dashboard/posture'
+import { countOpenBySeverity } from '@/lib/dashboard/severity'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -22,12 +24,15 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  const posture = computePosture(await loadPostureInputs(supabase, user.id))
+  const inputs = await loadPostureInputs(supabase, user.id)
+  const posture = computePosture(inputs)
+  const counts = countOpenBySeverity(inputs.openSeverities)
 
   return (
     <ConsoleShell activeRail="dashboard" title="Dashboard">
       <div className="space-y-6">
         <PostureIndicator posture={posture} />
+        <SeverityCounters counts={counts} />
       </div>
     </ConsoleShell>
   )
