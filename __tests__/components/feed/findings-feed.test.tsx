@@ -223,16 +223,25 @@ describe('FindingsFeed — actions (ENT-63)', () => {
     expect(snoozeMock).toHaveBeenCalledWith('a', 30)
   })
 
-  it('shows the Pro upgrade prompt on Approve for Free users without firing the action', async () => {
+  it('opens the "Upgrade to act" modal on Approve for Free users without firing the action', async () => {
     const user = userEvent.setup()
     render(<FindingsFeed plan="free" findings={[finding({ id: 'a', detected: 'Approve me' })]} />)
 
+    // Reject and Snooze are available on Free (not gated) before any modal opens.
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Snooze' })).toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'Approve' }))
 
+    // Executor is never called…
     expect(approveMock).not.toHaveBeenCalled()
-    expect(toastError).toHaveBeenCalled()
-    // Stays pending — no optimistic flip.
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+    // …and the upgrade modal explains why, with the AC copy.
+    expect(
+      await screen.findByText(
+        'Pro unlocks one-tap actions. Your finding is still here, waiting.',
+      ),
+    ).toBeInTheDocument()
+    expect(shownMock).toHaveBeenCalledWith({ source: 'executor_approve' })
   })
 })
 

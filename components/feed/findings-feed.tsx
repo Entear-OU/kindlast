@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 
 import { approveFinding, rejectFinding, snoozeFinding } from '@/app/(authed)/feed/actions'
+import { UpgradeDialog } from '@/components/billing/upgrade-dialog'
 import { trackUpgradeConverted, trackUpgradePromptShown } from '@/lib/analytics/track'
 import type { Plan } from '@/lib/billing/plan'
 import {
@@ -93,6 +94,8 @@ export function FindingsFeed({
   const [severity, setSeverity] = useState<SeverityChoice>('all')
   const [pending, startTransition] = useTransition()
   const [busyId, setBusyId] = useState<string | null>(null)
+  // ENT-83: the "Upgrade to act" modal a Free user sees when they tap Approve.
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
 
   // Free-tier gate first (ENT-82): the 3 most-recent are actionable, the rest
   // locked. Filters then narrow only the actionable set; the locked previews are
@@ -124,9 +127,9 @@ export function FindingsFeed({
       } else {
         setItems(snapshot)
         if (res.upgrade) {
-          toast.error('Approving is a Pro feature', {
-            description: 'Upgrade to let your agents act on this finding.',
-          })
+          // Defense-in-depth: the client already gates Approve for Free, but if
+          // the server is the one to reject on tier, raise the same modal.
+          setUpgradeOpen(true)
         } else {
           toast.error('Something went wrong', { description: res.error })
         }
@@ -136,12 +139,10 @@ export function FindingsFeed({
   }
 
   function onApprove(id: string) {
-    // Free users never reach the Executor — surface the upgrade prompt instead
-    // of an optimistic flip the server would only reject.
+    // Free users never reach the Executor — raise the "Upgrade to act" modal
+    // (ENT-83) instead of an optimistic flip the server would only reject.
     if (plan !== 'pro') {
-      toast.error('Approving is a Pro feature', {
-        description: 'Upgrade to let your agents act on this finding.',
-      })
+      setUpgradeOpen(true)
       return
     }
     runAction(id, { status: 'approved' }, () => approveFinding(id), 'Finding approved')
@@ -221,6 +222,8 @@ export function FindingsFeed({
           totalCount={gated.totalCount}
         />
       ) : null}
+
+      <UpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} source="executor_approve" />
     </div>
   )
 }
