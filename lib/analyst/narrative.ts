@@ -56,6 +56,14 @@ export interface FindingNarrativeContext {
   subjectName?: string | null
   /** profile_gap: the unsatisfied control tokens (e.g. ["dpo"]). */
   missingControls?: string[] | null
+  /**
+   * Prior founder-rejection reasons for the SAME condition (same
+   * profile_id + obligation_slug), newest first (ENT-65). Distinct from the
+   * critic-retry `priorReasons` param of buildNarrativePrompt — these are the
+   * founder's own objections, fed in so the model stops repeating a false
+   * positive the founder has already dismissed.
+   */
+  priorRejectionReasons?: string[]
 }
 
 export const ANALYST_NARRATIVE_PROMPT = `You are the Analyst in a compliance copilot for EU small businesses. You turn a detected compliance condition into something a non-legal founder can read and act on in 30 seconds.
@@ -100,6 +108,13 @@ export function buildNarrativePrompt(
   if (context.subjectName) lines.push(`Data-subject request from: ${context.subjectName}`)
   if (context.missingControls?.length) {
     lines.push(`Missing controls: ${context.missingControls.join(', ')}`)
+  }
+  if (context.priorRejectionReasons?.length) {
+    const quoted = context.priorRejectionReasons.map((r) => `"${r}"`).join('; ')
+    lines.push(
+      '',
+      `The founder has previously rejected similar findings for this obligation, saying: ${quoted}. Take these objections seriously — only raise this if it still applies, and make the description and action directly address those concerns.`,
+    )
   }
   if (priorReasons.length) {
     lines.push(

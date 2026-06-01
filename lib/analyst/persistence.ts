@@ -28,6 +28,7 @@ interface FindingRow {
   id: string
   profile_id: string
   obligation_id: string
+  obligation_slug: string | null
   regulatory_obligation: string | null
   supporting_context: string | null
   metadata: {
@@ -42,7 +43,9 @@ export async function loadFindingContext(
 ): Promise<FindingNarrativeContext> {
   const { data: finding, error } = await supabase
     .from('findings')
-    .select('id, profile_id, obligation_id, regulatory_obligation, supporting_context, metadata')
+    .select(
+      'id, profile_id, obligation_id, obligation_slug, regulatory_obligation, supporting_context, metadata',
+    )
     .eq('id', findingId)
     .single<FindingRow>()
   if (error || !finding) {
@@ -61,6 +64,34 @@ export async function loadFindingContext(
       .single<{ industry: string | null; vendor_list: string | null; ai_systems: string[] | null }>(),
   ])
 
+  // Prior founder-rejection reasons for the SAME condition (ENT-65). When the
+  // Watcher re-emits the same (profile_id, obligation_slug), feed the founder's
+  // earlier objections into the prompt so the model stops repeating a false
+  // positive. Best-effort: a failure here (or a null slug) just means "no prior
+  // reasons" — it must not break the whole context load.
+  let priorRejectionReasons: string[] | undefined
+  if (finding.obligation_slug) {
+    try {
+      const { data: priorRows } = await supabase
+        .from('findings')
+        .select('rejection_reason')
+        .eq('profile_id', finding.profile_id)
+        .eq('obligation_slug', finding.obligation_slug)
+        .eq('status', 'rejected')
+        .neq('id', findingId)
+        .not('rejection_reason', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(5)
+        .returns<{ rejection_reason: string | null }[]>()
+      const reasons = (priorRows ?? [])
+        .map((r) => r.rejection_reason?.trim())
+        .filter((r): r is string => !!r)
+      if (reasons.length) priorRejectionReasons = reasons
+    } catch {
+      // Treat any failure as "no prior reasons".
+    }
+  }
+
   const sigMeta = finding.metadata?.signal_metadata ?? {}
   const asString = (v: unknown): string | null => (typeof v === 'string' ? v : null)
   const asStringArray = (v: unknown): string[] | null =>
@@ -76,6 +107,7 @@ export async function loadFindingContext(
     aiSystems: profile?.ai_systems ?? null,
     deadlineDate: asString(sigMeta['effective_date']) ?? asString(sigMeta['response_due_at']),
     missingControls: asStringArray(sigMeta['missing']),
+    priorRejectionReasons,
   }
 }
 

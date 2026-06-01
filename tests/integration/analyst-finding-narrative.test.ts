@@ -119,6 +119,45 @@ describe.skipIf(!supabaseRunning)('analyst finding narrative (ENT-60)', () => {
     expect(ctx.obligationSummary).toBe(SUMMARY)
   })
 
+  it('has no priorRejectionReasons when no prior finding was rejected (ENT-65)', async () => {
+    const ctx = await loadFindingContext(createServiceRoleClient(), findingId)
+    // No prior rejected finding for this condition yet.
+    expect(ctx.priorRejectionReasons ?? []).toEqual([])
+  })
+
+  it('surfaces prior founder-rejection reasons for the same condition (ENT-65)', async () => {
+    // A prior finding for the SAME (profile_id, obligation_slug), rejected with
+    // a reason — re-emitted via the real pipeline with a distinct dedup key so a
+    // separate finding row exists.
+    const reason = 'We already maintain a ROPA in our internal compliance tool.'
+    const [{ id: priorSignalId }] = await querySql<{ id: string }>(
+      `select public.emit_watcher_finding(
+         $1::uuid, 'profile_gap', 'gap:obligation:${PREFIX}ropa:prior',
+         'Profile gap: Records of Processing Activities', 'baseline detail', 'high',
+         '${PREFIX}ropa', jsonb_build_object('missing', to_jsonb(array['ropa']), 'recurring', false)
+       ) as id`,
+      [profileId],
+    )
+    await querySql(`select public.analyst_convert_signal($1::uuid)`, [priorSignalId])
+    const [{ id: priorFindingId }] = await querySql<{ id: string }>(
+      `select id from public.findings where watcher_finding_id = $1::uuid`,
+      [priorSignalId],
+    )
+    await querySql(
+      `update public.findings
+       set status = 'rejected', rejection_reason = $2
+       where id = $1::uuid`,
+      [priorFindingId, reason],
+    )
+
+    // Loading context for the ORIGINAL finding should now carry the prior reason.
+    const ctx = await loadFindingContext(createServiceRoleClient(), findingId)
+    expect(ctx.priorRejectionReasons).toEqual([reason])
+
+    // Cleanup the helper finding so it does not leak into other assertions.
+    await querySql(`delete from public.findings where id = $1::uuid`, [priorFindingId])
+  })
+
   it('persists the generated narrative onto the finding', async () => {
     await persistFindingNarrative(createServiceRoleClient(), findingId, NARRATIVE)
 

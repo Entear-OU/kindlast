@@ -13,6 +13,7 @@ vi.mock('@ai-sdk/openai', () => ({
 
 import {
   ANALYST_NARRATIVE_PROMPT,
+  buildNarrativePrompt,
   findingNarrativeSchema,
   generateFindingNarrative,
   type FindingNarrativeContext,
@@ -92,5 +93,42 @@ describe('generateFindingNarrative (ENT-60)', () => {
     expect(result.narrative).toBeUndefined()
     expect(result.reasons).toContain('generic_verb')
     expect(generateObjectMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('buildNarrativePrompt — prior founder-rejection reasons (ENT-65)', () => {
+  it('includes the prior-rejection wording and reason text when present', () => {
+    const prompt = buildNarrativePrompt({
+      ...CONTEXT,
+      priorRejectionReasons: [
+        'We already signed a DPA with Stripe last quarter.',
+        'Stripe is not a processor for us, only a payment gateway.',
+      ],
+    })
+
+    expect(prompt).toMatch(/previously rejected/i)
+    expect(prompt).toContain('We already signed a DPA with Stripe last quarter.')
+    expect(prompt).toContain('Stripe is not a processor for us, only a payment gateway.')
+  })
+
+  it('omits the prior-rejection wording when there are none', () => {
+    const none = buildNarrativePrompt(CONTEXT)
+    expect(none).not.toMatch(/previously rejected/i)
+
+    const empty = buildNarrativePrompt({ ...CONTEXT, priorRejectionReasons: [] })
+    expect(empty).not.toMatch(/previously rejected/i)
+  })
+
+  it('keeps founder-rejection reasons distinct from the critic retry block', () => {
+    const prompt = buildNarrativePrompt(
+      { ...CONTEXT, priorRejectionReasons: ['Already handled offline.'] },
+      ['generic_verb'],
+    )
+    // Critic feedback block.
+    expect(prompt).toMatch(/rejected for:/i)
+    expect(prompt).toContain('generic_verb')
+    // Founder-rejection block — separate wording, separate content.
+    expect(prompt).toMatch(/previously rejected/i)
+    expect(prompt).toContain('Already handled offline.')
   })
 })
