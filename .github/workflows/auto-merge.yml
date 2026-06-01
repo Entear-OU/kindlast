@@ -1,0 +1,60 @@
+name: Auto-merge
+
+# Squash-merges a PR into main automatically once CI passes — but only if the
+# PR carries the `auto-merge` label, so merging stays opt-in per PR and human
+# review of acceptance criteria is preserved for everything else.
+#
+# Why a self-contained gate instead of GitHub's native `gh pr merge --auto`:
+# native auto-merge requires a required-status-check (branch protection or a
+# ruleset) to act as the merge gate, and this repo's plan doesn't offer branch
+# protection. So we trigger off the CI workflow completing successfully and do
+# the label check + merge ourselves.
+#
+# Note: `workflow_run` only fires for workflow files that exist on the default
+# branch, so this won't auto-merge the very PR that first adds it — it takes
+# effect for PRs opened after this lands on main.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Squash-merge labeled PRs
+    # Only act on a green CI run that was triggered by a pull request.
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge if labeled
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          # Resolve the open PR from the commit CI ran on.
+          pr=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
+                 --jq '.[] | select(.state == "open") | .number' | head -n1)
+
+          if [ -z "${pr}" ]; then
+            echo "No open PR for ${HEAD_SHA}; nothing to merge."
+            exit 0
+          fi
+
+          # Opt-in gate: only merge PRs explicitly labeled `auto-merge`.
+          if ! gh pr view "${pr}" --repo "${REPO}" --json labels \
+                 --jq '.labels[].name' | grep -Fxq 'auto-merge'; then
+            echo "PR #${pr} is not labeled 'auto-merge'; skipping."
+            exit 0
+          fi
+
+          echo "Squash-merging PR #${pr}…"
+          gh pr merge "${pr}" --repo "${REPO}" --squash --delete-branch
