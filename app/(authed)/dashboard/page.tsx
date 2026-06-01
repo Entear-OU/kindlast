@@ -3,8 +3,13 @@ import { redirect } from 'next/navigation'
 import { ConsoleShell } from '@/components/console/console-shell'
 import { DeadlinesList } from '@/components/dashboard/deadlines-list'
 import { PostureIndicator } from '@/components/dashboard/posture-indicator'
+import { RecentActivity } from '@/components/dashboard/recent-activity'
 import { SeverityCounters } from '@/components/dashboard/severity-counters'
-import { loadPostureInputs, loadUpcomingDeadlines } from '@/lib/dashboard/data'
+import {
+  loadPostureInputs,
+  loadRecentActivity,
+  loadUpcomingDeadlines,
+} from '@/lib/dashboard/data'
 import { computePosture } from '@/lib/dashboard/posture'
 import { countOpenBySeverity } from '@/lib/dashboard/severity'
 import { createClient } from '@/lib/supabase/server'
@@ -25,9 +30,10 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  const [inputs, deadlines] = await Promise.all([
+  const [inputs, deadlines, activity] = await Promise.all([
     loadPostureInputs(supabase, user.id),
     loadUpcomingDeadlines(supabase, user.id),
+    loadRecentActivity(supabase, user.id),
   ])
   const posture = computePosture(inputs)
   const counts = countOpenBySeverity(inputs.openSeverities)
@@ -38,6 +44,11 @@ export default async function DashboardPage() {
         <PostureIndicator posture={posture} />
         <SeverityCounters counts={counts} />
         <DeadlinesList deadlines={deadlines} />
+        <RecentActivity
+          activity={activity}
+          currentUserId={user.id}
+          currentUserEmail={user.email}
+        />
       </div>
     </ConsoleShell>
   )

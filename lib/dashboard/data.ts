@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import type { AuditEntry, RecentActivity } from './activity'
 import {
   buildUpcomingDeadlines,
   type DeadlineFindingRow,
@@ -83,4 +84,63 @@ export async function loadUpcomingDeadlines(
   }
 
   return buildUpcomingDeadlines((data ?? []) as DeadlineFindingRow[])
+}
+
+/** How many audit entries the "Recent actions" widget shows (AC: last 10). */
+const RECENT_ACTIONS_LIMIT = 10
+
+interface AuditRow {
+  id: string
+  action_type: string
+  target_table: string
+  target_id: string | null
+  approving_user_id: string
+  occurred_at: string
+}
+
+/**
+ * The recent-activity widget's data (ENT-80): the last 10 Executor audit
+ * entries (newest first, served from the `audit_log_user_recent_idx`) and the
+ * profile's last Watcher run. Both reads are RLS-scoped to the owner.
+ */
+export async function loadRecentActivity(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<RecentActivity> {
+  const [auditRes, profileRes] = await Promise.all([
+    supabase
+      .from('audit_log')
+      .select('id,action_type,target_table,target_id,approving_user_id,occurred_at')
+      .eq('user_id', userId)
+      .order('occurred_at', { ascending: false })
+      .limit(RECENT_ACTIONS_LIMIT),
+    supabase
+      .from('compliance_profiles')
+      .select('watcher_last_run_at')
+      .eq('user_id', userId)
+      .order('watcher_last_run_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (auditRes.error) {
+    throw new Error(`loadRecentActivity (audit): ${auditRes.error.message}`)
+  }
+  if (profileRes.error) {
+    throw new Error(`loadRecentActivity (profile): ${profileRes.error.message}`)
+  }
+
+  const entries: AuditEntry[] = ((auditRes.data ?? []) as AuditRow[]).map((r) => ({
+    id: r.id,
+    actionType: r.action_type,
+    targetTable: r.target_table,
+    targetId: r.target_id,
+    approvingUserId: r.approving_user_id,
+    occurredAt: r.occurred_at,
+  }))
+
+  return {
+    entries,
+    watcherLastRunAt: (profileRes.data?.watcher_last_run_at as string | null) ?? null,
+  }
 }
