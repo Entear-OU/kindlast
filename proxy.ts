@@ -23,15 +23,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // ENT-90: redirect authenticated `/dashboard*` to `/onboarding`. The
-  // legacy dashboard was removed in ENT-40 and the real one lands with
-  // ENT-46; until then stale bookmarks would render Next.js's not-found.
-  // Swap this for a profile-aware check once `compliance_profiles` exists.
-  if (user && pathname.startsWith('/dashboard')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/onboarding'
-    return NextResponse.redirect(url)
-  }
+  // ENT-90: authenticated `/dashboard*` used to redirect to `/onboarding`
+  // because no dashboard route existed (the legacy one was removed in ENT-40).
+  // The real compliance dashboard has since landed (epic ENT-37), so the
+  // redirect is gone — authenticated users reach `/dashboard` directly, exactly
+  // like the other console surfaces (`/feed`, `/records`). Unauthenticated
+  // access is still bounced to `/login` by the guard above.
 
   return supabaseResponse
 }

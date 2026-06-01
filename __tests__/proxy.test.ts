@@ -118,9 +118,10 @@ describe('Proxy', () => {
     expect(response).toBe(supabaseResponse)
   })
 
-  it('redirects authenticated users from /dashboard to /onboarding', async () => {
-    // ENT-90: until ENT-46 lands a real `/dashboard`, the legacy route would
-    // 404. Redirect to /onboarding so stale bookmarks land somewhere useful.
+  it('allows authenticated users to access /dashboard', async () => {
+    // ENT-90: the real compliance dashboard (epic ENT-37) has landed, so the
+    // old `/dashboard` → `/onboarding` redirect is gone — an authenticated user
+    // reaches the dashboard directly.
     const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
@@ -134,16 +135,13 @@ describe('Proxy', () => {
     })
 
     const request = createRequest('/dashboard')
-    await proxy(request)
+    const response = await proxy(request)
 
-    expect(NextResponse.redirect).toHaveBeenCalled()
-    const redirectCall = vi.mocked(NextResponse.redirect).mock.calls[0]
-    expect(redirectCall[0].toString()).toContain('/onboarding')
+    expect(NextResponse.redirect).not.toHaveBeenCalled()
+    expect(response).toBe(supabaseResponse)
   })
 
-  it('redirects authenticated users from /dashboard/sub-path to /onboarding', async () => {
-    // Catches any nested `/dashboard/*` link that might still float around
-    // (e.g. older marketing copy).
+  it('allows authenticated users to access a /dashboard sub-path', async () => {
     const { proxy } = await import('@/proxy')
     const { NextResponse } = await import('next/server')
 
@@ -157,11 +155,10 @@ describe('Proxy', () => {
     })
 
     const request = createRequest('/dashboard/settings')
-    await proxy(request)
+    const response = await proxy(request)
 
-    expect(NextResponse.redirect).toHaveBeenCalled()
-    const redirectCall = vi.mocked(NextResponse.redirect).mock.calls[0]
-    expect(redirectCall[0].toString()).toContain('/onboarding')
+    expect(NextResponse.redirect).not.toHaveBeenCalled()
+    expect(response).toBe(supabaseResponse)
   })
 
   it('allows unauthenticated users to access /login', async () => {
