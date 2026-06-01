@@ -36,7 +36,9 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm 11 requires Node >= 22.13 (and uses node:sqlite); local dev runs
+          # Node 24, so 22 LTS is the safe CI floor.
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
