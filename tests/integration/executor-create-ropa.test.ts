@@ -74,13 +74,20 @@ async function seedObligation(slug: string): Promise<void> {
   `)
 }
 
+// Each call needs a distinct signal: emit_watcher_finding dedups on
+// (profile_id, dedup_key) and analyst_convert_signal upserts the finding on
+// watcher_finding_id, so a constant key would hand every test the same
+// already-approved finding and the approval trigger would never re-fire.
+let findingSeq = 0
+
 /** Emit a signal and convert it to a finding, returning the finding id. */
 async function makeFinding(profileId: string, slug: string): Promise<string> {
+  const dedupKey = `gap:${slug}:${(findingSeq += 1)}`
   const [{ id: signalId }] = await querySql<{ id: string }>(
     `select public.emit_watcher_finding(
        $1::uuid, 'profile_gap', $2::text, $3::text, $4::text, 'high', $5::text, '{}'::jsonb
      ) as id`,
-    [profileId, `gap:${slug}`, `Profile gap: ${slug}`, 'A ROPA entry is missing for this activity.', slug],
+    [profileId, dedupKey, `Profile gap: ${slug}`, 'A ROPA entry is missing for this activity.', slug],
   )
   const [{ id: findingId }] = await querySql<{ id: string }>(
     `select public.analyst_convert_signal($1::uuid) as id`,
@@ -209,7 +216,8 @@ describe.skipIf(!supabaseRunning)('executor creates a ROPA entry on approval (EN
     // The after-snapshot is the whole new row — it carries the profile id.
     expect(entry.after?.profile_id).toBe(profileId)
     expect(entry.after?.name).toBe('Marketing emails')
-    expect(typeof entry.occurred_at).toBe('string')
+    // Populated with a valid timestamp (a Date over the direct pg client).
+    expect(Number.isNaN(new Date(entry.occurred_at).getTime())).toBe(false)
   })
 
   it('falls back to the finding text when the payload omits a name', async () => {
