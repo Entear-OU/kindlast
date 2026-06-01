@@ -113,7 +113,11 @@ describe.skipIf(!supabaseRunning)('executor audit log immutability (ENT-69)', ()
     expect(row.after).toMatchObject({ name: 'Customer onboarding', legal_basis: 'contract' })
     expect(row.approving_user_id).toBe(user.id)
     expect(row.finding_id).toBeNull()
-    expect(typeof row.occurred_at).toBe('string')
+    // occurred_at is populated with a valid timestamp. (Read over the direct pg
+    // client it arrives as a Date, not an ISO string, so assert validity rather
+    // than the JS type.)
+    expect(row.occurred_at).toBeTruthy()
+    expect(Number.isNaN(new Date(row.occurred_at).getTime())).toBe(false)
   })
 
   it('exposes a row only to its owner under RLS', async () => {
