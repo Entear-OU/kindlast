@@ -4,8 +4,10 @@ import {
   FEED_SEVERITIES,
   FEED_STATUSES,
   filterFindings,
+  gateFindings,
   severityChip,
   statusLabel,
+  upgradeWaitingMessage,
   type Finding,
 } from '@/lib/feed/findings'
 
@@ -79,5 +81,60 @@ describe('presentation helpers (ENT-62)', () => {
     for (const s of FEED_STATUSES) {
       expect(statusLabel(s)).toMatch(/^[A-Z]/)
     }
+  })
+})
+
+describe('gateFindings (free-tier cap, ENT-82)', () => {
+  const five = [
+    finding({ id: 'a' }),
+    finding({ id: 'b' }),
+    finding({ id: 'c' }),
+    finding({ id: 'd' }),
+    finding({ id: 'e' }),
+  ]
+
+  it('shows everything to Pro, locking nothing', () => {
+    const g = gateFindings(five, 'pro')
+    expect(g.visible.map((f) => f.id)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(g.locked).toEqual([])
+    expect(g.lockedCount).toBe(0)
+    expect(g.totalCount).toBe(5)
+  })
+
+  it('shows Free the 3 most-recent and locks the rest', () => {
+    const g = gateFindings(five, 'free')
+    expect(g.visible.map((f) => f.id)).toEqual(['a', 'b', 'c'])
+    expect(g.locked.map((f) => f.id)).toEqual(['d', 'e'])
+    expect(g.lockedCount).toBe(2)
+    expect(g.totalCount).toBe(5)
+  })
+
+  it('locks nothing for Free at or under the limit', () => {
+    const g = gateFindings(five.slice(0, 3), 'free')
+    expect(g.visible).toHaveLength(3)
+    expect(g.lockedCount).toBe(0)
+  })
+
+  it('handles an empty list', () => {
+    expect(gateFindings([], 'free')).toEqual({
+      visible: [],
+      locked: [],
+      lockedCount: 0,
+      totalCount: 0,
+    })
+  })
+})
+
+describe('upgradeWaitingMessage (ENT-82)', () => {
+  it('carries the count as trigger context', () => {
+    expect(upgradeWaitingMessage(5)).toBe(
+      'You have 5 findings waiting — upgrade to act on them',
+    )
+  })
+
+  it('uses the singular noun for one finding', () => {
+    expect(upgradeWaitingMessage(1)).toBe(
+      'You have 1 finding waiting — upgrade to act on them',
+    )
   })
 })
