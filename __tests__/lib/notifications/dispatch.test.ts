@@ -79,7 +79,7 @@ function makeFakeSupabase(tables: Tables, users: Record<string, { email: string 
 const BASE = 'https://app.kindlast.com'
 const SECRET = 'dispatch-secret'
 
-function baseFinding(id: string, severity: string, userId: string) {
+function baseFinding(id: string, severity: string, userId: string, metadata: unknown = null) {
   return {
     id,
     detected: 'Something needs action',
@@ -89,6 +89,7 @@ function baseFinding(id: string, severity: string, userId: string) {
     citation_url: null,
     effort_estimate: 'hours',
     user_id: userId,
+    metadata,
   }
 }
 
@@ -169,5 +170,21 @@ describe('dispatchPendingNotifications (ENT-73)', () => {
     const summary = await dispatchPendingNotifications({ supabase, emailProvider: email, baseUrl: BASE, tokenSecret: SECRET })
     expect(summary).toMatchObject({ sent: 0, skipped: 1, failed: 0 })
     expect(tables.notification_outbox[0].status).toBe('skipped')
+  })
+
+  it('skips a deadline finding — it is handled by the deadline-alert stream (ENT-75)', async () => {
+    const tables: Tables = {
+      notification_outbox: [{ id: 'o1', finding_id: 'f1', user_id: 'u1', status: 'pending', channel: 'email', attempts: 0 }],
+      findings: [baseFinding('f1', 'critical', 'u1', { signal_kind: 'deadline' })],
+      notification_preferences: [{ user_id: 'u1', email_frequency: 'immediate' }],
+    }
+    const email = createCapturingEmailProvider()
+    const supabase = makeFakeSupabase(tables, { u1: { email: 'founder@example.com' } })
+
+    const summary = await dispatchPendingNotifications({ supabase, emailProvider: email, baseUrl: BASE, tokenSecret: SECRET })
+    expect(summary).toMatchObject({ sent: 0, skipped: 1 })
+    expect(email.sent).toHaveLength(0)
+    expect(tables.notification_outbox[0].status).toBe('skipped')
+    expect(tables.notification_outbox[0].last_error).toContain('deadline')
   })
 })
