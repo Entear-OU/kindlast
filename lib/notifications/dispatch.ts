@@ -26,7 +26,11 @@ const DEFAULT_LIMIT = 50
 const DEFAULT_FREQUENCY: EmailFrequency = 'daily'
 
 const FINDING_COLUMNS =
-  'id,detected,severity,proposed_action,regulatory_obligation,citation_url,effort_estimate,user_id'
+  'id,detected,severity,proposed_action,regulatory_obligation,citation_url,effort_estimate,user_id,metadata'
+
+// Deadline/DSAR findings get the dedicated deadline-alert email (ENT-75), so the
+// generic "new finding" email here would double-notify — skip them.
+const DEADLINE_KINDS = ['deadline', 'dsar']
 
 interface OutboxRow {
   id: string
@@ -34,7 +38,11 @@ interface OutboxRow {
   user_id: string
 }
 
-type FindingRow = FindingEmailInput & { severity: FindingSeverity; user_id: string }
+type FindingRow = FindingEmailInput & {
+  severity: FindingSeverity
+  user_id: string
+  metadata: { signal_kind?: string } | null
+}
 
 export interface DispatchOptions {
   supabase: SupabaseClient
@@ -117,6 +125,14 @@ async function processRow(
     .single<FindingRow>()
   if (findingError || !finding) {
     throw new Error(`finding ${row.finding_id} not found: ${findingError?.message ?? 'missing'}`)
+  }
+
+  // Deadline findings are notified by the deadline-alert stream (ENT-75), not the
+  // generic finding email — skip so they aren't double-sent.
+  const signalKind = finding.metadata?.signal_kind
+  if (signalKind && DEADLINE_KINDS.includes(signalKind)) {
+    await mark(supabase, row.id, { status: 'skipped', last_error: 'deadline finding — handled by deadline alerts' })
+    return 'skipped'
   }
 
   const frequency = await loadFrequency(supabase, row.user_id)

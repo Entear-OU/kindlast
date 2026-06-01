@@ -8,6 +8,10 @@
     {
       "path": "/api/notifications/briefing",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/notifications/deadline-alerts",
+      "schedule": "0 7 * * *"
     }
   ]
 }
