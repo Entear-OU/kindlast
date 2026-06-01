@@ -13,8 +13,8 @@ import Link from 'next/link'
  *
  * The dark, agentic frame the register tabs live in: a left icon rail, a header
  * with the agent-status pill, and the tab bar across the record types. Tabs with
- * a route are links; the rest render disabled until their issues land (AI systems
- * → ENT-72; Vendors / AI literacy are later).
+ * a route are links; the rest render disabled until their issues land (Vendors /
+ * AI literacy are later).
  *
  * Deliberately a dark surface independent of the global theme — this is the
  * product's "console", a distinct visual key from the eggshell marketing pages.
@@ -24,7 +24,7 @@ export type RecordsTab = 'ropa' | 'ai-systems' | 'vendors' | 'dsar-log' | 'ai-li
 
 const TABS: { key: RecordsTab; label: string; href?: string }[] = [
   { key: 'ropa', label: 'ROPA', href: '/records/ropa' },
-  { key: 'ai-systems', label: 'AI systems' },
+  { key: 'ai-systems', label: 'AI systems', href: '/records/ai-systems' },
   { key: 'vendors', label: 'Vendors' },
   { key: 'dsar-log', label: 'DSAR log', href: '/records/dsar' },
   { key: 'ai-literacy', label: 'AI literacy' },
