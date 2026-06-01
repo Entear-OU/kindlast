@@ -47,15 +47,38 @@ const FIXTURE_SQL = /* sql */ `
 
 const DROP_SQL = /* sql */ `drop table if exists public._test_rls_fixture;`
 
+/**
+ * Wait for PostgREST to pick up a freshly-created table. The fixture table is
+ * created over a direct pg connection, but the assertions query it through
+ * PostgREST (supabase-js), which serves from a schema cache. Supabase reloads
+ * that cache on DDL, but the reload is asynchronous — under parallel test load
+ * the first query can still race ahead of it and get PGRST205 ("table not found
+ * in schema cache"). Poll until the table resolves so the suite is deterministic.
+ */
+async function waitForPostgrestTable(
+  admin: ReturnType<typeof createServiceRoleClient>,
+  table: string,
+  attempts = 30,
+): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    const { error } = await admin.from(table).select('*', { head: true, count: 'exact' })
+    if (!error || error.code !== 'PGRST205') return
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error(`waitForPostgrestTable: ${table} never appeared in the PostgREST schema cache`)
+}
+
 describe.skipIf(!supabaseRunning)('RLS convention (sample scaffold test)', () => {
   let userA: { id: string; email: string; password: string }
   let userB: { id: string; email: string; password: string }
   let userARowId: string
 
   beforeAll(async () => {
-    await applyFixtureSql(FIXTURE_SQL)
+    await applyFixtureSql(`${FIXTURE_SQL}\n  notify pgrst, 'reload schema';`)
 
     const admin = createServiceRoleClient()
+    // Don't let the assertions race PostgREST's schema-cache reload.
+    await waitForPostgrestTable(admin, '_test_rls_fixture')
     userA = await signUpTestUser(admin)
     userB = await signUpTestUser(admin)
 
