@@ -74,13 +74,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'unauthorised' }, { status: 401 })
   }
 
-  let body: { message: UIMessage }
+  let body: { message?: UIMessage; begin?: boolean }
   try {
-    body = (await req.json()) as { message: UIMessage }
+    body = (await req.json()) as { message?: UIMessage; begin?: boolean }
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 })
   }
-  if (!body?.message?.role || !Array.isArray(body.message.parts)) {
+  // ENT-154: the client opens the interview with `{ begin: true }` (no user
+  // turn) so the chat page can render instantly and stream the opening question
+  // in, instead of blocking the server render on generation. A normal turn
+  // still carries `{ message }`.
+  const isBegin = body?.begin === true
+  if (!isBegin && (!body?.message?.role || !Array.isArray(body.message?.parts))) {
     return NextResponse.json({ error: 'invalid_message' }, { status: 400 })
   }
 
@@ -88,7 +93,12 @@ export async function POST(req: Request) {
 
   const transcriptRows = await loadTranscript(supabase, sessionId)
   const previousMessages: UIMessage[] = transcriptRows.map(uiMessageFromRow)
-  const allMessages: UIMessage[] = [...previousMessages, body.message]
+  // On `begin` there's no user turn — the opening question is generated from the
+  // system prompt alone. A `begin` that races a populated transcript just
+  // continues from it (the client only fires `begin` on an empty transcript).
+  const allMessages: UIMessage[] = isBegin
+    ? previousMessages
+    : [...previousMessages, body.message as UIMessage]
 
   // The agent calls this when it judges the interview complete. It must
   // explicitly check off each of the six required topics in `topicsCovered`,
@@ -176,7 +186,11 @@ export async function POST(req: Request) {
   const result = streamText({
     model: openai(MODEL_ID),
     system: ONBOARDING_SYSTEM_PROMPT,
-    messages: await convertToModelMessages(allMessages),
+    // An empty `begin` has no prior turns to convert, so seed the model with a
+    // direct instruction; every other case threads the running transcript.
+    ...(isBegin && allMessages.length === 0
+      ? { prompt: 'Begin the onboarding interview.' }
+      : { messages: await convertToModelMessages(allMessages) }),
     tools: { complete_onboarding: completeOnboarding },
     // Allow a second model step so the agent can react to a `too_early`
     // tool result — either by asking the missing topic or by acknowledging

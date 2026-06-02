@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { PostureSummaryCard } from '@/components/onboarding/posture-summary-card'
 import type { PostureSummary } from '@/lib/onboarding/posture-summary'
 
-function DraftingIndicator() {
+function DraftingIndicator({ label = 'Drafting your compliance posture…' }: { label?: string }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div className="flex gap-1">
@@ -29,24 +29,39 @@ function DraftingIndicator() {
         <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:150ms]" />
         <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:300ms]" />
       </div>
-      <span className="text-sm text-muted-foreground">
-        Drafting your compliance posture…
-      </span>
+      <span className="text-sm text-muted-foreground">{label}</span>
     </div>
   )
 }
+
+/** The concatenated text of a UI message — its `text` parts joined. */
+function messageText(message: UIMessage): string {
+  return message.parts
+    .filter((p) => p.type === 'text')
+    .map((p) => (p as { type: 'text'; text: string }).text)
+    .join('')
+}
+
+// ENT-154: a hidden user turn the client sends to ask the server for the
+// opening question (`{ begin: true }` on the wire). It never renders and is
+// never persisted — it only exists to drive the first assistant stream.
+export const OPENING_TRIGGER = '__begin_onboarding__'
 
 export function OnboardingChat({
   sessionId,
   initialMessages,
   initialSummary,
+  startOpening = false,
 }: {
   sessionId: string
   initialMessages: UIMessage[]
   initialSummary: PostureSummary | null
+  /** True on a fresh session — the client streams the opening question in. */
+  startOpening?: boolean
 }) {
   const [input, setInput] = useState('')
   const pendingInputRef = useRef<string | null>(null)
+  const openingStartedRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const { messages, sendMessage, regenerate, status, error } = useChat({
@@ -55,10 +70,27 @@ export function OnboardingChat({
     transport: new DefaultChatTransport({
       api: '/api/onboarding/chat',
       prepareSendMessagesRequest({ messages }) {
-        return { body: { message: messages[messages.length - 1] } }
+        const last = messages[messages.length - 1]
+        // The opening trigger carries no real user content — ask the server to
+        // open the interview instead of sending it as a turn.
+        if (last?.role === 'user' && messageText(last) === OPENING_TRIGGER) {
+          return { body: { begin: true } }
+        }
+        return { body: { message: last } }
       },
     }),
   })
+
+  // ENT-154: on a fresh session the page renders instantly with an empty
+  // transcript and we stream the opening question in here — once — instead of
+  // blocking the server render on generation. Guarded by a ref so it fires
+  // exactly once even under re-render or strict-mode double-invocation.
+  useEffect(() => {
+    if (startOpening && !openingStartedRef.current && messages.length === 0 && status === 'ready') {
+      openingStartedRef.current = true
+      sendMessage({ text: OPENING_TRIGGER })
+    }
+  }, [startOpening, messages.length, status, sendMessage])
 
   // Walk the message parts for a `complete_onboarding` tool result. We pick
   // the latest `output-available` part with `status === 'completed'` so a
@@ -128,6 +160,14 @@ export function OnboardingChat({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, status, summary])
 
+  // ENT-154: while the opening question is being streamed on a fresh session,
+  // the only message is the hidden trigger — show a typing indicator until the
+  // assistant's first token lands (becomes a visible message).
+  const hasVisibleMessage = messages.some(
+    (m) => !(m.role === 'user' && messageText(m) === OPENING_TRIGGER) && messageText(m) !== '',
+  )
+  const openingPending = startOpening && !hasVisibleMessage && status !== 'ready'
+
   const showError = status === 'error'
   // After completion the session is `completed` server-side; if we left
   // the input enabled, the next message would silently create a fresh
@@ -140,10 +180,9 @@ export function OnboardingChat({
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="flex flex-col gap-6 py-4">
           {messages.map((message) => {
-            const text = message.parts
-              .filter((p) => p.type === 'text')
-              .map((p) => (p as { type: 'text'; text: string }).text)
-              .join('')
+            const text = messageText(message)
+            // Never surface the hidden opening trigger (ENT-154).
+            if (message.role === 'user' && text === OPENING_TRIGGER) return null
             if (!text) return null
             return (
               <Message key={message.id} from={message.role}>
@@ -153,6 +192,9 @@ export function OnboardingChat({
               </Message>
             )
           })}
+          {/* ENT-154: the opening question streams in on a fresh session — show
+              a typing indicator until its first token lands. */}
+          {openingPending && <DraftingIndicator label="Starting your interview…" />}
           {isDrafting && status !== 'ready' && <DraftingIndicator />}
           {summary && <PostureSummaryCard summary={summary} />}
         </div>

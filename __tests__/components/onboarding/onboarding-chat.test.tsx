@@ -28,7 +28,7 @@ vi.mock('ai', async () => {
   }
 })
 
-import { OnboardingChat } from '@/components/onboarding/onboarding-chat'
+import { OnboardingChat, OPENING_TRIGGER } from '@/components/onboarding/onboarding-chat'
 
 type UseChatReturn = {
   messages: Array<{
@@ -37,6 +37,7 @@ type UseChatReturn = {
     parts: Array<{ type: 'text'; text: string }>
   }>
   sendMessage: ReturnType<typeof vi.fn>
+  setMessages: ReturnType<typeof vi.fn>
   status: 'submitted' | 'streaming' | 'ready' | 'error'
 }
 
@@ -44,11 +45,18 @@ function mockUseChat(overrides: Partial<UseChatReturn> = {}): UseChatReturn {
   const value: UseChatReturn = {
     messages: [],
     sendMessage: vi.fn(),
+    setMessages: vi.fn(),
     status: 'ready',
     ...overrides,
   }
   useChatMock.mockReturnValue(value)
   return value
+}
+
+const greeting = {
+  id: 'a1',
+  role: 'assistant' as const,
+  parts: [{ type: 'text' as const, text: 'Hi — what does your company do?' }],
 }
 
 describe('OnboardingChat', () => {
@@ -128,5 +136,68 @@ describe('OnboardingChat', () => {
     expect(
       screen.getByText(/which countries do you serve\?/i),
     ).toBeInTheDocument()
+  })
+
+  // ENT-154: a fresh session renders instantly with an empty transcript and the
+  // client streams the opening question in via a hidden trigger turn, rather
+  // than the page blocking its render on server-side generation.
+  it('streams the opening question on a fresh session (startOpening)', () => {
+    const sendMessage = vi.fn()
+    mockUseChat({ messages: [], sendMessage, status: 'ready' })
+
+    render(
+      <OnboardingChat
+        sessionId="s1"
+        initialMessages={[]}
+        initialSummary={null}
+        startOpening
+      />,
+    )
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(sendMessage).toHaveBeenCalledWith({ text: OPENING_TRIGGER })
+  })
+
+  it('does not stream an opening when the transcript already has messages', () => {
+    const sendMessage = vi.fn()
+    mockUseChat({ messages: [greeting], sendMessage, status: 'ready' })
+
+    render(
+      <OnboardingChat
+        sessionId="s1"
+        initialMessages={[greeting]}
+        initialSummary={null}
+        startOpening
+      />,
+    )
+
+    expect(sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not stream an opening when startOpening is false', () => {
+    const sendMessage = vi.fn()
+    mockUseChat({ messages: [], sendMessage, status: 'ready' })
+
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
+
+    expect(sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('never renders the hidden opening trigger turn', () => {
+    mockUseChat({
+      messages: [
+        { id: 'trigger', role: 'user', parts: [{ type: 'text', text: OPENING_TRIGGER }] },
+        {
+          id: 'a1',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Hi — what does your company do?' }],
+        },
+      ],
+    })
+
+    render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
+
+    expect(screen.queryByText(OPENING_TRIGGER)).not.toBeInTheDocument()
+    expect(screen.getByText(/what does your company do\?/i)).toBeInTheDocument()
   })
 })
