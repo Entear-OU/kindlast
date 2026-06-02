@@ -83,6 +83,33 @@ export function isWatcherRunStale(lastRunAt: string | null, now: Date = new Date
   return hoursSince(lastRunAt, now) > STALE_AFTER_HOURS
 }
 
+export interface AgentStatusPill {
+  /** True only when the Watcher has run recently — drives the green vs amber dot. */
+  running: boolean
+  /** Founder-facing pill text. */
+  text: string
+}
+
+/**
+ * The console header's agent-status pill (ENT-155), derived from the real last
+ * Watcher run instead of a hard-coded string. Never run → an honest "hasn't run
+ * yet"; stale (>36h) → amber "idle"; otherwise green "running" with the relative
+ * last-scan time. `now` is injectable so the label is deterministic to test.
+ */
+export function agentStatusLabel(
+  lastRunAt: string | null,
+  now: Date = new Date(),
+): AgentStatusPill {
+  if (!lastRunAt) {
+    return { running: false, text: "Watcher hasn't run yet" }
+  }
+  const relative = formatRelativeTime(lastRunAt, now)
+  if (isWatcherRunStale(lastRunAt, now)) {
+    return { running: false, text: `Agent idle · last scan ${relative}` }
+  }
+  return { running: true, text: `Agent running · last scan ${relative}` }
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**

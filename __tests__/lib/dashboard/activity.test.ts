@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   STALE_AFTER_HOURS,
   actionLabel,
+  agentStatusLabel,
   approverLabel,
   formatRelativeTime,
   hoursSince,
@@ -85,5 +86,30 @@ describe('formatRelativeTime (ENT-80)', () => {
 
   it('handles a null/never timestamp', () => {
     expect(formatRelativeTime(null, NOW)).toBe('never')
+  })
+})
+
+describe('agentStatusLabel (ENT-155)', () => {
+  it('reports an honest "not run yet" with an amber dot when the Watcher never ran', () => {
+    expect(agentStatusLabel(null, NOW)).toEqual({
+      running: false,
+      text: "Watcher hasn't run yet",
+    })
+  })
+
+  it('reports a green "running" pill with the relative scan time for a recent run', () => {
+    const pill = agentStatusLabel(hoursAgo(2), NOW)
+    expect(pill.running).toBe(true)
+    expect(pill.text).toBe('Agent running · last scan 2 hours ago')
+  })
+
+  it('reports an amber "idle" pill once the run is stale (>36h)', () => {
+    const pill = agentStatusLabel(hoursAgo(STALE_AFTER_HOURS + 12), NOW)
+    expect(pill.running).toBe(false)
+    expect(pill.text).toMatch(/^Agent idle · last scan /)
+  })
+
+  it('never emits the old hard-coded "4 min ago" string', () => {
+    expect(agentStatusLabel(hoursAgo(1), NOW).text).not.toContain('4 min ago')
   })
 })

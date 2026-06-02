@@ -62,18 +62,15 @@ function RecordTabs({ activeTab }: { activeTab: RecordsTab }) {
 
 export function ComplianceRecordsShell({
   activeTab,
-  lastScanLabel,
   children,
 }: {
   activeTab: RecordsTab
-  lastScanLabel?: string
   children: React.ReactNode
 }) {
   return (
     <ConsoleShell
       activeRail="records"
       title="Compliance records"
-      lastScanLabel={lastScanLabel}
       subnav={<RecordTabs activeTab={activeTab} />}
     >
       {children}
