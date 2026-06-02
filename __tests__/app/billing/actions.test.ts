@@ -105,4 +105,23 @@ describe('startCheckout (ENT-85)', () => {
       expect.objectContaining({ successUrl: 'https://app.test/feed' }),
     )
   })
+
+  // ENT-156: a provider/config failure must not leak its raw message to the UI.
+  it('returns a friendly message and hides the internal error when checkout creation fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    createCheckoutMock.mockRejectedValue(
+      new Error('[billing:stripe] STRIPE_SECRET_KEY is required'),
+    )
+
+    const res = await startCheckout('/feed')
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error).not.toContain('STRIPE_SECRET_KEY')
+      expect(res.error).toMatch(/couldn.t start checkout/i)
+    }
+    // The technical detail is still logged server-side for debugging.
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
 })

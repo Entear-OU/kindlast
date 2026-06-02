@@ -80,6 +80,13 @@ export async function startCheckout(returnTo?: string): Promise<CheckoutResult> 
 
     return { ok: true, url: session.url }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Checkout failed' }
+    // ENT-156: never surface raw provider/config errors (e.g. "[billing:stripe]
+    // STRIPE_SECRET_KEY is required") to the founder. Log the technical detail
+    // server-side and return a friendly, generic message instead.
+    console.error('[billing] startCheckout failed', err)
+    return {
+      ok: false,
+      error: "We couldn't start checkout. Please try again, or contact support if it keeps happening.",
+    }
   }
 }
