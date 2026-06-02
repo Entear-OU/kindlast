@@ -34,8 +34,10 @@ import { deleteTestUser, signUpTestUser, type TestUser } from './helpers/test-us
  * Open-finding idempotency is inherited from ENT-53.
  *
  * Fixture obligations carry a `_test_ent56_` slug prefix and are removed in
- * afterAll; the test DB has no seeded corpus, so these are the only
- * `requires`-bearing rows in play.
+ * afterAll. The real catalogue is now seeded by a migration (ENT-157), so the
+ * DB also holds production `requires`-bearing rows; every assertion below is
+ * scoped to the `_test_ent56_` prefix (or this profile's dedup keys), so the
+ * seeded corpus can't perturb it.
  */
 
 const supabaseRunning = await isLocalSupabaseReachable()
