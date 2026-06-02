@@ -1,9 +1,7 @@
-import { openai } from '@ai-sdk/openai'
-import { generateText, type UIMessage } from 'ai'
+import { type UIMessage } from 'ai'
 import { redirect } from 'next/navigation'
 
 import {
-  appendMessages,
   getOrCreateActiveSession,
   loadComplianceProfile,
   loadTranscript,
@@ -11,12 +9,9 @@ import {
   uiMessageFromRow,
 } from '@/lib/onboarding/persistence'
 import { computePostureSummary, type PostureSummary } from '@/lib/onboarding/posture-summary'
-import { ONBOARDING_SYSTEM_PROMPT } from '@/lib/onboarding/system-prompt'
 import { createClient } from '@/lib/supabase/server'
 
 import { OnboardingChat } from '@/components/onboarding/onboarding-chat'
-
-const MODEL_ID = process.env.ONBOARDING_CHAT_MODEL ?? 'gpt-5.4-mini'
 
 export default async function OnboardingChatPage() {
   const supabase = await createClient()
@@ -30,29 +25,12 @@ export default async function OnboardingChatPage() {
   const sessionId = await getOrCreateActiveSession(supabase, user.id)
   const rows = await loadTranscript(supabase, sessionId)
 
-  if (rows.length === 0) {
-    const { text } = await generateText({
-      model: openai(MODEL_ID),
-      system: ONBOARDING_SYSTEM_PROMPT,
-      prompt: 'Begin the onboarding interview.',
-    })
-
-    await appendMessages(supabase, {
-      sessionId,
-      userId: user.id,
-      messages: [{ role: 'assistant', content: text }],
-    })
-
-    const newRows = await loadTranscript(supabase, sessionId)
-    const initialMessages: UIMessage[] = newRows.map(uiMessageFromRow)
-    return (
-      <OnboardingChat
-        sessionId={sessionId}
-        initialMessages={initialMessages}
-        initialSummary={null}
-      />
-    )
-  }
+  // ENT-154: the opening question used to be generated here with a blocking
+  // `generateText` (2–50s) before the page could return any HTML. During a
+  // client-side navigation into the chat that left the segment rendering empty
+  // and never recovering — a blank conversation until a hard reload. We now
+  // render immediately and let the client stream the opening question in via
+  // `/api/onboarding/chat` (`{ begin: true }`) when the transcript is empty.
 
   // ENT-46: hydrate the posture card from the persisted compliance profile
   // on reload. The tool-result `parts` aren't stored in `onboarding_messages`
@@ -69,6 +47,7 @@ export default async function OnboardingChatPage() {
       sessionId={sessionId}
       initialMessages={initialMessages}
       initialSummary={initialSummary}
+      startOpening={rows.length === 0}
     />
   )
 }
