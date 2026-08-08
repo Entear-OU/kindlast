@@ -60,7 +60,7 @@ export function RecentActivity({
         </p>
         {entries.length === 0 ? (
           <p className="mt-4 text-sm text-zinc-500">
-            No actions yet — approved findings the Executor acts on will appear here.
+            No actions yet. Approved findings the Executor acts on will appear here.
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-white/5">

@@ -39,7 +39,7 @@ export interface RenderFindingEmailOptions {
 
 /** The Free-tier upsell footer (ENT-74): one line, only for Free recipients. */
 const BRIEFING_UPSELL_TEXT =
-  'Upgrade to Pro for a weekly Monday compliance briefing — your whole posture in one email.'
+  'Upgrade to Pro for a weekly Monday compliance briefing with your whole posture in one email.'
 
 export interface RenderedEmail {
   subject: string
@@ -135,7 +135,7 @@ export function renderFindingEmail(
       </div>
 
       ${showUpsell ? `<p style="margin:24px 0 0;font-size:13px;line-height:1.5;color:#a1a1aa;border-top:1px solid #27272a;padding-top:16px;">${escapeHtml(BRIEFING_UPSELL_TEXT)} <a href="${escapeHtml(baseUrl)}" style="color:#6366f1;">Upgrade</a>.</p>` : ''}
-      <p style="margin:24px 0 0;font-size:12px;color:#52525b;">Kindlast — your AI compliance co-pilot. These one-tap links are private to you.</p>
+      <p style="margin:24px 0 0;font-size:12px;color:#52525b;">Kindlast, your AI compliance co-pilot. These one-tap links are private to you.</p>
     </div>
   </body>
 </html>`

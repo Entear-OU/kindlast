@@ -256,7 +256,7 @@ export function AiSystemsRegister({ systems }: { systems: AiSystem[] }) {
           <h2 className="text-sm font-semibold text-zinc-100">No AI systems registered yet</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
             Systems land here when you <strong>approve an AI-system finding</strong>. You can also
-            add one the agent hasn&apos;t seen — useful for catching shadow AI.
+            add one the agent hasn&apos;t seen, which is useful for catching shadow AI.
           </p>
         </div>
         {addButton}
@@ -295,7 +295,7 @@ export function AiSystemsRegister({ systems }: { systems: AiSystem[] }) {
                     <div className="font-medium text-zinc-100">{a.name}</div>
                     {a.purpose && <div className="text-xs text-zinc-500">{a.purpose}</div>}
                   </td>
-                  <td className="py-3 pr-4 text-zinc-300">{a.vendor || '—'}</td>
+                  <td className="py-3 pr-4 text-zinc-300">{a.vendor || '–'}</td>
                   <td className="py-3 pr-4">
                     <Pill tone={RISK_TONE[a.risk_classification]}>
                       {RISK_LABEL[a.risk_classification]}

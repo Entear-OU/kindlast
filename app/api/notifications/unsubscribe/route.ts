@@ -40,7 +40,7 @@ function htmlPage({ title, message }: PageCopy): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>${title} — Kindlast</title>
+    <title>${title} · Kindlast</title>
   </head>
   <body style="margin:0;background:#0b0b0f;color:#e5e7eb;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
     <div style="max-width:440px;margin:12vh auto 0;padding:32px 24px;text-align:center;">

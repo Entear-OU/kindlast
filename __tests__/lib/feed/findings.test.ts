@@ -128,13 +128,13 @@ describe('gateFindings (free-tier cap, ENT-82)', () => {
 describe('upgradeWaitingMessage (ENT-82)', () => {
   it('carries the count as trigger context', () => {
     expect(upgradeWaitingMessage(5)).toBe(
-      'You have 5 findings waiting — upgrade to act on them',
+      'You have 5 findings waiting. Upgrade to act on them',
     )
   })
 
   it('uses the singular noun for one finding', () => {
     expect(upgradeWaitingMessage(1)).toBe(
-      'You have 1 finding waiting — upgrade to act on them',
+      'You have 1 finding waiting. Upgrade to act on them',
     )
   })
 })

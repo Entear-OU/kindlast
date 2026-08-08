@@ -26,7 +26,7 @@ import type { NotificationPreferences, SeverityLevel } from '@/lib/notifications
  */
 
 const SEVERITIES: { value: SeverityLevel; label: string; hint: string }[] = [
-  { value: 'low', label: 'Low and up', hint: 'Everything — most email' },
+  { value: 'low', label: 'Low and up', hint: 'Everything, most email' },
   { value: 'medium', label: 'Medium and up', hint: 'Recommended' },
   { value: 'high', label: 'High and up', hint: 'Only the urgent' },
   { value: 'critical', label: 'Critical only', hint: 'Bare minimum' },

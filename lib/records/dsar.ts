@@ -77,7 +77,7 @@ export function deriveDsarStatus(dsar: Dsar, now: Date = new Date()): DsarStatus
 
 /** Human "deadline" cell: a dash once answered, else a countdown / overdue note. */
 export function formatDueLabel(dsar: Dsar, now: Date = new Date()): string {
-  if (!isOpenDsar(dsar)) return '—'
+  if (!isOpenDsar(dsar)) return '–'
   const days = daysUntilDue(dsar, now)
   if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`
   if (days === 0) return 'Due today'
@@ -88,9 +88,9 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 /** Compact date for the received / response-sent columns, e.g. "8 May". */
 export function formatDate(iso: string | null, now: Date = new Date()): string {
-  if (!iso) return '—'
+  if (!iso) return '–'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return '–'
   const base = `${d.getDate()} ${MONTHS[d.getMonth()]}`
   return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`
 }

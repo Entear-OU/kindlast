@@ -294,7 +294,7 @@ export function RopaRegister({
         <div className="max-w-md rounded-xl border border-white/10 bg-white/[0.03] p-6">
           <h2 className="text-sm font-semibold text-zinc-100">No processing activities yet</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            Your ROPA fills up as you <strong>approve findings</strong> — the agent pre-fills a
+            Your ROPA fills up as you <strong>approve findings</strong>. The agent pre-fills a
             ratified entry for each one. You can also add an activity the agent hasn&apos;t seen.
           </p>
         </div>
@@ -343,10 +343,10 @@ export function RopaRegister({
                     <div className="font-medium text-zinc-100">{a.name}</div>
                     {a.purpose && <div className="text-xs text-zinc-500">{a.purpose}</div>}
                   </td>
-                  <td className="py-3 pr-4 text-zinc-300">{a.legal_basis || '—'}</td>
-                  <td className="py-3 pr-4 text-zinc-300">{joinList(a.data_categories) || '—'}</td>
-                  <td className="py-3 pr-4 text-zinc-300">{joinList(a.recipients) || '—'}</td>
-                  <td className="py-3 pr-4 text-zinc-300">{a.retention_period || '—'}</td>
+                  <td className="py-3 pr-4 text-zinc-300">{a.legal_basis || '–'}</td>
+                  <td className="py-3 pr-4 text-zinc-300">{joinList(a.data_categories) || '–'}</td>
+                  <td className="py-3 pr-4 text-zinc-300">{joinList(a.recipients) || '–'}</td>
+                  <td className="py-3 pr-4 text-zinc-300">{a.retention_period || '–'}</td>
                   <td className="py-3 pr-4">
                     <StatusPill status={deriveRopaStatus(a)} />
                   </td>
@@ -362,7 +362,7 @@ export function RopaRegister({
                             totalCount: manualUsed,
                           })
                         }
-                        title="Over the Free-tier limit — upgrade to edit this activity"
+                        title="Over the Free-tier limit. Upgrade to edit this activity."
                         className="rounded-md px-2 py-1 text-xs text-amber-300/80 hover:bg-white/5"
                       >
                         Upgrade to edit

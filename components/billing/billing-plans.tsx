@@ -53,7 +53,7 @@ export function BillingPlans({ plan, returnTo }: { plan: Plan; returnTo?: string
         </h1>
         <p className="text-sm text-muted-foreground">
           {isPro
-            ? 'You have full access — unlimited findings, the complete registers, and one-tap actions.'
+            ? 'You have full access: unlimited findings, the complete registers, and one-tap actions.'
             : 'Let your agents act for you. Unlock one-tap Executor actions and your full compliance history.'}
         </p>
       </div>
@@ -79,7 +79,7 @@ export function BillingPlans({ plan, returnTo }: { plan: Plan; returnTo?: string
                 disabled={pending}
                 className="w-full rounded-lg bg-[#00C9A7] px-3 py-2 text-sm font-semibold text-zinc-950 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {pending ? 'Starting checkout…' : `Upgrade — ${PRO_PRICE}/month`}
+                {pending ? 'Starting checkout…' : `Upgrade for ${PRO_PRICE}/month`}
               </button>
             )
           }

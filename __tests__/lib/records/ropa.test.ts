@@ -127,6 +127,6 @@ describe('formatUpdatedAt (ENT-70)', () => {
   })
 
   it('falls back to a dash for an invalid date', () => {
-    expect(formatUpdatedAt('not-a-date', now)).toBe('—')
+    expect(formatUpdatedAt('not-a-date', now)).toBe('–')
   })
 })

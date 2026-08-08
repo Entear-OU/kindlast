@@ -46,7 +46,7 @@ export function Hero() {
           {/* Sub */}
           <p className="mt-9 max-w-[540px] text-[1.1875rem] font-medium leading-[1.78] tracking-[-0.01em] text-[#0D1B2A]/50">
             AI-powered GDPR and EU AI Act assessment built for European SMEs.
-            Know exactly where you stand — and what to fix — in under 10 minutes.
+            Know exactly where you stand, and what to fix, in under 10 minutes.
           </p>
 
           {/* Waitlist form */}

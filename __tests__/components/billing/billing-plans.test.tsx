@@ -28,7 +28,7 @@ describe('BillingPlans (ENT-85)', () => {
     startCheckoutMock.mockResolvedValue({ ok: true, url: 'https://checkout.stripe/x' })
     render(<BillingPlans plan="free" returnTo="/records/ropa" />)
 
-    await user.click(screen.getByRole('button', { name: /upgrade — €49\/month/i }))
+    await user.click(screen.getByRole('button', { name: /upgrade for €49\/month/i }))
 
     expect(startCheckoutMock).toHaveBeenCalledWith('/records/ropa')
     await waitFor(() => expect(locationStub.href).toBe('https://checkout.stripe/x'))

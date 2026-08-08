@@ -74,7 +74,7 @@ describe('daysUntilDue / formatDueLabel (ENT-71)', () => {
   })
 
   it('shows a dash for a request already answered', () => {
-    expect(formatDueLabel(dsar({ status: 'responded' }), now)).toBe('—')
+    expect(formatDueLabel(dsar({ status: 'responded' }), now)).toBe('–')
   })
 })
 
@@ -90,6 +90,6 @@ describe('isOpenDsar (ENT-71)', () => {
 describe('formatDate (ENT-71)', () => {
   it('formats a date and dashes nulls', () => {
     expect(formatDate('2026-05-08T10:00:00.000Z', now)).toBe('8 May')
-    expect(formatDate(null, now)).toBe('—')
+    expect(formatDate(null, now)).toBe('–')
   })
 })

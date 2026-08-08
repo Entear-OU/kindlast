@@ -49,12 +49,12 @@ export default function LandingPage() {
             <div className="lg:pt-2 space-y-5">
               <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]" style={{ color: 'rgba(13,27,42,0.5)' }}>
                 Most SMEs lack the legal budget, in-house expertise, or time to figure out
-                where they stand. GDPR has been in force since 2018 — and fines are
+                where they stand. GDPR has been in force since 2018, and fines are
                 accelerating. The EU AI Act now adds a second wave of obligations.
               </p>
               <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]" style={{ color: 'rgba(13,27,42,0.5)' }}>
                 Kindlast turns regulatory complexity into a plain-English action plan your
-                team can act on immediately — without hiring a DPO.
+                team can act on immediately, without hiring a DPO.
               </p>
             </div>
           </div>
@@ -99,7 +99,7 @@ export default function LandingPage() {
 
             <p className="mx-auto mt-6 max-w-[460px] text-[1.0625rem] font-medium leading-[1.78] tracking-[-0.01em] text-white/60">
               We&apos;re opening early access to a limited number of EU SMEs. Get
-              notified the moment your spot is ready — and lock in founding-member
+              notified the moment your spot is ready, and lock in founding-member
               pricing.
             </p>
 
@@ -116,7 +116,7 @@ export default function LandingPage() {
             <div className="mt-12 flex flex-wrap justify-center gap-x-8 gap-y-3">
               {['Free to join', 'Priority access guaranteed', 'Founding-member pricing'].map((item) => (
                 <span key={item} className="text-[14px] font-semibold tracking-[-0.005em] text-white/45">
-                  — {item}
+                  – {item}
                 </span>
               ))}
             </div>

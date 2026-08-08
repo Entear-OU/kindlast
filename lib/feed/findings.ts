@@ -111,7 +111,7 @@ export function gateFindings(findings: Finding[], plan: Plan): GatedFindings {
  */
 export function upgradeWaitingMessage(totalCount: number): string {
   const noun = totalCount === 1 ? 'finding' : 'findings'
-  return `You have ${totalCount} ${noun} waiting — upgrade to act on them`
+  return `You have ${totalCount} ${noun} waiting. Upgrade to act on them`
 }
 
 export interface FeedFilter {

@@ -15,7 +15,7 @@ const BASE = 'https://app.kindlast.com'
 const FINDING: DeadlineEmailInput = {
   id: '55555555-5555-5555-5555-555555555555',
   detected: 'GDPR Art. 30 ROPA effective date approaching',
-  regulatory_obligation: 'GDPR Art. 30 — Records of processing',
+  regulatory_obligation: 'GDPR Art. 30: Records of processing',
   citation_url: 'https://gdpr-info.eu/art-30-gdpr/',
   proposed_action: 'Finalise and file the record of processing activities',
 }
@@ -30,7 +30,7 @@ describe('renderDeadlineEmail (ENT-75)', () => {
   })
 
   it('names the obligation and days remaining in the subject', () => {
-    expect(email.subject).toBe('[Deadline] GDPR Art. 30 — Records of processing — 7 days left')
+    expect(email.subject).toBe('[Deadline] GDPR Art. 30: Records of processing (7 days left)')
   })
 
   it('singularises one day', () => {
