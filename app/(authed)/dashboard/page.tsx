@@ -13,6 +13,7 @@ import {
 import { computePosture } from '@/lib/dashboard/posture'
 import { countOpenBySeverity } from '@/lib/dashboard/severity'
 import { createClient } from '@/lib/supabase/server'
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 
 /**
  * The compliance dashboard (epic ENT-37) — the read-only posture overview a
@@ -28,6 +29,13 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-166: every console surface is a view over a compliance profile. Without
+  // one there is nothing to show and nothing that can be written, so send them
+  // to finish onboarding rather than render an empty console with dead actions.
+  if (!(await hasComplianceProfile(supabase, user.id))) {
+    redirect('/onboarding')
   }
 
   const [inputs, deadlines, activity] = await Promise.all([

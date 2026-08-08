@@ -4,6 +4,7 @@ import { ComplianceRecordsShell } from '@/components/records/compliance-records-
 import { DsarLog } from '@/components/records/dsar-log'
 import { loadDsars } from '@/lib/records/dsar'
 import { createClient } from '@/lib/supabase/server'
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 
 /**
  * The DSAR Log (ENT-71) — every data-subject request with its status and
@@ -20,6 +21,13 @@ export default async function DsarPage() {
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-166: every console surface is a view over a compliance profile. Without
+  // one there is nothing to show and nothing that can be written, so send them
+  // to finish onboarding rather than render an empty console with dead actions.
+  if (!(await hasComplianceProfile(supabase, user.id))) {
+    redirect('/onboarding')
   }
 
   const dsars = await loadDsars(supabase, user.id)

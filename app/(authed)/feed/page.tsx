@@ -6,6 +6,7 @@ import { FindingsFeed } from '@/components/feed/findings-feed'
 import { parseSeverityParam } from '@/lib/dashboard/severity'
 import { loadFindings } from '@/lib/feed/findings'
 import { createClient } from '@/lib/supabase/server'
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 
 /**
  * The Agent feed (ENT-62 list, ENT-63 actions) — the founder's
@@ -26,6 +27,13 @@ export default async function FeedPage({
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-166: every console surface is a view over a compliance profile. Without
+  // one there is nothing to show and nothing that can be written, so send them
+  // to finish onboarding rather than render an empty console with dead actions.
+  if (!(await hasComplianceProfile(supabase, user.id))) {
+    redirect('/onboarding')
   }
 
   const [findings, plan, params] = await Promise.all([

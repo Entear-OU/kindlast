@@ -4,6 +4,7 @@ import { BillingPlans } from '@/components/billing/billing-plans'
 import { ConsoleShell } from '@/components/console/console-shell'
 import { getPlan } from '@/lib/billing/plan'
 import { createClient } from '@/lib/supabase/server'
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 
 /**
  * The upgrade / billing page (ENT-85) — the destination of every "Upgrade to
@@ -24,6 +25,13 @@ export default async function BillingPage({
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-166: every console surface is a view over a compliance profile. Without
+  // one there is nothing to show and nothing that can be written, so send them
+  // to finish onboarding rather than render an empty console with dead actions.
+  if (!(await hasComplianceProfile(supabase, user.id))) {
+    redirect('/onboarding')
   }
 
   const [{ returnTo }, plan] = await Promise.all([searchParams, getPlan(supabase, user.id)])

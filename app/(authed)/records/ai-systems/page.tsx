@@ -4,6 +4,7 @@ import { AiSystemsRegister } from '@/components/records/ai-systems-register'
 import { ComplianceRecordsShell } from '@/components/records/compliance-records-shell'
 import { loadAiSystems } from '@/lib/records/ai-system'
 import { createClient } from '@/lib/supabase/server'
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 
 /**
  * The AI Systems Register (ENT-72) — every AI system in use with its EU AI Act
@@ -17,6 +18,13 @@ export default async function AiSystemsPage() {
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-166: every console surface is a view over a compliance profile. Without
+  // one there is nothing to show and nothing that can be written, so send them
+  // to finish onboarding rather than render an empty console with dead actions.
+  if (!(await hasComplianceProfile(supabase, user.id))) {
+    redirect('/onboarding')
   }
 
   const systems = await loadAiSystems(supabase, user.id)

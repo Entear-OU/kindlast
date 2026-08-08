@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 
 import type { DocumentationStatus, RiskClassification } from '@/lib/records/ai-system'
 import { createClient } from '@/lib/supabase/server'
+import { recordsActionError } from '@/lib/records/action-errors'
 
 /**
  * Server actions for the AI Systems Register (ENT-72).
@@ -41,7 +42,7 @@ export async function addSystem(input: AiSystemInput, reviewed: boolean): Promis
     p_documentation_status: input.documentation_status,
     p_reviewed: reviewed,
   })
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: recordsActionError(error.message, 'addSystem') }
 
   revalidatePath(PATH)
   return { ok: true }
@@ -67,7 +68,7 @@ export async function editSystem(
     p_documentation_status: input.documentation_status,
     p_reviewed: reviewed,
   })
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: recordsActionError(error.message, 'editSystem') }
 
   revalidatePath(PATH)
   return { ok: true }

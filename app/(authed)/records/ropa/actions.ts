@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 
 import type { ProcessingActivityInput } from '@/lib/records/ropa'
 import { createClient } from '@/lib/supabase/server'
+import { recordsActionError } from '@/lib/records/action-errors'
 
 /**
  * Server actions for the ROPA register (ENT-70).
@@ -33,7 +34,7 @@ export async function addActivity(input: ProcessingActivityInput): Promise<Actio
     p_recipients: input.recipients,
     p_retention_period: input.retention_period,
   })
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: recordsActionError(error.message, 'addActivity') }
 
   revalidatePath(ROPA_PATH)
   return { ok: true }
@@ -58,7 +59,7 @@ export async function editActivity(
     p_recipients: input.recipients,
     p_retention_period: input.retention_period,
   })
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: recordsActionError(error.message, 'editActivity') }
 
   revalidatePath(ROPA_PATH)
   return { ok: true }

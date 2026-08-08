@@ -8,6 +8,7 @@ import {
   type NotificationPreferencesRow,
 } from '@/lib/notifications/preferences'
 import { createClient } from '@/lib/supabase/server'
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 
 /**
  * Notification settings (ENT-76) — closes the Comms epic. Loads the founder's
@@ -22,6 +23,13 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-166: every console surface is a view over a compliance profile. Without
+  // one there is nothing to show and nothing that can be written, so send them
+  // to finish onboarding rather than render an empty console with dead actions.
+  if (!(await hasComplianceProfile(supabase, user.id))) {
+    redirect('/onboarding')
   }
 
   const [{ data: row }, plan] = await Promise.all([

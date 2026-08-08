@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { createClient } from '@/lib/supabase/server'
+import { recordsActionError } from '@/lib/records/action-errors'
 
 /**
  * Server actions for the DSAR Log (ENT-71).
@@ -35,7 +36,7 @@ export async function logDsar(input: LogDsarInput): Promise<ActionResult> {
     p_request_type: input.request_type,
     p_handler: input.handler,
   })
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: recordsActionError(error.message, 'logDsar') }
 
   revalidatePath(DSAR_PATH)
   return { ok: true }
@@ -56,7 +57,7 @@ export async function markResponded(id: string): Promise<ActionResult> {
     p_id: id,
     p_reviewed: true,
   })
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: recordsActionError(error.message, 'markResponded') }
 
   revalidatePath(DSAR_PATH)
   return { ok: true }

@@ -5,6 +5,7 @@ import { RopaRegister } from '@/components/records/ropa-register'
 import { getPlan } from '@/lib/billing/plan'
 import { loadProcessingActivities } from '@/lib/records/ropa'
 import { createClient } from '@/lib/supabase/server'
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 
 /**
  * The ROPA register (ENT-70) — the founder's view/edit surface for their Record
@@ -17,6 +18,13 @@ export default async function RopaPage() {
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-166: every console surface is a view over a compliance profile. Without
+  // one there is nothing to show and nothing that can be written, so send them
+  // to finish onboarding rather than render an empty console with dead actions.
+  if (!(await hasComplianceProfile(supabase, user.id))) {
+    redirect('/onboarding')
   }
 
   const [activities, plan] = await Promise.all([
