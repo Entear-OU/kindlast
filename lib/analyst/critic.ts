@@ -65,6 +65,14 @@ const LEGAL_JARGON = [
 const ACTION_MIN = 15
 const ACTION_MAX = 200
 
+/**
+ * House style bans the em dash in user-facing copy (ENT-160, ENT-163). The
+ * prompts ask for it, but a prompt is a request and this is a guarantee: a
+ * narrative that slips one through is regenerated rather than shipped. Hyphens
+ * in compound words ("plain-language") are untouched.
+ */
+const EM_DASH = '—'
+
 /** Number of sentence-final boundaries actually followed by a new sentence. */
 function sentenceCount(text: string): number {
   const trimmed = text.trim()
@@ -108,6 +116,8 @@ export function critiqueProposedAction(action: string): Critique {
     reasons.push('multiple_actions')
   }
 
+  if (text.includes(EM_DASH)) reasons.push('em_dash')
+
   return { ok: reasons.length === 0, reasons: [...new Set(reasons)] }
 }
 
@@ -131,6 +141,8 @@ export function critiqueDescription(description: string): Critique {
   if (sentences < 1 || sentences > 2) reasons.push('sentence_count')
 
   if (LEGAL_JARGON.some((j) => lower.includes(j))) reasons.push('legal_jargon')
+
+  if (text.includes(EM_DASH)) reasons.push('em_dash')
 
   return { ok: reasons.length === 0, reasons: [...new Set(reasons)] }
 }

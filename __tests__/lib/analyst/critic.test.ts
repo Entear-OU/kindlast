@@ -85,3 +85,28 @@ describe('critiqueDescription (ENT-60)', () => {
     expect(verdict.reasons).toContain('sentence_count')
   })
 })
+
+/**
+ * House style is enforced deterministically rather than trusted to the prompt
+ * (ENT-163): the prompt asks, the critic guarantees.
+ */
+describe('em dash rejection (ENT-163)', () => {
+  it('rejects a description containing an em dash', () => {
+    const verdict = critiqueDescription(
+      'You use Stripe to process payments — but you have no data processing agreement on file.',
+    )
+    expect(verdict.ok).toBe(false)
+    expect(verdict.reasons).toContain('em_dash')
+  })
+
+  it('rejects a proposed action containing an em dash', () => {
+    const verdict = critiqueProposedAction('Draft a Data Processing Agreement — with Stripe')
+    expect(verdict.ok).toBe(false)
+    expect(verdict.reasons).toContain('em_dash')
+  })
+
+  it('still accepts hyphens in compound words', () => {
+    const verdict = critiqueProposedAction('Draft a plain-language privacy notice for customers')
+    expect(verdict.ok).toBe(true)
+  })
+})
