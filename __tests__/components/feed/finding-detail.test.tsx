@@ -45,15 +45,18 @@ function chunk(over: Partial<SupportingChunk> = {}): SupportingChunk {
 }
 
 describe('FindingDetailView (ENT-64)', () => {
-  it('renders the title, proposed action, obligation link, and severity rationale', () => {
+  it('renders the title, description lede, obligation link, and severity rationale', () => {
     render(<FindingDetailView finding={finding()} chunks={[chunk()]} plan="pro" />)
 
+    // ENT-164: the page is titled by the action being proposed. `detected` is
+    // prose once the narrative layer has run, so it reads as the lede beneath.
     expect(
-      screen.getByRole('heading', { level: 1, name: 'No DPA on file for Stripe' }),
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Draft a Data Processing Agreement with Stripe.',
+      }),
     ).toBeInTheDocument()
-    expect(
-      screen.getByText('Draft a Data Processing Agreement with Stripe.'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('No DPA on file for Stripe')).toBeInTheDocument()
 
     const link = screen.getByRole('link', { name: 'GDPR Art. 28' })
     expect(link).toHaveAttribute(

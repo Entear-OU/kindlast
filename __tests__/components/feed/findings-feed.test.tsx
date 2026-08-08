@@ -330,3 +330,64 @@ describe('FindingsFeed — initial severity from URL (ENT-78)', () => {
     )
   })
 })
+
+/**
+ * ENT-164 — `findings.detected` is prose once the narrative layer (ENT-162)
+ * has run, so it cannot be the card heading. The proposed action is the thing
+ * the founder is being asked to approve, it is always one short verb-led
+ * sentence, and it is present on baseline and narrated findings alike, so it
+ * is what titles the card.
+ */
+const NARRATED = finding({
+  id: 'narrated',
+  detected:
+    'Your team uses ChatGPT internally and an AI product recommendation widget in the store, but there is no AI register. That matters because the people using these tools need basic AI know-how.',
+  proposed_action: 'Create an AI register for ChatGPT and the product recommendation widget',
+})
+
+describe('FindingsFeed — card heading (ENT-164)', () => {
+  it('titles the card with the proposed action, not the description', () => {
+    render(<FindingsFeed findings={[NARRATED]} />)
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Create an AI register for ChatGPT and the product recommendation widget',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('never renders a prose description as a heading', () => {
+    render(<FindingsFeed findings={[NARRATED]} />)
+
+    const headings = screen.getAllByRole('heading').map((h) => h.textContent ?? '')
+    expect(headings.some((h) => h.startsWith('Your team uses ChatGPT'))).toBe(false)
+  })
+
+  it('still shows the description as body copy', () => {
+    render(<FindingsFeed findings={[NARRATED]} />)
+
+    expect(screen.getByText(NARRATED.detected)).toBeInTheDocument()
+  })
+
+  it('titles a baseline finding the same way', () => {
+    // A finding the narrative sweep has not reached yet still has a usable
+    // heading, so the rule needs no branch on narrative_generated_at.
+    render(
+      <FindingsFeed
+        findings={[
+          finding({
+            id: 'baseline',
+            detected: 'Profile gap: Records of Processing Activities (ROPA)',
+            proposed_action: 'Put the missing control in place to satisfy this obligation.',
+          }),
+        ]}
+      />,
+    )
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Put the missing control in place to satisfy this obligation.',
+      }),
+    ).toBeInTheDocument()
+  })
+})

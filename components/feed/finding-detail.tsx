@@ -43,8 +43,14 @@ export function FindingDetailView({
         ← Back to feed
       </Link>
 
+      {/*
+        ENT-164: titled by the proposed action for the same reason as the feed
+        card. `detected` becomes the lede underneath, which is where the
+        narrative's "what we found and why it matters to you" belongs.
+      */}
       <header className="flex flex-col gap-3">
-        <h1 className="text-xl font-semibold text-zinc-100">{finding.detected}</h1>
+        <h1 className="text-xl font-semibold text-zinc-100">{finding.proposed_action}</h1>
+        <p className="text-sm leading-relaxed text-zinc-300">{finding.detected}</p>
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sev.className}`}>
             {sev.label}
@@ -91,13 +97,6 @@ export function FindingDetailView({
           ) : null}
         </section>
       ) : null}
-
-      <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Proposed action
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-200">{finding.proposed_action}</p>
-      </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">

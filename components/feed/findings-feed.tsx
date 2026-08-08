@@ -264,8 +264,8 @@ function LockedFindings({
             key={f.id}
             className="pointer-events-none select-none rounded-xl border border-white/10 bg-white/[0.03] p-4 blur-sm"
           >
-            <h3 className="text-sm font-semibold text-zinc-100">{f.detected}</h3>
-            <p className="mt-3 text-sm text-zinc-300">{f.proposed_action}</p>
+            <h3 className="text-sm font-semibold text-zinc-100">{f.proposed_action}</h3>
+            <p className="mt-3 text-sm text-zinc-300">{f.detected}</p>
           </li>
         ))}
       </ul>
@@ -314,12 +314,19 @@ function FindingCard({
   return (
     <li className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
       <div className="flex items-start justify-between gap-3">
+        {/*
+          ENT-164: the heading is the proposed action, not `detected`. Once the
+          narrative sweep (ENT-162) has run, `detected` holds one to two
+          sentences of prose and reads as a wall of text in an h3. The action is
+          short, verb-led, present on baseline and narrated findings alike, and
+          it is the thing this card is asking the founder to approve.
+        */}
         <h3 className="text-sm font-semibold text-zinc-100">
           <Link
             href={`/feed/${finding.id}`}
             className="hover:text-white hover:underline decoration-zinc-600 underline-offset-2"
           >
-            {finding.detected}
+            {finding.proposed_action}
           </Link>
         </h3>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${sev.className}`}>
@@ -344,7 +351,7 @@ function FindingCard({
         </p>
       ) : null}
 
-      <p className="mt-3 text-sm text-zinc-300">{finding.proposed_action}</p>
+      <p className="mt-3 text-sm text-zinc-300">{finding.detected}</p>
 
       <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500">
         <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
