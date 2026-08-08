@@ -7,7 +7,9 @@
      "playwright": {
       "command": "npx",
       "args": [
-        "@playwright/mcp@latest"
+        "@playwright/mcp@latest",
+        "--browser",
+        "chromium"
       ]
     },
     "shadcn": {
