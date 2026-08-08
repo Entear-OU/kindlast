@@ -10,7 +10,7 @@ import type { FindingSeverity } from '@/lib/feed/findings'
  * is `loadPostureInputs` in `./data`.
  */
 
-export type Posture = 'green' | 'amber' | 'red'
+export type Posture = 'green' | 'amber' | 'red' | 'unassessed'
 
 /**
  * A regulatory deadline's bearing on posture: its severity and how many days
@@ -26,6 +26,14 @@ export interface PostureInputs {
   openSeverities: FindingSeverity[]
   /** Approaching or overdue regulatory deadlines. */
   deadlines: PostureDeadline[]
+  /**
+   * When the Watcher last swept this profile, or `null` if it never has
+   * (ENT-161). Without it, "no open findings" is ambiguous: it could mean
+   * nothing is wrong, or that nobody has looked yet. A brand-new profile is
+   * always the second, and calling that Green tells a non-compliant business
+   * it is on track.
+   */
+  watcherLastRunAt: string | null
 }
 
 /** The "near-term" window the AC pins posture to. */
@@ -39,11 +47,19 @@ export const NEAR_TERM_DAYS = 30
  *             the 30-day window. (A near-term Critical deadline that isn't yet
  *             overdue still breaks Green per the AC, but it is not Red until it
  *             actually lapses — so it lands here.)
+ *   * Unassessed — the Watcher has never swept this profile, so a quiet board
+ *             means "not looked at yet", not "clean" (ENT-161).
  *   * Green — nothing Critical/High is pressing.
  *
- * Precedence is Red → Amber → Green: the worst applicable band wins.
+ * Precedence is Red → Amber → Unassessed → Green: the worst applicable band
+ * wins. Unassessed sits below Red/Amber deliberately — if we already know
+ * something is on fire, saying "not yet assessed" would bury it.
  */
-export function computePosture({ openSeverities, deadlines }: PostureInputs): Posture {
+export function computePosture({
+  openSeverities,
+  deadlines,
+  watcherLastRunAt,
+}: PostureInputs): Posture {
   const hasOpen = (s: FindingSeverity) => openSeverities.includes(s)
   const deadlineOverdue = (s: FindingSeverity) =>
     deadlines.some((d) => d.severity === s && d.daysRemaining < 0)
@@ -55,6 +71,8 @@ export function computePosture({ openSeverities, deadlines }: PostureInputs): Po
   if (hasOpen('critical') || deadlineOverdue('critical')) return 'red'
 
   if (hasOpen('high') || deadlineNearTerm('high') || deadlineNearTerm('critical')) return 'amber'
+
+  if (watcherLastRunAt === null) return 'unassessed'
 
   return 'green'
 }
@@ -93,6 +111,15 @@ const POSTURE_META: Record<Posture, PostureMeta> = {
     dotClassName: 'bg-rose-500 shadow-[0_0_60px_-5px] shadow-rose-500/60',
     textClassName: 'text-rose-300',
   },
+  // Deliberately unlit: a glowing dot of any colour reads as a verdict, and we
+  // do not have one yet (ENT-161).
+  unassessed: {
+    posture: 'unassessed',
+    label: 'Not yet assessed',
+    headline: "The Watcher hasn't swept your profile yet. Your first scan runs within 24 hours.",
+    dotClassName: 'border-2 border-dashed border-zinc-600 bg-transparent',
+    textClassName: 'text-zinc-300',
+  },
 }
 
 export function postureMeta(posture: Posture): PostureMeta {
@@ -103,4 +130,5 @@ export function postureMeta(posture: Posture): PostureMeta {
 export const POSTURE_TOOLTIP =
   'Green: no critical findings open and no critical or high deadlines within 30 days. ' +
   'Amber: an open high finding, or a critical/high deadline within 30 days. ' +
-  'Red: an open critical finding, or a critical deadline overdue.'
+  'Red: an open critical finding, or a critical deadline overdue. ' +
+  'Not yet assessed: the Watcher has not scanned your profile yet.'

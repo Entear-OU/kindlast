@@ -15,8 +15,18 @@ import type { FindingSeverity } from '@/lib/feed/findings'
  * the loader that feeds it real rows is covered by the integration suite.
  */
 
+/**
+ * Default to a profile the Watcher HAS already swept, so the existing band
+ * cases keep testing what they were written to test. The never-run case is
+ * exercised explicitly below (ENT-161).
+ */
 function inputs(over: Partial<PostureInputs> = {}): PostureInputs {
-  return { openSeverities: [], deadlines: [], ...over }
+  return {
+    openSeverities: [],
+    deadlines: [],
+    watcherLastRunAt: '2026-08-08T06:00:00.000Z',
+    ...over,
+  }
 }
 
 function deadline(severity: FindingSeverity, daysRemaining: number): PostureDeadline {
@@ -79,15 +89,56 @@ describe('computePosture (ENT-77)', () => {
   })
 })
 
+describe('computePosture before the first Watcher run (ENT-161)', () => {
+  it('is Unassessed, not Green, when the Watcher has never run', () => {
+    expect(computePosture(inputs({ watcherLastRunAt: null }))).toBe('unassessed')
+  })
+
+  it('stays Unassessed when only Medium/Low noise would have been Green', () => {
+    expect(
+      computePosture(
+        inputs({
+          watcherLastRunAt: null,
+          openSeverities: ['low', 'medium'],
+          deadlines: [deadline('medium', 5)],
+        }),
+      ),
+    ).toBe('unassessed')
+  })
+
+  it('still reports Red when a Critical finding is open', () => {
+    // "Not yet assessed" must never mask something we already know is on fire.
+    expect(
+      computePosture(inputs({ watcherLastRunAt: null, openSeverities: ['critical'] })),
+    ).toBe('red')
+  })
+
+  it('still reports Amber when a High finding is open', () => {
+    expect(computePosture(inputs({ watcherLastRunAt: null, openSeverities: ['high'] }))).toBe(
+      'amber',
+    )
+  })
+
+  it('returns to Green once the Watcher has run and found nothing', () => {
+    expect(computePosture(inputs({ watcherLastRunAt: '2026-08-08T06:00:00.000Z' }))).toBe('green')
+  })
+})
+
 describe('postureMeta (ENT-77)', () => {
   it('gives every posture a label, headline and styling', () => {
-    for (const p of ['green', 'amber', 'red'] as const) {
+    for (const p of ['green', 'amber', 'red', 'unassessed'] as const) {
       const meta = postureMeta(p)
       expect(meta.posture).toBe(p)
       expect(meta.label).toBeTruthy()
       expect(meta.headline).toBeTruthy()
       expect(meta.dotClassName).toBeTruthy()
     }
+  })
+
+  it('never tells an unassessed founder they are on track (ENT-161)', () => {
+    const meta = postureMeta('unassessed')
+    expect(meta.headline).not.toMatch(/on track/i)
+    expect(meta.label).not.toMatch(/green/i)
   })
 })
 

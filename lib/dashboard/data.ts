@@ -41,14 +41,30 @@ export async function loadPostureInputs(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<PostureInputs> {
-  const { data, error } = await supabase
-    .from('findings')
-    .select('severity,metadata')
-    .eq('user_id', userId)
-    .eq('status', 'pending')
+  const [findingsRes, profileRes] = await Promise.all([
+    supabase
+      .from('findings')
+      .select('severity,metadata')
+      .eq('user_id', userId)
+      .eq('status', 'pending'),
+    // ENT-161: an empty board means nothing until we know whether the Watcher
+    // has actually looked. Read alongside the findings rather than deriving it
+    // downstream, so the rule always gets both halves of the picture.
+    supabase
+      .from('compliance_profiles')
+      .select('watcher_last_run_at')
+      .eq('user_id', userId)
+      .order('watcher_last_run_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
+  const { data, error } = findingsRes
   if (error) {
     throw new Error(`loadPostureInputs: ${error.message}`)
+  }
+  if (profileRes.error) {
+    throw new Error(`loadPostureInputs (profile): ${profileRes.error.message}`)
   }
 
   const rows = (data ?? []) as PostureFindingRow[]
@@ -60,7 +76,11 @@ export async function loadPostureInputs(
       daysRemaining: Number(r.metadata?.signal_metadata?.days_remaining ?? 0),
     }))
 
-  return { openSeverities, deadlines }
+  return {
+    openSeverities,
+    deadlines,
+    watcherLastRunAt: (profileRes.data?.watcher_last_run_at as string | null) ?? null,
+  }
 }
 
 /**
