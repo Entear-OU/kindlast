@@ -12,7 +12,7 @@ const features = [
     id: 'gdpr',
     title: 'GDPR Gap Analysis',
     description:
-      'AI evaluates your business against the full scope of GDPR — lawful bases, consent, data subject rights, and breach notification procedures.',
+      'AI evaluates your business against the full scope of GDPR: lawful bases, consent, data subject rights, and breach notification procedures.',
     detail:
       'Article-level findings tied to specific GDPR provisions, so you know exactly where the gaps are and what to fix first.',
     icon: Shield,
@@ -33,7 +33,7 @@ const features = [
     id: 'recs',
     title: 'Actionable Recommendations',
     description:
-      'Every finding comes with a prioritized, step-by-step recommendation — specific actions mapped to your business context.',
+      'Every finding comes with a prioritized, step-by-step recommendation: specific actions mapped to your business context.',
     detail: '',
     icon: Lightbulb,
     colSpan: 'md:col-span-1',
@@ -43,7 +43,7 @@ const features = [
     id: 'aiact',
     title: 'EU AI Act Classification',
     description:
-      'Classify your AI systems by risk tier — unacceptable, high, limited, or minimal. Understand your obligations before enforcement.',
+      'Classify your AI systems by risk tier: unacceptable, high, limited, or minimal. Understand your obligations before enforcement.',
     detail:
       'Guidance on documentation requirements, conformity assessments, and compliance deadlines for your specific tier.',
     icon: Brain,
@@ -54,7 +54,7 @@ const features = [
     id: 'pdf',
     title: 'Audit-Ready PDF Reports',
     description:
-      'Professional compliance reports with your score, all findings, and recommendations — ready to share with auditors or investors.',
+      'Professional compliance reports with your score, all findings, and recommendations, ready to share with auditors or investors.',
     detail: '',
     icon: FileText,
     colSpan: 'md:col-span-1',

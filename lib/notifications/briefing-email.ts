@@ -53,7 +53,7 @@ export function renderBriefingEmail(
   { userId, baseUrl, tokenSecret, nowSeconds }: RenderBriefingOptions,
 ): RenderedEmail {
   const dueSoon = data.upcomingDeadlines.length
-  const subject = `Your weekly compliance briefing — ${data.openTotal} open, ${dueSoon} due soon`
+  const subject = `Your weekly compliance briefing: ${data.openTotal} open, ${dueSoon} due soon`
 
   const unsubscribeUrl = buildUnsubscribeUrl(
     baseUrl,
@@ -66,7 +66,7 @@ export function renderBriefingEmail(
     .filter((s) => data.findingsBySeverity[s] > 0)
     .map((s) => `  ${severityChip(s).label}: ${data.findingsBySeverity[s]}`)
   const deadlineLines = data.upcomingDeadlines.length
-    ? data.upcomingDeadlines.map((d) => `  ${d.label} — ${d.daysRemaining} day(s)`)
+    ? data.upcomingDeadlines.map((d) => `  ${d.label}: ${d.daysRemaining} day(s)`)
     : ['  None in the next 30 days.']
   const actionLines = data.executorActions.length
     ? data.executorActions.map((a) => `  ${actionLabel(a.actionType)}`)
@@ -99,7 +99,7 @@ export function renderBriefingEmail(
     ? data.upcomingDeadlines
         .map(
           (d) =>
-            `<li style="margin:0 0 4px;">${escapeHtml(d.label)} — <strong>${d.daysRemaining}</strong> day${d.daysRemaining === 1 ? '' : 's'}</li>`,
+            `<li style="margin:0 0 4px;">${escapeHtml(d.label)}: <strong>${d.daysRemaining}</strong> day${d.daysRemaining === 1 ? '' : 's'}</li>`,
         )
         .join('')
     : '<li style="margin:0 0 4px;color:#71717a;">None in the next 30 days.</li>'
@@ -126,7 +126,7 @@ export function renderBriefingEmail(
       ${section('What shipped last week', actionsHtml)}
 
       <p style="margin:28px 0 0;font-size:12px;color:#52525b;">
-        Kindlast — your AI compliance co-pilot.
+        Kindlast, your AI compliance co-pilot.
         <a href="${escapeHtml(unsubscribeUrl)}" style="color:#52525b;text-decoration:underline;">Stop weekly briefings</a>.
       </p>
     </div>

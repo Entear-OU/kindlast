@@ -21,7 +21,7 @@ const DATA: BriefingData = {
   findingsBySeverity: { critical: 2, high: 1, medium: 0, low: 0 },
   openTotal: 3,
   upcomingDeadlines: [
-    { label: 'GDPR Art. 30 — ROPA', daysRemaining: 5 },
+    { label: 'GDPR Art. 30 ROPA', daysRemaining: 5 },
     { label: 'DSAR response', daysRemaining: 12 },
   ],
   executorActions: [
@@ -33,7 +33,7 @@ describe('renderBriefingEmail (ENT-74)', () => {
   const email = renderBriefingEmail(DATA, { userId: USER, baseUrl: BASE, tokenSecret: SECRET, nowSeconds: NOW })
 
   it('reflects the totals in the subject', () => {
-    expect(email.subject).toBe('Your weekly compliance briefing — 3 open, 2 due soon')
+    expect(email.subject).toBe('Your weekly compliance briefing: 3 open, 2 due soon')
   })
 
   it('renders all three sections', () => {

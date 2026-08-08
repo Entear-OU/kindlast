@@ -190,7 +190,7 @@ function pickTopAction(
       title: 'Document your cross-border transfer mechanism',
       description: `You mentioned data leaves the EU${
         destinations ? ` (${destinations})` : ''
-      }. GDPR Chapter V requires a documented transfer mechanism — typically Standard Contractual Clauses or an adequacy decision — for every destination outside the EEA. List each vendor and the mechanism that covers it.`,
+      }. GDPR Chapter V requires a documented transfer mechanism, typically Standard Contractual Clauses or an adequacy decision, for every destination outside the EEA. List each vendor and the mechanism that covers it.`,
       regulation: 'GDPR Chapter V',
       severity: 'medium',
     })
@@ -207,7 +207,7 @@ function pickTopAction(
     return draft({
       key: 'dpo',
       title: 'Designate a Data Protection Officer',
-      description: `With around ${profile.staffCount} staff and personal data flowing through your operations, GDPR Article 37 likely requires you to designate a Data Protection Officer. The DPO can be internal or an external consultant — what matters is the named, contactable accountability point.`,
+      description: `With around ${profile.staffCount} staff and personal data flowing through your operations, GDPR Article 37 likely requires you to designate a Data Protection Officer. The DPO can be internal or an external consultant. What matters is the named, contactable accountability point.`,
       regulation: 'GDPR Article 37',
       severity: 'medium',
     })
@@ -219,7 +219,7 @@ function pickTopAction(
     key: 'privacy_policy_review',
     title: 'Schedule a privacy policy review',
     description:
-      "You've covered the structural gaps an SME usually hits first. A quarterly review of your public privacy policy against your actual processing activities is the highest-value next step — it keeps the document in sync with how the business has evolved.",
+      "You've covered the structural gaps an SME usually hits first. A quarterly review of your public privacy policy against your actual processing activities is the highest-value next step. It keeps the document in sync with how the business has evolved.",
     regulation: 'GDPR Article 13',
     severity: 'low',
   })

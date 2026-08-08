@@ -135,7 +135,7 @@ async function processRow(
   // generic finding email — skip so they aren't double-sent.
   const signalKind = finding.metadata?.signal_kind
   if (signalKind && DEADLINE_KINDS.includes(signalKind)) {
-    await mark(supabase, row.id, { status: 'skipped', last_error: 'deadline finding — handled by deadline alerts' })
+    await mark(supabase, row.id, { status: 'skipped', last_error: 'deadline finding: handled by deadline alerts' })
     return 'skipped'
   }
 

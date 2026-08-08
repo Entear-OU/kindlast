@@ -56,7 +56,7 @@ export function renderDeadlineEmail(
   const days = Math.max(0, daysRemaining)
   const dayLabel = `${days} day${days === 1 ? '' : 's'}`
   const due = formatDueDate(dueDate)
-  const subject = `[Deadline] ${obligation} — ${dayLabel} left`
+  const subject = `[Deadline] ${obligation} (${dayLabel} left)`
 
   const approveUrl = buildActionUrl(
     baseUrl,
@@ -66,7 +66,7 @@ export function renderDeadlineEmail(
 
   const citationLine = finding.citation_url ? `\nReference: ${finding.citation_url}` : ''
   const text = [
-    `${obligation} — ${dayLabel} until the deadline`,
+    `${obligation}: ${dayLabel} until the deadline`,
     '',
     `Obligation: ${obligation}${citationLine}`,
     `Due date: ${due} (${dayLabel} remaining)`,
@@ -90,7 +90,7 @@ export function renderDeadlineEmail(
       <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">${escapeHtml(obligation)}${citationHtml}</p>
 
       <p style="margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#71717a;">Due date</p>
-      <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">${escapeHtml(due)} — <strong>${escapeHtml(dayLabel)}</strong> remaining</p>
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">${escapeHtml(due)}: <strong>${escapeHtml(dayLabel)}</strong> remaining</p>
 
       <p style="margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#71717a;">What to do</p>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.5;">${escapeHtml(finding.proposed_action)}</p>
@@ -99,7 +99,7 @@ export function renderDeadlineEmail(
         <a href="${escapeHtml(approveUrl)}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#22c55e;color:#06210f;font-weight:600;text-decoration:none;font-size:14px;">Approve</a>
       </div>
 
-      <p style="margin:24px 0 0;font-size:12px;color:#52525b;">Kindlast — your AI compliance co-pilot. This one-tap link is private to you.</p>
+      <p style="margin:24px 0 0;font-size:12px;color:#52525b;">Kindlast, your AI compliance co-pilot. This one-tap link is private to you.</p>
     </div>
   </body>
 </html>`

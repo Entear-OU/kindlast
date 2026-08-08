@@ -65,7 +65,7 @@ export function PostureSummaryCard({
           Your initial compliance posture
         </CardTitle>
         <CardDescription>
-          Based on what you shared — here&apos;s where you stand and what to do
+          Based on what you shared, here&apos;s where you stand and what to do
           first.
         </CardDescription>
       </CardHeader>

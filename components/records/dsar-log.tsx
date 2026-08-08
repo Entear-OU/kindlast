@@ -142,7 +142,7 @@ export function DsarLog({
         <div className="max-w-md rounded-xl border border-white/10 bg-white/[0.03] p-6">
           <h2 className="text-sm font-semibold text-zinc-100">No data-subject requests yet</h2>
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            DSARs land here when you <strong>approve a request finding</strong> — each gets a 30-day
+            DSARs land here when you <strong>approve a request finding</strong>. Each gets a 30-day
             Article 12(3) countdown. You can also log one you received offline.
           </p>
         </div>
@@ -180,8 +180,8 @@ export function DsarLog({
                       <div className="text-xs text-zinc-500">{d.subject_name}</div>
                     )}
                   </td>
-                  <td className="py-3 pr-4 text-zinc-300">{d.request_type || '—'}</td>
-                  <td className="py-3 pr-4 text-zinc-300">{d.handler || '—'}</td>
+                  <td className="py-3 pr-4 text-zinc-300">{d.request_type || '–'}</td>
+                  <td className="py-3 pr-4 text-zinc-300">{d.handler || '–'}</td>
                   <td className="py-3 pr-4 text-zinc-400">{formatDueLabel(d)}</td>
                   <td className="py-3 pr-4 text-zinc-400">{formatDate(d.responded_at)}</td>
                   <td className="py-3 pr-4">

@@ -120,7 +120,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export function formatRelativeTime(iso: string | null, now: Date = new Date()): string {
   if (!iso) return 'never'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return '–'
 
   const mins = Math.floor((now.getTime() - d.getTime()) / (1000 * 60))
   if (mins < 1) return 'just now'

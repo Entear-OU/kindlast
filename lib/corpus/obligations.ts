@@ -100,7 +100,7 @@ const ObligationSchema = z.object({
   dueWithinDays: z
     .number()
     .int()
-    .min(0, 'dueWithinDays cannot be negative — a deadline cannot be in the past')
+    .min(0, 'dueWithinDays cannot be negative: a deadline cannot be in the past')
     .optional(),
   recurrence: z.string().min(1).optional(),
   effectiveDate: z
