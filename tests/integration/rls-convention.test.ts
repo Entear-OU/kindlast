@@ -43,6 +43,13 @@ const FIXTURE_SQL = /* sql */ `
     on public._test_rls_fixture
     for select
     using (auth.uid() = user_id);
+
+  -- Grant explicitly (ENT-159): the fixture is created at test time by
+  -- \`postgres\`, whose default privileges in \`public\` hand anon/authenticated
+  -- only Dxtm — no SELECT. Without this the policy above is dead code and the
+  -- assertions fail with "permission denied for table" before RLS is consulted.
+  grant select on public._test_rls_fixture to anon, authenticated;
+  grant select, insert, update, delete on public._test_rls_fixture to service_role;
 `
 
 const DROP_SQL = /* sql */ `drop table if exists public._test_rls_fixture;`
