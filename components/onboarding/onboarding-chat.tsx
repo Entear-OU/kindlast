@@ -42,6 +42,29 @@ function messageText(message: UIMessage): string {
     .join('')
 }
 
+type MessagePart = UIMessage['parts'][number]
+
+/** True for a `complete_onboarding` part, under either the typed or dynamic shape. */
+function isCompleteOnboardingPart(part: MessagePart): boolean {
+  const partType = part.type as string
+  return (
+    partType === 'tool-complete_onboarding' ||
+    (partType === 'dynamic-tool' &&
+      (part as { toolName?: string }).toolName === 'complete_onboarding')
+  )
+}
+
+/** The most recent `complete_onboarding` part in the transcript, or null. */
+function latestCompleteOnboardingPart(messages: UIMessage[]): MessagePart | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const parts = messages[i].parts
+    for (let j = parts.length - 1; j >= 0; j--) {
+      if (isCompleteOnboardingPart(parts[j])) return parts[j]
+    }
+  }
+  return null
+}
+
 // ENT-154: a hidden user turn the client sends to ask the server for the
 // opening question (`{ begin: true }` on the wire). It never renders and is
 // never persisted — it only exists to drive the first assistant stream.
@@ -100,12 +123,7 @@ export function OnboardingChat({
     for (let i = messages.length - 1; i >= 0; i--) {
       const message = messages[i]
       for (const part of message.parts) {
-        const partType = part.type as string
-        const isCompleteTool =
-          partType === 'tool-complete_onboarding' ||
-          (partType === 'dynamic-tool' &&
-            (part as { toolName?: string }).toolName === 'complete_onboarding')
-        if (!isCompleteTool) continue
+        if (!isCompleteOnboardingPart(part)) continue
         const output = (part as { output?: unknown }).output as
           | { status?: string; summary?: PostureSummary }
           | undefined
@@ -123,21 +141,21 @@ export function OnboardingChat({
   // The "drafting" indicator only fires when the tool is in-flight — once
   // `summary` is set, the card takes its place and we never want both
   // visible at the same time.
+  //
+  // ENT-167: in-flight means the latest `complete_onboarding` call has not
+  // resolved yet. A resolved call is never drafting: `completed` renders the
+  // summary card, and `too_early` (the route's answer to a premature call,
+  // see `app/api/onboarding/chat/route.ts`) hands the interview back to the
+  // founder. Keying off mere presence left that rejected part in the
+  // transcript forever and locked the composer for the rest of the session.
   const isDrafting = useMemo(() => {
     if (isCompleted) return false
-    for (const message of messages) {
-      for (const part of message.parts) {
-        const partType = part.type as string
-        if (
-          partType === 'tool-complete_onboarding' ||
-          (partType === 'dynamic-tool' &&
-            (part as { toolName?: string }).toolName === 'complete_onboarding')
-        ) {
-          return true
-        }
-      }
-    }
-    return false
+    const part = latestCompleteOnboardingPart(messages)
+    if (!part) return false
+    const state = (part as { state?: string }).state
+    if (state === 'output-available' || state === 'output-error') return false
+    // No `state` field (older part shape): fall back to whether output landed.
+    return (part as { output?: unknown }).output === undefined
   }, [messages, isCompleted])
 
   const lastMessage = messages[messages.length - 1]

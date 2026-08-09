@@ -30,11 +30,20 @@ vi.mock('ai', async () => {
 
 import { OnboardingChat, OPENING_TRIGGER } from '@/components/onboarding/onboarding-chat'
 
+type MessagePart =
+  | { type: 'text'; text: string }
+  | {
+      type: 'tool-complete_onboarding'
+      toolCallId: string
+      state: string
+      output?: unknown
+    }
+
 type UseChatReturn = {
   messages: Array<{
     id: string
     role: 'user' | 'assistant'
-    parts: Array<{ type: 'text'; text: string }>
+    parts: MessagePart[]
   }>
   sendMessage: ReturnType<typeof vi.fn>
   setMessages: ReturnType<typeof vi.fn>
@@ -181,6 +190,133 @@ describe('OnboardingChat', () => {
     render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
 
     expect(sendMessage).not.toHaveBeenCalled()
+  })
+
+  // ENT-167: the route answers a premature `complete_onboarding` call with
+  // `too_early` and lets the model ask the missing question instead. The
+  // rejected call stays in the transcript forever, so keying "drafting" off
+  // its mere presence locked the composer for the rest of the interview.
+  describe('complete_onboarding tool state', () => {
+    const summary = {
+      covered: [{ key: 'business_mapped', label: 'Business profile mapped' }],
+      missing: [{ key: 'ropa', label: 'Record of Processing Activities' }],
+      topAction: {
+        id: 'ropa',
+        key: 'ropa',
+        title: 'Start a Record of Processing Activities',
+        description: 'You process employee data but have no ROPA yet.',
+        regulation: 'GDPR Article 30',
+        severity: 'high' as const,
+      },
+    }
+
+    function toolTurn(part: MessagePart) {
+      return { id: 'a2', role: 'assistant' as const, parts: [part] }
+    }
+
+    it('re-enables the composer after a too_early finalisation attempt', () => {
+      mockUseChat({
+        status: 'ready',
+        messages: [
+          greeting,
+          toolTurn({
+            type: 'tool-complete_onboarding',
+            toolCallId: 'call_1',
+            state: 'output-available',
+            output: { status: 'too_early', missing: ['ropaStatus'], message: 'Keep interviewing.' },
+          }),
+        ],
+      })
+
+      render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
+
+      expect(screen.getByRole('textbox')).toBeEnabled()
+      expect(screen.getByPlaceholderText(/type your answer/i)).toBeInTheDocument()
+      expect(screen.queryByText(/drafting/i)).not.toBeInTheDocument()
+    })
+
+    it('re-enables the composer when the finalisation call errors', () => {
+      mockUseChat({
+        status: 'ready',
+        messages: [
+          greeting,
+          toolTurn({
+            type: 'tool-complete_onboarding',
+            toolCallId: 'call_1',
+            state: 'output-error',
+          }),
+        ],
+      })
+
+      render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
+
+      expect(screen.getByRole('textbox')).toBeEnabled()
+    })
+
+    it('disables the composer and shows the indicator while finalisation is in flight', () => {
+      mockUseChat({
+        status: 'streaming',
+        messages: [
+          greeting,
+          toolTurn({
+            type: 'tool-complete_onboarding',
+            toolCallId: 'call_1',
+            state: 'input-available',
+          }),
+        ],
+      })
+
+      render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
+
+      expect(screen.getByRole('textbox')).toBeDisabled()
+      expect(screen.getByText(/drafting your compliance posture/i)).toBeInTheDocument()
+    })
+
+    it('swaps the composer for the posture summary once finalisation completes', () => {
+      mockUseChat({
+        status: 'ready',
+        messages: [
+          greeting,
+          toolTurn({
+            type: 'tool-complete_onboarding',
+            toolCallId: 'call_1',
+            state: 'output-available',
+            output: { status: 'completed', summary },
+          }),
+        ],
+      })
+
+      render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
+
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      expect(screen.getByText(/start a record of processing activities/i)).toBeInTheDocument()
+    })
+
+    it('re-enables the composer after a too_early call that precedes a later question', () => {
+      // The model's second step asks the missing question in a new turn; the
+      // stale tool part still sits earlier in the transcript.
+      mockUseChat({
+        status: 'ready',
+        messages: [
+          greeting,
+          toolTurn({
+            type: 'tool-complete_onboarding',
+            toolCallId: 'call_1',
+            state: 'output-available',
+            output: { status: 'too_early', missing: ['ropaStatus'], message: 'Keep interviewing.' },
+          }),
+          {
+            id: 'a3',
+            role: 'assistant' as const,
+            parts: [{ type: 'text' as const, text: 'Do you keep a ROPA today?' }],
+          },
+        ],
+      })
+
+      render(<OnboardingChat sessionId="s1" initialMessages={[]} initialSummary={null} />)
+
+      expect(screen.getByRole('textbox')).toBeEnabled()
+    })
   })
 
   it('never renders the hidden opening trigger turn', () => {
