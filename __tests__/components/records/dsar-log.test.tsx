@@ -117,6 +117,26 @@ describe('DsarLog (ENT-71)', () => {
     expect(refreshMock).toHaveBeenCalled()
   })
 
+  // ENT-168: an empty submit used to log a requester-less DSAR and start a live
+  // 30-day Article 12(3) countdown for a request that does not exist.
+  it('keeps the log button disabled until the request names a requester', async () => {
+    const user = userEvent.setup()
+    render(<DsarLog dsars={[dsar()]} />)
+
+    await user.click(screen.getByRole('button', { name: /log a dsar/i }))
+    const save = screen.getByRole('button', { name: /^log dsar$/i })
+    expect(save).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Requester'), '  ')
+    expect(save).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Requester'), 'John Doe')
+    expect(save).toBeEnabled()
+
+    await user.click(save)
+    expect(logDsarMock).toHaveBeenCalledTimes(1)
+  })
+
   it('surfaces a mark-responded error', async () => {
     const user = userEvent.setup()
     markRespondedMock.mockResolvedValue({ ok: false, error: 'requires a reviewed approval' })

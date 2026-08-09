@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { logDsar, markResponded } from '@/app/(authed)/records/dsar/actions'
+import { isBlank } from '@/lib/records/required-fields'
 import {
   deriveDsarStatus,
   formatDate,
@@ -119,7 +120,9 @@ export function DsarLog({
         <button
           type="button"
           onClick={submitLog}
-          disabled={pending}
+          // ENT-168: no requester, no request. Logging one anyway starts a real
+          // Article 12(3) countdown against nobody.
+          disabled={pending || isBlank(draft.subject_name)}
           className="rounded-md bg-[#00C9A7] px-3 py-1.5 text-sm font-medium text-zinc-950 transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {pending ? 'Saving…' : 'Log DSAR'}

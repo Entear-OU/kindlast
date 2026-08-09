@@ -8,6 +8,7 @@ import { addActivity, editActivity } from '@/app/(authed)/records/ropa/actions'
 import { trackUpgradeConverted, trackUpgradePromptShown } from '@/lib/analytics/track'
 import type { Plan } from '@/lib/billing/plan'
 import { upgradeHref } from '@/lib/billing/upgrade-link'
+import { isBlank } from '@/lib/records/required-fields'
 import {
   deriveRopaStatus,
   formatUpdatedAt,
@@ -163,7 +164,9 @@ function ActivityForm({
         <button
           type="button"
           onClick={onSave}
-          disabled={pending}
+          // ENT-168: an activity with no name is not a record, it is a blank
+          // row the founder can never delete.
+          disabled={pending || isBlank(draft.name)}
           className="rounded-md bg-[#00C9A7] px-3 py-1.5 text-sm font-medium text-zinc-950 transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {pending ? 'Saving…' : saveLabel}

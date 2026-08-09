@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import type { ProcessingActivityInput } from '@/lib/records/ropa'
 import { createClient } from '@/lib/supabase/server'
 import { recordsActionError } from '@/lib/records/action-errors'
+import { isBlank, REQUIRED_FIELD_MESSAGES } from '@/lib/records/required-fields'
 
 /**
  * Server actions for the ROPA register (ENT-70).
@@ -25,6 +26,11 @@ export async function addActivity(input: ProcessingActivityInput): Promise<Actio
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not authenticated' }
+  // ENT-168: the RPC would coalesce a blank name to "Untitled activity" and
+  // write the row, which nothing in the app can delete afterwards.
+  if (isBlank(input.name)) {
+    return { ok: false, error: REQUIRED_FIELD_MESSAGES.activityName }
+  }
 
   const { error } = await supabase.rpc('create_processing_activity', {
     p_name: input.name,
@@ -49,6 +55,9 @@ export async function editActivity(
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not authenticated' }
+  if (isBlank(input.name)) {
+    return { ok: false, error: REQUIRED_FIELD_MESSAGES.activityName }
+  }
 
   const { error } = await supabase.rpc('update_processing_activity', {
     p_id: id,

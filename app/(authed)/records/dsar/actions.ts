@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 
 import { createClient } from '@/lib/supabase/server'
 import { recordsActionError } from '@/lib/records/action-errors'
+import { isBlank, REQUIRED_FIELD_MESSAGES } from '@/lib/records/required-fields'
 
 /**
  * Server actions for the DSAR Log (ENT-71).
@@ -30,6 +31,11 @@ export async function logDsar(input: LogDsarInput): Promise<ActionResult> {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not authenticated' }
+  // ENT-168: logging a requester-less DSAR starts a real 30-day Article 12(3)
+  // countdown, which then drives deadline alerts for a request nobody made.
+  if (isBlank(input.subject_name)) {
+    return { ok: false, error: REQUIRED_FIELD_MESSAGES.dsarRequester }
+  }
 
   const { error } = await supabase.rpc('log_dsar', {
     p_subject_name: input.subject_name,

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import type { DocumentationStatus, RiskClassification } from '@/lib/records/ai-system'
 import { createClient } from '@/lib/supabase/server'
 import { recordsActionError } from '@/lib/records/action-errors'
+import { isBlank, REQUIRED_FIELD_MESSAGES } from '@/lib/records/required-fields'
 
 /**
  * Server actions for the AI Systems Register (ENT-72).
@@ -33,6 +34,10 @@ export async function addSystem(input: AiSystemInput, reviewed: boolean): Promis
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not authenticated' }
+  // ENT-168: same guard as the ROPA register, against an "Untitled system" row.
+  if (isBlank(input.name)) {
+    return { ok: false, error: REQUIRED_FIELD_MESSAGES.systemName }
+  }
 
   const { error } = await supabase.rpc('create_ai_system_manual', {
     p_name: input.name,
@@ -58,6 +63,9 @@ export async function editSystem(
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Not authenticated' }
+  if (isBlank(input.name)) {
+    return { ok: false, error: REQUIRED_FIELD_MESSAGES.systemName }
+  }
 
   const { error } = await supabase.rpc('update_ai_system', {
     p_id: id,

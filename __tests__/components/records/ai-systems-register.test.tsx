@@ -138,6 +138,22 @@ describe('AiSystemsRegister (ENT-72)', () => {
     expect(reviewed).toBe(true)
   })
 
+  // ENT-168: an empty submit used to register an "Untitled system".
+  it('keeps the add button disabled until the system has a name', async () => {
+    const user = userEvent.setup()
+    render(<AiSystemsRegister systems={[system()]} />)
+
+    await user.click(screen.getByRole('button', { name: /add system/i }))
+    const save = screen.getByRole('button', { name: /add system/i })
+    expect(save).toBeDisabled()
+
+    await user.type(screen.getByLabelText('System name'), '  ')
+    expect(save).toBeDisabled()
+
+    await user.type(screen.getByLabelText('System name'), 'Chatbot')
+    expect(save).toBeEnabled()
+  })
+
   it('adds a non-high system without the reviewed step', async () => {
     const user = userEvent.setup()
     render(<AiSystemsRegister systems={[system()]} />)

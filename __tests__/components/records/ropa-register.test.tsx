@@ -180,6 +180,26 @@ describe('RopaRegister (ENT-70)', () => {
     expect(convertedMock).toHaveBeenCalledWith({ source: 'ropa_cap', lockedCount: 1, totalCount: 4 })
   })
 
+  // ENT-168: an empty submit used to write an "Untitled activity" row that
+  // could never be deleted, and on Free it burnt one of the three manual slots.
+  it('keeps the add button disabled until the activity has a name', async () => {
+    const user = userEvent.setup()
+    render(<RopaRegister activities={[activity()]} />)
+
+    await user.click(screen.getByRole('button', { name: /add activity/i }))
+    const save = screen.getByRole('button', { name: /add activity/i })
+    expect(save).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Activity name'), '   ')
+    expect(save).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Activity name'), 'Payroll')
+    expect(save).toBeEnabled()
+
+    await user.click(save)
+    expect(addActivityMock).toHaveBeenCalledTimes(1)
+  })
+
   it('surfaces an action error without closing the form', async () => {
     const user = userEvent.setup()
     addActivityMock.mockResolvedValue({ ok: false, error: 'free tier limit reached' })

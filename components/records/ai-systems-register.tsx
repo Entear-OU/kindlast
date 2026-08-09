@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { addSystem, editSystem, type AiSystemInput } from '@/app/(authed)/records/ai-systems/actions'
+import { isBlank } from '@/lib/records/required-fields'
 import {
   DOC_LABEL,
   DOC_OPTIONS,
@@ -146,7 +147,8 @@ function SystemForm({
         <button
           type="button"
           onClick={onSave}
-          disabled={pending}
+          // ENT-168: a system with no name is a blank row in the register.
+          disabled={pending || isBlank(draft.name)}
           className="rounded-md bg-[#00C9A7] px-3 py-1.5 text-sm font-medium text-zinc-950 transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {pending ? 'Saving…' : confirming ? 'Confirm reviewed approval' : saveLabel}
