@@ -63,8 +63,13 @@ export default function AuthedLayout({
     <div className="flex h-[100dvh] flex-col">
       <header className="border-b border-border/60 bg-background">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-3">
+          {/* ENT-170: /dashboard, never /onboarding. A founder without a
+              compliance profile is redirected from here to /onboarding
+              (ENT-166), so this one destination is right in both states, and
+              an onboarded founder can no longer click the wordmark and fall
+              back into a fresh interview. */}
           <Link
-            href="/onboarding"
+            href="/dashboard"
             className="flex items-center gap-2 text-foreground transition-opacity hover:opacity-80"
           >
             <span className="text-foreground">

@@ -39,6 +39,19 @@ describe('(authed)/layout — header chrome (ENT-91)', () => {
     expect(brand).toBeInTheDocument()
   })
 
+  // ENT-170: the brand link used to point at /onboarding, so clicking the
+  // wordmark from the console dropped an onboarded founder back into the
+  // interview. /dashboard is right for both states, because it redirects a
+  // founder without a compliance profile to /onboarding (ENT-166).
+  it('points the brand link at the dashboard, not at onboarding', () => {
+    render(
+      <AuthedLayout>
+        <div>child</div>
+      </AuthedLayout>,
+    )
+    expect(screen.getByRole('link', { name: /kindlast/i })).toHaveAttribute('href', '/dashboard')
+  })
+
   it('renders a sign-out button that submits to the signOut server action', () => {
     render(
       <AuthedLayout>

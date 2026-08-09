@@ -9,6 +9,7 @@ import {
   uiMessageFromRow,
 } from '@/lib/onboarding/persistence'
 import { computePostureSummary, type PostureSummary } from '@/lib/onboarding/posture-summary'
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 import { createClient } from '@/lib/supabase/server'
 
 import { OnboardingChat } from '@/components/onboarding/onboarding-chat'
@@ -20,6 +21,14 @@ export default async function OnboardingChatPage() {
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-170: completing the interview marks the session `completed`, which
+  // `getOrCreateActiveSession` cannot see, so landing here again would open a
+  // new session and stream question one at a founder who is already onboarded.
+  // The composer's post-completion lock guards the same thing one layer down.
+  if (await hasComplianceProfile(supabase, user.id)) {
+    redirect('/dashboard')
   }
 
   const sessionId = await getOrCreateActiveSession(supabase, user.id)

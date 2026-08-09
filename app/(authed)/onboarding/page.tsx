@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import { hasComplianceProfile } from '@/lib/console/require-profile'
 import { getOrCreateActiveSession, loadTranscript } from '@/lib/onboarding/persistence'
 import { createClient } from '@/lib/supabase/server'
 
@@ -11,6 +12,14 @@ export default async function OnboardingPage() {
   } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  // ENT-170: the inverse of the console's onboarding gate. `getOrCreateActiveSession`
+  // only sees `in_progress` sessions, so for a founder who has already finished
+  // it opens a brand-new empty one and this page invites them to start over.
+  // Check the profile first, so the check itself has no side effect either.
+  if (await hasComplianceProfile(supabase, user.id)) {
+    redirect('/dashboard')
   }
 
   const sessionId = await getOrCreateActiveSession(supabase, user.id)
