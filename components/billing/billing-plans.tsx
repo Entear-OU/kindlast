@@ -10,6 +10,12 @@ import type { Plan } from '@/lib/billing/plan'
  * checkout. On success the server returns the hosted-checkout URL and we redirect
  * the whole window there; on Free→Pro the plan only flips once the webhook lands
  * (ENT-86), so there's nothing optimistic to show here.
+ *
+ * Palette (ENT-169): this renders inside `ConsoleShell`, which paints its own
+ * `bg-zinc-950 text-zinc-100` surface. Use the explicit zinc classes the rest of
+ * the console uses, never the shadcn theme tokens — nothing in the tree adds the
+ * `.dark` class, so `text-foreground` resolves to the light palette's near-black
+ * and disappears against the console background.
  */
 
 const PRO_PRICE = '€49'
@@ -48,10 +54,10 @@ export function BillingPlans({ plan, returnTo }: { plan: Plan; returnTo?: string
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-100">
           {isPro ? 'You’re on Pro' : 'Upgrade to Pro'}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-zinc-400">
           {isPro
             ? 'You have full access: unlimited findings, the complete registers, and one-tap actions.'
             : 'Let your agents act for you. Unlock one-tap Executor actions and your full compliance history.'}
@@ -109,14 +115,14 @@ function PlanCard({
   return (
     <div
       className={`flex flex-col gap-4 rounded-xl border p-5 ${
-        highlighted ? 'border-[#00C9A7]/40 bg-[#00C9A7]/[0.05]' : 'border-border/60 bg-background'
+        highlighted ? 'border-[#00C9A7]/40 bg-[#00C9A7]/[0.05]' : 'border-white/10 bg-white/[0.03]'
       }`}
     >
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold text-foreground">{name}</h2>
-        <span className="text-sm font-medium text-muted-foreground">{price}</span>
+        <h2 className="text-sm font-semibold text-zinc-100">{name}</h2>
+        <span className="text-sm font-medium text-zinc-400">{price}</span>
       </div>
-      <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
+      <ul className="flex flex-col gap-2 text-sm text-zinc-400">
         {features.map((f) => (
           <li key={f} className="flex gap-2">
             <span aria-hidden="true" className="text-[#00C9A7]">
@@ -128,7 +134,7 @@ function PlanCard({
       </ul>
       <div className="mt-auto">
         {current ? (
-          <p className="rounded-lg border border-border/60 px-3 py-2 text-center text-sm text-muted-foreground">
+          <p className="rounded-lg border border-white/10 px-3 py-2 text-center text-sm text-zinc-400">
             Current plan
           </p>
         ) : (

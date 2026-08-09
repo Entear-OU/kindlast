@@ -45,6 +45,27 @@ describe('BillingPlans (ENT-85)', () => {
     expect(locationStub.href).toBe('')
   })
 
+  // ENT-169: this component sits inside the dark `ConsoleShell`, but styled
+  // itself with the shadcn theme tokens. Nothing ever adds the `.dark` class,
+  // so `--foreground` stayed at its near-black `:root` value and the heading
+  // and the "Pro" plan name rendered invisible on `bg-zinc-950`.
+  it.each(['free', 'pro'] as const)(
+    'paints with the console palette on the %s plan, not the light-theme tokens',
+    (plan) => {
+      const { container } = render(<BillingPlans plan={plan} />)
+      const markup = container.innerHTML
+
+      for (const token of [
+        'text-foreground',
+        'bg-background',
+        'border-border',
+        'text-muted-foreground',
+      ]) {
+        expect(markup).not.toContain(token)
+      }
+    },
+  )
+
   it('shows the current-plan state for Pro with no upgrade CTA', () => {
     render(<BillingPlans plan="pro" />)
     expect(screen.getByText(/you’re on pro/i)).toBeInTheDocument()
