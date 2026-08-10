@@ -10,497 +10,497 @@
     {
       "articleNumber": 1,
       "heading": "Subject-matter and objectives",
-      "summary": "Article 1 of the GDPR — Subject-matter and objectives. Establishes the dual purpose of the Regulation: protecting natural persons' fundamental rights regarding personal data processing, and ensuring free movement of personal data within the Union. Sets the constitutional frame for the entire instrument; Art 1(2) anchors the right under the EU Charter, Art 1(3) bars Member States from restricting intra-Union data flows on data-protection grounds. Route here when an analyst needs the overarching aim or to balance protection vs free movement."
+      "summary": "Article 1 of the GDPR: Subject-matter and objectives. Establishes the dual purpose of the Regulation: protecting natural persons' fundamental rights regarding personal data processing, and ensuring free movement of personal data within the Union. Sets the constitutional frame for the entire instrument; Art 1(2) anchors the right under the EU Charter, Art 1(3) bars Member States from restricting intra-Union data flows on data-protection grounds. Route here when an analyst needs the overarching aim or to balance protection vs free movement."
     },
     {
       "articleNumber": 2,
       "heading": "Material scope",
-      "summary": "Article 2 of the GDPR — Material scope. Defines what activities the Regulation covers (automated processing, and non-automated processing forming part of a filing system) and the carve-outs: activities outside Union law, CFSP, purely personal/household activities, and law enforcement (covered by the LED). Also coordinates with Reg 45/2001 (now 2018/1725) for EU institutions and preserves the e-Commerce Directive's intermediary liability rules. Cite when scoping whether a processing activity falls inside the GDPR at all."
+      "summary": "Article 2 of the GDPR: Material scope. Defines what activities the Regulation covers (automated processing, and non-automated processing forming part of a filing system) and the carve-outs: activities outside Union law, CFSP, purely personal/household activities, and law enforcement (covered by the LED). Also coordinates with Reg 45/2001 (now 2018/1725) for EU institutions and preserves the e-Commerce Directive's intermediary liability rules. Cite when scoping whether a processing activity falls inside the GDPR at all."
     },
     {
       "articleNumber": 3,
       "heading": "Territorial scope",
-      "summary": "Article 3 of the GDPR — Territorial scope. Sets when the GDPR applies extraterritorially: (1) processing in the context of an EU establishment regardless of where data is processed; (2) non-EU controllers/processors targeting goods/services to EU data subjects or monitoring their behaviour in the EU; (3) controllers in places where Member State law applies by public international law. Foundational for any cross-border SaaS or non-EU vendor analysis. Always pair with Art 27 (EU representative)."
+      "summary": "Article 3 of the GDPR: Territorial scope. Sets when the GDPR applies extraterritorially: (1) processing in the context of an EU establishment regardless of where data is processed; (2) non-EU controllers/processors targeting goods/services to EU data subjects or monitoring their behaviour in the EU; (3) controllers in places where Member State law applies by public international law. Foundational for any cross-border SaaS or non-EU vendor analysis. Always pair with Art 27 (EU representative)."
     },
     {
       "articleNumber": 4,
       "heading": "Definitions",
-      "summary": "Article 4 of the GDPR — Definitions. The Regulation's controlled vocabulary: 26 numbered definitions including personal data, processing, controller, processor, consent, personal data breach, profiling, pseudonymisation, special categories, main establishment, cross-border processing, supervisory authority concerned, and information society service. Route here whenever a term's exact statutory meaning matters — virtually every other article presupposes these definitions."
+      "summary": "Article 4 of the GDPR: Definitions. The Regulation's controlled vocabulary: 26 numbered definitions including personal data, processing, controller, processor, consent, personal data breach, profiling, pseudonymisation, special categories, main establishment, cross-border processing, supervisory authority concerned, and information society service. Route here whenever a term's exact statutory meaning matters, virtually every other article presupposes these definitions."
     },
     {
       "articleNumber": 5,
       "heading": "Principles relating to processing of personal data",
-      "summary": "Article 5 of the GDPR — Principles relating to processing. Sets the seven core principles binding every controller: lawfulness, fairness and transparency; purpose limitation; data minimisation; accuracy; storage limitation; integrity and confidentiality; and accountability (Art 5(2)). The accountability principle requires the controller to demonstrate compliance, not merely achieve it. Cited in nearly every supervisory authority decision; the substantive yardstick behind most fines."
+      "summary": "Article 5 of the GDPR: Principles relating to processing. Sets the seven core principles binding every controller: lawfulness, fairness and transparency; purpose limitation; data minimisation; accuracy; storage limitation; integrity and confidentiality; and accountability (Art 5(2)). The accountability principle requires the controller to demonstrate compliance, not merely achieve it. Cited in nearly every supervisory authority decision; the substantive yardstick behind most fines."
     },
     {
       "articleNumber": 6,
       "heading": "Lawfulness of processing",
-      "summary": "Article 6 of the GDPR — Lawfulness of processing. Defines the six lawful bases for processing personal data: consent, contract, legal obligation, vital interests, public task, and legitimate interests. Foundation of the GDPR — every processing activity must rely on at least one. Art 6(1)(a)–(f) enumerate the bases; Art 6(2)–(3) handle Member State derogations for legal obligation and public-task processing; Art 6(4) sets the compatibility test for further processing for new purposes."
+      "summary": "Article 6 of the GDPR: Lawfulness of processing. Defines the six lawful bases for processing personal data: consent, contract, legal obligation, vital interests, public task, and legitimate interests. Foundation of the GDPR: every processing activity must rely on at least one. Art 6(1)(a)-(f) enumerate the bases; Art 6(2)-(3) handle Member State derogations for legal obligation and public-task processing; Art 6(4) sets the compatibility test for further processing for new purposes."
     },
     {
       "articleNumber": 7,
       "heading": "Conditions for consent",
-      "summary": "Article 7 of the GDPR — Conditions for consent. Sets the validity requirements where consent is the chosen lawful basis: controller must demonstrate consent was given (burden of proof); requests must be clearly distinguishable, intelligible, plain-language; data subjects can withdraw at any time as easily as they gave it; consent is not freely given if performance of a contract is conditioned on processing not necessary for it. Read with Art 4(11) for the definition and Art 8 for children."
+      "summary": "Article 7 of the GDPR: Conditions for consent. Sets the validity requirements where consent is the chosen lawful basis: controller must demonstrate consent was given (burden of proof); requests must be clearly distinguishable, intelligible, plain-language; data subjects can withdraw at any time as easily as they gave it; consent is not freely given if performance of a contract is conditioned on processing not necessary for it. Read with Art 4(11) for the definition and Art 8 for children."
     },
     {
       "articleNumber": 8,
       "heading": "Conditions applicable to child's consent in relation to information society services",
-      "summary": "Article 8 of the GDPR — Child's consent for information society services. Where consent is the basis for offering information society services directly to a child, the child must be at least 16 (Member States may lower to 13). Below the age threshold parental consent is required, and the controller must make reasonable verification efforts using available technology. Does not affect Member State contract law concerning children. Pair with Art 6(1)(a) and Art 7."
+      "summary": "Article 8 of the GDPR: Child's consent for information society services. Where consent is the basis for offering information society services directly to a child, the child must be at least 16 (Member States may lower to 13). Below the age threshold parental consent is required, and the controller must make reasonable verification efforts using available technology. Does not affect Member State contract law concerning children. Pair with Art 6(1)(a) and Art 7."
     },
     {
       "articleNumber": 9,
       "heading": "Processing of special categories of personal data",
-      "summary": "Article 9 of the GDPR — Special categories of personal data. Prohibits processing of data revealing racial/ethnic origin, political opinions, religious beliefs, trade union membership, genetic data, biometric data used to identify, health data, and sex life/orientation, unless one of ten exceptions in Art 9(2)(a)–(j) applies (explicit consent, employment law, vital interests, public interest, public health, etc.). Member States can add further conditions for genetic, biometric, and health data. Always evaluate alongside Art 6."
+      "summary": "Article 9 of the GDPR: Special categories of personal data. Prohibits processing of data revealing racial/ethnic origin, political opinions, religious beliefs, trade union membership, genetic data, biometric data used to identify, health data, and sex life/orientation, unless one of ten exceptions in Art 9(2)(a)-(j) applies (explicit consent, employment law, vital interests, public interest, public health, etc.). Member States can add further conditions for genetic, biometric, and health data. Always evaluate alongside Art 6."
     },
     {
       "articleNumber": 10,
       "heading": "Processing of personal data relating to criminal convictions and offences",
-      "summary": "Article 10 of the GDPR — Criminal convictions and offences data. Processing of personal data on criminal convictions, offences, or related security measures may be carried out only under the control of an official authority or where authorised by Union/Member State law with appropriate safeguards. Comprehensive registers of criminal convictions are reserved to official authority. Sits alongside Art 9 for sensitive-data routing in HR screening, fraud prevention, and KYC."
+      "summary": "Article 10 of the GDPR: Criminal convictions and offences data. Processing of personal data on criminal convictions, offences, or related security measures may be carried out only under the control of an official authority or where authorised by Union/Member State law with appropriate safeguards. Comprehensive registers of criminal convictions are reserved to official authority. Sits alongside Art 9 for sensitive-data routing in HR screening, fraud prevention, and KYC."
     },
     {
       "articleNumber": 11,
       "heading": "Processing which does not require identification",
-      "summary": "Article 11 of the GDPR — Processing which does not require identification. If a controller's purposes no longer require identifying the data subject, the controller is not obliged to acquire or retain additional identifying information solely for GDPR compliance. Where the controller cannot re-identify, Articles 15–20 (access, rectification, erasure, restriction, portability) are switched off unless the data subject provides identifying information. Important for pseudonymised analytics and research."
+      "summary": "Article 11 of the GDPR: Processing which does not require identification. If a controller's purposes no longer require identifying the data subject, the controller is not obliged to acquire or retain additional identifying information solely for GDPR compliance. Where the controller cannot re-identify, Articles 15-20 (access, rectification, erasure, restriction, portability) are switched off unless the data subject provides identifying information. Important for pseudonymised analytics and research."
     },
     {
       "articleNumber": 12,
       "heading": "Transparent information, communication and modalities for the exercise of the rights of the data subject",
-      "summary": "Article 12 of the GDPR — Modalities for the exercise of data subject rights. Procedural backbone for Articles 13–22 and 34: information and responses must be concise, transparent, intelligible, easily accessible, plain language; default is one month to respond (extendable by two); free of charge unless manifestly unfounded/excessive; controller may verify identity; standardised icons may accompany notices. Cite whenever timing, format, or fees for a rights request are in scope."
+      "summary": "Article 12 of the GDPR: Modalities for the exercise of data subject rights. Procedural backbone for Articles 13-22 and 34: information and responses must be concise, transparent, intelligible, easily accessible, plain language; default is one month to respond (extendable by two); free of charge unless manifestly unfounded/excessive; controller may verify identity; standardised icons may accompany notices. Cite whenever timing, format, or fees for a rights request are in scope."
     },
     {
       "articleNumber": 13,
       "heading": "Information to be provided where personal data are collected from the data subject",
-      "summary": "Article 13 of the GDPR — Information to be provided where personal data are collected from the data subject. The first-party notice obligation: at the time of collection the controller must provide identity/contact details, DPO contact, purposes and legal basis, legitimate interests (if relied on), recipients, transfers, retention, data-subject rights, complaint right, statutory/contractual nature of provision, and automated decision-making logic. Pair with Art 14 for indirect collection and Art 12 for delivery rules."
+      "summary": "Article 13 of the GDPR: Information to be provided where personal data are collected from the data subject. The first-party notice obligation: at the time of collection the controller must provide identity/contact details, DPO contact, purposes and legal basis, legitimate interests (if relied on), recipients, transfers, retention, data-subject rights, complaint right, statutory/contractual nature of provision, and automated decision-making logic. Pair with Art 14 for indirect collection and Art 12 for delivery rules."
     },
     {
       "articleNumber": 14,
       "heading": "Information to be provided where personal data have not been obtained from the data subject",
-      "summary": "Article 14 of the GDPR — Information to be provided where personal data have not been obtained from the data subject. Mirror of Art 13 for indirectly collected data: adds the categories of data and source disclosure; timing is the earlier of one month, first communication with the subject, or first onward disclosure. Disapplies where the subject already has the information, provision is impossible or disproportionate (esp. research), the law expressly requires obtaining/disclosure, or professional secrecy applies."
+      "summary": "Article 14 of the GDPR: Information to be provided where personal data have not been obtained from the data subject. Mirror of Art 13 for indirectly collected data: adds the categories of data and source disclosure; timing is the earlier of one month, first communication with the subject, or first onward disclosure. Disapplies where the subject already has the information, provision is impossible or disproportionate (esp. research), the law expressly requires obtaining/disclosure, or professional secrecy applies."
     },
     {
       "articleNumber": 15,
       "heading": "Right of access by the data subject",
-      "summary": "Article 15 of the GDPR — Right of access. The data subject's right to confirmation of processing plus a copy of their personal data and prescribed metadata: purposes, categories, recipients, retention, rights, source if not collected from them, and automated-decision logic with envisaged consequences. Where data is transferred to third countries, the subject must be told of safeguards used. The right to a copy must not adversely affect the rights and freedoms of others. Workhorse of DSARs."
+      "summary": "Article 15 of the GDPR: Right of access. The data subject's right to confirmation of processing plus a copy of their personal data and prescribed metadata: purposes, categories, recipients, retention, rights, source if not collected from them, and automated-decision logic with envisaged consequences. Where data is transferred to third countries, the subject must be told of safeguards used. The right to a copy must not adversely affect the rights and freedoms of others. Workhorse of DSARs."
     },
     {
       "articleNumber": 16,
       "heading": "Right to rectification",
-      "summary": "Article 16 of the GDPR — Right to rectification. The data subject has the right to obtain, without undue delay, the rectification of inaccurate personal data and the completion of incomplete data, including by a supplementary statement. Brief and absolute on its face; operationally read with Art 12 (timing) and Art 19 (notification to recipients)."
+      "summary": "Article 16 of the GDPR: Right to rectification. The data subject has the right to obtain, without undue delay, the rectification of inaccurate personal data and the completion of incomplete data, including by a supplementary statement. Brief and absolute on its face; operationally read with Art 12 (timing) and Art 19 (notification to recipients)."
     },
     {
       "articleNumber": 17,
       "heading": "Right to erasure (‘right to be forgotten’)",
-      "summary": "Article 17 of the GDPR — Right to erasure ('right to be forgotten'). Data subject can require erasure where: data no longer necessary for original purposes; consent withdrawn with no other basis; objection upheld; unlawful processing; legal-obligation erasure; data collected from a child under Art 8(1). Art 17(2) imposes a duty to inform other controllers of public data. Art 17(3) carves out freedom of expression, legal obligations, public-health public interest, archiving/research, and legal claims."
+      "summary": "Article 17 of the GDPR: Right to erasure ('right to be forgotten'). Data subject can require erasure where: data no longer necessary for original purposes; consent withdrawn with no other basis; objection upheld; unlawful processing; legal-obligation erasure; data collected from a child under Art 8(1). Art 17(2) imposes a duty to inform other controllers of public data. Art 17(3) carves out freedom of expression, legal obligations, public-health public interest, archiving/research, and legal claims."
     },
     {
       "articleNumber": 18,
       "heading": "Right to restriction of processing",
-      "summary": "Article 18 of the GDPR — Right to restriction of processing. The data subject can require restriction (data marked but not actively processed) where accuracy is contested, processing is unlawful but erasure is declined, the controller no longer needs the data but the subject needs it for legal claims, or an Art 21 objection is pending verification. Once restricted, processing is limited to storage, consent-based use, legal claims, third-party rights, or important public interest. The subject must be informed before restriction is lifted."
+      "summary": "Article 18 of the GDPR: Right to restriction of processing. The data subject can require restriction (data marked but not actively processed) where accuracy is contested, processing is unlawful but erasure is declined, the controller no longer needs the data but the subject needs it for legal claims, or an Art 21 objection is pending verification. Once restricted, processing is limited to storage, consent-based use, legal claims, third-party rights, or important public interest. The subject must be informed before restriction is lifted."
     },
     {
       "articleNumber": 19,
       "heading": "Notification obligation regarding rectification or erasure of personal data or restriction of processing",
-      "summary": "Article 19 of the GDPR — Notification obligation regarding rectification, erasure or restriction. The controller must communicate any rectification, erasure, or restriction of processing carried out under Articles 16, 17(1), or 18 to each recipient to whom the data has been disclosed, unless this proves impossible or involves disproportionate effort. The controller must also inform the data subject of those recipients on request. Operational glue connecting rights-fulfilment to downstream data flows."
+      "summary": "Article 19 of the GDPR: Notification obligation regarding rectification, erasure or restriction. The controller must communicate any rectification, erasure, or restriction of processing carried out under Articles 16, 17(1), or 18 to each recipient to whom the data has been disclosed, unless this proves impossible or involves disproportionate effort. The controller must also inform the data subject of those recipients on request. Operational glue connecting rights-fulfilment to downstream data flows."
     },
     {
       "articleNumber": 20,
       "heading": "Right to data portability",
-      "summary": "Article 20 of the GDPR — Right to data portability. Where processing is based on consent or contract and carried out by automated means, the data subject is entitled to receive the personal data they provided in a structured, commonly used, machine-readable format and to transmit it to another controller — including, where technically feasible, direct controller-to-controller transmission. Does not apply to processing necessary for public-interest tasks; must not adversely affect the rights of others."
+      "summary": "Article 20 of the GDPR: Right to data portability. Where processing is based on consent or contract and carried out by automated means, the data subject is entitled to receive the personal data they provided in a structured, commonly used, machine-readable format and to transmit it to another controller, including, where technically feasible, direct controller-to-controller transmission. Does not apply to processing necessary for public-interest tasks; must not adversely affect the rights of others."
     },
     {
       "articleNumber": 21,
       "heading": "Right to object",
-      "summary": "Article 21 of the GDPR — Right to object. The data subject may object at any time, on grounds relating to their particular situation, to processing based on Art 6(1)(e) or (f), including profiling; the controller must stop unless it demonstrates compelling legitimate grounds overriding the subject's interests, or the processing is for legal claims. Direct-marketing objection is absolute. The right must be explicitly brought to the subject's attention at first communication, separately and clearly."
+      "summary": "Article 21 of the GDPR: Right to object. The data subject may object at any time, on grounds relating to their particular situation, to processing based on Art 6(1)(e) or (f), including profiling; the controller must stop unless it demonstrates compelling legitimate grounds overriding the subject's interests, or the processing is for legal claims. Direct-marketing objection is absolute. The right must be explicitly brought to the subject's attention at first communication, separately and clearly."
     },
     {
       "articleNumber": 22,
       "heading": "Automated individual decision-making, including profiling",
-      "summary": "Article 22 of the GDPR — Automated individual decision-making, including profiling. Data subjects have the right not to be subject to a decision based solely on automated processing — including profiling — that produces legal or similarly significant effects. Exceptions: necessary for a contract, authorised by Union/Member State law, or based on explicit consent. In the contract and consent cases the controller must provide safeguards including the right to human intervention, to express a view, and to contest the decision. Special-category data only with Art 9(2)(a) or (g) and safeguards."
+      "summary": "Article 22 of the GDPR: Automated individual decision-making, including profiling. Data subjects have the right not to be subject to a decision based solely on automated processing, including profiling, that produces legal or similarly significant effects. Exceptions: necessary for a contract, authorised by Union/Member State law, or based on explicit consent. In the contract and consent cases the controller must provide safeguards including the right to human intervention, to express a view, and to contest the decision. Special-category data only with Art 9(2)(a) or (g) and safeguards."
     },
     {
       "articleNumber": 23,
       "heading": "Restrictions",
-      "summary": "Article 23 of the GDPR — Restrictions. Union or Member State law may restrict the scope of obligations and rights in Articles 12–22, Article 34, and Article 5 (insofar as it mirrors those rights), where the restriction respects fundamental rights and is a necessary and proportionate measure to safeguard listed public interests (national security, defence, public security, criminal enforcement, judicial independence, breaches of professional ethics, monitoring/inspection functions, protection of the data subject or others' rights, civil claims). Sets minimum content for legislative restrictions."
+      "summary": "Article 23 of the GDPR: Restrictions. Union or Member State law may restrict the scope of obligations and rights in Articles 12-22, Article 34, and Article 5 (insofar as it mirrors those rights), where the restriction respects fundamental rights and is a necessary and proportionate measure to safeguard listed public interests (national security, defence, public security, criminal enforcement, judicial independence, breaches of professional ethics, monitoring/inspection functions, protection of the data subject or others' rights, civil claims). Sets minimum content for legislative restrictions."
     },
     {
       "articleNumber": 24,
       "heading": "Responsibility of the controller",
-      "summary": "Article 24 of the GDPR — Responsibility of the controller. Codifies the accountability principle: the controller must implement appropriate technical and organisational measures, reviewed and updated, to ensure and to demonstrate that processing complies with the Regulation, taking into account nature, scope, context, purposes and risks. Where proportionate, measures include data-protection policies. Adherence to approved Art 40 codes of conduct or Art 42 certifications may be used as elements to demonstrate compliance."
+      "summary": "Article 24 of the GDPR: Responsibility of the controller. Codifies the accountability principle: the controller must implement appropriate technical and organisational measures, reviewed and updated, to ensure and to demonstrate that processing complies with the Regulation, taking into account nature, scope, context, purposes and risks. Where proportionate, measures include data-protection policies. Adherence to approved Art 40 codes of conduct or Art 42 certifications may be used as elements to demonstrate compliance."
     },
     {
       "articleNumber": 25,
       "heading": "Data protection by design and by default",
-      "summary": "Article 25 of the GDPR — Data protection by design and by default. The controller must implement appropriate technical and organisational measures, both at the time of determining the means and at the time of processing, to implement the data-protection principles effectively (e.g., pseudonymisation) and integrate the necessary safeguards. By default, only personal data necessary for each specific purpose are processed (volume, retention, accessibility). Art 42 certification can demonstrate compliance. Cite for product-design and architecture reviews."
+      "summary": "Article 25 of the GDPR: Data protection by design and by default. The controller must implement appropriate technical and organisational measures, both at the time of determining the means and at the time of processing, to implement the data-protection principles effectively (e.g., pseudonymisation) and integrate the necessary safeguards. By default, only personal data necessary for each specific purpose are processed (volume, retention, accessibility). Art 42 certification can demonstrate compliance. Cite for product-design and architecture reviews."
     },
     {
       "articleNumber": 26,
       "heading": "Joint controllers",
-      "summary": "Article 26 of the GDPR — Joint controllers. Where two or more controllers jointly determine purposes and means, they must determine their respective responsibilities for GDPR obligations — particularly data-subject rights and information duties — in a transparent arrangement, and make the essence of that arrangement available to data subjects. The arrangement must reflect the parties' respective roles and relationships with subjects. Regardless of the arrangement, data subjects may exercise their rights in respect of and against each controller."
+      "summary": "Article 26 of the GDPR: Joint controllers. Where two or more controllers jointly determine purposes and means, they must determine their respective responsibilities for GDPR obligations, particularly data-subject rights and information duties, in a transparent arrangement, and make the essence of that arrangement available to data subjects. The arrangement must reflect the parties' respective roles and relationships with subjects. Regardless of the arrangement, data subjects may exercise their rights in respect of and against each controller."
     },
     {
       "articleNumber": 27,
       "heading": "Representatives of controllers or processors not established in the Union",
-      "summary": "Article 27 of the GDPR — Representatives of controllers or processors not established in the Union. Where Art 3(2) applies, the controller or processor must designate in writing a representative in the Union, except for occasional processing not involving large-scale special-category or Art 10 data and unlikely to risk subjects' rights, or for public authorities. The representative must be established in a Member State where the relevant subjects are, acts as a contact point for supervisory authorities and data subjects, and does not discharge the controller's own liability."
+      "summary": "Article 27 of the GDPR: Representatives of controllers or processors not established in the Union. Where Art 3(2) applies, the controller or processor must designate in writing a representative in the Union, except for occasional processing not involving large-scale special-category or Art 10 data and unlikely to risk subjects' rights, or for public authorities. The representative must be established in a Member State where the relevant subjects are, acts as a contact point for supervisory authorities and data subjects, and does not discharge the controller's own liability."
     },
     {
       "articleNumber": 28,
       "heading": "Processor",
-      "summary": "Article 28 of the GDPR — Processor. Sets the contractual and substantive regime governing controller-processor relationships: only processors providing sufficient guarantees may be engaged; the engagement must be a written contract or other legal act covering subject-matter, duration, nature and purpose, types of data and subjects, and controller obligations; mandates documented instructions, confidentiality, security (Art 32), sub-processor consent and flow-down, assistance with rights, breach notification, deletion or return on termination, and audit rights. Approved Art 40 codes or Art 42 certifications may evidence sufficient guarantees."
+      "summary": "Article 28 of the GDPR: Processor. Sets the contractual and substantive regime governing controller-processor relationships: only processors providing sufficient guarantees may be engaged; the engagement must be a written contract or other legal act covering subject-matter, duration, nature and purpose, types of data and subjects, and controller obligations; mandates documented instructions, confidentiality, security (Art 32), sub-processor consent and flow-down, assistance with rights, breach notification, deletion or return on termination, and audit rights. Approved Art 40 codes or Art 42 certifications may evidence sufficient guarantees."
     },
     {
       "articleNumber": 29,
       "heading": "Processing under the authority of the controller or processor",
-      "summary": "Article 29 of the GDPR — Processing under the authority of the controller or processor. Any processor and any person acting under the authority of the controller or processor who has access to personal data must process those data only on documented instructions from the controller, unless required to do so by Union or Member State law. Short but load-bearing — it converts internal staff and contractors into instruction-bound actors and underpins purpose-limitation in service chains."
+      "summary": "Article 29 of the GDPR: Processing under the authority of the controller or processor. Any processor and any person acting under the authority of the controller or processor who has access to personal data must process those data only on documented instructions from the controller, unless required to do so by Union or Member State law. Short but load-bearing, it converts internal staff and contractors into instruction-bound actors and underpins purpose-limitation in service chains."
     },
     {
       "articleNumber": 30,
       "heading": "Records of processing activities",
-      "summary": "Article 30 of the GDPR — Records of processing activities (RoPA). Each controller and, where applicable, its representative must maintain a written, electronic record of processing activities with specified contents (purposes, categories of subjects and data, recipients, transfers, retention, security measures). Processors maintain a parallel processor record. The obligation does not apply to organisations with fewer than 250 employees unless processing is likely to result in risk, is not occasional, or involves Art 9/Art 10 data. The record must be made available to the supervisory authority on request."
+      "summary": "Article 30 of the GDPR: Records of processing activities (RoPA). Each controller and, where applicable, its representative must maintain a written, electronic record of processing activities with specified contents (purposes, categories of subjects and data, recipients, transfers, retention, security measures). Processors maintain a parallel processor record. The obligation does not apply to organisations with fewer than 250 employees unless processing is likely to result in risk, is not occasional, or involves Art 9/Art 10 data. The record must be made available to the supervisory authority on request."
     },
     {
       "articleNumber": 31,
       "heading": "Cooperation with the supervisory authority",
-      "summary": "Article 31 of the GDPR — Cooperation with the supervisory authority. The controller and processor, and where applicable their representatives, must cooperate with the supervisory authority in the performance of its tasks on request. A short but consequential duty that underlies investigative procedures and inspections under Art 58."
+      "summary": "Article 31 of the GDPR: Cooperation with the supervisory authority. The controller and processor, and where applicable their representatives, must cooperate with the supervisory authority in the performance of its tasks on request. A short but consequential duty that underlies investigative procedures and inspections under Art 58."
     },
     {
       "articleNumber": 32,
       "heading": "Security of processing",
-      "summary": "Article 32 of the GDPR — Security of processing. Controllers and processors must implement appropriate technical and organisational measures to ensure a level of security appropriate to the risk, taking into account state of the art, costs, and the nature/scope/context/purposes of processing. Non-exhaustive measures: pseudonymisation and encryption; CIA-availability and resilience; ability to restore after incident; regular testing and evaluation. Codes/certifications under Arts 40 and 42 may demonstrate compliance. Foundation for breach-prevention scrutiny."
+      "summary": "Article 32 of the GDPR: Security of processing. Controllers and processors must implement appropriate technical and organisational measures to ensure a level of security appropriate to the risk, taking into account state of the art, costs, and the nature/scope/context/purposes of processing. Non-exhaustive measures: pseudonymisation and encryption; CIA-availability and resilience; ability to restore after incident; regular testing and evaluation. Codes/certifications under Arts 40 and 42 may demonstrate compliance. Foundation for breach-prevention scrutiny."
     },
     {
       "articleNumber": 33,
       "heading": "Notification of a personal data breach to the supervisory authority",
-      "summary": "Article 33 of the GDPR — Notification of a personal data breach to the supervisory authority. The controller must notify the competent supervisory authority not later than 72 hours after becoming aware of a breach, unless the breach is unlikely to result in a risk to natural persons' rights and freedoms; later notifications need reasoned justification for the delay. Sets the prescribed contents of the notification, allows phased reporting, requires the controller to document all breaches, and obliges processors to notify the controller without undue delay."
+      "summary": "Article 33 of the GDPR: Notification of a personal data breach to the supervisory authority. The controller must notify the competent supervisory authority not later than 72 hours after becoming aware of a breach, unless the breach is unlikely to result in a risk to natural persons' rights and freedoms; later notifications need reasoned justification for the delay. Sets the prescribed contents of the notification, allows phased reporting, requires the controller to document all breaches, and obliges processors to notify the controller without undue delay."
     },
     {
       "articleNumber": 34,
       "heading": "Communication of a personal data breach to the data subject",
-      "summary": "Article 34 of the GDPR — Communication of a personal data breach to the data subject. Where a breach is likely to result in a high risk to natural persons' rights and freedoms, the controller must communicate the breach to affected data subjects without undue delay, in clear and plain language, including the Art 33(3)(b)–(d) information. The duty is disapplied where appropriate protections (e.g., encryption) were in place, subsequent measures eliminated the high risk, or it would involve disproportionate effort (in which case a public communication suffices). The SA can compel communication."
+      "summary": "Article 34 of the GDPR: Communication of a personal data breach to the data subject. Where a breach is likely to result in a high risk to natural persons' rights and freedoms, the controller must communicate the breach to affected data subjects without undue delay, in clear and plain language, including the Art 33(3)(b)-(d) information. The duty is disapplied where appropriate protections (e.g., encryption) were in place, subsequent measures eliminated the high risk, or it would involve disproportionate effort (in which case a public communication suffices). The SA can compel communication."
     },
     {
       "articleNumber": 35,
       "heading": "Data protection impact assessment",
-      "summary": "Article 35 of the GDPR — Data protection impact assessment (DPIA). Required where processing, in particular using new technologies, is likely to result in a high risk to rights and freedoms. Lists mandatory triggers: systematic and extensive profiling with legal/significant effects, large-scale Art 9 or Art 10 processing, and large-scale systematic monitoring of public areas. Sets the minimum DPIA content (description, necessity/proportionality, risks, mitigations). SAs publish lists of operations requiring/exempt from a DPIA; DPO advice must be sought."
+      "summary": "Article 35 of the GDPR: Data protection impact assessment (DPIA). Required where processing, in particular using new technologies, is likely to result in a high risk to rights and freedoms. Lists mandatory triggers: systematic and extensive profiling with legal/significant effects, large-scale Art 9 or Art 10 processing, and large-scale systematic monitoring of public areas. Sets the minimum DPIA content (description, necessity/proportionality, risks, mitigations). SAs publish lists of operations requiring/exempt from a DPIA; DPO advice must be sought."
     },
     {
       "articleNumber": 36,
       "heading": "Prior consultation",
-      "summary": "Article 36 of the GDPR — Prior consultation. Where a DPIA under Art 35 indicates that processing would result in a high risk in the absence of mitigations by the controller, the controller must consult the supervisory authority before processing. Sets information the controller must provide and an eight-week SA response window (extendable). Member State law may require prior consultation for processing for tasks in the public interest. Gateway between DPIA findings and regulatory engagement."
+      "summary": "Article 36 of the GDPR: Prior consultation. Where a DPIA under Art 35 indicates that processing would result in a high risk in the absence of mitigations by the controller, the controller must consult the supervisory authority before processing. Sets information the controller must provide and an eight-week SA response window (extendable). Member State law may require prior consultation for processing for tasks in the public interest. Gateway between DPIA findings and regulatory engagement."
     },
     {
       "articleNumber": 37,
       "heading": "Designation of the data protection officer",
-      "summary": "Article 37 of the GDPR — Designation of the data protection officer. DPO designation is mandatory where processing is by a public authority/body, where core activities require regular and systematic monitoring of data subjects on a large scale, or where core activities consist of large-scale processing of Art 9 special-category or Art 10 criminal-data. A group of undertakings may appoint a single DPO if accessible from each establishment. The DPO must have expert knowledge of data-protection law; contact details must be published and communicated to the SA."
+      "summary": "Article 37 of the GDPR: Designation of the data protection officer. DPO designation is mandatory where processing is by a public authority/body, where core activities require regular and systematic monitoring of data subjects on a large scale, or where core activities consist of large-scale processing of Art 9 special-category or Art 10 criminal-data. A group of undertakings may appoint a single DPO if accessible from each establishment. The DPO must have expert knowledge of data-protection law; contact details must be published and communicated to the SA."
     },
     {
       "articleNumber": 38,
       "heading": "Position of the data protection officer",
-      "summary": "Article 38 of the GDPR — Position of the data protection officer. The controller/processor must involve the DPO properly and timely in all data-protection matters, provide resources and access, ensure the DPO does not receive instructions on tasks, and not dismiss or penalise the DPO for performing those tasks. The DPO reports to the highest management level, is bound by secrecy/confidentiality, may perform other tasks provided no conflicts of interest arise, and is available to be contacted by data subjects."
+      "summary": "Article 38 of the GDPR: Position of the data protection officer. The controller/processor must involve the DPO properly and timely in all data-protection matters, provide resources and access, ensure the DPO does not receive instructions on tasks, and not dismiss or penalise the DPO for performing those tasks. The DPO reports to the highest management level, is bound by secrecy/confidentiality, may perform other tasks provided no conflicts of interest arise, and is available to be contacted by data subjects."
     },
     {
       "articleNumber": 39,
       "heading": "Tasks of the data protection officer",
-      "summary": "Article 39 of the GDPR — Tasks of the data protection officer. The DPO must at least: inform and advise the controller/processor and employees of their obligations; monitor compliance with the GDPR and internal policies including awareness and audits; advise on DPIAs and monitor their performance; cooperate with the supervisory authority and act as its contact point; have due regard to risk in performing tasks. Defines the minimum statutory job description."
+      "summary": "Article 39 of the GDPR: Tasks of the data protection officer. The DPO must at least: inform and advise the controller/processor and employees of their obligations; monitor compliance with the GDPR and internal policies including awareness and audits; advise on DPIAs and monitor their performance; cooperate with the supervisory authority and act as its contact point; have due regard to risk in performing tasks. Defines the minimum statutory job description."
     },
     {
       "articleNumber": 40,
       "heading": "Codes of conduct",
-      "summary": "Article 40 of the GDPR — Codes of conduct. Member States, supervisory authorities, the EDPB, and the Commission encourage drawing up of codes of conduct to specify GDPR application, covering matters such as fair processing, legitimate interests, pseudonymisation, transparency, children, controller/processor obligations, security, breach notification, transfers, and out-of-court dispute resolution. Associations representing categories of controllers/processors may prepare codes for SA approval; cross-border codes go via the EDPB and Commission. Adherence carries evidential weight under Arts 24, 28, 32."
+      "summary": "Article 40 of the GDPR: Codes of conduct. Member States, supervisory authorities, the EDPB, and the Commission encourage drawing up of codes of conduct to specify GDPR application, covering matters such as fair processing, legitimate interests, pseudonymisation, transparency, children, controller/processor obligations, security, breach notification, transfers, and out-of-court dispute resolution. Associations representing categories of controllers/processors may prepare codes for SA approval; cross-border codes go via the EDPB and Commission. Adherence carries evidential weight under Arts 24, 28, 32."
     },
     {
       "articleNumber": 41,
       "heading": "Monitoring of approved codes of conduct",
-      "summary": "Article 41 of the GDPR — Monitoring of approved codes of conduct. Monitoring of compliance with a code may be carried out by a body with appropriate expertise accredited by the competent supervisory authority. Sets accreditation requirements (independence, expertise, procedures, complaint-handling, conflicts management). The monitoring body can take action against members for code infringement, subject to SA oversight; SAs may revoke accreditation. Does not apply to public-authority processing."
+      "summary": "Article 41 of the GDPR: Monitoring of approved codes of conduct. Monitoring of compliance with a code may be carried out by a body with appropriate expertise accredited by the competent supervisory authority. Sets accreditation requirements (independence, expertise, procedures, complaint-handling, conflicts management). The monitoring body can take action against members for code infringement, subject to SA oversight; SAs may revoke accreditation. Does not apply to public-authority processing."
     },
     {
       "articleNumber": 42,
       "heading": "Certification",
-      "summary": "Article 42 of the GDPR — Certification. Member States, SAs, the EDPB and the Commission encourage data-protection certification mechanisms, seals and marks to demonstrate compliance, available to controllers and processors including those outside the Union for transfers. Certification is voluntary, transparent, and granted by certification bodies under Art 43 or by the competent SA. Maximum duration three years and renewable. The EDPB compiles a public register; certification supplements but does not reduce controller/processor responsibility."
+      "summary": "Article 42 of the GDPR: Certification. Member States, SAs, the EDPB and the Commission encourage data-protection certification mechanisms, seals and marks to demonstrate compliance, available to controllers and processors including those outside the Union for transfers. Certification is voluntary, transparent, and granted by certification bodies under Art 43 or by the competent SA. Maximum duration three years and renewable. The EDPB compiles a public register; certification supplements but does not reduce controller/processor responsibility."
     },
     {
       "articleNumber": 43,
       "heading": "Certification bodies",
-      "summary": "Article 43 of the GDPR — Certification bodies. Without prejudice to SA powers, certification bodies with an appropriate level of data-protection expertise issue, renew and withdraw Art 42 certifications, after informing the SA. They are accredited by the SA or the national accreditation body in accordance with EN-ISO/IEC 17065 with additional GDPR criteria established by the SA or the EDPB. Accreditation valid up to five years; certification bodies must demonstrate independence, expertise, complaint procedures, and absence of conflicts."
+      "summary": "Article 43 of the GDPR: Certification bodies. Without prejudice to SA powers, certification bodies with an appropriate level of data-protection expertise issue, renew and withdraw Art 42 certifications, after informing the SA. They are accredited by the SA or the national accreditation body in accordance with EN-ISO/IEC 17065 with additional GDPR criteria established by the SA or the EDPB. Accreditation valid up to five years; certification bodies must demonstrate independence, expertise, complaint procedures, and absence of conflicts."
     },
     {
       "articleNumber": 44,
       "heading": "General principle for transfers",
-      "summary": "Article 44 of the GDPR — General principle for transfers. Any transfer of personal data to a third country or international organisation — including onward transfers — may take place only where the conditions of Chapter V are met by the controller and processor, including the obligation not to undermine the level of protection guaranteed by the Regulation. Sets the umbrella principle under which Arts 45–49 operate."
+      "summary": "Article 44 of the GDPR: General principle for transfers. Any transfer of personal data to a third country or international organisation, including onward transfers, may take place only where the conditions of Chapter V are met by the controller and processor, including the obligation not to undermine the level of protection guaranteed by the Regulation. Sets the umbrella principle under which Arts 45-49 operate."
     },
     {
       "articleNumber": 45,
       "heading": "Transfers on the basis of an adequacy decision",
-      "summary": "Article 45 of the GDPR — Transfers on the basis of an adequacy decision. A transfer may take place where the Commission has decided that the third country, territory, sector, or international organisation ensures an adequate level of protection. Lists elements the Commission must assess (rule of law, data-protection rules, independent supervision, international commitments), the obligation to monitor and periodically review decisions, the option to repeal/amend/suspend, and the parallel transitional treatment of pre-existing Directive 95/46/EC adequacy decisions."
+      "summary": "Article 45 of the GDPR: Transfers on the basis of an adequacy decision. A transfer may take place where the Commission has decided that the third country, territory, sector, or international organisation ensures an adequate level of protection. Lists elements the Commission must assess (rule of law, data-protection rules, independent supervision, international commitments), the obligation to monitor and periodically review decisions, the option to repeal/amend/suspend, and the parallel transitional treatment of pre-existing Directive 95/46/EC adequacy decisions."
     },
     {
       "articleNumber": 46,
       "heading": "Transfers subject to appropriate safeguards",
-      "summary": "Article 46 of the GDPR — Transfers subject to appropriate safeguards. Where no adequacy decision exists, transfers may take place if the controller/processor provides appropriate safeguards and enforceable rights and effective remedies for data subjects. Safeguards include legally binding instruments between public authorities, BCRs (Art 47), standard contractual clauses adopted by the Commission or an SA, approved codes of conduct (Art 40) with binding enforceable commitments, and approved certification (Art 42) with such commitments; or, subject to SA authorisation, ad hoc clauses or administrative arrangements."
+      "summary": "Article 46 of the GDPR: Transfers subject to appropriate safeguards. Where no adequacy decision exists, transfers may take place if the controller/processor provides appropriate safeguards and enforceable rights and effective remedies for data subjects. Safeguards include legally binding instruments between public authorities, BCRs (Art 47), standard contractual clauses adopted by the Commission or an SA, approved codes of conduct (Art 40) with binding enforceable commitments, and approved certification (Art 42) with such commitments; or, subject to SA authorisation, ad hoc clauses or administrative arrangements."
     },
     {
       "articleNumber": 47,
       "heading": "Binding corporate rules",
-      "summary": "Article 47 of the GDPR — Binding corporate rules (BCRs). The competent SA approves BCRs through the consistency mechanism where they are legally binding on every group member, expressly confer enforceable rights on data subjects, and meet the prescribed minimum content (structure, data flows, principles, rights, liability, complaint procedures, training, audit, cooperation with SAs, legal-conflict mechanisms, etc.). BCRs are the principal intra-group safeguard for non-EU transfers. The EDPB issues opinions in accordance with Art 64."
+      "summary": "Article 47 of the GDPR: Binding corporate rules (BCRs). The competent SA approves BCRs through the consistency mechanism where they are legally binding on every group member, expressly confer enforceable rights on data subjects, and meet the prescribed minimum content (structure, data flows, principles, rights, liability, complaint procedures, training, audit, cooperation with SAs, legal-conflict mechanisms, etc.). BCRs are the principal intra-group safeguard for non-EU transfers. The EDPB issues opinions in accordance with Art 64."
     },
     {
       "articleNumber": 48,
       "heading": "Transfers or disclosures not authorised by Union law",
-      "summary": "Article 48 of the GDPR — Transfers or disclosures not authorised by Union law. A judgment of a third-country court or tribunal, or a decision of a third-country administrative authority, requiring a controller or processor to transfer or disclose personal data may only be recognised or enforceable if based on an international agreement (such as an MLAT) between the requesting third country and the Union or a Member State, without prejudice to other Chapter V grounds. Central provision in the Schrems II / extraterritorial-law context."
+      "summary": "Article 48 of the GDPR: Transfers or disclosures not authorised by Union law. A judgment of a third-country court or tribunal, or a decision of a third-country administrative authority, requiring a controller or processor to transfer or disclose personal data may only be recognised or enforceable if based on an international agreement (such as an MLAT) between the requesting third country and the Union or a Member State, without prejudice to other Chapter V grounds. Central provision in the Schrems II / extraterritorial-law context."
     },
     {
       "articleNumber": 49,
       "heading": "Derogations for specific situations",
-      "summary": "Article 49 of the GDPR — Derogations for specific situations. Where no adequacy decision under Art 45 or appropriate safeguards under Art 46/47 are in place, transfers may exceptionally rely on specified derogations: explicit informed consent, contract necessity with the subject, contract concluded in the subject's interest, important reasons of public interest, legal claims, vital interests, or non-systematic transfers from a public register. A residual ground exists for compelling legitimate interests, subject to strict conditions, suitable safeguards, SA notification, and subject information."
+      "summary": "Article 49 of the GDPR: Derogations for specific situations. Where no adequacy decision under Art 45 or appropriate safeguards under Art 46/47 are in place, transfers may exceptionally rely on specified derogations: explicit informed consent, contract necessity with the subject, contract concluded in the subject's interest, important reasons of public interest, legal claims, vital interests, or non-systematic transfers from a public register. A residual ground exists for compelling legitimate interests, subject to strict conditions, suitable safeguards, SA notification, and subject information."
     },
     {
       "articleNumber": 50,
       "heading": "International cooperation for the protection of personal data",
-      "summary": "Article 50 of the GDPR — International cooperation for the protection of personal data. The Commission and supervisory authorities take appropriate steps to develop international cooperation mechanisms to facilitate effective enforcement of data-protection legislation, mutual assistance in enforcement including notification and complaint referral, stakeholder engagement, and exchange and documentation of legislation and practice. Cited mainly when describing cross-jurisdiction enforcement coordination."
+      "summary": "Article 50 of the GDPR: International cooperation for the protection of personal data. The Commission and supervisory authorities take appropriate steps to develop international cooperation mechanisms to facilitate effective enforcement of data-protection legislation, mutual assistance in enforcement including notification and complaint referral, stakeholder engagement, and exchange and documentation of legislation and practice. Cited mainly when describing cross-jurisdiction enforcement coordination."
     },
     {
       "articleNumber": 51,
       "heading": "Supervisory authority",
-      "summary": "Article 51 of the GDPR — Supervisory authority. Each Member State must provide for one or more independent public authorities to be responsible for monitoring the application of the Regulation, contributing to consistent EU-wide application, and protecting fundamental rights and free movement. Where there are multiple SAs in a Member State, one must represent the others in the EDPB. Member States must notify the Commission of provisions adopted under this chapter."
+      "summary": "Article 51 of the GDPR: Supervisory authority. Each Member State must provide for one or more independent public authorities to be responsible for monitoring the application of the Regulation, contributing to consistent EU-wide application, and protecting fundamental rights and free movement. Where there are multiple SAs in a Member State, one must represent the others in the EDPB. Member States must notify the Commission of provisions adopted under this chapter."
     },
     {
       "articleNumber": 52,
       "heading": "Independence",
-      "summary": "Article 52 of the GDPR — Independence. Each supervisory authority must act with complete independence in performing its tasks and exercising its powers. Members must remain free from external influence, abstain from incompatible actions, and have separate, public, audited budgets and own staff under their exclusive direction. Member States must ensure each SA has the human, technical and financial resources, premises and infrastructure needed. Backbone of the SA enforcement system."
+      "summary": "Article 52 of the GDPR: Independence. Each supervisory authority must act with complete independence in performing its tasks and exercising its powers. Members must remain free from external influence, abstain from incompatible actions, and have separate, public, audited budgets and own staff under their exclusive direction. Member States must ensure each SA has the human, technical and financial resources, premises and infrastructure needed. Backbone of the SA enforcement system."
     },
     {
       "articleNumber": 53,
       "heading": "General conditions for the members of the supervisory authority",
-      "summary": "Article 53 of the GDPR — General conditions for the members of the supervisory authority. Members of each SA are appointed by transparent procedures laid down by Member State law (by parliament, government, head of state, or independent body), must have the qualifications and experience required, perform duties without external instruction, and have a term of at least four years (renewable once unless national law specifies otherwise). Sets dismissal grounds limited to serious misconduct or inability."
+      "summary": "Article 53 of the GDPR: General conditions for the members of the supervisory authority. Members of each SA are appointed by transparent procedures laid down by Member State law (by parliament, government, head of state, or independent body), must have the qualifications and experience required, perform duties without external instruction, and have a term of at least four years (renewable once unless national law specifies otherwise). Sets dismissal grounds limited to serious misconduct or inability."
     },
     {
       "articleNumber": 54,
       "heading": "Rules on the establishment of the supervisory authority",
-      "summary": "Article 54 of the GDPR — Rules on the establishment of the supervisory authority. Member States must provide by law for the establishment of each SA: qualifications and conditions for members; rules and procedures for appointment; duration of term and dismissal rules; staff and budget arrangements. Members and staff are subject to a duty of professional secrecy, both during and after their term, with respect to confidential information they encounter."
+      "summary": "Article 54 of the GDPR: Rules on the establishment of the supervisory authority. Member States must provide by law for the establishment of each SA: qualifications and conditions for members; rules and procedures for appointment; duration of term and dismissal rules; staff and budget arrangements. Members and staff are subject to a duty of professional secrecy, both during and after their term, with respect to confidential information they encounter."
     },
     {
       "articleNumber": 55,
       "heading": "Competence",
-      "summary": "Article 55 of the GDPR — Competence. Each supervisory authority is competent for the performance of GDPR tasks and powers within its own Member State, save where Art 56 (lead authority) applies. SAs are not competent to supervise processing carried out by courts acting in their judicial capacity. Where processing is carried out by public authorities or private bodies acting on the basis of point (c) or (e) of Art 6(1), the SA of the Member State concerned is competent."
+      "summary": "Article 55 of the GDPR: Competence. Each supervisory authority is competent for the performance of GDPR tasks and powers within its own Member State, save where Art 56 (lead authority) applies. SAs are not competent to supervise processing carried out by courts acting in their judicial capacity. Where processing is carried out by public authorities or private bodies acting on the basis of point (c) or (e) of Art 6(1), the SA of the Member State concerned is competent."
     },
     {
       "articleNumber": 56,
       "heading": "Competence of the lead supervisory authority",
-      "summary": "Article 56 of the GDPR — Competence of the lead supervisory authority. For cross-border processing, the SA of the main or single establishment of the controller or processor acts as lead SA under the Art 60 cooperation procedure. Other SAs concerned may nonetheless handle a local case where it relates only to an establishment in their Member State or substantially affects subjects only in that Member State, subject to lead-SA notification and the option for the lead to take over. Cornerstone of the one-stop-shop."
+      "summary": "Article 56 of the GDPR: Competence of the lead supervisory authority. For cross-border processing, the SA of the main or single establishment of the controller or processor acts as lead SA under the Art 60 cooperation procedure. Other SAs concerned may nonetheless handle a local case where it relates only to an establishment in their Member State or substantially affects subjects only in that Member State, subject to lead-SA notification and the option for the lead to take over. Cornerstone of the one-stop-shop."
     },
     {
       "articleNumber": 57,
       "heading": "Tasks",
-      "summary": "Article 57 of the GDPR — Tasks. Catalogue of supervisory-authority duties: monitor and enforce the GDPR; promote awareness; advise the legislature and other institutions; handle complaints; conduct investigations; foster codes and certifications; cooperate with other SAs and the EDPB; contribute to consistency; keep records of infringements; provide standard forms. SA actions must be free of charge save where requests are manifestly unfounded or excessive."
+      "summary": "Article 57 of the GDPR: Tasks. Catalogue of supervisory-authority duties: monitor and enforce the GDPR; promote awareness; advise the legislature and other institutions; handle complaints; conduct investigations; foster codes and certifications; cooperate with other SAs and the EDPB; contribute to consistency; keep records of infringements; provide standard forms. SA actions must be free of charge save where requests are manifestly unfounded or excessive."
     },
     {
       "articleNumber": 58,
       "heading": "Powers",
-      "summary": "Article 58 of the GDPR — Powers. Sets the SA's binding toolkit: investigative powers (order information, conduct audits, review certifications, notify infringements, obtain access to premises and equipment); corrective powers (warnings, reprimands, orders to comply, bans, suspension of data flows, administrative fines, etc.); authorisation and advisory powers (issue certifications, approve BCRs, codes, contractual clauses, opinions to parliament); and the right to bring infringements before judicial authorities. Member States may provide additional powers."
+      "summary": "Article 58 of the GDPR: Powers. Sets the SA's binding toolkit: investigative powers (order information, conduct audits, review certifications, notify infringements, obtain access to premises and equipment); corrective powers (warnings, reprimands, orders to comply, bans, suspension of data flows, administrative fines, etc.); authorisation and advisory powers (issue certifications, approve BCRs, codes, contractual clauses, opinions to parliament); and the right to bring infringements before judicial authorities. Member States may provide additional powers."
     },
     {
       "articleNumber": 59,
       "heading": "Activity reports",
-      "summary": "Article 59 of the GDPR — Activity reports. Each supervisory authority must draw up an annual report on its activities, which may include a list of types of infringements notified and corrective measures taken. The report is transmitted to the national parliament, government and other authorities designated by national law, and made available to the public, the Commission and the EDPB."
+      "summary": "Article 59 of the GDPR: Activity reports. Each supervisory authority must draw up an annual report on its activities, which may include a list of types of infringements notified and corrective measures taken. The report is transmitted to the national parliament, government and other authorities designated by national law, and made available to the public, the Commission and the EDPB."
     },
     {
       "articleNumber": 60,
       "heading": "Cooperation between the lead supervisory authority and the other supervisory authorities concerned",
-      "summary": "Article 60 of the GDPR — Cooperation between the lead supervisory authority and the other supervisory authorities concerned. Defines the one-stop-shop procedural mechanics: the lead SA cooperates with concerned SAs seeking consensus, exchanges relevant information, prepares a draft decision and submits it for consideration; concerned SAs may raise a relevant and reasoned objection within four weeks; if the lead disagrees, the matter goes to Art 65 dispute resolution. Both lead and concerned SAs may adopt urgency measures under Art 66."
+      "summary": "Article 60 of the GDPR: Cooperation between the lead supervisory authority and the other supervisory authorities concerned. Defines the one-stop-shop procedural mechanics: the lead SA cooperates with concerned SAs seeking consensus, exchanges relevant information, prepares a draft decision and submits it for consideration; concerned SAs may raise a relevant and reasoned objection within four weeks; if the lead disagrees, the matter goes to Art 65 dispute resolution. Both lead and concerned SAs may adopt urgency measures under Art 66."
     },
     {
       "articleNumber": 61,
       "heading": "Mutual assistance",
-      "summary": "Article 61 of the GDPR — Mutual assistance. Supervisory authorities must provide each other with relevant information and mutual assistance to implement and apply the Regulation consistently, including information requests and supervisory measures such as authorisation requests, inspections and investigations. Requested SAs must respond without undue delay and at the latest within one month; grounds for refusal are limited and reasoned. Assistance is in principle free; the EDPB may specify formats and procedures."
+      "summary": "Article 61 of the GDPR: Mutual assistance. Supervisory authorities must provide each other with relevant information and mutual assistance to implement and apply the Regulation consistently, including information requests and supervisory measures such as authorisation requests, inspections and investigations. Requested SAs must respond without undue delay and at the latest within one month; grounds for refusal are limited and reasoned. Assistance is in principle free; the EDPB may specify formats and procedures."
     },
     {
       "articleNumber": 62,
       "heading": "Joint operations of supervisory authorities",
-      "summary": "Article 62 of the GDPR — Joint operations of supervisory authorities. Supervisory authorities, where appropriate, conduct joint operations, including joint investigations and enforcement measures, involving members or staff of other Member States' SAs. Where data subjects are or are likely to be substantially affected in another Member State, the SA of that Member State has the right to participate. The host SA, in accordance with Member State law, may confer powers on visiting members and is liable for damage caused by them."
+      "summary": "Article 62 of the GDPR: Joint operations of supervisory authorities. Supervisory authorities, where appropriate, conduct joint operations, including joint investigations and enforcement measures, involving members or staff of other Member States' SAs. Where data subjects are or are likely to be substantially affected in another Member State, the SA of that Member State has the right to participate. The host SA, in accordance with Member State law, may confer powers on visiting members and is liable for damage caused by them."
     },
     {
       "articleNumber": 63,
       "heading": "Consistency mechanism",
-      "summary": "Article 63 of the GDPR — Consistency mechanism. Establishes the consistency mechanism — the EDPB-led cooperation, opinion and dispute-resolution architecture (Arts 64–67) — to ensure the consistent application of the GDPR throughout the Union. Acts as the constitutional bridge between national supervisory authorities and the EDPB. Cite when explaining how SA divergences are resolved EU-wide."
+      "summary": "Article 63 of the GDPR: Consistency mechanism. Establishes the consistency mechanism, the EDPB-led cooperation, opinion and dispute-resolution architecture (Arts 64-67), to ensure the consistent application of the GDPR throughout the Union. Acts as the constitutional bridge between national supervisory authorities and the EDPB. Cite when explaining how SA divergences are resolved EU-wide."
     },
     {
       "articleNumber": 64,
       "heading": "Opinion of the Board",
-      "summary": "Article 64 of the GDPR — Opinion of the Board. The EDPB issues opinions where a competent SA intends to adopt measures with cross-border consequences, in particular DPIA lists, codes of conduct, certification criteria, accreditation requirements, standard clauses, and BCR authorisations. Any SA, the Chair, or the Commission may request a Board opinion on general matters. Opinions adopted by simple majority within eight weeks (extendable); the SA must take utmost account, communicate intentions to amend, and otherwise the matter enters Art 65 dispute resolution."
+      "summary": "Article 64 of the GDPR: Opinion of the Board. The EDPB issues opinions where a competent SA intends to adopt measures with cross-border consequences, in particular DPIA lists, codes of conduct, certification criteria, accreditation requirements, standard clauses, and BCR authorisations. Any SA, the Chair, or the Commission may request a Board opinion on general matters. Opinions adopted by simple majority within eight weeks (extendable); the SA must take utmost account, communicate intentions to amend, and otherwise the matter enters Art 65 dispute resolution."
     },
     {
       "articleNumber": 65,
       "heading": "Dispute resolution by the Board",
-      "summary": "Article 65 of the GDPR — Dispute resolution by the Board. Where SAs disagree on relevant and reasoned objections to a lead SA's draft decision, on identification of the lead SA, or on whether a Board opinion has been followed, the EDPB adopts a binding decision by two-thirds majority (or simple-majority fallback). The decision is addressed to the SAs concerned and adopted as a national decision by the lead/notified SA. Key mechanism for ending intra-EU regulatory divergence on individual cases."
+      "summary": "Article 65 of the GDPR: Dispute resolution by the Board. Where SAs disagree on relevant and reasoned objections to a lead SA's draft decision, on identification of the lead SA, or on whether a Board opinion has been followed, the EDPB adopts a binding decision by two-thirds majority (or simple-majority fallback). The decision is addressed to the SAs concerned and adopted as a national decision by the lead/notified SA. Key mechanism for ending intra-EU regulatory divergence on individual cases."
     },
     {
       "articleNumber": 66,
       "heading": "Urgency procedure",
-      "summary": "Article 66 of the GDPR — Urgency procedure. In exceptional circumstances, a supervisory authority may immediately adopt provisional measures with effect in its territory and validity of up to three months, where it considers urgent action is needed to protect rights and freedoms. The SA must communicate those measures and reasoned justification to other SAs concerned, the Board and the Commission. The Board may adopt urgent opinions or urgent binding decisions on its own motion or on request."
+      "summary": "Article 66 of the GDPR: Urgency procedure. In exceptional circumstances, a supervisory authority may immediately adopt provisional measures with effect in its territory and validity of up to three months, where it considers urgent action is needed to protect rights and freedoms. The SA must communicate those measures and reasoned justification to other SAs concerned, the Board and the Commission. The Board may adopt urgent opinions or urgent binding decisions on its own motion or on request."
     },
     {
       "articleNumber": 67,
       "heading": "Exchange of information",
-      "summary": "Article 67 of the GDPR — Exchange of information. The Commission may adopt implementing acts of general scope to specify the arrangements for the exchange of information by electronic means between supervisory authorities, and between SAs and the Board, in particular the standardised format referred to in Art 64. Operational provision underlying the cooperation and consistency architecture."
+      "summary": "Article 67 of the GDPR: Exchange of information. The Commission may adopt implementing acts of general scope to specify the arrangements for the exchange of information by electronic means between supervisory authorities, and between SAs and the Board, in particular the standardised format referred to in Art 64. Operational provision underlying the cooperation and consistency architecture."
     },
     {
       "articleNumber": 68,
       "heading": "European Data Protection Board",
-      "summary": "Article 68 of the GDPR — European Data Protection Board. Establishes the EDPB as a body of the Union with legal personality, composed of the head of one supervisory authority of each Member State and of the EDPS, with the Commission having the right to participate without voting rights. Replaces the Article 29 Working Party. Headed by a Chair and assisted by a secretariat provided by the EDPS. Foundational provision for EU-level data-protection governance."
+      "summary": "Article 68 of the GDPR: European Data Protection Board. Establishes the EDPB as a body of the Union with legal personality, composed of the head of one supervisory authority of each Member State and of the EDPS, with the Commission having the right to participate without voting rights. Replaces the Article 29 Working Party. Headed by a Chair and assisted by a secretariat provided by the EDPS. Foundational provision for EU-level data-protection governance."
     },
     {
       "articleNumber": 69,
       "heading": "Independence",
-      "summary": "Article 69 of the GDPR — Independence. The European Data Protection Board acts independently when performing its tasks or exercising its powers under Articles 70 and 71. Members must neither seek nor take instructions from any government or other body, save where they act on a request from the Commission or under the consistency mechanism. Mirror provision to Art 52 at Union level."
+      "summary": "Article 69 of the GDPR: Independence. The European Data Protection Board acts independently when performing its tasks or exercising its powers under Articles 70 and 71. Members must neither seek nor take instructions from any government or other body, save where they act on a request from the Commission or under the consistency mechanism. Mirror provision to Art 52 at Union level."
     },
     {
       "articleNumber": 70,
       "heading": "Tasks of the Board",
-      "summary": "Article 70 of the GDPR — Tasks of the Board. Catalogue of EDPB tasks: monitor and ensure correct application of the Regulation; advise the Commission; issue guidelines, recommendations, and best practices on a long list of topics (consent, breach notification, transfers, automated decisions, DPIAs, certification, BCRs, accreditation criteria, etc.); examine practical application of guidance; provide opinions to the Commission on adequacy and other matters; promote cooperation and joint operations; maintain a public register of decisions taken by SAs and courts."
+      "summary": "Article 70 of the GDPR: Tasks of the Board. Catalogue of EDPB tasks: monitor and ensure correct application of the Regulation; advise the Commission; issue guidelines, recommendations, and best practices on a long list of topics (consent, breach notification, transfers, automated decisions, DPIAs, certification, BCRs, accreditation criteria, etc.); examine practical application of guidance; provide opinions to the Commission on adequacy and other matters; promote cooperation and joint operations; maintain a public register of decisions taken by SAs and courts."
     },
     {
       "articleNumber": 71,
       "heading": "Reports",
-      "summary": "Article 71 of the GDPR — Reports. The EDPB draws up an annual report on the protection of natural persons with regard to processing in the Union and, where relevant, in third countries and international organisations; the report is made public and transmitted to the European Parliament, the Council and the Commission. The annual report includes the application of guidelines, recommendations, best practices and binding decisions."
+      "summary": "Article 71 of the GDPR: Reports. The EDPB draws up an annual report on the protection of natural persons with regard to processing in the Union and, where relevant, in third countries and international organisations; the report is made public and transmitted to the European Parliament, the Council and the Commission. The annual report includes the application of guidelines, recommendations, best practices and binding decisions."
     },
     {
       "articleNumber": 72,
       "heading": "Procedure",
-      "summary": "Article 72 of the GDPR — Procedure. The EDPB takes decisions by simple majority of its members, unless otherwise provided in the Regulation. The Board adopts its own rules of procedure by two-thirds majority and organises its operating arrangements. Procedural housekeeping that complements the substantive provisions in Arts 64 and 65."
+      "summary": "Article 72 of the GDPR: Procedure. The EDPB takes decisions by simple majority of its members, unless otherwise provided in the Regulation. The Board adopts its own rules of procedure by two-thirds majority and organises its operating arrangements. Procedural housekeeping that complements the substantive provisions in Arts 64 and 65."
     },
     {
       "articleNumber": 73,
       "heading": "Chair",
-      "summary": "Article 73 of the GDPR — Chair. The EDPB elects a Chair and two Deputy Chairs from among its members by simple majority. The term of office is five years, renewable once. Brief institutional provision, typically cited only in describing EDPB governance."
+      "summary": "Article 73 of the GDPR: Chair. The EDPB elects a Chair and two Deputy Chairs from among its members by simple majority. The term of office is five years, renewable once. Brief institutional provision, typically cited only in describing EDPB governance."
     },
     {
       "articleNumber": 74,
       "heading": "Tasks of the Chair",
-      "summary": "Article 74 of the GDPR — Tasks of the Chair. The Chair convenes meetings, prepares the work of the Board, ensures the timely performance of the Board's tasks (notably the consistency mechanism), and represents the Board externally. Sets out the day-to-day institutional role; relevant principally for describing EDPB workflow."
+      "summary": "Article 74 of the GDPR: Tasks of the Chair. The Chair convenes meetings, prepares the work of the Board, ensures the timely performance of the Board's tasks (notably the consistency mechanism), and represents the Board externally. Sets out the day-to-day institutional role; relevant principally for describing EDPB workflow."
     },
     {
       "articleNumber": 75,
       "heading": "Secretariat",
-      "summary": "Article 75 of the GDPR — Secretariat. The EDPB has a secretariat provided by the European Data Protection Supervisor, performing its tasks exclusively under the instructions of the Chair. The staff of the EDPS involved in EDPB tasks are functionally separate from EDPS-supervised activities. The provision details the secretariat's analytical, administrative and logistical support."
+      "summary": "Article 75 of the GDPR: Secretariat. The EDPB has a secretariat provided by the European Data Protection Supervisor, performing its tasks exclusively under the instructions of the Chair. The staff of the EDPS involved in EDPB tasks are functionally separate from EDPS-supervised activities. The provision details the secretariat's analytical, administrative and logistical support."
     },
     {
       "articleNumber": 76,
       "heading": "Confidentiality",
-      "summary": "Article 76 of the GDPR — Confidentiality. Discussions of the EDPB are confidential where the Board deems it necessary, as provided for in its rules of procedure. Access to documents submitted to members, experts and third parties is governed by Regulation (EC) No 1049/2001. Short provision typically referenced only in connection with EDPB document disclosure."
+      "summary": "Article 76 of the GDPR: Confidentiality. Discussions of the EDPB are confidential where the Board deems it necessary, as provided for in its rules of procedure. Access to documents submitted to members, experts and third parties is governed by Regulation (EC) No 1049/2001. Short provision typically referenced only in connection with EDPB document disclosure."
     },
     {
       "articleNumber": 77,
       "heading": "Right to lodge a complaint with a supervisory authority",
-      "summary": "Article 77 of the GDPR — Right to lodge a complaint with a supervisory authority. Without prejudice to any other administrative or judicial remedy, every data subject has the right to lodge a complaint with a supervisory authority — in particular in the Member State of habitual residence, place of work, or place of the alleged infringement — if they consider that processing of their personal data infringes the Regulation. The SA must inform the complainant of progress, outcome, and the possibility of judicial remedy under Art 78."
+      "summary": "Article 77 of the GDPR: Right to lodge a complaint with a supervisory authority. Without prejudice to any other administrative or judicial remedy, every data subject has the right to lodge a complaint with a supervisory authority (in particular in the Member State of habitual residence, place of work, or place of the alleged infringement) if they consider that processing of their personal data infringes the Regulation. The SA must inform the complainant of progress, outcome, and the possibility of judicial remedy under Art 78."
     },
     {
       "articleNumber": 78,
       "heading": "Right to an effective judicial remedy against a supervisory authority",
-      "summary": "Article 78 of the GDPR — Right to an effective judicial remedy against a supervisory authority. Without prejudice to other remedies, every natural or legal person has the right to an effective judicial remedy against a legally binding decision of a supervisory authority concerning them, or where the SA does not handle a complaint or inform the complainant within three months of progress or outcome. Proceedings are brought before the courts of the Member State where the SA is established."
+      "summary": "Article 78 of the GDPR: Right to an effective judicial remedy against a supervisory authority. Without prejudice to other remedies, every natural or legal person has the right to an effective judicial remedy against a legally binding decision of a supervisory authority concerning them, or where the SA does not handle a complaint or inform the complainant within three months of progress or outcome. Proceedings are brought before the courts of the Member State where the SA is established."
     },
     {
       "articleNumber": 79,
       "heading": "Right to an effective judicial remedy against a controller or processor",
-      "summary": "Article 79 of the GDPR — Right to an effective judicial remedy against a controller or processor. Each data subject has the right to an effective judicial remedy where they consider their GDPR rights have been infringed as a result of processing in non-compliance with the Regulation. Proceedings may be brought before the courts of the Member State where the controller or processor has an establishment, or, alternatively, where the data subject has their habitual residence (unless the controller/processor is a public authority acting in the exercise of public powers)."
+      "summary": "Article 79 of the GDPR: Right to an effective judicial remedy against a controller or processor. Each data subject has the right to an effective judicial remedy where they consider their GDPR rights have been infringed as a result of processing in non-compliance with the Regulation. Proceedings may be brought before the courts of the Member State where the controller or processor has an establishment, or, alternatively, where the data subject has their habitual residence (unless the controller/processor is a public authority acting in the exercise of public powers)."
     },
     {
       "articleNumber": 80,
       "heading": "Representation of data subjects",
-      "summary": "Article 80 of the GDPR — Representation of data subjects. Data subjects have the right to mandate a not-for-profit body, organisation or association which is properly constituted under Member State law, has statutory objectives in the public interest, and is active in the field of data-subject rights, to lodge a complaint, exercise rights under Arts 77, 78, 79, and (subject to Member State law) the right to compensation under Art 82 on their behalf. Member States may allow such bodies to act independently of any mandate."
+      "summary": "Article 80 of the GDPR: Representation of data subjects. Data subjects have the right to mandate a not-for-profit body, organisation or association which is properly constituted under Member State law, has statutory objectives in the public interest, and is active in the field of data-subject rights, to lodge a complaint, exercise rights under Arts 77, 78, 79, and (subject to Member State law) the right to compensation under Art 82 on their behalf. Member States may allow such bodies to act independently of any mandate."
     },
     {
       "articleNumber": 81,
       "heading": "Suspension of proceedings",
-      "summary": "Article 81 of the GDPR — Suspension of proceedings. Where a competent court has information that proceedings concerning the same subject-matter as regards processing by the same controller or processor are pending in another Member State court, it must contact that court to confirm. Where such proceedings are pending at first instance, any court other than the court first seised may stay its proceedings, or on application by one of the parties decline jurisdiction in favour of the first court. Coordinates parallel litigation across the Union."
+      "summary": "Article 81 of the GDPR: Suspension of proceedings. Where a competent court has information that proceedings concerning the same subject-matter as regards processing by the same controller or processor are pending in another Member State court, it must contact that court to confirm. Where such proceedings are pending at first instance, any court other than the court first seised may stay its proceedings, or on application by one of the parties decline jurisdiction in favour of the first court. Coordinates parallel litigation across the Union."
     },
     {
       "articleNumber": 82,
       "heading": "Right to compensation and liability",
-      "summary": "Article 82 of the GDPR — Right to compensation and liability. Any person who has suffered material or non-material damage as a result of an infringement of the GDPR is entitled to receive compensation from the controller or processor. Controllers are liable for the damage caused by processing infringing the Regulation; processors are liable only for breaches of obligations specifically directed at processors or where they acted outside lawful instructions. Joint and several liability with internal recourse where multiple actors are involved. Exemption where the defendant is not in any way responsible for the event giving rise to damage."
+      "summary": "Article 82 of the GDPR: Right to compensation and liability. Any person who has suffered material or non-material damage as a result of an infringement of the GDPR is entitled to receive compensation from the controller or processor. Controllers are liable for the damage caused by processing infringing the Regulation; processors are liable only for breaches of obligations specifically directed at processors or where they acted outside lawful instructions. Joint and several liability with internal recourse where multiple actors are involved. Exemption where the defendant is not in any way responsible for the event giving rise to damage."
     },
     {
       "articleNumber": 83,
       "heading": "General conditions for imposing administrative fines",
-      "summary": "Article 83 of the GDPR — General conditions for imposing administrative fines. Sets the two-tier maximum fine regime: up to EUR 10 million or 2 % of total worldwide annual turnover for the lower tier (covering most controller/processor procedural obligations) and up to EUR 20 million or 4 % for the higher tier (covering breaches of the basic principles, data-subject rights, transfer rules, and certain SA orders). Lists the eleven factors SAs must weigh (nature, gravity, intent, mitigation, prior infringements, cooperation, categories of data, etc.) and requires effective, proportionate, and dissuasive fines."
+      "summary": "Article 83 of the GDPR: General conditions for imposing administrative fines. Sets the two-tier maximum fine regime: up to EUR 10 million or 2 % of total worldwide annual turnover for the lower tier (covering most controller/processor procedural obligations) and up to EUR 20 million or 4 % for the higher tier (covering breaches of the basic principles, data-subject rights, transfer rules, and certain SA orders). Lists the eleven factors SAs must weigh (nature, gravity, intent, mitigation, prior infringements, cooperation, categories of data, etc.) and requires effective, proportionate, and dissuasive fines."
     },
     {
       "articleNumber": 84,
       "heading": "Penalties",
-      "summary": "Article 84 of the GDPR — Penalties. Member States must lay down the rules on other penalties applicable to infringements of the Regulation — in particular those not subject to Art 83 administrative fines — and take all measures necessary to ensure they are implemented; penalties must be effective, proportionate and dissuasive. Member States notify the Commission of those provisions and of any later amendments. Anchors criminal and non-fine sanctions."
+      "summary": "Article 84 of the GDPR: Penalties. Member States must lay down the rules on other penalties applicable to infringements of the Regulation, in particular those not subject to Art 83 administrative fines, and take all measures necessary to ensure they are implemented; penalties must be effective, proportionate and dissuasive. Member States notify the Commission of those provisions and of any later amendments. Anchors criminal and non-fine sanctions."
     },
     {
       "articleNumber": 85,
       "heading": "Processing and freedom of expression and information",
-      "summary": "Article 85 of the GDPR — Processing and freedom of expression and information. Member States must by law reconcile the right to the protection of personal data with the right to freedom of expression and information, including processing for journalistic purposes and the purposes of academic, artistic or literary expression. They must provide for exemptions or derogations from large parts of the Regulation (notably Chapters II–VII, IX) where necessary to reconcile the two rights, and notify those provisions to the Commission. Foundation of the journalistic-purposes carve-out."
+      "summary": "Article 85 of the GDPR: Processing and freedom of expression and information. Member States must by law reconcile the right to the protection of personal data with the right to freedom of expression and information, including processing for journalistic purposes and the purposes of academic, artistic or literary expression. They must provide for exemptions or derogations from large parts of the Regulation (notably Chapters II-VII, IX) where necessary to reconcile the two rights, and notify those provisions to the Commission. Foundation of the journalistic-purposes carve-out."
     },
     {
       "articleNumber": 86,
       "heading": "Processing and public access to official documents",
-      "summary": "Article 86 of the GDPR — Processing and public access to official documents. Personal data in official documents held by a public authority, public body or private body for the performance of a task carried out in the public interest may be disclosed by that authority/body in accordance with Union or Member State law to which the authority/body is subject, in order to reconcile public access to official documents with the right to the protection of personal data under the Regulation."
+      "summary": "Article 86 of the GDPR: Processing and public access to official documents. Personal data in official documents held by a public authority, public body or private body for the performance of a task carried out in the public interest may be disclosed by that authority/body in accordance with Union or Member State law to which the authority/body is subject, in order to reconcile public access to official documents with the right to the protection of personal data under the Regulation."
     },
     {
       "articleNumber": 87,
       "heading": "Processing of the national identification number",
-      "summary": "Article 87 of the GDPR — Processing of the national identification number. Member States may further determine the specific conditions for the processing of a national identification number or any other identifier of general application; the national identification number or other identifier of general application is to be used only under appropriate safeguards for the rights and freedoms of the data subject under the Regulation. Member State opening clause for ID-number processing."
+      "summary": "Article 87 of the GDPR: Processing of the national identification number. Member States may further determine the specific conditions for the processing of a national identification number or any other identifier of general application; the national identification number or other identifier of general application is to be used only under appropriate safeguards for the rights and freedoms of the data subject under the Regulation. Member State opening clause for ID-number processing."
     },
     {
       "articleNumber": 88,
       "heading": "Processing in the context of employment",
-      "summary": "Article 88 of the GDPR — Processing in the context of employment. Member States may by law or by collective agreements provide for more specific rules to ensure the protection of the rights and freedoms in respect of the processing of employees' personal data in the employment context — in particular recruitment, contract performance, management, equality and diversity, health and safety, exercise of employment rights, and termination — and must notify those provisions to the Commission. Mandates suitable and specific safeguards for human dignity, legitimate interests and fundamental rights."
+      "summary": "Article 88 of the GDPR: Processing in the context of employment. Member States may by law or by collective agreements provide for more specific rules to ensure the protection of the rights and freedoms in respect of the processing of employees' personal data in the employment context (in particular recruitment, contract performance, management, equality and diversity, health and safety, exercise of employment rights, and termination) and must notify those provisions to the Commission. Mandates suitable and specific safeguards for human dignity, legitimate interests and fundamental rights."
     },
     {
       "articleNumber": 89,
       "heading": "Safeguards and derogations relating to processing for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes",
-      "summary": "Article 89 of the GDPR — Safeguards and derogations relating to processing for archiving in the public interest, scientific or historical research, and statistical purposes. Such processing must be subject to appropriate safeguards, in particular technical and organisational measures to ensure data minimisation, including pseudonymisation where the purposes can be fulfilled in that manner. Union or Member State law may provide derogations from rights under Arts 15, 16, 18, 19, 20 and 21 — and additional derogations for archiving in the public interest — where the rights would render impossible or seriously impair the achievement of the specific purposes."
+      "summary": "Article 89 of the GDPR: Safeguards and derogations relating to processing for archiving in the public interest, scientific or historical research, and statistical purposes. Such processing must be subject to appropriate safeguards, in particular technical and organisational measures to ensure data minimisation, including pseudonymisation where the purposes can be fulfilled in that manner. Union or Member State law may provide derogations from rights under Arts 15, 16, 18, 19, 20 and 21, and additional derogations for archiving in the public interest, where the rights would render impossible or seriously impair the achievement of the specific purposes."
     },
     {
       "articleNumber": 90,
       "heading": "Obligations of secrecy",
-      "summary": "Article 90 of the GDPR — Obligations of secrecy. Member States may adopt specific rules to set the powers of supervisory authorities under Art 58(1)(e) and (f) — access to data and premises — in relation to controllers or processors that are subject, under Union or Member State law or rules established by national competent bodies, to an obligation of professional secrecy or other equivalent obligations of secrecy, where this is necessary and proportionate to reconcile data protection with secrecy duties. Member States must notify those rules to the Commission."
+      "summary": "Article 90 of the GDPR: Obligations of secrecy. Member States may adopt specific rules to set the powers of supervisory authorities under Art 58(1)(e) and (f), access to data and premises, in relation to controllers or processors that are subject, under Union or Member State law or rules established by national competent bodies, to an obligation of professional secrecy or other equivalent obligations of secrecy, where this is necessary and proportionate to reconcile data protection with secrecy duties. Member States must notify those rules to the Commission."
     },
     {
       "articleNumber": 91,
       "heading": "Existing data protection rules of churches and religious associations",
-      "summary": "Article 91 of the GDPR — Existing data protection rules of churches and religious associations. Where churches and religious associations or communities apply, at the time of entry into force of the Regulation, comprehensive rules on the protection of natural persons with regard to processing, those rules may continue to apply provided they are brought into line with the Regulation. Such bodies must be subject to the supervision of an independent supervisory authority, which may be specific, provided it meets the conditions of Chapter VI."
+      "summary": "Article 91 of the GDPR: Existing data protection rules of churches and religious associations. Where churches and religious associations or communities apply, at the time of entry into force of the Regulation, comprehensive rules on the protection of natural persons with regard to processing, those rules may continue to apply provided they are brought into line with the Regulation. Such bodies must be subject to the supervision of an independent supervisory authority, which may be specific, provided it meets the conditions of Chapter VI."
     },
     {
       "articleNumber": 92,
       "heading": "Exercise of the delegation",
-      "summary": "Article 92 of the GDPR — Exercise of the delegation. Sets the procedural conditions under which the Commission exercises the delegated-act powers granted under Articles 12(8) and 43(8): delegation is conferred for an indeterminate period from 24 May 2016; may be revoked at any time by the European Parliament or the Council; delegated acts are adopted only after consultation of designated experts; the Parliament and Council have an objection period within which they can prevent entry into force."
+      "summary": "Article 92 of the GDPR: Exercise of the delegation. Sets the procedural conditions under which the Commission exercises the delegated-act powers granted under Articles 12(8) and 43(8): delegation is conferred for an indeterminate period from 24 May 2016; may be revoked at any time by the European Parliament or the Council; delegated acts are adopted only after consultation of designated experts; the Parliament and Council have an objection period within which they can prevent entry into force."
     },
     {
       "articleNumber": 93,
       "heading": "Committee procedure",
-      "summary": "Article 93 of the GDPR — Committee procedure. The Commission is assisted by a committee within the meaning of Regulation (EU) No 182/2011 when exercising its implementing-act powers under the Regulation. The examination procedure applies, with the urgency procedure available in duly justified cases. Procedural backbone for Commission implementing acts including standard contractual clauses (Art 46) and adequacy decisions (Art 45)."
+      "summary": "Article 93 of the GDPR: Committee procedure. The Commission is assisted by a committee within the meaning of Regulation (EU) No 182/2011 when exercising its implementing-act powers under the Regulation. The examination procedure applies, with the urgency procedure available in duly justified cases. Procedural backbone for Commission implementing acts including standard contractual clauses (Art 46) and adequacy decisions (Art 45)."
     },
     {
       "articleNumber": 94,
       "heading": "Repeal of Directive 95/46/EC",
-      "summary": "Article 94 of the GDPR — Repeal of Directive 95/46/EC. Repeals the Data Protection Directive with effect from 25 May 2018. References to the repealed Directive are to be construed as references to the GDPR, and references to the Article 29 Working Party are to be construed as references to the European Data Protection Board. Cited mainly when interpreting pre-2018 jurisprudence and instruments."
+      "summary": "Article 94 of the GDPR: Repeal of Directive 95/46/EC. Repeals the Data Protection Directive with effect from 25 May 2018. References to the repealed Directive are to be construed as references to the GDPR, and references to the Article 29 Working Party are to be construed as references to the European Data Protection Board. Cited mainly when interpreting pre-2018 jurisprudence and instruments."
     },
     {
       "articleNumber": 95,
       "heading": "Relationship with Directive 2002/58/EC",
-      "summary": "Article 95 of the GDPR — Relationship with Directive 2002/58/EC. The Regulation does not impose additional obligations on natural or legal persons in relation to processing in connection with the provision of publicly available electronic communications services in public communication networks in the Union, in relation to matters for which they are subject to specific obligations with the same objective under the ePrivacy Directive. Anchors the GDPR–ePrivacy lex specialis relationship."
+      "summary": "Article 95 of the GDPR: Relationship with Directive 2002/58/EC. The Regulation does not impose additional obligations on natural or legal persons in relation to processing in connection with the provision of publicly available electronic communications services in public communication networks in the Union, in relation to matters for which they are subject to specific obligations with the same objective under the ePrivacy Directive. Anchors the GDPR-ePrivacy lex specialis relationship."
     },
     {
       "articleNumber": 96,
       "heading": "Relationship with previously concluded Agreements",
-      "summary": "Article 96 of the GDPR — Relationship with previously concluded Agreements. International agreements involving the transfer of personal data to third countries or international organisations concluded by Member States prior to 24 May 2016, and which comply with the Union law applicable prior to that date, remain in force until amended, replaced or revoked. Provides legal continuity for pre-GDPR international data-transfer instruments."
+      "summary": "Article 96 of the GDPR: Relationship with previously concluded Agreements. International agreements involving the transfer of personal data to third countries or international organisations concluded by Member States prior to 24 May 2016, and which comply with the Union law applicable prior to that date, remain in force until amended, replaced or revoked. Provides legal continuity for pre-GDPR international data-transfer instruments."
     },
     {
       "articleNumber": 97,
       "heading": "Commission reports",
-      "summary": "Article 97 of the GDPR — Commission reports. By 25 May 2020 and every four years thereafter, the Commission must submit a report on the evaluation and review of the Regulation to the European Parliament and the Council. In particular, the Commission must examine the application and functioning of Chapter V on transfers (including adequacy decisions under Art 45(3) and pre-existing decisions) and Chapter VII on cooperation and consistency. The Commission may submit proposals to amend the Regulation as appropriate."
+      "summary": "Article 97 of the GDPR: Commission reports. By 25 May 2020 and every four years thereafter, the Commission must submit a report on the evaluation and review of the Regulation to the European Parliament and the Council. In particular, the Commission must examine the application and functioning of Chapter V on transfers (including adequacy decisions under Art 45(3) and pre-existing decisions) and Chapter VII on cooperation and consistency. The Commission may submit proposals to amend the Regulation as appropriate."
     },
     {
       "articleNumber": 98,
       "heading": "Review of other Union legal acts on data protection",
-      "summary": "Article 98 of the GDPR — Review of other Union legal acts on data protection. The Commission must, if appropriate, submit legislative proposals with a view to amending other Union legal acts on the protection of personal data — in particular the rules applicable to processing by Union institutions, bodies, offices and agencies (originally Reg 45/2001, now Reg 2018/1725) and on the free movement of such data — to ensure uniform and consistent protection across the Union."
+      "summary": "Article 98 of the GDPR: Review of other Union legal acts on data protection. The Commission must, if appropriate, submit legislative proposals with a view to amending other Union legal acts on the protection of personal data, in particular the rules applicable to processing by Union institutions, bodies, offices and agencies (originally Reg 45/2001, now Reg 2018/1725) and on the free movement of such data, to ensure uniform and consistent protection across the Union."
     },
     {
       "articleNumber": 99,
       "heading": "Entry into force and application",
-      "summary": "Article 99 of the GDPR — Entry into force and application. The Regulation entered into force on the twentieth day following its publication in the Official Journal (20 May 2016) and applies from 25 May 2018. Binding in its entirety and directly applicable in all Member States. The constitutional clock-stop for the GDPR's effective date; cited routinely in transitional and applicability analyses."
+      "summary": "Article 99 of the GDPR: Entry into force and application. The Regulation entered into force on the twentieth day following its publication in the Official Journal (20 May 2016) and applies from 25 May 2018. Binding in its entirety and directly applicable in all Member States. The constitutional clock-stop for the GDPR's effective date; cited routinely in transitional and applicability analyses."
     }
   ],
   "recitals": [
@@ -546,7 +546,7 @@
     },
     {
       "recitalNumber": 11,
-      "summary": "Recital 11 of the GDPR. Explains the need for strengthened data-subject rights, controller/processor obligations, and equivalent powers and sanctions across Member States. Background framing for the enforcement architecture in Chapters VI–VIII."
+      "summary": "Recital 11 of the GDPR. Explains the need for strengthened data-subject rights, controller/processor obligations, and equivalent powers and sanctions across Member States. Background framing for the enforcement architecture in Chapters VI-VIII."
     },
     {
       "recitalNumber": 12,
@@ -586,7 +586,7 @@
     },
     {
       "recitalNumber": 21,
-      "summary": "Recital 21 of the GDPR. Without-prejudice clause for the e-Commerce Directive 2000/31/EC, especially the intermediary liability regime in Articles 12–15. Cited when reconciling GDPR controller duties with hosting/conduit liability shields."
+      "summary": "Recital 21 of the GDPR. Without-prejudice clause for the e-Commerce Directive 2000/31/EC, especially the intermediary liability regime in Articles 12-15. Cited when reconciling GDPR controller duties with hosting/conduit liability shields."
     },
     {
       "recitalNumber": 22,
@@ -738,11 +738,11 @@
     },
     {
       "recitalNumber": 59,
-      "summary": "Recital 59 of the GDPR. Mandates accessible modalities for exercising data-subject rights, including free-of-charge electronic requests and a one-month response window with reasons for refusal. Background for Article 12(3)–(4)."
+      "summary": "Recital 59 of the GDPR. Mandates accessible modalities for exercising data-subject rights, including free-of-charge electronic requests and a one-month response window with reasons for refusal. Background for Article 12(3)-(4)."
     },
     {
       "recitalNumber": 60,
-      "summary": "Recital 60 of the GDPR. Requires informing data subjects of profiling and its consequences, of any obligation to provide data, and supports standardised, machine-readable icons summarising processing. Read with Articles 12–14."
+      "summary": "Recital 60 of the GDPR. Requires informing data subjects of profiling and its consequences, of any obligation to provide data, and supports standardised, machine-readable icons summarising processing. Read with Articles 12-14."
     },
     {
       "recitalNumber": 61,
@@ -782,7 +782,7 @@
     },
     {
       "recitalNumber": 70,
-      "summary": "Recital 70 of the GDPR. Absolute right to object to direct-marketing processing (including related profiling) at any time and free of charge, with the right brought explicitly and separately to the data subject's attention. Maps to Article 21(2)–(3)."
+      "summary": "Recital 70 of the GDPR. Absolute right to object to direct-marketing processing (including related profiling) at any time and free of charge, with the right brought explicitly and separately to the data subject's attention. Maps to Article 21(2)-(3)."
     },
     {
       "recitalNumber": 71,
@@ -986,7 +986,7 @@
     },
     {
       "recitalNumber": 121,
-      "summary": "Recital 121 of the GDPR. Governs appointment, integrity, and independence of supervisory authority members: transparent appointment by parliament, government, or independent body, prohibition on incompatible occupations, and own-staff control. Read with Articles 53–54."
+      "summary": "Recital 121 of the GDPR. Governs appointment, integrity, and independence of supervisory authority members: transparent appointment by parliament, government, or independent body, prohibition on incompatible occupations, and own-staff control. Read with Articles 53-54."
     },
     {
       "recitalNumber": 122,
@@ -1066,7 +1066,7 @@
     },
     {
       "recitalNumber": 141,
-      "summary": "Recital 141 of the GDPR. Right to lodge a complaint with the supervisory authority of habitual residence and to an effective judicial remedy under Article 47 Charter; SAs must inform complainants of progress within a reasonable period. Read with Articles 77–78."
+      "summary": "Recital 141 of the GDPR. Right to lodge a complaint with the supervisory authority of habitual residence and to an effective judicial remedy under Article 47 Charter; SAs must inform complainants of progress within a reasonable period. Read with Articles 77-78."
     },
     {
       "recitalNumber": 142,

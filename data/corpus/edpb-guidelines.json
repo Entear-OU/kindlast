@@ -30,7 +30,7 @@
     {
       "slug": "wp29-wp260-transparency",
       "publisher": "WP29",
-      "title": "Guidelines on transparency under Regulation 2016/679 (WP260 rev.01) — endorsed by the EDPB",
+      "title": "Guidelines on transparency under Regulation 2016/679 (WP260 rev.01): endorsed by the EDPB",
       "adoptedDate": "2018-04-11",
       "version": "rev.01",
       "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/622227/en",
@@ -48,7 +48,7 @@
     {
       "slug": "edpb-01-2022-right-of-access",
       "publisher": "EDPB",
-      "title": "Guidelines 01/2022 on data subject rights — Right of access",
+      "title": "Guidelines 01/2022 on data subject rights: Right of access",
       "adoptedDate": "2023-03-28",
       "version": "2.0",
       "sourceUrl": "https://edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-012022-data-subject-rights-right-access_en",
@@ -57,7 +57,7 @@
     {
       "slug": "wp29-wp242-data-portability",
       "publisher": "WP29",
-      "title": "Guidelines on the right to data portability (WP242 rev.01) — endorsed by the EDPB",
+      "title": "Guidelines on the right to data portability (WP242 rev.01): endorsed by the EDPB",
       "adoptedDate": "2017-04-05",
       "version": "rev.01",
       "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/611233/en",
@@ -66,7 +66,7 @@
     {
       "slug": "wp29-wp248-dpia",
       "publisher": "WP29",
-      "title": "Guidelines on Data Protection Impact Assessment (DPIA) and determining whether processing is 'likely to result in a high risk' (WP248 rev.01) — endorsed by the EDPB",
+      "title": "Guidelines on Data Protection Impact Assessment (DPIA) and determining whether processing is 'likely to result in a high risk' (WP248 rev.01): endorsed by the EDPB",
       "adoptedDate": "2017-10-04",
       "version": "rev.01",
       "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/611236/en",
@@ -75,7 +75,7 @@
     {
       "slug": "wp29-wp251-automated-decisions-profiling",
       "publisher": "WP29",
-      "title": "Guidelines on Automated individual decision-making and Profiling for the purposes of Regulation 2016/679 (WP251 rev.01) — endorsed by the EDPB",
+      "title": "Guidelines on Automated individual decision-making and Profiling for the purposes of Regulation 2016/679 (WP251 rev.01): endorsed by the EDPB",
       "adoptedDate": "2018-02-06",
       "version": "rev.01",
       "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/612053/en",
@@ -84,7 +84,7 @@
     {
       "slug": "wp29-wp243-dpo",
       "publisher": "WP29",
-      "title": "Guidelines on Data Protection Officers ('DPOs') (WP243 rev.01) — endorsed by the EDPB",
+      "title": "Guidelines on Data Protection Officers ('DPOs') (WP243 rev.01): endorsed by the EDPB",
       "adoptedDate": "2017-04-05",
       "version": "rev.01",
       "sourceUrl": "https://ec.europa.eu/newsroom/article29/items/612048/en",
@@ -165,7 +165,7 @@
     {
       "slug": "wp29-wp217-legitimate-interests",
       "publisher": "WP29",
-      "title": "Opinion 06/2014 on the notion of legitimate interests of the data controller under Article 7 of Directive 95/46/EC (WP217) — referenced for legitimate interests assessments under GDPR Article 6(1)(f)",
+      "title": "Opinion 06/2014 on the notion of legitimate interests of the data controller under Article 7 of Directive 95/46/EC (WP217): referenced for legitimate interests assessments under GDPR Article 6(1)(f)",
       "adoptedDate": "2014-04-09",
       "sourceUrl": "https://ec.europa.eu/justice/article-29/documentation/opinion-recommendation/files/2014/wp217_en.pdf",
       "topicTags": ["lawful-basis", "legitimate-interests"]
