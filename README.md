@@ -18,7 +18,7 @@ DPO Copilot for EU SMEs — an agentic compliance workspace currently being rebu
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22.13+ (required by pnpm 11)
 - [pnpm](https://pnpm.io)
 - [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) (`brew install supabase/tap/supabase` on macOS)
 - Docker Desktop (required by `supabase start` for the local stack)
