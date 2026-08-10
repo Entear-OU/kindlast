@@ -135,7 +135,8 @@ Kindlast is free software, licensed under the [GNU Affero General Public License
 
 The AGPL is a copyleft licence with one addition that matters for a hosted product: if you run a modified version of Kindlast as a network service, section 13 requires you to offer your users the corresponding source of your modifications. Running an unmodified copy, or using Kindlast internally without offering it to others over a network, carries no such obligation.
 
-The licence covers the code in this repository. Two things are scoped separately:
+The licence covers the code **and** the regulatory corpus in `data/corpus/`. The corpus holds original summaries written for Kindlast rather than reproductions of the underlying legal texts, so it is ours to license. See [`data/corpus/README.md`](./data/corpus/README.md) for per-file provenance and the accuracy disclaimer.
 
-- **Regulatory corpus.** The contents of `data/corpus/` are third-party regulatory texts under their own terms. See the sourcing notes alongside them.
+One thing is scoped separately:
+
 - **Trademarks.** The Kindlast name and the logo assets in `docs/brand/` are not covered by the AGPL grant. You may not use them to imply endorsement by, or affiliation with, Entear OÜ.

@@ -1,0 +1,118 @@
+# Regulatory corpus
+
+Source data for the Analyst's regulatory knowledge base. Ingested into Supabase
+by the `pnpm ingest:*` scripts in `scripts/`.
+
+## What this is, and what it is not
+
+**These files contain original editorial summaries written for Kindlast. They
+are not reproductions of the underlying legal texts.**
+
+That distinction matters for licensing, and it is easy to get backwards. An
+entry for GDPR Article 5 does not contain the text of Article 5. It contains a
+paraphrase of what that article requires, written in plain language, with an
+editorial note on how it tends to be applied in practice. The verbatim
+third-party content is limited to bibliographic facts: official document
+titles, CELEX numbers, adoption dates, and source URLs.
+
+Consequently:
+
+- **Copyright in these summaries is held by Entear OÜ**, as original works of
+  authorship.
+- The bibliographic metadata is factual and carries no separate copyright
+  interest.
+- Nothing here reproduces enough of any source to raise a reproduction
+  question.
+
+## Licence
+
+The corpus is licensed under the same terms as the rest of this repository,
+[AGPL-3.0](../../LICENSE).
+
+This is stated explicitly because the opposite assumption is the intuitive one.
+Data shipped inside an AGPL repository is not automatically AGPL, and readers
+who notice that reasonably wonder what the corpus terms are. Here they are the
+same.
+
+## Accuracy disclaimer
+
+These summaries are an aid to navigation, not legal advice, and they are not a
+substitute for the official text. Where a summary and the underlying regulation
+disagree, the regulation governs. Always follow the `sourceUrl` or `officialUrl`
+before relying on anything here for a compliance decision.
+
+## Files
+
+### `gdpr.json`
+
+Regulation (EU) 2016/679 (General Data Protection Regulation).
+
+| | |
+|---|---|
+| CELEX | `32016R0679` |
+| Official text | https://eur-lex.europa.eu/eli/reg/2016/679/oj |
+| Version date | 2016-05-04 |
+| Contents | 99 article summaries, 173 recital summaries |
+| Authorship | Original summaries by Entear OÜ |
+
+### `eu-ai-act.json`
+
+Regulation (EU) 2024/1689 (Artificial Intelligence Act).
+
+| | |
+|---|---|
+| CELEX | `32024R1689` |
+| Official text | https://eur-lex.europa.eu/eli/reg/2024/1689/oj |
+| Version date | 2024-07-12 |
+| Contents | 113 article summaries, 180 recital summaries, Annex III |
+| Authorship | Original summaries by Entear OÜ |
+
+### `edpb-guidelines.json`
+
+Pointers to 20 European Data Protection Board guidelines.
+
+| | |
+|---|---|
+| Publisher | European Data Protection Board |
+| Contents | Citation metadata only: title, adoption date, version, `sourceUrl`, topic tags |
+| Authorship | No EDPB text is reproduced. This is a bibliography. |
+
+### `enforcement-decisions.json`
+
+22 national supervisory authority enforcement decisions.
+
+| | |
+|---|---|
+| Publishers | National DPAs (CNIL, Garante, AEPD, DPC and others) |
+| Contents | Case metadata plus an original summary of each decision's reasoning |
+| Authorship | Original summaries by Entear OÜ. Decision titles and fine amounts are facts. |
+
+Enforcement decisions are public documents, and the facts they contain (who was
+fined, how much, under which articles) are not copyrightable. The summaries of
+each decision's reasoning are ours.
+
+### `obligations.json`
+
+15 derived compliance obligations, each mapping a regulatory requirement to
+something an organisation can act on.
+
+| | |
+|---|---|
+| Contents | Obligation text, citation, applicability conditions, severity, recurrence |
+| Authorship | Entirely original work by Entear OÜ. This is a derived model, not a source document. |
+
+Generated and maintained via `pnpm generate:obligations-seed`.
+
+## Attribution when reusing
+
+If you reuse this corpus under the AGPL, attribute Entear OÜ for the summaries
+and cite the official sources for the underlying law. Do not present the
+summaries as official text, and do not strip the `sourceUrl` and `officialUrl`
+fields, since they are what let a reader verify a claim against the regulation.
+
+## Updating
+
+The corpus is a point-in-time snapshot. EU regulation changes, guidelines are
+superseded, and enforcement decisions accumulate. When updating an entry,
+refresh its `versionDate` or `adoptedDate` and confirm the source URL still
+resolves.
