@@ -17,6 +17,14 @@ name: CI
 #
 # Both jobs are required for the workflow to conclude `success`, so the
 # auto-merge workflow (gated on the whole CI run) still waits for both.
+#
+# Fork safety: this workflow is safe to run on pull requests from forks and is
+# meant to. It reads no secrets, holds only `contents: read`, and every step
+# operates on the checked-out tree rather than on PR metadata. The local
+# Supabase stack the integration job boots needs no credentials, so external
+# contributions get the same signal maintainers do. Keep it that way: adding a
+# secret to this workflow would silently break CI for every external PR, since
+# GitHub withholds secrets from forked runs.
 
 on:
   push:

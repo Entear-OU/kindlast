@@ -12,11 +12,34 @@ on:
 
 jobs:
   claude:
+    # Two gates, and both have to pass:
+    #
+    #   1. the body actually mentions @claude, and
+    #   2. the author has write access to this repository.
+    #
+    # Gate 2 exists because this repository is public. The triggers above all
+    # fire on input from arbitrary people: anyone can open an issue or comment
+    # on one. Without an author check, a passer-by could type "@claude" and
+    # spend our Claude budget on demand, in a loop, for free.
+    #
+    # author_association is the cheapest reliable signal for this. OWNER,
+    # MEMBER and COLLABORATOR all imply write access; CONTRIBUTOR,
+    # FIRST_TIME_CONTRIBUTOR, MANNEQUIN and NONE do not. The field sits in a
+    # different place on each event payload (comment / review / issue), which
+    # is why the check is repeated per branch rather than hoisted out.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' &&
+        contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' &&
+        contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'issues' &&
+        (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: read
