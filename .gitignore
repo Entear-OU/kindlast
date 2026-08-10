@@ -24,6 +24,21 @@
 .DS_Store
 *.pem
 
+# Loose images at the repo root. These are almost always scratch screenshots
+# taken while debugging, and for a compliance product they tend to show a real
+# organisation's posture and findings. A stray `git add -A` publishing one is
+# exactly the disclosure this product exists to prevent.
+#
+# Root-level only, so genuine assets under public/, docs/ and components/ are
+# unaffected. Product imagery belongs in those directories and should be added
+# deliberately, with `git add -f` if it ever needs to sit at the root.
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
+/*.avif
+
 # debug
 npm-debug.log*
 yarn-debug.log*
