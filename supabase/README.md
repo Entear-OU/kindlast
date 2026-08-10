@@ -1,8 +1,8 @@
 # `supabase/`
 
-Versioned schema for the Kindlast Supabase project (ref `kstdusioclkgffyfpesu`).
-All DDL flows through this directory — never apply migrations ad-hoc via MCP
-`apply_migration` or the Studio SQL editor on the remote.
+Versioned schema for the Kindlast Supabase project. All DDL flows through this
+directory. Never apply migrations ad-hoc via MCP `apply_migration` or the Studio
+SQL editor on the remote.
 
 ## Layout
 

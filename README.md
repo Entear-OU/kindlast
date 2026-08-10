@@ -51,13 +51,20 @@ All schema changes flow through **versioned migrations** committed to `supabase/
 
 ### One-time setup
 
+Only needed if you are pushing migrations to a hosted Supabase project. Local
+development against `supabase start` needs neither step.
+
 ```bash
 # Authenticate the CLI with your Supabase account
 supabase login
 
-# Link this checkout to the remote project (already initialised; only needed once per machine)
-supabase link --project-ref kstdusioclkgffyfpesu
+# Link this checkout to your remote project (once per machine)
+supabase link --project-ref <your-project-ref>
 ```
+
+Your project ref is the subdomain of your Supabase project URL: for
+`https://abcdefghijklmnop.supabase.co` the ref is `abcdefghijklmnop`. You can
+also read it off the project's General Settings page in the dashboard.
 
 ### Day-to-day
 
