@@ -86,6 +86,8 @@ Kindlast is in active development. Being straight about what exists:
 Expect breaking changes. If you are evaluating this for production use, talk to
 us first.
 
+Where this is heading next is in the [roadmap](./docs/ROADMAP.md).
+
 ## Tech stack
 
 | Layer | Technology |
