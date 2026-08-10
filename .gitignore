@@ -60,6 +60,11 @@ supabase/.branches/
 # Claude Code per-user settings (skills + agents stay tracked under .agents/)
 .claude/settings.local.json
 
+# Per-user MCP servers. The committed .mcp.json holds only servers that work
+# for anyone who clones the repo; anything needing private access (the Linear
+# workspace, for one) belongs here. See docs/maintainers.md.
+.mcp.local.json
+
 # Playwright MCP per-session artifacts (snapshots + console logs)
 .playwright-mcp/
 

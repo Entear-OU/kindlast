@@ -24,10 +24,32 @@ Use **Vitest** for unit/integration tests and **React Testing Library** for comp
 
 ## Git Strategy
 
-One branch + PR per Linear sub-issue. Never bundle multiple sub-issues into a single branch.
+One branch and one PR per unit of work. Never bundle unrelated changes into a
+single branch.
 
-- Branch from `main` using Linear's generated `gitBranchName` (e.g. `dev/ent-40-delete-legacy-assessment-flow-code`).
-- One PR per sub-issue, merged sequentially when its acceptance criteria pass.
-- Each sub-issue's commit history can be multiple commits, but the PR scope stays bounded to that issue.
-- Epic-level issues (e.g. ENT-30) do not get their own branch; they exist only to group sub-issues.
-- **PR titles must include the Linear issue ID** as a prefix in brackets, e.g. `[ENT-40] chore: remove legacy assessment-flow code`. The body should link back to the Linear issue URL so Linear auto-links the PR.
+- Branch from `main`.
+- Each branch's commit history can be multiple commits, but the PR scope stays
+  bounded to one change.
+- Write the commit message and PR body for someone who will read them in a year
+  with no other context: what changed, and why it needed changing.
+
+### Branch and PR naming
+
+If you are working from a Linear issue (Kindlast maintainers), use the
+project's issue tracking conventions, documented in
+[`docs/maintainers.md`](./docs/maintainers.md).
+
+If you are not (this includes every external contributor), use:
+
+- Branch: `type/short-description`, e.g. `fix/executor-empty-records`.
+- PR title: `type: short description`, e.g. `fix: refuse blank compliance records`.
+- Types follow Conventional Commits: `feat`, `fix`, `chore`, `docs`, `test`,
+  `refactor`, `perf`.
+
+Both conventions are accepted. Neither is enforced by CI, so use judgement
+rather than treating this as a gate.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full contributor workflow,
+including how to run the test suites and what a reviewable PR looks like.
