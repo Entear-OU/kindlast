@@ -56,6 +56,29 @@ instead, either in `~/.claude.json` or in a git-ignored `.mcp.local.json`:
 }
 ```
 
+## Contributor licence agreement
+
+External contributions require acceptance of [`CLA.md`](../CLA.md) before they
+can be merged. The reason is narrow and specific: without it, contributors
+retain copyright on their patches, and Entear cannot offer a commercial licence
+exception to organisations that cannot comply with the AGPL's network copyleft.
+Retrofitting a CLA later means tracking down every past contributor and getting
+each to agree, which in practice means the option is gone.
+
+Signatures are collected by CLA Assistant on the pull request. Setting that up
+needs three things, none of which are in this repo yet:
+
+1. A workflow at `.github/workflows/cla.yml` running
+   `contributor-assistant/github-action`.
+2. A `PERSONAL_ACCESS_TOKEN` repository secret with `repo` scope, used to write
+   the signature file.
+3. A store for signatures. Either a `signatures/` path in this repo or, tidier,
+   a separate private repository so the signature file does not churn the main
+   history.
+
+Maintainers and anyone with write access are exempt from the check, so this
+does not add friction to internal work.
+
 ## Supabase
 
 Migrations are pushed to the hosted project after a PR merges, never before,
