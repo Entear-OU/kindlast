@@ -122,4 +122,13 @@ The project follows test-driven development (TDD) per [CLAUDE.md](./CLAUDE.md). 
 
 ## License
 
-Private — All rights reserved.
+Copyright (C) 2026 Entear OÜ.
+
+Kindlast is free software, licensed under the [GNU Affero General Public License v3.0](./LICENSE) (AGPL-3.0-only). You may use, study, modify, and redistribute it under those terms.
+
+The AGPL is a copyleft licence with one addition that matters for a hosted product: if you run a modified version of Kindlast as a network service, section 13 requires you to offer your users the corresponding source of your modifications. Running an unmodified copy, or using Kindlast internally without offering it to others over a network, carries no such obligation.
+
+The licence covers the code in this repository. Two things are scoped separately:
+
+- **Regulatory corpus.** The contents of `data/corpus/` are third-party regulatory texts under their own terms. See the sourcing notes alongside them.
+- **Trademarks.** The Kindlast name and the logo assets in `docs/brand/` are not covered by the AGPL grant. You may not use them to imply endorsement by, or affiliation with, Entear OÜ.
