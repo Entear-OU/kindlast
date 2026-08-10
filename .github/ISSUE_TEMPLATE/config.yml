@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Entear-OU/kindlast/security/advisories/new
+    about: Report privately. Never open a public issue for a security problem.
+  - name: Question or idea
+    url: https://github.com/Entear-OU/kindlast/discussions
+    about: For anything that is not yet a concrete bug or feature request.
+  - name: Contributing guide
+    url: https://github.com/Entear-OU/kindlast/blob/main/CONTRIBUTING.md
+    about: How to set up, test, and submit a change.
