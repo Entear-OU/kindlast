@@ -49,6 +49,20 @@ jobs:
             exit 0
           fi
 
+          # Never auto-merge a PR that originates from a fork.
+          #
+          # The label gate below is already the primary control, and it holds:
+          # applying a label needs triage or write access, so an outside
+          # contributor cannot self-approve their own merge. This is defence
+          # in depth. Merging untrusted code into main should take a
+          # deliberate human action every time, not a label a maintainer
+          # might apply out of habit while reviewing a stacked chain.
+          if [ "$(gh pr view "${pr}" --repo "${REPO}" --json isCrossRepository \
+                    --jq '.isCrossRepository')" = "true" ]; then
+            echo "PR #${pr} comes from a fork; refusing to auto-merge."
+            exit 0
+          fi
+
           # Opt-in gate: only merge PRs explicitly labeled `auto-merge`.
           if ! gh pr view "${pr}" --repo "${REPO}" --json labels \
                  --jq '.labels[].name' | grep -Fxq 'auto-merge'; then

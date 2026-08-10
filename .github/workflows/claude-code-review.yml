@@ -12,11 +12,20 @@ on:
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Same-repo PRs only.
+    #
+    # GitHub deliberately withholds secrets from workflow runs triggered by a
+    # forked pull_request, so on an external contribution
+    # CLAUDE_CODE_OAUTH_TOKEN below resolves to an empty string and the action
+    # fails with an opaque auth error. Skipping is honest; failing on every
+    # external PR is noise that teaches contributors to ignore red checks.
+    #
+    # The tempting fix is pull_request_target, which does get secrets. Do not
+    # do that here. It runs in the context of the base repository with a
+    # write-capable token while checking out untrusted PR code, and is the
+    # single most common way public repositories get compromised. External
+    # PRs get human review instead.
+    if: github.event.pull_request.head.repo.full_name == github.repository
 
     runs-on: ubuntu-latest
     permissions:
