@@ -66,13 +66,19 @@ describe('OpenSource', () => {
     expect(container.querySelector('img[src*="guilloche"]')).toBeNull()
   })
 
-  it('no longer paints the generic teal radial gradient on the card', () => {
-    // Guard against the gradient creeping back alongside the rosette: two
+  it('no longer paints the generic teal glow on the card', () => {
+    // Guard against the glow creeping back alongside the rosette: two
     // decorative layers in the same corner would fight each other.
+    //
+    // Scoped to the teal specifically rather than to `radial-gradient` in
+    // general, because the technical grid legitimately uses one to draw its
+    // intersection nodes. The original assertion caught that too and was
+    // measuring the wrong thing.
     const { container } = render(<OpenSource />)
-    const gradients = Array.from(container.querySelectorAll('[style]')).filter(
-      (el) => el.getAttribute('style')?.includes('radial-gradient')
-    )
-    expect(gradients).toHaveLength(0)
+    const tealGlows = Array.from(container.querySelectorAll('[style]')).filter((el) => {
+      const style = el.getAttribute('style') ?? ''
+      return style.includes('radial-gradient') && /0\s*,\s*201\s*,\s*167/.test(style)
+    })
+    expect(tealGlows).toHaveLength(0)
   })
 })

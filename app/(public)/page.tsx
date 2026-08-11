@@ -1,4 +1,5 @@
 import { Hero } from '@/components/landing/hero'
+import { TechnicalGrid } from '@/components/landing/technical-grid'
 import { CapabilitySummary } from '@/components/landing/capability-summary'
 import { OpenSource } from '@/components/landing/open-source'
 import { Footer } from '@/components/landing/footer'
@@ -21,9 +22,20 @@ export default function LandingPage() {
     <>
       <Hero />
 
-      {/* Problem, stated in numbers */}
-      <section className="py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
-        <div className="mx-auto max-w-5xl px-6 lg:px-8">
+      {/* Problem, stated in numbers.
+          The ruled grid is the hero's WebGL lattice seen head on, so leaving
+          the hero reads as the mesh settling rather than as a change of motif.
+          Its marginalia are real operating facts, not decoration. */}
+      <section className="relative overflow-hidden py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
+        <TechnicalGrid
+          labels={[
+            { text: '[ GDPR · IN FORCE 2018 ]', top: '10%', left: '2%', drift: -70 },
+            { text: '[ ART. 83 · PENALTIES ]', top: '34%', right: '2.5%', drift: -120 },
+            { text: '[ AI ACT · ANNEX III ]', top: '68%', left: '2%', drift: -90 },
+            { text: '[ DEADLINE · 2026-08-02 ]', top: '88%', right: '3%', drift: -50 },
+          ]}
+        />
+        <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
 
           <div
             className="mb-16 grid grid-cols-2 gap-x-8 gap-y-10 pb-16 sm:grid-cols-3"

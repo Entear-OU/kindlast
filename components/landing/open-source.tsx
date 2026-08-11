@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import { GitHubMark } from '@/components/icons/github-mark'
 import { GuillocheMark } from '@/components/landing/guilloche-mark'
+import { TechnicalGrid } from '@/components/landing/technical-grid'
 import { GITHUB_REPO_HANDLE, GITHUB_REPO_URL, LICENSE_SPDX } from '@/lib/links'
 
 /**
@@ -35,8 +36,15 @@ const GUARANTEES = [
 
 export function OpenSource() {
   return (
-    <section id="open-source" className="py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
-      <div className="mx-auto max-w-5xl px-6 lg:px-8">
+    <section id="open-source" className="relative overflow-hidden py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
+      <TechnicalGrid
+        labels={[
+          { text: '[ AGPL-3.0 ]', top: '11%', right: '2.5%', drift: -60 },
+          { text: '[ COPYLEFT · NETWORK USE ]', top: '38%', left: '2%', drift: -110 },
+          { text: '[ SELF-HOSTABLE ]', top: '72%', right: '2%', drift: -80 },
+        ]}
+      />
+      <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
 
         {/* Full-width intro. The two sections above both use a left/right
             split, so a third would read as a template; giving the headline the
