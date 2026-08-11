@@ -137,3 +137,35 @@
   background-repeat: repeat;
   background-size: 150px 150px;
 }
+/*
+ * Crossfade for the text in the pipeline's sticky signal card.
+ *
+ * The card reports what has happened to one tracked finding as the reader
+ * scrolls, so its state swaps four times down the page. Swapping it instantly
+ * reads as a glitch rather than as something following along.
+ *
+ * Deliberately an entry animation on a keyed node rather than a transition:
+ * the value being animated is the element's own arrival, and React remounts it
+ * on each stage change. The final state is the resting state, so a visitor who
+ * never gets the animation still sees the text at full opacity.
+ */
+@keyframes signal-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.signal-fade {
+  animation: signal-fade-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal-fade {
+    animation: none;
+  }
+}

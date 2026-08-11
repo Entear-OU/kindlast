@@ -151,13 +151,21 @@ export function AgentPipeline() {
                   <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-white/30">
                     State
                   </p>
+                  {/* Keyed on the stage so React swaps the node rather than
+                      mutating its text, which restarts the fade. Without this
+                      the state snaps between stages and the card reads as a
+                      glitch rather than as something tracking your scroll. */}
                   <p
+                    key={`status-${current.id}`}
                     data-testid="signal-status"
-                    className="mt-2.5 text-[1.375rem] font-black tracking-[-0.03em] text-white"
+                    className="signal-fade mt-2.5 text-[1.375rem] font-black tracking-[-0.03em] text-white"
                   >
                     {current.signal.status}
                   </p>
-                  <p className="mt-2.5 text-[14px] font-medium leading-[1.65] tracking-[-0.005em] text-white/45">
+                  <p
+                    key={`detail-${current.id}`}
+                    className="signal-fade mt-2.5 text-[14px] font-medium leading-[1.65] tracking-[-0.005em] text-white/45"
+                  >
                     {current.signal.detail}
                   </p>
                 </div>
@@ -189,13 +197,13 @@ export function AgentPipeline() {
         <div className="relative" data-stage-list>
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute left-0 top-2 bottom-2 hidden w-px sm:block"
+            className="pointer-events-none absolute left-0 top-16 bottom-16 hidden w-px sm:block"
             style={{ backgroundColor: 'rgba(13,27,42,0.09)' }}
           />
           <span
             aria-hidden="true"
             data-progress-fill
-            className="pointer-events-none absolute left-0 top-2 bottom-2 hidden w-px origin-top sm:block"
+            className="pointer-events-none absolute left-0 top-16 bottom-16 hidden w-px origin-top sm:block"
             style={{ backgroundColor: '#00C9A7' }}
           />
 
