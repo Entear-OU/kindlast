@@ -6,7 +6,7 @@ describe('Footer', () => {
   it('renders the brand blurb', () => {
     render(<Footer />)
     expect(
-      screen.getByText(/AI-powered GDPR & EU AI Act compliance/i)
+      screen.getByText(/GDPR & EU AI Act compliance for companies building in Europe/i)
     ).toBeInTheDocument()
   })
 

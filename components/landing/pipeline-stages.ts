@@ -1,10 +1,17 @@
 /**
- * The four agents, described as they are actually implemented.
+ * The four agents, in the order a problem passes through them.
  *
- * This is the substance behind `/how-it-works`, so it is deliberately a data
- * module rather than JSX buried in a component: the copy is the claim, and it
- * has to be checkable against the code it describes. If an agent's behaviour
- * changes, this file is the thing that has to change with it.
+ * This is the substance behind `/how-it-works`, so it is a data module rather
+ * than JSX buried in a component: the copy is the claim, and it has to be
+ * checkable against the code it describes. If an agent's behaviour changes,
+ * this file changes with it.
+ *
+ * The copy leads in plain language and keeps the engineering underneath.
+ * An earlier version led with `pg_cron`, `dedup_key` and "deterministic
+ * critic", which is precise but reads as release notes to the founder actually
+ * deciding whether to trust this. The technical claim still matters, because
+ * the repository is public and anyone can check it, so it stays as a demoted
+ * `technical` line rather than being cut.
  *
  * The through-line the page has to land is a pair of promises that pull in
  * opposite directions and only make sense together: it runs without being
@@ -25,8 +32,12 @@ export interface PipelineStage {
   agent: string
   /** One-line claim for this stage. */
   headline: string
-  /** Body paragraphs, in order. */
+  /** The single sentence a reader should take away. Leads the stage. */
+  plain: string
+  /** Body paragraphs, in order. Plain language, no jargon. */
   body: string[]
+  /** How it is actually built. Demoted, for readers who want to verify. */
+  technical: string
   /** Compact key/value facts, rendered as a definition list. */
   facts: PipelineFact[]
   /** What the tracked signal looks like once this stage has handled it. */
@@ -37,11 +48,11 @@ export interface PipelineStage {
 }
 
 /**
- * One concrete signal is carried through all four stages so the reader follows
- * a single object rather than four unrelated abstractions. A missing record of
- * processing activity is a good choice: it is a real detector, it maps to a
- * real article (GDPR Art. 30), and the executor genuinely can create the
- * missing entry once a human approves.
+ * One concrete problem is carried through all four stages so the reader follows
+ * a single thing rather than four unrelated abstractions. A missing record of
+ * processing is a good choice: it is a real detector, it maps to a real article
+ * (GDPR Art. 30), and the executor genuinely can create the missing entry once
+ * a human approves.
  */
 export const TRACKED_SIGNAL = {
   dedupKey: 'ropa-gap:marketing-analytics',
@@ -52,82 +63,94 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   {
     id: 'watcher',
     index: '01',
-    agent: 'Watcher',
-    headline: 'Runs on a schedule, not on a reminder',
+    agent: 'The Watcher',
+    headline: 'It checks every day, so nobody has to remember to',
+    plain: 'Every day it looks through your compliance record for problems, without being asked.',
     body: [
-      'A pg_cron job wakes the watcher once a day. It does not wait to be asked, and it does not ask a model what to look at.',
-      'Deterministic detectors sweep three things: regulatory deadlines that are approaching, gaps between your compliance profile and the obligations catalogue, and DSAR response deadlines closing in on a breach.',
-      'Each detector emits a finding with a stable dedup_key. Run the sweep again the same day and the key matches, so the open finding is refreshed instead of filed a second time. Nothing accumulates in your inbox just because time passed.',
+      'Once a day it goes looking for three kinds of trouble: deadlines coming up, things the law expects you to have that you do not, and customer data requests that are running out of time to answer.',
+      'Nothing triggers it. You do not open an app or start a scan. This is the difference between compliance you remember to do and compliance that happens.',
+      'If it finds the same problem again tomorrow, it updates the one you already have rather than sending you a second copy. Your inbox does not fill up just because time passed.',
     ],
+    technical:
+      'Called the Watcher in the repository. A pg_cron job runs the sweep daily; the detectors are deterministic SQL with no model in the loop, and each finding carries a stable dedup key so repeat runs collapse onto the open finding rather than duplicating it.',
     facts: [
-      { label: 'Trigger', value: 'pg_cron, daily' },
-      { label: 'Logic', value: 'Deterministic detectors, no model' },
-      { label: 'Repeats', value: 'Collapsed on dedup_key' },
+      { label: 'How often', value: 'Every day' },
+      { label: 'What decides', value: 'Fixed rules, not AI' },
+      { label: 'Repeat problems', value: 'Updated, never duplicated' },
     ],
     signal: {
-      status: 'Detected',
+      status: 'Found',
       detail:
-        'Found by the daily sweep. Keyed, so tomorrow refreshes it rather than filing another one.',
+        'Picked up by the daily check. If it is still there tomorrow, this same item updates.',
     },
   },
   {
     id: 'analyst',
     index: '02',
-    agent: 'Analyst',
-    headline: 'Turns a signal into one specific action',
+    agent: 'The Analyst',
+    headline: 'It works out what the problem means and what to do',
+    plain: 'It turns a raw signal into one specific thing you can actually do.',
     body: [
-      'A raw signal is not much use on its own. The analyst interprets each one into a structured finding: a plain-language description, the specific GDPR or EU AI Act article it maps to, a severity, an estimated effort, and exactly one proposed action.',
-      'An LLM drafts the narrative. A deterministic critic then reads it back and rejects anything vague or non-imperative, and the draft is regenerated until it passes. That is the check that keeps "consider reviewing your processes" off the page.',
+      'Knowing something is wrong is not much use on its own. This step works out what it means: what the problem is in plain English, which specific law it relates to, how serious it is, roughly how long it will take to fix, and exactly one thing to do about it.',
+      'Vague advice never reaches you. If the draft says something like "consider reviewing your processes", it is rejected and rewritten until it says something you could actually sit down and do.',
     ],
+    technical:
+      'Called the Analyst in the repository. A language model drafts the explanation, then a deterministic critic reads it back and rejects anything vague or non-imperative, regenerating until it passes. The critic is ordinary code, not another model.',
     facts: [
-      { label: 'Drafted by', value: 'LLM' },
-      { label: 'Checked by', value: 'Deterministic critic' },
-      { label: 'Produces', value: 'Article, severity, effort, one action' },
+      { label: 'Written by', value: 'AI' },
+      { label: 'Checked by', value: 'Fixed rules' },
+      { label: 'You get', value: 'The law, the severity, one action' },
     ],
     signal: {
-      status: 'Interpreted',
+      status: 'Explained',
       detail:
-        'GDPR Article 30. High severity, roughly two hours of work, one proposed action.',
+        'Tied to GDPR Article 30. Serious, roughly two hours of work, with one thing to do.',
     },
   },
   {
     id: 'comms',
     index: '03',
-    agent: 'Comms',
-    headline: 'Delivered where the decision gets made',
+    agent: 'The Messenger',
+    headline: 'It comes to you, rather than waiting to be found',
+    plain: 'The answer arrives in your inbox, and replying takes one tap.',
     body: [
-      'The finding goes into an outbox and leaves as transactional email. Approve, Reject, and Remind me later are each a single tap, so answering never requires logging in first.',
-      'The same outbox carries the weekly Monday briefing and the daily alerts for deadlines that are closing. One channel, three cadences, no dashboard you have to remember to open.',
+      'You get an email. Approve, Reject, and Remind me later are one tap each, so answering never means logging in first or finding the right page.',
+      'There is no dashboard you have to remember to check. The same channel sends a short summary on Monday and a warning when a deadline is getting close, so the only thing you have to keep up with is your email.',
     ],
+    technical:
+      'Called Comms in the repository. Delivery goes through an outbox as transactional email, with signed one-tap action links so a reply is authenticated without a session.',
     facts: [
-      { label: 'Channel', value: 'Transactional email, via an outbox' },
-      { label: 'Replies', value: 'Approve, Reject, Remind me later' },
-      { label: 'Cadence', value: 'Monday briefing, daily deadline alerts' },
+      { label: 'Where it lands', value: 'Your inbox' },
+      { label: 'To answer', value: 'One tap' },
+      { label: 'Also sends', value: 'Monday summary, deadline warnings' },
     ],
     signal: {
-      status: 'Delivered',
+      status: 'Sent to you',
       detail:
-        'Sent, with one-tap Approve, Reject, and Remind me later. Now it waits.',
+        'In your inbox, with Approve, Reject, and Remind me later. Now it waits for you.',
     },
   },
   {
     id: 'executor',
     index: '04',
-    agent: 'Executor',
-    headline: 'Never acts without approval',
+    agent: 'The Hands',
+    headline: 'It does nothing until you say yes',
+    plain: 'Nothing changes unless you approve it, and everything that happens is written down.',
     body: [
-      'Until a person approves, nothing happens. The executor has no autonomous path to the database: an explicit human approval is the only thing that starts it, and a finding left unanswered simply stays open.',
-      'On approval it performs the action that was proposed and nothing besides, whether that is creating a ROPA entry, logging a DSAR, or registering an AI system. Then it writes an immutable audit log row with a timestamp, so the decision and who made it outlive the person who made it.',
+      'Until you approve, nothing happens. There is no route for it to act on its own, and a finding you ignore simply stays open. This is deliberate: an agent that can change your records unsupervised is a liability, not a help.',
+      'When you do approve, it does the one thing that was proposed and nothing else, then records what happened, when, and that you approved it. That record cannot be edited afterwards, which is what makes it worth anything to an auditor.',
     ],
+    technical:
+      'Called the Executor in the repository. There is no autonomous write path: an explicit approval is the only trigger, and it writes an immutable audit log row carrying the actor and a timestamp.',
     facts: [
-      { label: 'Trigger', value: 'Explicit human approval' },
-      { label: 'Scope', value: 'The approved action, nothing else' },
-      { label: 'Record', value: 'Immutable audit log, timestamped' },
+      { label: 'Starts when', value: 'You approve' },
+      { label: 'Does', value: 'Only what was proposed' },
+      { label: 'Leaves behind', value: 'A record nobody can edit' },
     ],
     signal: {
-      status: 'Executed',
+      status: 'Done',
       detail:
-        'ROPA entry created after approval. Audit log row written, timestamped and immutable.',
+        'The missing record was created after you approved it, and the decision is logged permanently.',
     },
   },
 ]

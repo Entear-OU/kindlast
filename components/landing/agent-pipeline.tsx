@@ -236,6 +236,12 @@ export function AgentPipeline() {
                   {stage.headline}
                 </p>
 
+                {/* The one sentence to take away, set larger than the body so a
+                    reader skimming the page still gets each stage. */}
+                <p className="mt-5 max-w-[46ch] text-[1.1875rem] font-semibold leading-[1.6] tracking-[-0.02em] text-[#0D1B2A]/75">
+                  {stage.plain}
+                </p>
+
                 <div className="mt-6 max-w-[58ch] space-y-5">
                   {stage.body.map((paragraph) => (
                     <p
@@ -247,6 +253,26 @@ export function AgentPipeline() {
                     </p>
                   ))}
                 </div>
+
+                {/* How it is actually built. Demoted rather than cut: the
+                    repository is public, so the precise claim still has to be
+                    on the page for anyone who wants to check it, but it should
+                    not be the first thing a non-engineer reads. */}
+                <p
+                  className="mt-7 max-w-[58ch] border-l pl-4 font-mono text-[13px] leading-[1.7] tracking-[-0.005em]"
+                  style={{
+                    color: 'rgba(13,27,42,0.4)',
+                    borderColor: 'rgba(0,201,167,0.45)',
+                  }}
+                >
+                  <span
+                    className="mr-2 font-sans text-[11px] font-bold uppercase tracking-[0.16em]"
+                    style={{ color: 'rgba(13,27,42,0.28)' }}
+                  >
+                    Under the hood
+                  </span>
+                  {stage.technical}
+                </p>
 
                 <dl
                   className="mt-8 grid gap-x-8 gap-y-5 pt-7 sm:grid-cols-3"

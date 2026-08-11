@@ -31,7 +31,7 @@ export function Footer() {
               </span>
             </div>
             <p className="text-[1rem] font-medium leading-[1.65] tracking-[-0.005em] text-white/38">
-              AI-powered GDPR &amp; EU AI Act compliance for European SMEs.
+              Continuous GDPR &amp; EU AI Act compliance for companies building in Europe.
             </p>
           </div>
 

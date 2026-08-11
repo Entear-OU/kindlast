@@ -61,7 +61,7 @@ export const PRINCIPLES: Principle[] = [
     statement:
       'Tools should widen access rather than concentrate it among those who can already afford help.',
     mechanism:
-      'The people this is for cannot hire a DPO. Making the whole system readable and self-hostable means a company with no budget gets the same engine as one with a legal team.',
+      'Making the whole system readable and self-hostable means a two-person team gets the same engine as a company with a legal department, and neither is locked into us to keep it.',
     icon: 'network',
   },
   {

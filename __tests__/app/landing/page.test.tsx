@@ -58,28 +58,29 @@ describe('LandingPage', () => {
   })
 
   /**
-   * The headline trio used to be external facts (max fine, fine threshold,
-   * Annex III deadline). They went stale on two axes: the dates arrive, and
-   * the figures move with each amendment. They were also fear-framed, which
-   * argues against the case the rest of the site makes.
+   * The headline stat trio is gone entirely.
    *
-   * These replacements are invariants of the system itself, so they cannot
-   * expire, and this test fails if a perishable figure creeps back in.
+   * It began as external facts (4% max fine, €20M threshold, an Annex III
+   * deadline), which went stale as the dates arrived and the figures moved,
+   * and which were fear-framed against the case the rest of the site makes.
+   * Its replacement (Daily, Two, Zero) restated claims the hero and the
+   * pipeline already make better. A number set that large has to earn it.
    */
-  it('states system invariants rather than perishable regulatory figures', () => {
-    render(<LandingPage />)
-    expect(screen.getByText('Daily')).toBeInTheDocument()
-    expect(screen.getByText('Two')).toBeInTheDocument()
-    expect(screen.getByText('Zero')).toBeInTheDocument()
-  })
-
-  it('carries no dated regulatory claims in the headline stats', () => {
+  it('carries no headline statistic block', () => {
     const { container } = render(<LandingPage />)
     const copy = container.textContent ?? ''
+
     expect(copy).not.toMatch(/€\s?20M/)
     expect(copy).not.toMatch(/\b4%/)
-    // Any bare "Mon 'YY" deadline will go stale the moment it arrives.
+    // Any bare "Mon 'YY" deadline goes stale the moment it arrives.
     expect(copy).not.toMatch(/\b[A-Z][a-z]{2}\s?'\d{2}\b/)
+  })
+
+  it('no longer scopes the audience to SMEs', () => {
+    // The product is no longer positioned at small and medium companies
+    // specifically, so copy that narrows it should not creep back.
+    const { container } = render(<LandingPage />)
+    expect(container.textContent ?? '').not.toMatch(/\bSMEs?\b/)
   })
 
   it('renders the footer', () => {

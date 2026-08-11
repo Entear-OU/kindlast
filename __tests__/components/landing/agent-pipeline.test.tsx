@@ -33,11 +33,35 @@ afterEach(() => {
 
 describe('PIPELINE_STAGES', () => {
   it('describes exactly the four agents that exist', () => {
+    // Reader-facing names. `Comms` and `Executor` are what the code calls
+    // them, which is jargon on a page a non-engineer has to follow, so the
+    // page uses plainer names and the `technical` line names the component in
+    // the repository. The next test is what stops those two drifting apart.
     expect(PIPELINE_STAGES.map((s) => s.agent)).toEqual([
-      'Watcher',
-      'Analyst',
-      'Comms',
-      'Executor',
+      'The Watcher',
+      'The Analyst',
+      'The Messenger',
+      'The Hands',
+    ])
+  })
+
+  it('ties every reader-facing name back to its component in the repository', () => {
+    // A friendlier label is fine; an unfindable one is not. Someone who reads
+    // "The Hands" here has to be able to go and find the Executor in the
+    // source, or the page has quietly become marketing abstraction.
+    const codeNames = ['Watcher', 'Analyst', 'Comms', 'Executor']
+    PIPELINE_STAGES.forEach((stage, i) => {
+      expect(stage.technical).toContain(codeNames[i])
+      expect(stage.technical).toMatch(/in the repository/i)
+    })
+  })
+
+  it('keeps the stage ids matching the code names', () => {
+    expect(PIPELINE_STAGES.map((s) => s.id)).toEqual([
+      'watcher',
+      'analyst',
+      'comms',
+      'executor',
     ])
   })
 
@@ -77,11 +101,37 @@ describe('AgentPipeline', () => {
     }
   })
 
-  it('explains the watcher is scheduled and deduplicated', () => {
+  it('explains the watcher is scheduled and deduplicated, in plain language first', () => {
+    // The page is read by founders deciding whether to trust this, not only by
+    // engineers, so the scheduling and deduplication claims have to land
+    // without jargon. The precise mechanism still has to be present for anyone
+    // who wants to check it against the public repository, which is what the
+    // `technical` line carries.
     const { container } = render(<AgentPipeline />)
     const copy = container.textContent ?? ''
+    expect(copy).toMatch(/every day/i)
+    expect(copy).toMatch(/updates the one you already have/i)
     expect(copy).toMatch(/pg_cron/)
-    expect(copy).toMatch(/dedup_key/)
+    expect(copy).toMatch(/dedup key/i)
+  })
+
+  it('demotes the engineering rather than deleting it', () => {
+    // Every stage must still name how it is actually built, and name the
+    // component in the repository, so the page stays checkable.
+    const { container } = render(<AgentPipeline />)
+    const copy = container.textContent ?? ''
+    for (const stage of PIPELINE_STAGES) {
+      expect(copy).toContain(stage.technical)
+    }
+    expect(copy).toMatch(/in the repository/i)
+  })
+
+  it('leads each stage with a single plain-language takeaway', () => {
+    const { container } = render(<AgentPipeline />)
+    const copy = container.textContent ?? ''
+    for (const stage of PIPELINE_STAGES) {
+      expect(copy).toContain(stage.plain)
+    }
   })
 
   it('explains the analyst is drafted by an LLM and checked by a critic', () => {
@@ -102,7 +152,8 @@ describe('AgentPipeline', () => {
   it('states that the executor requires an explicit human approval', () => {
     const { container } = render(<AgentPipeline />)
     const copy = container.textContent ?? ''
-    expect(copy).toMatch(/approval/i)
+    expect(copy).toMatch(/approve/i)
+    expect(copy).toMatch(/nothing happens/i)
     expect(copy).toMatch(/audit log/i)
   })
 
