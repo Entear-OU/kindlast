@@ -51,6 +51,9 @@ export function Footer() {
                 <Link href="/features" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
                   Features
                 </Link>
+                <Link href="/why" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
+                  Why
+                </Link>
               </nav>
             </div>
 

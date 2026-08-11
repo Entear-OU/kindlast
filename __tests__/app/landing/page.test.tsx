@@ -58,13 +58,28 @@ describe('LandingPage', () => {
   })
 
   /**
-   * Guard against over-correcting: the €20M GDPR fine threshold is regulatory
-   * content, not a price, and removing it would gut the problem statement.
+   * The headline trio used to be external facts (max fine, fine threshold,
+   * Annex III deadline). They went stale on two axes: the dates arrive, and
+   * the figures move with each amendment. They were also fear-framed, which
+   * argues against the case the rest of the site makes.
+   *
+   * These replacements are invariants of the system itself, so they cannot
+   * expire, and this test fails if a perishable figure creeps back in.
    */
-  it('keeps the regulatory fine statistics', () => {
+  it('states system invariants rather than perishable regulatory figures', () => {
     render(<LandingPage />)
-    expect(screen.getByText('€20M')).toBeInTheDocument()
-    expect(screen.getByText('4%')).toBeInTheDocument()
+    expect(screen.getByText('Daily')).toBeInTheDocument()
+    expect(screen.getByText('Two')).toBeInTheDocument()
+    expect(screen.getByText('Zero')).toBeInTheDocument()
+  })
+
+  it('carries no dated regulatory claims in the headline stats', () => {
+    const { container } = render(<LandingPage />)
+    const copy = container.textContent ?? ''
+    expect(copy).not.toMatch(/€\s?20M/)
+    expect(copy).not.toMatch(/\b4%/)
+    // Any bare "Mon 'YY" deadline will go stale the moment it arrives.
+    expect(copy).not.toMatch(/\b[A-Z][a-z]{2}\s?'\d{2}\b/)
   })
 
   it('renders the footer', () => {

@@ -18,7 +18,7 @@ import { GITHUB_REPO_URL } from '@/lib/links'
  * dark plate or it does not, and guessing from scroll position alone would
  * flash the wrong colour on first paint.
  */
-const DARK_HERO_ROUTES = new Set(['/', '/how-it-works'])
+const DARK_HERO_ROUTES = new Set(['/', '/how-it-works', '/why'])
 
 /** Roughly the height of a hero, past which the bar always solidifies. */
 const SOLIDIFY_AFTER_PX = 120
@@ -26,6 +26,7 @@ const SOLIDIFY_AFTER_PX = 120
 const ROUTES = [
   { href: '/how-it-works', label: 'How it works' },
   { href: '/features', label: 'Features' },
+  { href: '/why', label: 'Why' },
 ]
 
 function KindlastIcon({ size = 32 }: { size?: number }) {

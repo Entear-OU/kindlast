@@ -42,9 +42,14 @@ export default function LandingPage() {
             style={{ borderBottom: '1px solid rgba(13,27,42,0.07)' }}
           >
             {[
-              { value: '4%', label: 'Max GDPR fine of global annual turnover' },
-              { value: '€20M', label: 'Minimum fine threshold, whichever is higher' },
-              { value: "Aug '26", label: 'EU AI Act high-risk obligations deadline' },
+              // Invariants of the system, not facts about the outside world.
+              // The previous trio (max fine, fine threshold, Annex III deadline)
+              // went stale on two axes at once: the dates arrive, and the
+              // figures move with each amendment. They were also fear-framed,
+              // which argues against the thing we actually believe.
+              { value: 'Daily', label: 'The Watcher runs on a schedule, not when someone remembers' },
+              { value: 'Two', label: 'GDPR and the EU AI Act, in one workflow instead of two projects' },
+              { value: 'Zero', label: 'Actions taken on your behalf without your explicit approval' },
             ].map((stat) => (
               <div key={stat.value}>
                 <p className="text-[3.5rem] font-black leading-none tracking-[-0.04em] text-[#0D1B2A] sm:text-[4.5rem]">
