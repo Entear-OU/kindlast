@@ -83,8 +83,12 @@ export default function HowItWorksPage() {
         </div>
       </section>
 
-      {/* The pipeline */}
-      <section className="pb-28 sm:pb-36" style={{ backgroundColor: '#F5F4F0' }}>
+      {/* The pipeline.
+          The top padding is load-bearing, not rhythm. Without it the sticky
+          signal card butts straight up against the dark plate above, and the
+          two read as one welded object rather than as a statement followed by
+          the thing it introduces. */}
+      <section className="pt-24 pb-28 sm:pt-32 sm:pb-36" style={{ backgroundColor: '#F5F4F0' }}>
         <AgentPipeline />
       </section>
 
