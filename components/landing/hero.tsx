@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { GitHubMark } from '@/components/icons/github-mark'
+import { HeroLattice } from '@/components/landing/hero-lattice'
 import { GITHUB_REPO_URL, LICENSE_SPDX } from '@/lib/links'
 
 /**
@@ -48,6 +49,11 @@ export function Hero() {
           ].join(', '),
         }}
       />
+
+      {/* WebGL lattice, layered between the plate and the copy. Purely
+          additive: it fades in only once a frame has drawn, so no WebGL, a
+          lost context, or reduced motion all just leave the plate. */}
+      <HeroLattice />
 
       {/* Teal lift, bottom right, picking up the accent from the mark */}
       <div
