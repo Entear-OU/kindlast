@@ -23,7 +23,7 @@ const features = [
     id: 'score',
     title: 'Compliance Score',
     description:
-      'A clear 0–100 score with color-coded risk levels. Single view of where you stand, with progress over time.',
+      'A clear 0 to 100 score with colour-coded risk levels. Single view of where you stand, with progress over time.',
     detail: '',
     icon: BarChart3,
     colSpan: 'md:col-span-1',
@@ -148,7 +148,20 @@ function AiActMiniVisual() {
   )
 }
 
-export function Features() {
+interface FeaturesProps {
+  /**
+   * Heading level for the section title. ENT-190 gave the capability detail its
+   * own route, where this section is the page's only subject and so owns the
+   * `h1`; on any page that merely embeds it, `h2` is correct. Card titles sit
+   * one level below whatever this is, so the outline never skips a level.
+   */
+  headingLevel?: 1 | 2
+}
+
+export function Features({ headingLevel = 2 }: FeaturesProps = {}) {
+  const SectionHeading = (headingLevel === 1 ? 'h1' : 'h2') as 'h1' | 'h2'
+  const CardHeading = (headingLevel === 1 ? 'h2' : 'h3') as 'h2' | 'h3'
+
   return (
     <section id="features" className="py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
       <div className="mx-auto max-w-5xl px-6 lg:px-8">
@@ -158,11 +171,11 @@ export function Features() {
           <p className="mb-4 text-[13px] font-bold uppercase tracking-[0.18em]" style={{ color: '#00C9A7' }}>
             Platform capabilities
           </p>
-          <h2 className="text-[3rem] font-black tracking-[-0.035em] leading-none text-[#0D1B2A] sm:text-[3.75rem] text-balance">
+          <SectionHeading className="text-[3rem] font-black tracking-[-0.035em] leading-none text-[#0D1B2A] sm:text-[3.75rem] text-balance">
             Everything you need
             <br />
             for EU compliance
-          </h2>
+          </SectionHeading>
           <p className="mx-auto mt-6 max-w-[400px] text-[1.0625rem] font-medium leading-[1.72] tracking-[-0.01em]" style={{ color: 'rgba(13,27,42,0.45)' }}>
             GDPR &amp; AI Act in a single workflow. No consultants required.
           </p>
@@ -192,9 +205,9 @@ export function Features() {
                 />
               </div>
 
-              <h3 className="text-[1.1875rem] font-extrabold tracking-[-0.02em] text-[#0D1B2A]">
+              <CardHeading className="text-[1.1875rem] font-extrabold tracking-[-0.02em] text-[#0D1B2A]">
                 {f.title}
-              </h3>
+              </CardHeading>
               <p className="mt-2.5 text-[1.0625rem] font-medium leading-[1.72] tracking-[-0.005em]" style={{ color: 'rgba(13,27,42,0.48)' }}>
                 {f.description}
               </p>

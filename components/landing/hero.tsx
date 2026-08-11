@@ -1,88 +1,127 @@
-import { CheckCircle2 } from 'lucide-react'
-import { WaitlistForm } from './waitlist-form'
+import Image from 'next/image'
+import { GitHubMark } from '@/components/icons/github-mark'
+import { GITHUB_REPO_URL, LICENSE_SPDX } from '@/lib/links'
 
+/**
+ * ENT-190 took the waitlist off the hero, and the sign-in link with it. There
+ * is nothing to sign up for yet, and a form asking for an email in exchange for
+ * a promise reads badly next to a public AGPL repository. The repository is the
+ * claim, so reading it is the only ask.
+ *
+ * The hero is now a dark full-bleed plate rather than the flat warm ground it
+ * used to be. The image is an aerial of a northern European city grid at blue
+ * hour, abstracted to pure lattice: it is the North Star stated visually, many
+ * companies building in the same regulatory space, and it gives the page the
+ * depth that a flat colour section never had.
+ *
+ * Legibility is handled by a two-stop scrim rather than by dimming the whole
+ * image, so the lattice stays readable at the edges while the type sits on a
+ * genuinely dark ground.
+ */
 export function Hero() {
   return (
-    <section className="relative overflow-hidden bg-[#F5F4F0] min-h-[92dvh] flex items-center">
+    // `100dvh`, not `100vh`: on mobile Safari and Chrome the static `vh` unit
+    // measures against the viewport with the URL bar collapsed, so the plate
+    // overflows and the page shifts as the bar hides. `dvh` tracks it.
+    <section className="relative flex min-h-[100dvh] items-center overflow-hidden bg-[#0A141F]">
 
-      {/* Grain texture */}
-      <div className="noise pointer-events-none absolute inset-0 opacity-[0.03]" aria-hidden="true" />
+      {/* Plate. `priority` because this is the LCP element. */}
+      <Image
+        src="/imagery/hero-grid.webp"
+        alt=""
+        aria-hidden="true"
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
+      />
 
-      {/* Teal radial glow — top */}
+      {/* Scrim: heavier through the centre column where the type sits, so the
+          lattice survives at the edges instead of being flattened everywhere. */}
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden="true"
         style={{
           background: [
-            'radial-gradient(ellipse 75% 45% at 50% -5%, rgba(0,201,167,0.14) 0%, transparent 65%)',
-            'radial-gradient(ellipse 40% 35% at 88% 88%, rgba(0,201,167,0.07) 0%, transparent 55%)',
+            'linear-gradient(180deg, rgba(10,20,31,0.72) 0%, rgba(10,20,31,0.55) 45%, rgba(10,20,31,0.88) 100%)',
+            'radial-gradient(ellipse 62% 55% at 50% 48%, rgba(10,20,31,0.78) 0%, transparent 75%)',
           ].join(', '),
         }}
       />
+
+      {/* Teal lift, bottom right, picking up the accent from the mark */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background:
+            'radial-gradient(ellipse 45% 40% at 88% 92%, rgba(0,201,167,0.13) 0%, transparent 60%)',
+        }}
+      />
+
+      <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
 
       <div className="relative mx-auto w-full max-w-5xl px-6 py-28 lg:px-8">
         <div className="flex flex-col items-center text-center">
 
           {/* Eyebrow */}
-          <div className="mb-10 inline-flex items-center gap-2.5 rounded-full border border-[#00C9A7]/30 bg-white/70 px-4 py-2 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.07)]">
+          <div className="mb-10 inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 backdrop-blur-sm">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00C9A7] opacity-70" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00C9A7]" />
             </span>
-            <span className="text-[13px] font-bold uppercase tracking-[0.14em] text-[#0D1B2A]/70">
-              GDPR &amp; EU AI Act · Now in Early Access
+            <span className="text-[13px] font-bold uppercase tracking-[0.14em] text-white/70">
+              GDPR &amp; EU AI Act &middot; Open source, {LICENSE_SPDX}
             </span>
           </div>
 
           {/* Headline */}
-          <h1 className="text-[4.5rem] font-black tracking-[-0.04em] leading-[0.88] text-[#0D1B2A] sm:text-[6rem] lg:text-[8rem] text-balance">
+          <h1 className="text-[3.25rem] font-black leading-[0.88] tracking-[-0.04em] text-white sm:text-[5rem] lg:text-[7rem] text-balance">
             EU compliance,
             <br />
-            <span style={{ color: '#00C9A7' }}>
-              finally simple.
-            </span>
+            <span style={{ color: '#00C9A7' }}>finally simple.</span>
           </h1>
 
           {/* Sub */}
-          <p className="mt-9 max-w-[540px] text-[1.1875rem] font-medium leading-[1.78] tracking-[-0.01em] text-[#0D1B2A]/50">
-            AI-powered GDPR and EU AI Act assessment built for European SMEs.
-            Know exactly where you stand, and what to fix, in under 10 minutes.
+          <p className="mt-9 max-w-[560px] text-[1.1875rem] font-medium leading-[1.78] tracking-[-0.01em] text-white/60">
+            Four agents watch your GDPR and EU AI Act obligations, turn what they
+            find into one specific action, and wait for your approval before
+            anything changes.
           </p>
 
-          {/* Waitlist form */}
-          <WaitlistForm className="mt-10 w-full max-w-[520px]" />
+          {/* Action. Reading the source is the only ask: there is nothing to
+              sign up for yet, and the repository is the product claim. */}
+          <div className="mt-11">
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2.5 rounded-full bg-white px-7 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-[#0D1B2A] transition-all duration-150 hover:bg-white/90 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7]"
+            >
+              <GitHubMark size={18} />
+              Read the source
+            </a>
+          </div>
 
-          {/* Trust row */}
-          <div className="mt-8 flex flex-wrap justify-center gap-x-8 gap-y-3">
+          {/* What the shape of the product actually guarantees */}
+          <div className="mt-14 flex flex-wrap justify-center gap-x-10 gap-y-3">
             {[
-              'No legal background needed',
-              'Results in under 10 minutes',
-              'GDPR + EU AI Act in one scan',
+              'Runs on a schedule, not on a reminder',
+              'Never acts without your approval',
+              'Self-hostable, end to end',
             ].map((item) => (
               <span
                 key={item}
-                className="flex items-center gap-2 text-[15px] font-medium tracking-[-0.005em] text-[#0D1B2A]/38"
+                className="flex items-center gap-2.5 text-[15px] font-medium tracking-[-0.005em] text-white/45"
               >
-                <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: '#00C9A7' }} strokeWidth={2.5} />
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: '#00C9A7' }}
+                />
                 {item}
               </span>
             ))}
-          </div>
-
-          {/* Social proof blip */}
-          <div className="mt-12 flex items-center gap-3 rounded-full border border-black/[0.06] bg-white px-5 py-3 shadow-[0_2px_16px_-4px_rgba(0,0,0,0.06)]">
-            <div className="flex -space-x-2">
-              {['#00C9A7', '#60a5fa', '#f472b6', '#fb923c'].map((color, i) => (
-                <span
-                  key={i}
-                  className="h-7 w-7 rounded-full border-2 border-white"
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-            <span className="text-[14px] font-semibold tracking-[-0.01em] text-[#0D1B2A]/55">
-              Join <strong className="text-[#0D1B2A] font-extrabold">200+</strong> EU businesses already on the list
-            </span>
           </div>
 
         </div>

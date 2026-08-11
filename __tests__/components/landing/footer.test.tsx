@@ -36,4 +36,37 @@ describe('Footer', () => {
     render(<Footer />)
     expect(screen.getByText(/Not legal advice/i)).toBeInTheDocument()
   })
+
+  it('links the product columns at the new routes, not in-page anchors', () => {
+    // ENT-190 split the single-page site into `/`, `/how-it-works` and
+    // `/features`. An `#features` anchor in the footer only resolves on the
+    // home page, so it would be a dead affordance from the other two routes.
+    render(<Footer />)
+    expect(screen.getByRole('link', { name: /^Features$/i })).toHaveAttribute(
+      'href',
+      '/features'
+    )
+    expect(screen.getByRole('link', { name: /^How it works$/i })).toHaveAttribute(
+      'href',
+      '/how-it-works'
+    )
+  })
+
+  it('does not link to sign-in', () => {
+    // The "Account" column is gone with it: sign-in was its only entry, so
+    // keeping the heading would leave an empty column in the footer grid.
+    render(<Footer />)
+    expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull()
+    expect(
+      screen.queryAllByRole('link').filter((el) => el.getAttribute('href') === '/login')
+    ).toHaveLength(0)
+    expect(screen.queryByText(/^Account$/i)).toBeNull()
+  })
+
+  it('has no trace of the waitlist', () => {
+    const { container } = render(<Footer />)
+    expect(container.textContent ?? '').not.toMatch(/waitlist/i)
+    expect(container.innerHTML).not.toMatch(/#waitlist/i)
+    expect(container.innerHTML).not.toMatch(/tally\.so/i)
+  })
 })

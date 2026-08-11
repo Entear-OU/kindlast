@@ -41,26 +41,15 @@ export function Footer() {
               <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-white/22">
                 Product
               </p>
+              {/* ENT-190: real routes, not in-page anchors. An `#features`
+                  anchor only resolved on `/`, so it was a dead affordance in
+                  the footer of every other page. */}
               <nav className="flex flex-col gap-3.5">
-                <Link href="#features" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
-                  Features
-                </Link>
-                <Link href="#how-it-works" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
+                <Link href="/how-it-works" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
                   How it works
                 </Link>
-              </nav>
-            </div>
-
-            <div>
-              <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-white/22">
-                Early access
-              </p>
-              <nav className="flex flex-col gap-3.5">
-                <Link href="#waitlist" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
-                  Join waitlist
-                </Link>
-                <Link href="/login" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
-                  Sign in
+                <Link href="/features" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
+                  Features
                 </Link>
               </nav>
             </div>

@@ -1,4 +1,6 @@
+import Image from 'next/image'
 import { GitHubMark } from '@/components/icons/github-mark'
+import { GuillocheMark } from '@/components/landing/guilloche-mark'
 import { GITHUB_REPO_HANDLE, GITHUB_REPO_URL, LICENSE_SPDX } from '@/lib/links'
 
 /**
@@ -11,9 +13,9 @@ import { GITHUB_REPO_HANDLE, GITHUB_REPO_URL, LICENSE_SPDX } from '@/lib/links'
  * compliance plumbing is shared infrastructure, not a vendor moat, and every
  * startup re-answering the same GDPR questions is wasted European velocity.
  *
- * Visually this is the one dark object on the warm ground, sitting just before
- * the (dark) waitlist section so the page steps down into it rather than
- * switching abruptly.
+ * Visually this is the one dark object on the warm ground. ENT-190 made it the
+ * last section on `/`, so the repo card is now what the home page steps down
+ * into before the footer.
  */
 
 const GUARANTEES = [
@@ -67,18 +69,40 @@ export function OpenSource() {
           className="relative mt-14 overflow-hidden rounded-3xl"
           style={{ backgroundColor: '#0D1B2A' }}
         >
-          {/* Grain, matching the hero and waitlist treatment */}
-          <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
-
-          {/* Teal glow, anchored to the card's own corner */}
+          {/* Intaglio plate. A macro of engraved security printing, the raised
+              ink on a share certificate caught in raking light. It is the same
+              idea as the rosette above it but photographic, so the card reads
+              as printed stock rather than as a flat panel. Kept very dark so
+              the copy on top never has to fight it. */}
+          <Image
+            src="/imagery/engraving.webp"
+            alt=""
+            aria-hidden="true"
+            fill
+            sizes="(max-width: 1024px) 100vw, 1024px"
+            className="object-cover opacity-[0.22] mix-blend-luminosity"
+          />
           <div
             className="pointer-events-none absolute inset-0"
             aria-hidden="true"
             style={{
               background:
-                'radial-gradient(ellipse 55% 70% at 92% 8%, rgba(0,201,167,0.16) 0%, transparent 62%)',
+                'linear-gradient(105deg, rgba(13,27,42,0.97) 0%, rgba(13,27,42,0.86) 48%, rgba(13,27,42,0.62) 100%)',
             }}
           />
+
+          {/* Grain, matching the hero treatment */}
+          <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+
+          {/* Guilloche rosette, bled off the top-right corner.
+              This is the engraved seal stamped on share certificates and
+              passports, which is the right reference for the object that
+              carries the licence. It replaces a plain radial gradient: the
+              gradient was generic, and this says something.
+              A CSS background rather than an `<img>` because it is purely
+              decorative, which also keeps it out of the accessibility tree
+              without needing an empty alt. */}
+          <GuillocheMark className="pointer-events-none absolute -right-24 -top-28 h-[420px] w-[420px] opacity-[0.09] sm:-right-16 sm:h-[520px] sm:w-[520px]" />
 
           <div className="relative p-8 sm:p-12">
 

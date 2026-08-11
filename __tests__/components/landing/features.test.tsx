@@ -50,6 +50,26 @@ describe('Features', () => {
     expect(cards).toHaveLength(6)
   })
 
+  it('renders the section heading as an h2 by default', () => {
+    render(<Features />)
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+      /Everything you need/i
+    )
+  })
+
+  it('promotes the section heading to h1 on the features route', () => {
+    // ENT-190 gave the capability detail its own page, where this section is
+    // the only subject and so owns the page-level heading. Card titles move
+    // down with it so the document outline never skips a level.
+    render(<Features headingLevel={1} />)
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      /Everything you need/i
+    )
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(6)
+    expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0)
+  })
+
   it('highlights accent features with an additional detail paragraph', () => {
     // The original "Premium" badge UI was redesigned into bento-grid accent
     // cards (GDPR + AI Act) that render an extra detail paragraph beneath
