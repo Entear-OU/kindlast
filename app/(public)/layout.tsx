@@ -1,7 +1,8 @@
 import Link from 'next/link'
+import { GitHubMark } from '@/components/icons/github-mark'
+import { GITHUB_REPO_URL } from '@/lib/links'
 
 function KindlastIcon({ size = 32 }: { size?: number }) {
-  const scale = size / 56
   return (
     <svg width={size} height={size} viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="56" height="56" rx="11" fill="#0D1B2A" />
@@ -46,15 +47,35 @@ export default function PublicLayout({
             >
               How it works
             </Link>
+            <Link
+              href="#open-source"
+              className="text-[15px] font-medium tracking-[-0.01em] text-[#0D1B2A]/45 hover:text-[#0D1B2A] transition-colors duration-150"
+            >
+              Open source
+            </Link>
           </nav>
 
-          {/* CTA */}
-          <Link
-            href="https://tally.so/r/zxZaaM"
-            className="rounded-full bg-[#0D1B2A] px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-[#162537] active:scale-[0.97]"
-          >
-            Join waitlist
-          </Link>
+          {/* Actions */}
+          <div className="flex items-center gap-4">
+            {/* Repo link stays icon-only so it reads as a developer affordance
+                rather than competing with the waitlist CTA. */}
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Kindlast on GitHub"
+              className="rounded-full p-2 text-[#0D1B2A]/45 transition-colors duration-150 hover:text-[#0D1B2A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00C9A7]"
+            >
+              <GitHubMark size={20} />
+            </a>
+
+            <Link
+              href="https://tally.so/r/zxZaaM"
+              className="rounded-full bg-[#0D1B2A] px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-[#162537] active:scale-[0.97]"
+            >
+              Join waitlist
+            </Link>
+          </div>
 
         </div>
       </header>

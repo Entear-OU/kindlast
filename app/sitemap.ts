@@ -16,11 +16,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.5,
     },
-    {
-      url: `${baseUrl}/pricing`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
+    // No `/pricing` entry: the route was never built, so it pointed crawlers at
+    // a 404, and pricing is off the public site for now regardless.
   ]
 }

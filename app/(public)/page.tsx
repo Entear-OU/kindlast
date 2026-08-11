@@ -1,6 +1,7 @@
 import { Hero } from '@/components/landing/hero'
 import { Features } from '@/components/landing/features'
 import { HowItWorks } from '@/components/landing/how-it-works'
+import { OpenSource } from '@/components/landing/open-source'
 import { Footer } from '@/components/landing/footer'
 import { WaitlistForm } from '@/components/landing/waitlist-form'
 
@@ -66,6 +67,8 @@ export default function LandingPage() {
 
       <Features />
 
+      <OpenSource />
+
       {/* ── Waitlist CTA ── */}
       <section
         id="waitlist"
@@ -98,9 +101,9 @@ export default function LandingPage() {
             </h2>
 
             <p className="mx-auto mt-6 max-w-[460px] text-[1.0625rem] font-medium leading-[1.78] tracking-[-0.01em] text-white/60">
-              We&apos;re opening early access to a limited number of EU SMEs. Get
-              notified the moment your spot is ready, and lock in founding-member
-              pricing.
+              We&apos;re opening early access to a limited number of EU companies.
+              Get notified the moment your spot is ready, and help decide what we
+              build next.
             </p>
 
             <WaitlistForm
@@ -114,7 +117,7 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-12 flex flex-wrap justify-center gap-x-8 gap-y-3">
-              {['Free to join', 'Priority access guaranteed', 'Founding-member pricing'].map((item) => (
+              {['Priority access guaranteed', 'Open source from day one', 'Help shape the roadmap'].map((item) => (
                 <span key={item} className="text-[14px] font-semibold tracking-[-0.005em] text-white/45">
                   – {item}
                 </span>

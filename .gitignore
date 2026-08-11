@@ -68,6 +68,9 @@ supabase/.branches/
 # Playwright MCP per-session artifacts (snapshots + console logs)
 .playwright-mcp/
 
+# local scratch space (drafts, generated docs, throwaway experiments)
+/scratch/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
