@@ -34,8 +34,8 @@ green" on its own is not verification if the change is not covered by tests.
 ## Checklist
 
 - [ ] Tests cover the change, and would have failed before it
-- [ ] `pnpm lint` and `pnpm exec tsc --noEmit` pass
-- [ ] `pnpm test` passes locally
+- [ ] `bun run lint` and `bunx tsc --noEmit` pass
+- [ ] `bun run test` passes locally
 - [ ] No em dashes in copy, comments, commit messages, or this description
 - [ ] No secrets, credentials, or real customer data in the diff
 - [ ] Documentation updated if behaviour or setup changed

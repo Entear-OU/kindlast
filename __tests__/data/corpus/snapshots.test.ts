@@ -13,7 +13,7 @@ import { parseRegulationData } from '@/lib/corpus/ingest'
  * The validator (`parseRegulationData`) and the ingest path are exercised in
  * their own suites — this is the "front gate" for the committed source data:
  * if a curator edits a corpus JSON file and breaks its shape, the build
- * surfaces it here, not at `pnpm ingest:*` time.
+ * surfaces it here, not at `bun run ingest:*` time.
  *
  * Each snapshot also gets a few cheap sanity assertions on the counts and
  * known-stable content. The numbers are the official article/recital counts

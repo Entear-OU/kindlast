@@ -5,7 +5,7 @@ import { type Obligation, type ObligationsData, toRow } from './obligations'
  *
  * The curated corpus (`data/corpus/obligations.json`) is the single source of
  * truth. Historically the only path into `public.obligations` was a hand-run
- * `pnpm ingest:obligations`, which no migration/seed/CI step ever invoked — so
+ * `bun run ingest:obligations`, which no migration/seed/CI step ever invoked — so
  * production ran with an empty catalogue and the Watcher found no gaps. This
  * module renders the same corpus into an idempotent migration that ships with
  * `supabase/migrations`, so every environment seeds the catalogue from
@@ -87,11 +87,11 @@ const HEADER = `-- Seed the obligations catalogue (ENT-157)
 --
 -- Generated from data/corpus/obligations.json by
 -- scripts/generate-obligations-seed.ts — DO NOT EDIT BY HAND. Re-run
--- \`pnpm generate:obligations-seed\` after editing the corpus; a drift-guard
+-- \`bun run generate:obligations-seed\` after editing the corpus; a drift-guard
 -- unit test (__tests__/lib/corpus/obligations-seed-sql.test.ts) fails if this
 -- file and the corpus disagree.
 --
--- Why a migration and not the \`pnpm ingest:obligations\` script: nothing ever
+-- Why a migration and not the \`bun run ingest:obligations\` script: nothing ever
 -- ran that script automatically, so production shipped with an empty
 -- \`public.obligations\` and the Watcher's gap detector iterated zero rows —
 -- an empty feed for every real user (ENT-157). Seeding from a migration means

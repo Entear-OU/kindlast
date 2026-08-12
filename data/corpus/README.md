@@ -1,7 +1,7 @@
 # Regulatory corpus
 
 Source data for the Analyst's regulatory knowledge base. Ingested into Supabase
-by the `pnpm ingest:*` scripts in `scripts/`.
+by the `bun run ingest:*` scripts in `scripts/`.
 
 ## What this is, and what it is not
 
@@ -101,7 +101,7 @@ something an organisation can act on.
 | Contents | Obligation text, citation, applicability conditions, severity, recurrence |
 | Authorship | Entirely original work by Entear OÜ. This is a derived model, not a source document. |
 
-Generated and maintained via `pnpm generate:obligations-seed`.
+Generated and maintained via `bun run generate:obligations-seed`.
 
 ## Attribution when reusing
 

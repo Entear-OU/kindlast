@@ -2,11 +2,11 @@
 --
 -- Generated from data/corpus/obligations.json by
 -- scripts/generate-obligations-seed.ts — DO NOT EDIT BY HAND. Re-run
--- `pnpm generate:obligations-seed` after editing the corpus; a drift-guard
+-- `bun run generate:obligations-seed` after editing the corpus; a drift-guard
 -- unit test (__tests__/lib/corpus/obligations-seed-sql.test.ts) fails if this
 -- file and the corpus disagree.
 --
--- Why a migration and not the `pnpm ingest:obligations` script: nothing ever
+-- Why a migration and not the `bun run ingest:obligations` script: nothing ever
 -- ran that script automatically, so production shipped with an empty
 -- `public.obligations` and the Watcher's gap detector iterated zero rows —
 -- an empty feed for every real user (ENT-157). Seeding from a migration means

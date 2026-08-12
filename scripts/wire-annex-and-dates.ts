@@ -19,7 +19,7 @@
  *
  * Usage:
  *
- *   pnpm wire:ai-act-annex
+ *   bun run wire:ai-act-annex
  */
 
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

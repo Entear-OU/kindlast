@@ -72,7 +72,7 @@ supabase db reset
 
 # Run the integration test suite to confirm the new migration plus the
 # RLS convention still hold
-pnpm test
+bun run test
 
 # Once reviewed & merged, push to remote
 supabase db push --dry-run    # always preview first

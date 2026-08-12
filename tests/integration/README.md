@@ -11,7 +11,7 @@ supabase start
 
 # Run all tests — unit + integration. Integration suites auto-skip if the
 # local stack is unreachable (so unit-only contributors don't need Docker).
-pnpm test
+bun run test
 ```
 
 Local Studio runs at <http://localhost:54323>; the suite connects to the
@@ -49,4 +49,4 @@ tests/integration/
   service-role client bypasses RLS by design.
 - **Skip cleanly when the stack is down.** Use
   `await isLocalSupabaseReachable()` at module scope + `describe.skipIf`
-  so `pnpm test` stays green on machines without Docker.
+  so `bun run test` stays green on machines without Docker.
