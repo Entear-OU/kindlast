@@ -66,7 +66,7 @@ jobs:
         run: bun run lint
 
       - name: Typecheck
-        run: bunx tsc --noEmit
+        run: bunx tsc -p apps/web --noEmit
 
       # `bun run test:unit`, never `bun test`. The latter is Bun's own runner;
       # this repo's suite is Vitest, and `bun test` would collect none of it and

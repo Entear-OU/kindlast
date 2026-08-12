@@ -22,9 +22,9 @@ import { cwd, exit } from 'node:process'
 import { parseObligationsData } from '../lib/corpus/obligations'
 import { buildObligationsSeedMigration } from '../lib/corpus/obligations-seed'
 
-const CORPUS_PATH = 'data/corpus/obligations.json'
+const CORPUS_PATH = '../../data/corpus/obligations.json'
 const MIGRATION_PATH =
-  'supabase/migrations/20260602120000_seed_obligations_catalogue.sql'
+  '../../supabase/migrations/20260602120000_seed_obligations_catalogue.sql'
 
 function main(): void {
   const corpusAbs = resolve(cwd(), CORPUS_PATH)

@@ -38,7 +38,7 @@ const supabaseRunning = await isLocalSupabaseReachable()
 
 const CORPUS = parseObligationsData(
   JSON.parse(
-    readFileSync(resolve(__dirname, '../../data/corpus/obligations.json'), 'utf8'),
+    readFileSync(resolve(__dirname, '../../../../data/corpus/obligations.json'), 'utf8'),
   ),
 )
 const CORPUS_SLUGS = CORPUS.obligations.map((o) => o.slug)

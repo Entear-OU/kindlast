@@ -169,7 +169,7 @@ See [supabase/README.md](./supabase/README.md).
 ## Project structure
 
 ```
-app/
+apps/web/app/
 ├── (public)/           # Landing, login
 ├── (authed)/           # Console: dashboard, feed, records, settings, billing
 │   ├── onboarding/     # Conversational profile building
@@ -177,7 +177,7 @@ app/
 │   └── records/        # ROPA, AI systems, DSAR
 └── api/                # Route handlers, including scheduled agent endpoints
 
-lib/
+apps/web/lib/
 ├── analyst/            # Finding generation, narrative, critic
 ├── corpus/             # Regulatory knowledge base and obligations
 ├── notifications/      # Comms: dispatch, briefings, signed one-tap links

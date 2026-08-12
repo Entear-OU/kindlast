@@ -61,8 +61,8 @@ tests will be asked for them, so it is quicker to write them as you go.
 
 ```bash
 bun run test              # everything
-bun run test:unit         # unit and component tests (__tests__/)
-bun run test:integration  # integration tests (tests/integration/), needs Supabase running
+bun run test:unit         # unit and component tests (apps/web/__tests__/)
+bun run test:integration  # integration tests (apps/web/tests/integration/), needs Supabase running
 bun run test:watch        # watch mode
 bun run test:coverage     # with coverage
 ```

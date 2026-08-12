@@ -1,19 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * Ingest the curated obligations catalogue snapshot (ENT-52). Idempotent —
- * re-runs merge by `slug`, so calling this script twice produces the same
- * row state, not duplicates.
+ * Ingest the curated DPA enforcement-decisions snapshot into the regulatory
+ * corpus (ENT-99). Idempotent — re-runs merge by `slug`, so calling this
+ * script twice produces the same row state, not duplicates.
  *
- *   bun run ingest:obligations
+ *   bun run ingest:enforcement
  *
  *   # or call directly:
- *   tsx scripts/ingest-obligations.ts data/corpus/obligations.json
+ *   tsx scripts/ingest-enforcement.ts data/corpus/enforcement-decisions.json
  *
- * Auth: the `obligations` table has no INSERT policy for anon /
- * authenticated, so this MUST run with the service-role key. The script
- * bails loudly if either env var is missing — silently falling back to
- * the anon key would write zero rows and look "successful", which is the
- * worst possible failure mode for a one-shot ingest job.
+ * Auth: corpus tables have no INSERT policy for anon/authenticated, so
+ * this MUST run with the service-role key. The script bails loudly if
+ * either env var is missing — silently falling back to the anon key
+ * would write zero rows and look "successful", which is the worst
+ * possible failure mode for a one-shot ingest job.
  */
 
 import { readFile } from 'node:fs/promises'
@@ -22,7 +22,7 @@ import { argv, cwd, exit, loadEnvFile } from 'node:process'
 
 import { createClient } from '@supabase/supabase-js'
 
-import { ingestObligations, parseObligationsData } from '../lib/corpus/obligations'
+import { ingestEnforcementDecisions, parseEnforcementData } from '../lib/corpus/enforcement'
 
 // Load env from .env.local (local dev) then .env (fallback). Both files are
 // optional; if they're missing, we expect the caller to have set env vars
@@ -35,7 +35,7 @@ for (const file of ['.env.local', '.env']) {
   }
 }
 
-const DEFAULT_SNAPSHOT = 'data/corpus/obligations.json'
+const DEFAULT_SNAPSHOT = '../../data/corpus/enforcement-decisions.json'
 
 async function main(): Promise<void> {
   const dataPath = argv[2] ?? DEFAULT_SNAPSHOT
@@ -44,14 +44,14 @@ async function main(): Promise<void> {
 
   if (!supabaseUrl || !serviceKey) {
     console.error(
-      'ingest:obligations: SUPABASE_URL and SUPABASE_SECRET_KEY must be set ' +
+      'ingest:enforcement: SUPABASE_URL and SUPABASE_SECRET_KEY must be set ' +
         '(check .env.local for local dev, or export them for remote).',
     )
     exit(1)
   }
 
   const absolutePath = resolve(cwd(), dataPath)
-  console.log(`ingest:obligations: loading ${absolutePath}`)
+  console.log(`ingest:enforcement: loading ${absolutePath}`)
 
   let raw: unknown
   try {
@@ -59,36 +59,34 @@ async function main(): Promise<void> {
     raw = JSON.parse(text)
   } catch (err) {
     console.error(
-      `ingest:obligations: failed to read/parse ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
+      `ingest:enforcement: failed to read/parse ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
     )
     exit(1)
   }
 
   let data
   try {
-    data = parseObligationsData(raw)
+    data = parseEnforcementData(raw)
   } catch (err) {
-    console.error('ingest:obligations: source data is malformed:')
+    console.error('ingest:enforcement: source data is malformed:')
     console.error(err instanceof Error ? err.message : String(err))
     exit(1)
   }
 
   console.log(
-    `ingest:obligations: validated payload — ${data.obligations.length} obligations`,
+    `ingest:enforcement: validated payload — ${data.decisions.length} decisions`,
   )
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const result = await ingestObligations(supabase, data)
-  console.log(
-    `ingest:obligations: done — ${result.obligationsUpserted} obligations upserted.`,
-  )
+  const result = await ingestEnforcementDecisions(supabase, data)
+  console.log(`ingest:enforcement: done — ${result.decisionsUpserted} decisions upserted.`)
 }
 
 main().catch((err) => {
-  console.error('ingest:obligations: failed:')
+  console.error('ingest:enforcement: failed:')
   console.error(err instanceof Error ? err.stack ?? err.message : String(err))
   exit(1)
 })
