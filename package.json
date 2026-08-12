@@ -11,6 +11,7 @@
     "build": "bun run --cwd apps/web build",
     "start": "bun run --cwd apps/web start",
     "lint": "bun run --cwd apps/web lint",
+    "typecheck": "bun run --cwd apps/web typecheck",
     "test": "bun run --cwd apps/web test",
     "test:unit": "bun run --cwd apps/web test:unit",
     "test:integration": "bun run --cwd apps/web test:integration",

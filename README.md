@@ -136,7 +136,7 @@ defaults to `console`, so local development needs no email credentials.
 bun run dev              # dev server
 bun run build            # production build
 bun run lint             # ESLint
-bunx tsc --noEmit        # typecheck
+bun run typecheck        # typecheck
 bun run test             # everything
 bun run test:unit        # unit and component tests
 bun run test:integration # integration tests, needs Supabase running
