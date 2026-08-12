@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { GitHubMark } from '@/components/icons/github-mark'
+import { GITHUB_LICENSE_URL, GITHUB_REPO_URL, LICENSE_SPDX } from '@/lib/links'
 
 function KindlastIcon({ size = 32 }: { size?: number }) {
   return (
@@ -29,37 +31,54 @@ export function Footer() {
               </span>
             </div>
             <p className="text-[1rem] font-medium leading-[1.65] tracking-[-0.005em] text-white/38">
-              AI-powered GDPR &amp; EU AI Act compliance for European SMEs.
+              Continuous GDPR &amp; EU AI Act compliance for companies building in Europe.
             </p>
           </div>
 
           {/* Links */}
-          <div className="flex gap-16">
+          <div className="flex flex-wrap gap-x-16 gap-y-10">
             <div>
               <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-white/22">
                 Product
               </p>
+              {/* ENT-190: real routes, not in-page anchors. An `#features`
+                  anchor only resolved on `/`, so it was a dead affordance in
+                  the footer of every other page. */}
               <nav className="flex flex-col gap-3.5">
-                <Link href="#features" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
+                <Link href="/how-it-works" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
+                  How it works
+                </Link>
+                <Link href="/features" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
                   Features
                 </Link>
-                <Link href="#how-it-works" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
-                  How it works
+                <Link href="/why" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
+                  Why
                 </Link>
               </nav>
             </div>
 
             <div>
               <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.18em] text-white/22">
-                Early access
+                Open source
               </p>
               <nav className="flex flex-col gap-3.5">
-                <Link href="#waitlist" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
-                  Join waitlist
-                </Link>
-                <Link href="/login" className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150">
-                  Sign in
-                </Link>
+                <a
+                  href={GITHUB_REPO_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150"
+                >
+                  <GitHubMark size={15} />
+                  GitHub
+                </a>
+                <a
+                  href={GITHUB_LICENSE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150"
+                >
+                  Licence
+                </a>
               </nav>
             </div>
           </div>
@@ -69,7 +88,16 @@ export function Footer() {
         {/* Bottom */}
         <div className="mt-14 flex flex-col gap-3 pt-8 sm:flex-row sm:items-center sm:justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
           <p className="text-[14px] font-medium tracking-[-0.005em] text-white/22">
-            &copy; {new Date().getFullYear()} Kindlast. All rights reserved.
+            &copy; {new Date().getFullYear()} Entear O&Uuml;. Free software under{' '}
+            <a
+              href={GITHUB_LICENSE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white/38 underline underline-offset-2 hover:text-white transition-colors duration-150"
+            >
+              {LICENSE_SPDX}
+            </a>
+            .
           </p>
           <p className="text-[13px] font-medium text-white/18 max-w-xs leading-[1.6]">
             AI-generated compliance guidance for planning purposes only. Not legal advice.

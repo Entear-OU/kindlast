@@ -68,6 +68,13 @@ supabase/.branches/
 # Playwright MCP per-session artifacts (snapshots + console logs)
 .playwright-mcp/
 
+# local scratch space (drafts, generated docs, throwaway experiments)
+/scratch/
+
+# Git worktrees are checked out inside the repo; they are separate checkouts and
+# must never be staged as files of this one.
+.claude/worktrees/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

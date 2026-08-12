@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { Montserrat, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import Script from "next/script";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -19,11 +18,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Kindlast: AI-Powered GDPR & AI Act Compliance",
   description:
-    "Two regulations, one platform, zero guesswork. AI-powered compliance assessment for EU SMEs.",
+    "Two regulations, one workflow. Continuous GDPR and EU AI Act compliance for any company building in Europe.",
   openGraph: {
     title: "Kindlast: AI-Powered GDPR & AI Act Compliance",
     description:
-      "Two regulations, one platform, zero guesswork. AI-powered compliance assessment for EU SMEs.",
+      "Two regulations, one workflow. Continuous GDPR and EU AI Act compliance for any company building in Europe.",
     type: "website",
     locale: "en_US",
     siteName: "Kindlast",
@@ -43,7 +42,6 @@ export default function RootLayout({
         {children}
         <Toaster />
         <Analytics />
-        <Script src="https://tally.so/widgets/embed.js" strategy="lazyOnload" />
       </body>
     </html>
   );
