@@ -2,7 +2,7 @@
 /**
  * Regenerate the obligations seed migration from the curated corpus (ENT-157).
  *
- *   pnpm generate:obligations-seed
+ *   bun run generate:obligations-seed
  *
  * Reads data/corpus/obligations.json, validates it with the same Zod schema
  * the runtime ingest uses, and writes the idempotent seed migration. The

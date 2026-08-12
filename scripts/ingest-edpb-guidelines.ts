@@ -4,7 +4,7 @@
  * corpus (ENT-50). Idempotent — re-runs merge by `slug`, so calling this
  * script twice produces the same row state, not duplicates.
  *
- *   pnpm ingest:edpb-guidelines
+ *   bun run ingest:edpb-guidelines
  *
  *   # or call directly:
  *   tsx scripts/ingest-edpb-guidelines.ts data/corpus/edpb-guidelines.json

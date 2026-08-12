@@ -4,7 +4,7 @@
  * corpus (ENT-99). Idempotent — re-runs merge by `slug`, so calling this
  * script twice produces the same row state, not duplicates.
  *
- *   pnpm ingest:enforcement
+ *   bun run ingest:enforcement
  *
  *   # or call directly:
  *   tsx scripts/ingest-enforcement.ts data/corpus/enforcement-decisions.json

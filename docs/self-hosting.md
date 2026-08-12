@@ -23,8 +23,8 @@ Set up scheduling. It is described below.
 
 | | |
 |---|---|
-| Node.js | 22.13 or later |
-| pnpm | 11.1.3 or later |
+| Bun | 1.3 or later, for installing and running scripts |
+| Node.js | 22.13 or later, since Next.js runs on it |
 | Postgres | Via Supabase, which supplies auth, RLS, and pgvector |
 | Scheduler | Anything that can make an authenticated HTTP GET on a cron schedule |
 
@@ -96,9 +96,9 @@ emailed.
 ## Build and run
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm build
-pnpm start          # serves on :3000
+bun install --frozen-lockfile
+bun run build
+bun run start          # serves on :3000
 ```
 
 Put a reverse proxy in front of it for TLS. Set `NEXT_PUBLIC_APP_URL` to the

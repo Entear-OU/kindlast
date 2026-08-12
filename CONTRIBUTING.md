@@ -23,10 +23,12 @@ you like elsewhere.
 
 ### Prerequisites
 
-- **Node.js 22.13 or later.** The repo uses pnpm 11, which requires it. CI runs
-  Node 22.
-- **[pnpm](https://pnpm.io) 11.1.3 or later.** Never npm or yarn. The lockfile
-  is pnpm's and the workspace file uses pnpm 10+ syntax that pnpm 9 rejects.
+- **[Bun](https://bun.sh) 1.3 or later.** Never npm, yarn or pnpm. The lockfile
+  is `bun.lock`, and installing with anything else will produce a second
+  lockfile that disagrees with it.
+- **Node.js 22.13 or later.** Bun installs the dependencies and runs the
+  scripts, but Next.js and Vitest both execute on Node, so you need both. CI
+  runs Node 22.
 - **[Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)**,
   needed only for the integration tests and any database work.
 - **Docker**, required by `supabase start`.
@@ -34,9 +36,9 @@ you like elsewhere.
 ### Getting running
 
 ```bash
-pnpm install
+bun install
 cp .env.example .env
-pnpm dev
+bun run dev
 ```
 
 The app boots without most environment variables. `.env.example` documents what
@@ -58,26 +60,26 @@ refactor while it stays green. Pull requests that change behaviour without
 tests will be asked for them, so it is quicker to write them as you go.
 
 ```bash
-pnpm test              # everything
-pnpm test:unit         # unit and component tests (__tests__/)
-pnpm test:integration  # integration tests (tests/integration/), needs Supabase running
-pnpm test:watch        # watch mode
-pnpm test:coverage     # with coverage
+bun run test              # everything
+bun run test:unit         # unit and component tests (__tests__/)
+bun run test:integration  # integration tests (tests/integration/), needs Supabase running
+bun run test:watch        # watch mode
+bun run test:coverage     # with coverage
 ```
 
 [Vitest](https://vitest.dev) for unit and integration tests,
 [React Testing Library](https://testing-library.com/react) for components.
 
 The integration suites self-skip when the local Supabase stack is unreachable,
-so a green `pnpm test` locally does not necessarily mean the integration tests
+so a green `bun run test` locally does not necessarily mean the integration tests
 ran. CI boots the stack and fails loudly if it is missing, so they cannot
 silently disappear there.
 
 Before pushing:
 
 ```bash
-pnpm lint
-pnpm exec tsc --noEmit
+bun run lint
+bunx tsc --noEmit
 ```
 
 ## House rules

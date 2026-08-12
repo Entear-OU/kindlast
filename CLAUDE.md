@@ -10,7 +10,15 @@ rewrite the sentence if none of those fit. Hyphens in compound words
 
 ## Package Manager
 
-Always use **pnpm**, never npm or yarn.
+Always use **Bun**, never npm, yarn or pnpm. Install with `bun install`, run
+scripts with `bun run <script>`, and reach for one-off binaries with `bunx`.
+
+Bun is the package manager and task runner only. Next.js and the test suite
+still run on Node, so both toolchains have to be present.
+
+**Never write `bun test`.** That invokes Bun's own test runner, which collects
+none of this repo's Vitest suite and still exits 0, so it reads as a pass. The
+command is `bun run test` (or `test:unit` / `test:integration`).
 
 ## Development Approach
 

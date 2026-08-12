@@ -12,7 +12,7 @@ import { deleteTestUser, signUpTestUser, type TestUser } from './helpers/test-us
 
 /**
  * ENT-157 — The obligations catalogue must be seeded by a migration, not by a
- * manual `pnpm ingest:obligations` run.
+ * manual `bun run ingest:obligations` run.
  *
  * Root cause of the bug: the curated corpus lived only in
  * `data/corpus/obligations.json` + a hand-run ingest script that no migration,

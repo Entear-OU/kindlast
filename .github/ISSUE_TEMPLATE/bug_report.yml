@@ -66,9 +66,9 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Node version, pnpm version, OS, browser if relevant.
+      description: Bun version, Node version, OS, browser if relevant.
       placeholder: |
+        Bun 1.3.14
         Node 22.13.0
-        pnpm 11.1.3
         Ubuntu 24.04
         Firefox 142

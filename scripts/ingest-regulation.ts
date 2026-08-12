@@ -7,8 +7,8 @@
  *
  * The snapshot path is the first CLI argument:
  *
- *   pnpm ingest:gdpr      → scripts/ingest-regulation.ts data/corpus/gdpr.json
- *   pnpm ingest:ai-act    → scripts/ingest-regulation.ts data/corpus/eu-ai-act.json
+ *   bun run ingest:gdpr      → scripts/ingest-regulation.ts data/corpus/gdpr.json
+ *   bun run ingest:ai-act    → scripts/ingest-regulation.ts data/corpus/eu-ai-act.json
  *
  *   # or call directly:
  *   tsx scripts/ingest-regulation.ts data/corpus/<file>.json

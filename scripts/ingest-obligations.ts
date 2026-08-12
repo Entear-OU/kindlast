@@ -4,7 +4,7 @@
  * re-runs merge by `slug`, so calling this script twice produces the same
  * row state, not duplicates.
  *
- *   pnpm ingest:obligations
+ *   bun run ingest:obligations
  *
  *   # or call directly:
  *   tsx scripts/ingest-obligations.ts data/corpus/obligations.json

@@ -103,8 +103,8 @@ Where this is heading next is in the [roadmap](./docs/ROADMAP.md).
 
 ### Prerequisites
 
-- Node.js 22.13+ (required by pnpm 11)
-- [pnpm](https://pnpm.io) 11.1.3+
+- [Bun](https://bun.sh) 1.3+
+- Node.js 22.13+ (Bun installs and runs scripts; Next.js and Vitest run on Node)
 - [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
 - Docker, required by `supabase start`
 
@@ -113,7 +113,7 @@ Where this is heading next is in the [roadmap](./docs/ROADMAP.md).
 ```bash
 git clone https://github.com/Entear-OU/kindlast.git
 cd kindlast
-pnpm install
+bun install
 
 cp .env.example .env
 # At minimum set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY and OPENAI_API_KEY
@@ -121,7 +121,7 @@ cp .env.example .env
 supabase start        # local Postgres, Auth, Studio
 supabase db reset     # apply all migrations
 
-pnpm dev
+bun run dev
 ```
 
 The app runs at <http://localhost:3000>, Supabase Studio at
@@ -133,14 +133,14 @@ defaults to `console`, so local development needs no email credentials.
 ### Development commands
 
 ```bash
-pnpm dev              # dev server
-pnpm build            # production build
-pnpm lint             # ESLint
-pnpm exec tsc --noEmit # typecheck
-pnpm test             # everything
-pnpm test:unit        # unit and component tests
-pnpm test:integration # integration tests, needs Supabase running
-pnpm test:coverage    # with coverage
+bun run dev              # dev server
+bun run build            # production build
+bun run lint             # ESLint
+bunx tsc --noEmit        # typecheck
+bun run test             # everything
+bun run test:unit        # unit and component tests
+bun run test:integration # integration tests, needs Supabase running
+bun run test:coverage    # with coverage
 ```
 
 ## Self-hosting
@@ -198,7 +198,7 @@ The project follows test-driven development, and it is not decorative. Failing
 test first, minimum implementation, then refactor green.
 
 Note that the integration suites self-skip when the local Supabase stack is
-unreachable, so a green `pnpm test` locally does not necessarily mean they ran.
+unreachable, so a green `bun run test` locally does not necessarily mean they ran.
 CI boots the stack and fails loudly if it is missing.
 
 ## Contributing
