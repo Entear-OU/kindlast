@@ -2,6 +2,12 @@
 # (core-api-surface §21.3). One module, at proto/, so the import paths in
 # generated code match the directory layout exactly.
 version: v2
+# google/api/http.proto and annotations.proto, for the REST binding every
+# method declares (ENT-199, core-api-surface §23.2). Resolved through the BSR
+# and pinned in buf.lock, which is committed for the same reason every other
+# lockfile here is: the next person's build resolves what this one did.
+deps:
+  - buf.build/googleapis/googleapis
 modules:
   - path: proto
 lint:

@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package kindlast.core.v1;
 
+import "google/api/annotations.proto";
 import "kindlast/options/v1/scope.proto";
 
 // Organisations and membership (core-api-surface §20.1).
@@ -25,6 +26,10 @@ service OrgService {
   // would mean an invitee could never accept their first invitation.
   rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse) {
     option (kindlast.options.v1.required_scope) = "openid";
+    // `:accept` rather than `/accept`, per AIP-136 and §12: a custom verb on a
+    // resource, not a subresource that does not exist. The token travels in
+    // the path because that is the shape of the link a person is emailed.
+    option (google.api.http) = {post: "/api/v1/invitations/{token}:accept"};
   }
 }
 

@@ -6,6 +6,22 @@
 version: v2
 managed:
   enabled: true
+  # Managed mode rewrites go_package for every file in the image, including
+  # ones that arrive from a dependency. Left alone, our generated code imports
+  # `github.com/Entear-OU/kindlast/gen/go/google/api` for the http annotations,
+  # a vendored copy of googleapis that nothing generates and nothing else uses.
+  #
+  # That is worse than a broken build, and it did break the build, which is how
+  # it was found. The annotations carry an extension, and an extension is
+  # identified by its Go type: code reading `google.api.http` through the
+  # canonical package would not see an option set through a second copy of it.
+  # Two types, one wire format, and a reader that silently finds nothing.
+  #
+  # So the dependency keeps its own import path, and only our protos are
+  # rewritten.
+  disable:
+    - file_option: go_package_prefix
+      module: buf.build/googleapis/googleapis
   override:
     - file_option: go_package_prefix
       value: github.com/Entear-OU/kindlast/gen/go
@@ -16,5 +32,19 @@ plugins:
   - remote: buf.build/connectrpc/go:v1.20.0
     out: gen/go
     opt: paths=source_relative
+  # The OpenAPI document, generated from the same annotations rather than
+  # written alongside them, so the two cannot disagree (§23.2). Committed and
+  # covered by the CI drift check, for the reason gen/go is: a reviewer reads
+  # the same bytes a customer's generated client would.
+  #
+  # gnostic rather than grpc-ecosystem/openapiv2, because it emits OpenAPI v3
+  # and v2 is what tooling is migrating away from. Pinned, per the matched-pair
+  # rule in AGENTS.md.
+  - remote: buf.build/community/google-gnostic-openapi:v0.7.0
+    out: gen/openapi
+    opt:
+      - version=1.0.0
+      - title=Kindlast Core API
+      - enum_type=string
 inputs:
   - directory: proto

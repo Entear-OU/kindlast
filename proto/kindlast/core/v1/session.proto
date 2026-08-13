@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package kindlast.core.v1;
 
+import "google/api/annotations.proto";
 import "kindlast/options/v1/scope.proto";
 
 // The console bootstrap call, and the first authenticated endpoint in the
@@ -17,6 +18,11 @@ service SessionService {
   // (ENT-196), which is why this is a plain unary call rather than a read.
   rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse) {
     option (kindlast.options.v1.required_scope) = "openid";
+    // The REST alias. Declared from the first proto rather than swept in
+    // later, because a public API is roadmap rather than hypothetical and an
+    // annotation per method now beats a fifty-RPC sweep afterwards (§23.2).
+    // Connect paths keep serving the first-party client unchanged.
+    option (google.api.http) = {get: "/api/v1/me"};
   }
 }
 

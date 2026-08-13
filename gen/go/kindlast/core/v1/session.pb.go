@@ -8,6 +8,7 @@ package corev1
 
 import (
 	_ "github.com/Entear-OU/kindlast/gen/go/kindlast/options/v1"
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -273,7 +274,7 @@ var File_kindlast_core_v1_session_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_session_proto_rawDesc = "" +
 	"\n" +
-	"\x1ekindlast/core/v1/session.proto\x12\x10kindlast.core.v1\x1a\x1fkindlast/options/v1/scope.proto\"\x17\n" +
+	"\x1ekindlast/core/v1/session.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"\x17\n" +
 	"\x15GetCurrentUserRequest\"\xbc\x01\n" +
 	"\x16GetCurrentUserResponse\x12*\n" +
 	"\x04user\x18\x01 \x01(\v2\x16.kindlast.core.v1.UserR\x04user\x12>\n" +
@@ -289,10 +290,10 @@ const file_kindlast_core_v1_session_proto_rawDesc = "" +
 	"Membership\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x19\n" +
 	"\borg_name\x18\x02 \x01(\tR\aorgName\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role2\x81\x01\n" +
-	"\x0eSessionService\x12o\n" +
-	"\x0eGetCurrentUser\x12'.kindlast.core.v1.GetCurrentUserRequest\x1a(.kindlast.core.v1.GetCurrentUserResponse\"\n" +
-	"\x8a\xb5\x18\x06openidB\xc4\x01\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role2\x94\x01\n" +
+	"\x0eSessionService\x12\x81\x01\n" +
+	"\x0eGetCurrentUser\x12'.kindlast.core.v1.GetCurrentUserRequest\x1a(.kindlast.core.v1.GetCurrentUserResponse\"\x1c\x8a\xb5\x18\x06openid\x82\xd3\xe4\x93\x02\f\x12\n" +
+	"/api/v1/meB\xc4\x01\n" +
 	"\x14com.kindlast.core.v1B\fSessionProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3"
 
 var (

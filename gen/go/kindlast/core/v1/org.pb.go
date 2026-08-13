@@ -8,6 +8,7 @@ package corev1
 
 import (
 	_ "github.com/Entear-OU/kindlast/gen/go/kindlast/options/v1"
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -135,17 +136,16 @@ var File_kindlast_core_v1_org_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_org_proto_rawDesc = "" +
 	"\n" +
-	"\x1akindlast/core/v1/org.proto\x12\x10kindlast.core.v1\x1a\x1fkindlast/options/v1/scope.proto\"/\n" +
+	"\x1akindlast/core/v1/org.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"/\n" +
 	"\x17AcceptInvitationRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"`\n" +
 	"\x18AcceptInvitationResponse\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x19\n" +
 	"\borg_name\x18\x02 \x01(\tR\aorgName\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role2\x83\x01\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role2\xae\x01\n" +
 	"\n" +
-	"OrgService\x12u\n" +
-	"\x10AcceptInvitation\x12).kindlast.core.v1.AcceptInvitationRequest\x1a*.kindlast.core.v1.AcceptInvitationResponse\"\n" +
-	"\x8a\xb5\x18\x06openidB\xc0\x01\n" +
+	"OrgService\x12\x9f\x01\n" +
+	"\x10AcceptInvitation\x12).kindlast.core.v1.AcceptInvitationRequest\x1a*.kindlast.core.v1.AcceptInvitationResponse\"4\x8a\xb5\x18\x06openid\x82\xd3\xe4\x93\x02$\"\"/api/v1/invitations/{token}:acceptB\xc0\x01\n" +
 	"\x14com.kindlast.core.v1B\bOrgProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3"
 
 var (

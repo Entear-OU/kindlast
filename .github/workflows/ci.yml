@@ -141,6 +141,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, so `buf breaking` below can resolve main from the
+          # local clone. Comparing against the remote URL would need
+          # credentials for a private repository; comparing against `.git`
+          # needs only the objects, and a shallow clone does not have them.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -155,6 +161,17 @@ jobs:
 
       - name: Lint protos
         run: buf lint
+
+      # The merge gate ENT-199 adds, and the reason it exists now rather than
+      # when a stranger first integrates: a field removed or a tag reused is
+      # free to fix today and an external breaking change the moment anyone
+      # depends on it. Policy in proto/EVOLUTION.md.
+      #
+      # On a pull request this compares against main. On a push to main it
+      # compares main against itself, which is a no-op rather than a special
+      # case worth branching on.
+      - name: Check for breaking proto changes
+        run: buf breaking --against '.git#branch=main'
 
       # gen/ is committed so a reviewer reads the same bytes the build uses.
       # That only holds if CI notices when the two diverge, hence regenerating
