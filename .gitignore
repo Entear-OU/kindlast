@@ -81,3 +81,9 @@ next-env.d.ts
 # Go build artifacts
 apps/*/bin/
 
+# go.work IS committed: it is the mechanism joining the service modules, and
+# CI resolves intra-repo imports through it. go.work.sum is not. It is a local
+# by-product holding hashes already covered by each module's own go.sum, it
+# churns on unrelated commands, and CI passes without it.
+go.work.sum
+
