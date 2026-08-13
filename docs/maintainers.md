@@ -42,19 +42,29 @@ carries only servers that work for anyone who clones the repo: `playwright` and
 `shadcn`.
 
 The Linear MCP server is deliberately **not** in there, because it fails to
-connect for anyone without workspace access. Add it to your personal config
-instead, either in `~/.claude.json` or in a git-ignored `.mcp.local.json`:
+connect for anyone without workspace access. The same goes for any other server
+needing private credentials. Add those to your personal config instead:
 
-```json
-{
-  "mcpServers": {
-    "linear-server": {
-      "type": "http",
-      "url": "https://mcp.linear.app/mcp"
-    }
-  }
-}
+```bash
+claude mcp add --scope user --transport http linear-server https://mcp.linear.app/mcp
 ```
+
+Claude Code reads MCP servers from two files, and the scope decides which:
+
+| Scope | Lives in | Applies to |
+|---|---|---|
+| `project` | `.mcp.json` at the repo root, committed | everyone who clones the repo |
+| `user` | `~/.claude.json` | you, in every project |
+| `local` | `~/.claude.json`, under this project's entry | you, in this project only |
+
+**There is no `.mcp.local.json`.** An earlier version of this page suggested
+one; Claude Code never reads that file, so a server configured there simply
+never appears, with no error to explain why. `--scope user` is the safer of the
+two personal scopes for an account-level server like Linear, since it applies
+wherever you are rather than being tied to one project entry.
+
+Check what is loaded, and from where, with `claude mcp list` and
+`claude mcp get <name>`.
 
 ## Contributor licence agreement
 
