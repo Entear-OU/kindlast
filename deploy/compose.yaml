@@ -237,6 +237,19 @@ services:
       # not known until the project exists.
       KINDLAST_OIDC_AUDIENCE_FILE: /machinekey/core-api-audience.txt
 
+      # Where the caller's granted scopes actually live (ENT-197).
+      #
+      # Measured rather than assumed: Zitadel emits no `scope` claim and no
+      # `scp` claim on an access token, whatever is requested. With
+      # accessTokenRoleAssertion enabled on the web application it emits
+      # project roles instead, under two claims, and the unversioned one is
+      # used here because the other embeds a project id that differs per
+      # deployment.
+      #
+      # The verifier reads the object-keyed shape these carry, so pointing at
+      # them is configuration rather than a code change (§18.2).
+      KINDLAST_OIDC_SCOPE_CLAIMS: "urn:zitadel:iam:org:project:roles"
+
       # kindlast_app: owns nothing, NOSUPERUSER, NOBYPASSRLS. Connecting as
       # anything else makes every policy in the schema a silent no-op (§14.1).
       KINDLAST_DATABASE_URL: postgres://kindlast_app:${KINDLAST_APP_PASSWORD:-app-dev-password}@postgres-app:5432/kindlast?sslmode=disable
