@@ -175,6 +175,56 @@ If you add a tenant table, it needs `org_id`, `FORCE ROW LEVEL SECURITY`, and
 policies in the two-GUC form. `bun run test:db` asserts all of that over
 `pg_class` rather than trusting convention, and it will fail if you forget.
 
+## When the API surface changes, update the Postman collection
+
+**Any change to the API surface updates `postman/` in the same PR.** Not a
+follow-up, not an issue for later: the same PR, so the collection is reviewed
+against the change it describes.
+
+The surface means anything a caller has to know:
+
+- A proto change: a new RPC, a changed request or response, a changed
+  `required_scope`.
+- A new or renamed header a caller must send, such as the active-organisation
+  header.
+- A change to how a caller authenticates: the audience, the scopes, the grant,
+  where a credential comes from.
+- Any endpoint outside the proto surface, which is most of what the collection
+  is for: the authorization server's routes, `web`'s redirect endpoints, and
+  the webhook paths.
+
+The reason is narrow and it is not tidiness. **The collection is the only
+executable description of the halves that will never appear in a proto file**,
+so for those it is the source of truth rather than a convenience. And it is
+what someone reaches for at two in the morning during an incident, which is
+exactly when a request that quietly stopped matching reality does the most
+damage. A collection that is merely stale is worse than no collection, because
+somebody will believe it.
+
+Three things to get right, all of which have already gone wrong once:
+
+1. **Update the description, not only the request.** A request whose body is
+   right and whose description still says "does not work yet, see ENT-195"
+   sends the next person to read a closed issue. Descriptions carry the
+   reasoning that is not recoverable from a URL and a method, so they are the
+   part that rots hardest.
+2. **Record what you measured, not what the specification implies.** The
+   client-credentials request carries two facts that cost an afternoon each:
+   Zitadel's `client_id` for a service user is its username rather than its
+   id, and the audience is the project id. Neither is guessable and neither is
+   in a document.
+3. **Do not reformat the JSON.** Editing it by loading and re-dumping through
+   a library expands the compact arrays and escapes the section signs, and
+   turns a six-line change into a two-hundred-line diff nobody can review.
+   Edit the fields you mean to edit and leave the rest byte-identical.
+
+Mark an endpoint that does not exist yet with the issue that will deliver it,
+and keep it in the collection. Requests that document the plan are deliberate:
+they are how the collection tracks where the build order is going rather than
+only where it has been. When `buf` emits OpenAPI (design doc §23.2), the Core
+API requests should be generated from the spec instead, and this rule then
+applies to regenerating them.
+
 ## Development approach
 
 Test-driven, and it is not decorative:

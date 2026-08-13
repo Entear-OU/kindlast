@@ -149,7 +149,7 @@
           ]
         },
         {
-          "name": "Token, client credentials (NO CLIENT YET, ENT-195)",
+          "name": "Token, client credentials",
           "request": {
             "method": "POST",
             "header": [
@@ -161,7 +161,7 @@
                 { "key": "grant_type", "value": "client_credentials" },
                 { "key": "client_id", "value": "{{client_id}}" },
                 { "key": "client_secret", "value": "{{client_secret}}" },
-                { "key": "scope", "value": "openid" }
+                { "key": "scope", "value": "openid profile urn:zitadel:iam:org:project:id:{{project_id}}:aud" }
               ]
             },
             "url": {
@@ -169,7 +169,7 @@
               "host": ["{{auth_base_url}}"],
               "path": ["oauth", "v2", "token"]
             },
-            "description": "A machine token, for exercising the API without a browser.\n\n**This does not work yet, and not because of a misconfiguration.** The seed job creates one OIDC client, `web`, with the authorization-code and refresh grants only. Giving a confidential browser client the client-credentials grant would be wrong, so the machine clients of §1.3 (`internal:ingest`, `internal:intelligence`, `internal:act-on-behalf`) are a separate thing that ENT-195 adds. The request is kept here as the shape that will work once they exist.\n\nThe **user** flow is authorization code with PKCE and cannot be driven from Postman end to end, because it involves a login form and a redirect back to web. Use a browser for that."
+            "description": "A machine token, for exercising the API without a browser. The seed job creates the `core-api-client` service user this needs (ENT-195), so it works against any stack brought up with `docker compose -f deploy/compose.yaml up -d`.\n\nFill `client_id`, `client_secret` and `project_id` from the shared volume rather than guessing:\n\n```bash\ndocker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/core-api-client.json\ndocker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/core-api-audience.txt\n```\n\nTwo details were measured against this stack rather than taken from a specification, and both cost an afternoon to rediscover.\n\n**`client_id` is the service user's username, not its id.** The secret response carries its own `clientId`, and that is the one to send. Passing the numeric user id returns `invalid_client: client not found`.\n\n**The audience is Zitadel's project id**, which is why the reserved scope `urn:zitadel:iam:org:project:id:{project}:aud` is in the scope list. Without it the token comes back scoped to the client itself, and core-api refuses it, correctly, as minted for someone else.\n\nOne thing this token will not do yet: pass the scope check. Zitadel's access tokens carry no `scope`, no `scp` and no roles claim, whatever is requested here, so core-api refuses it at the scope stage with `permission_denied`. That is the chain failing closed rather than a broken request; ENT-197 closes it by enabling role assertion on the web application. See `docs/core-api-configuration.md`.\n\nThe **user** flow is authorization code with PKCE and cannot be driven from Postman end to end, because it involves a login form and a redirect back to web. Use a browser for that."
           },
           "event": [
             {
@@ -177,14 +177,29 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "// The service user is seeded (ENT-195), so a failure here is a",
+                  "// real failure rather than an expected gap, and is asserted.",
+                  "pm.test('token issued', () => pm.response.to.have.status(200));",
+                  "",
                   "if (pm.response.code === 200) {",
-                  "  pm.collectionVariables.set('access_token', pm.response.json().access_token);",
-                  "  pm.test('token issued', () => pm.expect(pm.response.json().access_token).to.be.a('string'));",
-                  "} else {",
-                  "  // Not an assertion failure: no client-credentials client exists",
-                  "  // yet (ENT-195). Asserting here would make a green stack look",
-                  "  // broken every time somebody runs the folder.",
-                  "  console.log('No client-credentials client yet. Expected until ENT-195; see the request description.');",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('access_token', body.access_token);",
+                  "",
+                  "  const claims = JSON.parse(atob(body.access_token.split('.')[1]",
+                  "    .replace(/-/g, '+').replace(/_/g, '/')));",
+                  "",
+                  "  // core-api accepts one audience and only one. If this fails, the",
+                  "  // reserved aud scope is missing or project_id is unset, and every",
+                  "  // core-api call will read as an audience mismatch.",
+                  "  pm.test('aud carries the project id', () =>",
+                  "    pm.expect(String(claims.aud)).to.include(pm.environment.get('project_id')));",
+                  "",
+                  "  // Recorded, not asserted: this is the known gap, and failing here",
+                  "  // would report a design decision as a defect.",
+                  "  if (!claims.scope && !claims.scp) {",
+                  "    console.log('No scope claim, as measured. core-api refuses this at the',",
+                  "      'scope stage until ENT-197 enables role assertion.');",
+                  "  }",
                   "}"
                 ]
               }
@@ -265,7 +280,7 @@
     },
     {
       "name": "Core API v1",
-      "description": "The proto surface, reached through web rather than directly: core-api binds no published port, so there is no host to point at (ENT-191).\n\nOnce buf emits OpenAPI (§23.2), these requests should be generated from it rather than maintained here by hand.",
+      "description": "The proto surface, reached through web rather than directly: core-api binds no published port, so there is no host to point at (ENT-191). CI asserts that absence rather than trusting it, because it is what stops a leaked access token being replayed from the internet. Postman runs on your machine, which is the wrong side of that boundary, so nothing in this folder can answer until web exists (ENT-197).\n\nThe interceptor chain in front of these endpoints is live and tested as of ENT-195. To exercise it today, join the network:\n\n```bash\ndocker run --rm --network kindlast_default curlimages/curl:8.11.1 \\\n  -sS -X POST http://core-api:8080/kindlast.core.v1.SessionService/GetCurrentUser \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer <the token from Auth (Zitadel)>' \\\n  -H 'X-Kindlast-Org: {{org_id}}' -d '{}'\n```\n\nOr run `./scripts/validate-core-api-auth.sh`, which drives the whole chain and explains what each result proves.\n\nOnce buf emits OpenAPI (§23.2), these requests should be generated from it rather than maintained here by hand.",
       "item": [
         {
           "name": "Me (NOT YET IMPLEMENTED, ENT-196)",
