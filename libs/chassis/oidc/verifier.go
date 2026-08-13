@@ -187,10 +187,45 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 		Email:         claims.Email,
 		EmailVerified: bool(claims.EmailVerified),
 		Name:          claims.Name,
-		Scopes:        claims.scopes(v.scopeClaims),
+		Scopes:        withOpenID(claims.scopes(v.scopeClaims)),
 		TokenID:       claims.ID,
 		ExpiresAt:     expires.Time,
 	}, nil
+}
+
+// ScopeOpenID is the one scope in the vocabulary that is not a permission.
+const ScopeOpenID = "openid"
+
+// withOpenID asserts `openid` on a token that has just verified.
+//
+// Every other scope answers "may this client touch this kind of resource".
+// `openid` answers "did this caller arrive through an OIDC login", and a token
+// that has passed signature, issuer, audience and expiry is exactly the proof
+// of that. It is a conclusion drawn from verification, not a grant carried in
+// the token, so this is where it belongs rather than in a special case inside
+// the scope interceptor, which stays uniform: is the string present.
+//
+// Why it has to be asserted at all, measured rather than assumed: no
+// authorization server issues a grant for `openid`, because it is a request
+// flag rather than a permission. A real authorization-code token from the
+// seeded Zitadel carries seven project roles and no `openid` (some servers,
+// Keycloak among them, happen to echo requested scopes back, which is an
+// implementation detail rather than a promise). Requiring it as a claim made
+// GetCurrentUser unreachable by every valid token, and that is the endpoint
+// where a new user's organisation is created, so a caller could never reach
+// the call that would grant them anything.
+//
+// The rule this creates matters more than the code: **never declare `openid`
+// on an endpoint that grants authority.** It means signed in, not permitted.
+// The two RPCs that declare it today are both bootstrap calls, and
+// AcceptInvitation's real authorization is possession of the invitation token.
+func withOpenID(scopes []string) []string {
+	for _, scope := range scopes {
+		if scope == ScopeOpenID {
+			return scopes
+		}
+	}
+	return append(scopes, ScopeOpenID)
 }
 
 // classify maps the jwt library's errors onto this package's, so nothing

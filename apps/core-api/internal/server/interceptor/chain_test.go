@@ -124,15 +124,16 @@ func TestTheChainRefusesWhatItShould(t *testing.T) {
 			want: connect.CodeUnauthenticated,
 			why:  "a token with no jti was accepted, opting that session out of the deny-list",
 		},
-		{
-			name: "missing the declared scope",
-			headers: map[string]string{
-				"Authorization":       "Bearer " + a.token(t, adaUser, "findings:read"),
-				interceptor.OrgHeader: alphaOrg,
-			},
-			want: connect.CodePermissionDenied,
-			why:  "a token without the declared scope was allowed through",
-		},
+		// "missing the declared scope" used to live here, asserting that a
+		// token carrying only findings:read was refused by GetCurrentUser.
+		// It cannot be tested against the real registry any more: both
+		// shipped RPCs declare `openid`, and verification now asserts that,
+		// because no authorization server issues a grant for it.
+		//
+		// The property itself is still covered, against fixtures declaring a
+		// real permission rather than the bootstrap scope:
+		// TestTheInterceptorEnforcesTheDeclaredValueNotAFixedOne and
+		// TestAssertingOpenIDGrantsNothingElse.
 		{
 			name: "an organisation the caller does not belong to",
 			headers: map[string]string{
