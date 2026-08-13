@@ -118,6 +118,31 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+step "3b. Provisioning on first arrival (ENT-196)"
+note "a new subject lands with a personal organisation and an owner membership;"
+note "an invited user joins the organisation they were invited to and does NOT"
+note "also get a personal one; and eight concurrent first requests produce one."
+
+if (cd apps/core-api && KINDLAST_REQUIRE_STACK=1 go test -count=1 \
+      ./internal/store/postgres/... ./internal/domain/... \
+      ./internal/server/interceptor/... >/tmp/ent196-provisioning.log 2>&1); then
+  pass "provisioning, invitations, and the whole chain end to end"
+else
+  fail "provisioning"
+  sed 's/^/        /' /tmp/ent196-provisioning.log | head -30
+fi
+
+note "the two-tab race is real, so the test that guards it must be able to see it:"
+if (cd apps/core-api && grep -q "on conflict (personal_owner_id)" internal/store/postgres/org.go); then
+  pass "the partial unique index is still what absorbs a retry"
+  note "measured during ENT-196: RecordIdentity serialises concurrent first"
+  note "requests (they upsert the same identity key), so the index is the"
+  note "backstop rather than the primary defence. Both are tested separately."
+else
+  fail "the on-conflict guard has been removed from provisioning"
+fi
+
+# ---------------------------------------------------------------------------
 step "4. The whole chain, over the compose network"
 
 published="$(docker inspect kindlast-core-api --format '{{json .NetworkSettings.Ports}}')"
