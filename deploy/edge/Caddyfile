@@ -1,11 +1,22 @@
-# The edge of the stack (core-api-surface §0). Today it owns the front door
-# and a health endpoint; web and core-api claim their routes at build-order
-# step 1. Zitadel stays on its own published port for now because it
-# validates the Host header against its external domain, and proxying it
-# through here would couple the two configs for no step-0 benefit.
+# The edge of the stack (core-api-surface §0). It owns the front door, a
+# health endpoint, and from step 1 the route to core-api. Zitadel stays on its
+# own published port for now because it validates the Host header against its
+# external domain, and proxying it through here would couple the two configs
+# for no step-0 benefit.
 :80 {
 	handle /healthz {
 		respond "ok" 200
+	}
+
+	# core-api's Connect surface (ENT-197). The paths are fully qualified
+	# proto names, so they namespace themselves and need no prefix stripping.
+	#
+	# This is the only way in. core-api publishes no ports, deliberately, so
+	# reaching it means coming through here: a caller on the host and a
+	# caller in another container use the same door, and there is no
+	# development-only shortcut that stops existing in production.
+	handle /kindlast.core.v1.* {
+		reverse_proxy core-api:8080
 	}
 
 	handle {
