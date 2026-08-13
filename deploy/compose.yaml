@@ -61,10 +61,20 @@ services:
     ports:
       - "127.0.0.1:${KINDLAST_PG_APP_PORT:-5433}:5432"
     healthcheck:
-      # The init scripts create the kindlast database last, so its presence
-      # is the "roles and grants are in place" signal, not just "postmaster
-      # answers".
-      test: ["CMD-SHELL", "pg_isready -U postgres -d kindlast"]
+      # Two things make this check honest, and both are needed.
+      #
+      # The database name, because the init scripts create `kindlast` last, so
+      # its presence means roles and grants are in place rather than merely
+      # "a postmaster answered".
+      #
+      # `-h 127.0.0.1`, because during initdb the entrypoint runs a temporary
+      # server that listens on the unix socket ONLY. A socket-based pg_isready
+      # succeeds against that temporary server, the container is marked
+      # healthy, the migration job starts, and then the real server restarts
+      # and answers "the database system is starting up". Forcing TCP means
+      # the check can only pass once the server clients actually use is
+      # accepting connections.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d kindlast"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -93,7 +103,9 @@ services:
       - postgres-platform-data:/var/lib/postgresql/data
       - ./postgres/platform-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d zitadel"]
+      # Same TCP requirement as postgres-app above: the socket answers during
+      # init, the network does not.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d zitadel"]
       interval: 2s
       timeout: 3s
       retries: 30
