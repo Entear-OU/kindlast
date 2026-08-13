@@ -9,16 +9,28 @@
 // ids, Auth0 issues `auth0|abc123`. So the schema's column type is a
 // commitment the IdP does not make.
 //
-// Two ways out, and this package is the reversible one:
+// Deriving a uuid is the settled answer (§20.1), rather than widening the
+// column to text: widening rewrites the neighbour of the tenancy key on the
+// table every RLS policy joins against, for nothing the derivation does not
+// already provide.
 //
-//  1. Widen the column to text. Correct, and it touches the tenancy key's
-//     neighbour on a table every RLS policy joins against, so it is a
-//     migration and a decision, not a detail.
-//  2. Derive a stable uuid from the subject, which is what this does.
+// The derivation lives here rather than in one service because `core-api` and
+// `intelligence` must agree about who a user is. Two copies would eventually
+// disagree while both believed they agreed, which is the worst available
+// version of that bug (§1.6).
 //
-// Whichever is chosen, the derivation has to live somewhere both Go resource
-// servers can reach, or `core-api` and `intelligence` would disagree about who
-// a user is while both believing they agreed (§1.6). Hence the chassis.
+// # Two consequences, both easy to miss
+//
+// **The issuer is set-once per deployed instance.** It is an input to every
+// derived id, so changing it re-derives all of them and orphans every
+// membership row: the rows remain, and nobody maps to them. Moving an IdP's
+// public URL is an identity migration with a backfill, not a settings change.
+// docs/core-api-configuration.md says so where an operator will read it.
+//
+// **The derivation is one-way.** A uuid cannot be turned back into a subject,
+// so provisioning stores the raw `iss` and `sub` alongside the derived id.
+// That is what answers "who is this uuid" during an incident, and what a
+// subject access request needs in a product whose whole subject is GDPR.
 package subject
 
 import (

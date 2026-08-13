@@ -6,6 +6,9 @@
 # workspace spans modules: core-api compiles against gen/go and libs/chassis,
 # and neither is reachable from a context rooted here.
 #
+# Written up in docs/core-api-configuration.md, under "Building the image",
+# including the consequence that `go mod tidy` cannot run in these modules.
+#
 # This is the mechanism §21.4 flagged as unresolved. With no `replace`
 # directives and no versioned requires, gen/go and libs/chassis resolve only
 # through the workspace, so a standalone build needs the workspace file in the
