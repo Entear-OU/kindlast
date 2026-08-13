@@ -2,9 +2,9 @@
 // dragging a service's dependency set along (core-api-surface §21.4).
 module github.com/Entear-OU/kindlast/gen/go
 
-go 1.24.0
+go 1.25.0
 
 require (
-	connectrpc.com/connect v1.19.1
-	google.golang.org/protobuf v1.36.11
+	connectrpc.com/connect v1.20.0
+	google.golang.org/protobuf v1.36.12
 )

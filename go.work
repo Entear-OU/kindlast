@@ -4,7 +4,7 @@
 // a careless import from crossing a service boundary.
 //
 // apps/workers and apps/intelligence join when they exist.
-go 1.24.0
+go 1.25.0
 
 use (
 	./apps/core-api
