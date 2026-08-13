@@ -1,0 +1,20 @@
+# The proto contract is the single source of truth for every service boundary
+# (core-api-surface §21.3). One module, at proto/, so the import paths in
+# generated code match the directory layout exactly.
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  except:
+    # STANDARD requires a package-versioned directory suffix, which we follow,
+    # but it also demands RPC request/response types be named after the RPC.
+    # Sharing one Empty-shaped response across several RPCs is not a mistake
+    # worth an exception comment on every method.
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+breaking:
+  use:
+    - FILE

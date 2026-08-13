@@ -78,3 +78,6 @@ supabase/.branches/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Go build artifacts
+apps/*/bin/
+

@@ -1,0 +1,20 @@
+# Generated code is committed and CI fails on drift, so a reviewer reads the
+# same bytes the build uses (core-api-surface §21.3).
+#
+# Plugins are pinned. A codegen toolchain that moves on its own produces a
+# diff nobody asked for, in a directory nobody reads carefully.
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/Entear-OU/kindlast/gen/go
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    out: gen/go
+    opt: paths=source_relative
+  - remote: buf.build/connectrpc/go:v1.19.1
+    out: gen/go
+    opt: paths=source_relative
+inputs:
+  - directory: proto
