@@ -46,6 +46,58 @@ func TestOfFailsClosedOnAnUndeclaredMethod(t *testing.T) {
 	}
 }
 
+// The option present but set to the empty string is a different failure from
+// the option being absent, and it is the more dangerous of the two: it looks
+// annotated to a reader skimming the proto. It must still fail closed.
+func TestOfFailsClosedOnAnEmptyScope(t *testing.T) {
+	service := fixtureWithEmptyOption(t)
+
+	_, err := scope.Of(service.Methods().ByName("Read"))
+	if !errors.Is(err, scope.ErrUndeclared) {
+		t.Fatalf("error = %v, want ErrUndeclared", err)
+	}
+}
+
+// A method that carries options but not this one, which is the shape a real
+// proto produces when someone writes `option deprecated = true;` and no
+// scope. It is a distinct code path from "no options at all", because
+// protoreflect hands back a nil options message in that case and a populated
+// one here.
+func TestOfFailsClosedWhenOtherOptionsArePresent(t *testing.T) {
+	opts := &descriptorpb.MethodOptions{Deprecated: proto.Bool(true)}
+	service := build(t, &descriptorpb.ServiceDescriptorProto{
+		Name: proto.String("Fixture"),
+		Method: []*descriptorpb.MethodDescriptorProto{{
+			Name:       proto.String("Read"),
+			InputType:  proto.String(".scope.test.v1.Empty"),
+			OutputType: proto.String(".scope.test.v1.Empty"),
+			Options:    opts,
+		}},
+	})
+
+	_, err := scope.Of(service.Methods().ByName("Read"))
+	if !errors.Is(err, scope.ErrUndeclared) {
+		t.Fatalf("error = %v, want ErrUndeclared", err)
+	}
+}
+
+// A descriptor carrying no options at all, which is what a method declared
+// without any `option (...)` block looks like once it has been through a
+// round trip that drops the default instance.
+func TestOfFailsClosedWhenOptionsAreAbsentEntirely(t *testing.T) {
+	_, err := scope.Of(strippedOptions{fixture(t, map[string]string{"Read": "findings:read"}).Methods().ByName("Read")})
+	if !errors.Is(err, scope.ErrUndeclared) {
+		t.Fatalf("error = %v, want ErrUndeclared", err)
+	}
+}
+
+// strippedOptions presents a real method descriptor reporting no options,
+// exercising the branch that a normal descriptor never reaches because
+// protoreflect hands back a default instance rather than nil.
+type strippedOptions struct{ protoreflect.MethodDescriptor }
+
+func (strippedOptions) Options() protoreflect.ProtoMessage { return nil }
+
 // One offender per run turns a five-minute fix into five runs, so the walker
 // reports all of them at once.
 func TestOfServiceReportsEveryUndeclaredMethodAtOnce(t *testing.T) {
@@ -85,6 +137,32 @@ func fixture(t *testing.T, methods map[string]string) protoreflect.ServiceDescri
 		}
 		service.Method = append(service.Method, method)
 	}
+
+	return build(t, service)
+}
+
+// fixtureWithEmptyOption sets the extension explicitly to "", which the
+// map-based fixture above cannot express (an empty value there means "omit
+// the option entirely").
+func fixtureWithEmptyOption(t *testing.T) protoreflect.ServiceDescriptor {
+	t.Helper()
+
+	opts := &descriptorpb.MethodOptions{}
+	proto.SetExtension(opts, optionsv1.E_RequiredScope, "")
+
+	return build(t, &descriptorpb.ServiceDescriptorProto{
+		Name: proto.String("Fixture"),
+		Method: []*descriptorpb.MethodDescriptorProto{{
+			Name:       proto.String("Read"),
+			InputType:  proto.String(".scope.test.v1.Empty"),
+			OutputType: proto.String(".scope.test.v1.Empty"),
+			Options:    opts,
+		}},
+	})
+}
+
+func build(t *testing.T, service *descriptorpb.ServiceDescriptorProto) protoreflect.ServiceDescriptor {
+	t.Helper()
 
 	file, err := protodesc.NewFile(&descriptorpb.FileDescriptorProto{
 		Name:    proto.String("scope/test/v1/fixture.proto"),
