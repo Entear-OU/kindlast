@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -77,9 +78,35 @@ func (c *Claims) HasScope(scope string) bool {
 
 // Verifier checks access tokens against one issuer and one audience.
 type Verifier struct {
-	keys     *KeySet
-	issuer   string
-	audience string
+	keys        *KeySet
+	issuer      string
+	audience    string
+	scopeClaims []string
+}
+
+// VerifierOption adjusts how a Verifier reads a token.
+type VerifierOption func(*Verifier)
+
+// WithScopeClaims names additional claims to read the caller's scopes from,
+// on top of the standard `scope` and `scp`.
+//
+// This exists because of a fact measured against the bundled Zitadel rather
+// than assumed: its access tokens carry neither `scope` nor `scp`. An
+// authorization server is free to express granted authority in a claim of its
+// own choosing, and several do. Zitadel asserts project roles under
+// `urn:zitadel:iam:org:project:{projectID}:roles`; Keycloak uses
+// `realm_access.roles`; Entra uses `roles`.
+//
+// Configurable rather than hard-coded, for the §18.2 reason: a self-hoster
+// pointing at their own IdP must not need a code change, and this package must
+// not grow a table of vendor quirks. The default stays RFC 9068, which is what
+// a conformant server does.
+//
+// Values are read whether the claim is a space-delimited string, an array of
+// strings, or an object whose keys are the grants, which is the shape Zitadel
+// and Keycloak both produce.
+func WithScopeClaims(names ...string) VerifierOption {
+	return func(v *Verifier) { v.scopeClaims = append(v.scopeClaims, names...) }
 }
 
 // NewVerifier binds a key set to the issuer and audience it is allowed to
@@ -90,7 +117,7 @@ type Verifier struct {
 // `intelligence` only `aud: kindlast-intelligence`. Without that, a token
 // minted for one resource server replays against the other, which is the most
 // common OAuth misconfiguration in a multi-service estate.
-func NewVerifier(keys *KeySet, issuer, audience string) (*Verifier, error) {
+func NewVerifier(keys *KeySet, issuer, audience string, opts ...VerifierOption) (*Verifier, error) {
 	if keys == nil {
 		return nil, errors.New("oidc: verifier needs a key set")
 	}
@@ -100,7 +127,12 @@ func NewVerifier(keys *KeySet, issuer, audience string) (*Verifier, error) {
 	if audience == "" {
 		return nil, errors.New("oidc: verifier needs an audience")
 	}
-	return &Verifier{keys: keys, issuer: issuer, audience: audience}, nil
+
+	verifier := &Verifier{keys: keys, issuer: issuer, audience: audience}
+	for _, opt := range opts {
+		opt(verifier)
+	}
+	return verifier, nil
 }
 
 // Verify checks a bearer token's signature, issuer, audience and expiry, and
@@ -144,7 +176,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 		Subject:       claims.Subject,
 		Email:         claims.Email,
 		EmailVerified: bool(claims.EmailVerified),
-		Scopes:        claims.scopes(),
+		Scopes:        claims.scopes(v.scopeClaims),
 		TokenID:       claims.ID,
 		ExpiresAt:     expires.Time,
 	}, nil
@@ -178,20 +210,89 @@ type tokenClaims struct {
 
 	Email         string       `json:"email,omitempty"`
 	EmailVerified flexibleBool `json:"email_verified,omitempty"`
+
+	// raw keeps the whole payload so WithScopeClaims can reach a claim this
+	// struct does not name.
+	raw map[string]json.RawMessage
 }
 
-func (c *tokenClaims) scopes() []string {
-	if c.Scope != "" {
-		return strings.Fields(c.Scope)
+// UnmarshalJSON fills the named fields and keeps the raw payload alongside
+// them.
+//
+// The local type strips the methods off tokenClaims, which is what stops this
+// recursing into itself.
+func (c *tokenClaims) UnmarshalJSON(data []byte) error {
+	type plain tokenClaims
+
+	var fields plain
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*c = tokenClaims(fields)
+
+	return json.Unmarshal(data, &c.raw)
+}
+
+// scopes collects the caller's granted authority from the standard claims
+// first, then from any deployment-configured ones.
+//
+// The union rather than the first non-empty answer: a deployment that asserts
+// roles in a vendor claim may still emit `scope` for the OIDC basics, and
+// dropping either half would deny requests that should pass.
+func (c *tokenClaims) scopes(extraClaims []string) []string {
+	found := map[string]bool{}
+	var ordered []string
+
+	add := func(values []string) {
+		for _, value := range values {
+			if value == "" || found[value] {
+				continue
+			}
+			found[value] = true
+			ordered = append(ordered, value)
+		}
+	}
+
+	add(strings.Fields(c.Scope))
+	add(valuesOf(c.SCP))
+	for _, name := range extraClaims {
+		add(valuesOf(c.raw[name]))
+	}
+
+	return ordered
+}
+
+// valuesOf reads a claim that may be a space-delimited string, an array of
+// strings, or an object whose keys are the grants.
+//
+// The object case is not hypothetical: it is the shape Zitadel emits for
+// project roles, where each key maps to the organisations the role was granted
+// in.
+func valuesOf(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	var single string
+	if err := json.Unmarshal(raw, &single); err == nil {
+		return strings.Fields(single)
 	}
 
 	var list []string
-	if err := json.Unmarshal(c.SCP, &list); err == nil {
+	if err := json.Unmarshal(raw, &list); err == nil {
 		return list
 	}
-	var single string
-	if err := json.Unmarshal(c.SCP, &single); err == nil {
-		return strings.Fields(single)
+
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err == nil {
+		keys := make([]string, 0, len(object))
+		for key := range object {
+			keys = append(keys, key)
+		}
+		// Sorted so the resulting scope list is stable across runs, which
+		// matters only for readable errors and predictable tests.
+		sort.Strings(keys)
+		return keys
 	}
 	return nil
 }
