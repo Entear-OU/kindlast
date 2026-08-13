@@ -1,11 +1,13 @@
-go 1.24
-
 // A Go module per service, joined here for local development
-// (core-api-surface §21.4). Modules land with build-order step 1:
+// (core-api-surface §21.4). One module would mean one dependency set, so an
+// upgrade for core-api would silently upgrade workers, and nothing would stop
+// a careless import from crossing a service boundary.
 //
-//	use (
-//		./apps/core-api
-//		./apps/workers
-//		./gen/go
-//		./libs/chassis
-//	)
+// apps/workers and apps/intelligence join when they exist.
+go 1.25.0
+
+use (
+	./apps/core-api
+	./gen/go
+	./libs/chassis
+)

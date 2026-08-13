@@ -136,6 +136,58 @@ jobs:
         if: always()
         run: supabase stop
 
+  go:
+    name: Proto codegen & Go tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      # Pinned, for the same reason the Bun version is pinned above: a codegen
+      # toolchain that moves on its own produces a diff nobody asked for, in a
+      # directory nobody reads carefully.
+      - name: Install buf
+        run: go install github.com/bufbuild/buf/cmd/buf@v1.72.0
+
+      - name: Lint protos
+        run: buf lint
+
+      # gen/ is committed so a reviewer reads the same bytes the build uses.
+      # That only holds if CI notices when the two diverge, hence regenerating
+      # and failing on any diff rather than trusting the author to have run it.
+      - name: Check generated code is in sync
+        run: |
+          buf generate
+          git diff --exit-code -- gen/ \
+            || { echo "gen/ is out of date; run 'buf generate' and commit"; exit 1; }
+
+      - name: Build and test every module
+        run: |
+          for module in apps/core-api libs/chassis gen/go; do
+            echo "== $module"
+            (cd "$module" && go build ./... && go test ./...)
+          done
+
+      # Service boundaries enforced by the build rather than by review habit
+      # (core-api-surface §21.4). Boundaries policed only by reviewers erode in
+      # weeks, and the erosion is invisible until two services cannot be
+      # deployed independently.
+      - name: Check service boundaries
+        run: |
+          if grep -rn "gen/go/kindlast/core" libs/chassis --include='*.go'; then
+            echo "libs/chassis must not import core business types"
+            exit 1
+          fi
+          if [ -d apps/workers ] \
+             && grep -rn "apps/core-api" apps/workers --include='*.go'; then
+            echo "apps/workers must not import apps/core-api"
+            exit 1
+          fi
+
   stack:
     name: Compose stack & isolation tests
     runs-on: ubuntu-latest

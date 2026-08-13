@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "kindlast/options/v1/scope.proto";
+
+// The console bootstrap call, and the first authenticated endpoint in the
+// system (core-api-surface §1.5, §20.1).
+//
+// Only GetCurrentUser is defined here. The rest of the public surface arrives
+// with the issues that implement it; defining it early would mean a contract
+// nobody has verified against a handler.
+service SessionService {
+  // Returns the caller, their memberships with roles, and the active
+  // organisation. On a subject it has never seen, it provisions a personal
+  // organisation and an owner membership in one transaction before returning
+  // (ENT-196), which is why this is a plain unary call rather than a read.
+  rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse) {
+    option (kindlast.options.v1.required_scope) = "openid";
+  }
+}
+
+message GetCurrentUserRequest {}
+
+message GetCurrentUserResponse {
+  // The verified identity. Sourced from the token's claims rather than from
+  // our database: the IdP owns users, this system owns memberships (§20.1).
+  User user = 1;
+
+  // Every organisation the caller belongs to, with the role they hold in it.
+  // A consultant serving several client companies is a realistic user here,
+  // so this is a list rather than a single value.
+  repeated Membership memberships = 2;
+
+  // The organisation this request resolved to, which travels per request
+  // rather than living in the token, so switching needs no re-minting.
+  string active_org_id = 3;
+
+  // The active organisation's plan, so the console can gate features without
+  // a second call. Billing keys on the organisation, not the user.
+  string plan = 4;
+}
+
+message User {
+  // The IdP subject claim. The tenancy key is org_id; this identifies the
+  // human, and is what created_by and approved_by record.
+  string id = 1;
+  string email = 2;
+  string display_name = 3;
+  // Gates finding approval: an unverified address must not be able to sign
+  // off a regulatory decision (§1.7).
+  bool email_verified = 4;
+}
+
+message Membership {
+  string org_id = 1;
+  string org_name = 2;
+  // One of owner, member, viewer. Approval authority is a regulatory-relevant
+  // fact, so it earns a role boundary (§20.1).
+  string role = 3;
+}
