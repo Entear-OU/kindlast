@@ -251,6 +251,38 @@ services:
       timeout: 5s
       retries: 20
 
+  # Mail, captured rather than sent (ENT-197).
+  #
+  # Without this, self-service registration cannot complete on a local stack at
+  # all: Zitadel sends a verification code, there is nowhere for it to go, and
+  # the account sits in USER_STATE_INITIAL forever. Found by registering a user
+  # through the browser and getting stuck on exactly that screen.
+  #
+  # It also carries the invitation links in §20.1, password resets, and the
+  # email channel that build-order step 9 begins with, so it earns a container
+  # rather than being a workaround for one flow.
+  #
+  # Nothing here ever reaches a real address, which is the point: a development
+  # stack that can email actual people is a stack that eventually does.
+  mailpit:
+    container_name: kindlast-mailpit
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+      # Keep the capture bounded; this is a development mailbox, not an archive.
+      MP_MAX_MESSAGES: "500"
+    ports:
+      # The web UI, for a human reading what the stack sent. SMTP on 1025 stays
+      # internal: nothing outside the network should be able to post mail.
+      - "127.0.0.1:${KINDLAST_MAILPIT_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   redis:
     container_name: kindlast-redis
     image: redis:7-alpine
