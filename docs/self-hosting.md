@@ -57,6 +57,16 @@ change the schema.
 this table. What follows is the required-versus-optional split, which is the
 part that is hard to work out from the file alone.
 
+The variables below configure the Next.js app against Supabase, which is the
+stack this document describes. The self-managed stack in `deploy/` is being
+built alongside it and is not yet what you would run; its resource server has
+its own settings, including how to point it at an IdP other than the bundled
+one, in
+[docs/core-api-configuration.md](./core-api-configuration.md). One thing there
+is worth knowing before you deploy anything rather than after: the OIDC issuer
+is part of every derived user id, so changing it later is an identity
+migration and not a settings edit.
+
 ### Required
 
 | Variable | Why |

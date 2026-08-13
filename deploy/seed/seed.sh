@@ -63,6 +63,60 @@ do
     || echo "seed: role ${role} exists"
 done
 
+# The audience core-api accepts (ENT-195, core-api-surface §1.4).
+#
+# Measured against this stack rather than taken from the design: Zitadel puts
+# the PROJECT id in `aud` when a token is requested with the project's reserved
+# audience scope, so the value core-api verifies is that id, not the friendly
+# `kindlast-core-api` the document names. The API application below exists so
+# the project has an API-typed app at all; the audience value is still the
+# project id.
+#
+# Written to the shared volume because it is generated here and core-api needs
+# it at boot. Same mechanism as the web client's credentials below.
+echo "seed: ensuring 'core-api' API application"
+API_APP_ID="$(api POST "/management/v1/projects/${PROJECT_ID}/apps/_search" \
+  '{"queries":[{"nameQuery":{"name":"core-api","method":"TEXT_QUERY_METHOD_EQUALS"}}]}' \
+  | jq -r '.result[0].id // empty')"
+
+if [ -z "$API_APP_ID" ]; then
+  api POST "/management/v1/projects/${PROJECT_ID}/apps/api" \
+    '{"name":"core-api","authMethodType":"API_AUTH_METHOD_TYPE_BASIC"}' > /dev/null
+  echo "seed: created the core-api API application"
+else
+  echo "seed: core-api API application exists (${API_APP_ID})"
+fi
+
+printf '%s' "${PROJECT_ID}" > /machinekey/core-api-audience.txt
+echo "seed: core-api audience (${PROJECT_ID}) written to the shared volume"
+
+# A service user for the client-credentials grant, which the Postman collection
+# marks as "NO CLIENT YET, ENT-195". It exists so API work does not need a
+# browser: the human sign-in flow is authorization code with PKCE and cannot be
+# driven from a collection.
+echo "seed: ensuring 'core-api-client' service user"
+MACHINE_ID="$(api POST /management/v1/users/_search \
+  '{"queries":[{"userNameQuery":{"userName":"core-api-client","method":"TEXT_QUERY_METHOD_EQUALS"}}]}' \
+  | jq -r '.result[0].id // empty')"
+
+if [ -z "$MACHINE_ID" ]; then
+  MACHINE_ID="$(api POST /management/v1/users/machine \
+    '{"userName":"core-api-client","name":"Core API client","description":"client_credentials for local API work (ENT-195)","accessTokenType":"ACCESS_TOKEN_TYPE_JWT"}' \
+    | jq -r '.userId')"
+
+  # The secret response carries its own clientId, and it is the USERNAME rather
+  # than the user id. Passing the user id as client_id returns
+  # "invalid_client: client not found", which is a confusing way to spend
+  # twenty minutes.
+  api PUT "/management/v1/users/${MACHINE_ID}/secret" '{}' \
+    | jq '{clientId, clientSecret}' > /machinekey/core-api-client.json
+
+  echo "seed: created service user core-api-client (${MACHINE_ID})"
+  echo "seed: credentials written to the zitadel-machinekey volume (core-api-client.json)"
+else
+  echo "seed: service user core-api-client exists (${MACHINE_ID})"
+fi
+
 echo "seed: ensuring 'web' OIDC client"
 APP_ID="$(api POST "/management/v1/projects/${PROJECT_ID}/apps/_search" \
   '{"queries":[{"nameQuery":{"name":"web","method":"TEXT_QUERY_METHOD_EQUALS"}}]}' \

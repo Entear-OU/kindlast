@@ -1,0 +1,77 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	"connectrpc.com/connect"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
+	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
+)
+
+// Dependencies is everything the mux needs, supplied by main.
+//
+// Interfaces rather than concrete types, so this package knows that tokens are
+// verified and that transactions carry tenancy, without knowing that one
+// involves an HTTP client and the other a connection pool (§21.6: main is the
+// only place that knows a Postgres URL and a Redis address exist together).
+type Dependencies struct {
+	Verifier interceptor.TokenVerifier
+	DenyList interceptor.DenyList
+	Tenants  interceptor.TenantOpener
+
+	// Ready reports whether the service's dependencies are reachable. Nil
+	// means always ready.
+	Ready func(context.Context) error
+}
+
+// New builds the HTTP handler core-api serves.
+//
+// The interceptor order is fixed here and nowhere else, so there is one place
+// to read it and one place it can be got wrong. See the package comment on
+// `interceptor` for why it is this order.
+func New(deps Dependencies) (http.Handler, error) {
+	scopes, err := interceptor.NewScope(Services())
+	if err != nil {
+		// The binary does not start. An RPC with no declared scope would
+		// otherwise be reachable with any valid token, and a process that
+		// refuses to come up is the loudest possible version of failing closed
+		// (§1.3).
+		return nil, fmt.Errorf("server: %w", err)
+	}
+
+	chain := connect.WithInterceptors(
+		interceptor.Auth(deps.Verifier),
+		interceptor.JTI(deps.DenyList),
+		scopes.Interceptor(),
+		interceptor.Tenancy(deps.Tenants),
+	)
+
+	mux := http.NewServeMux()
+	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(), chain))
+
+	// Unauthenticated by design, and bound to the internal listener only.
+	// Requiring a credential here is a common reflex that breaks orchestrator
+	// probes for no security gain, because they expose nothing a
+	// network-adjacent attacker could use (§1.7).
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
+
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		if deps.Ready != nil {
+			if err := deps.Ready(r.Context()); err != nil {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = fmt.Fprintf(w, "not ready: %v\n", err)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ready\n"))
+	})
+
+	return mux, nil
+}
