@@ -6,6 +6,7 @@
  */
 import { browserAuthorizationEndpoint, discoverProvider, requireEnv } from './oidc'
 import { createPkce, randomToken } from './pkce'
+import { safeReturnTo } from './return-to'
 import { stashState } from './state'
 
 /**
@@ -168,15 +169,4 @@ function redirectUri(): string {
   return requireEnv('KINDLAST_WEB_REDIRECT_URI')
 }
 
-/**
- * Only same-site paths are honoured as a return destination.
- *
- * `returnTo` arrives in a query parameter, so without this it is an open
- * redirect: a link that signs someone in and lands them on a page an attacker
- * controls, wearing our domain in the address bar on the way.
- */
-export function safeReturnTo(value: string | undefined | null): string {
-  if (!value) return '/dashboard'
-  if (!value.startsWith('/') || value.startsWith('//')) return '/dashboard'
-  return value
-}
+export { safeReturnTo } from './return-to'
