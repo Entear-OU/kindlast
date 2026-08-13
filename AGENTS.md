@@ -61,6 +61,50 @@ run on Node, so both toolchains have to be present.
 none of this repo's Vitest suite and still exits 0, so it reads as a pass. The
 command is `bun run test`.
 
+## Adding a dependency
+
+**Always add packages with the tool, never by hand-editing a manifest.**
+
+```bash
+bun add <pkg>              # or bun add -d <pkg> for a dev dependency
+go get <module>            # then commit the go.mod and go.sum it writes
+uv add <pkg>
+cargo add <crate>
+```
+
+The reason is narrow and it applies to agents more than to people: **a
+version written from memory is a guess.** Your knowledge has a cutoff, the
+registry does not. Hand-writing gets you a version that is stale, or that
+never existed, or that resolves but skips a transitive requirement the
+manifest needed. The tool asks the registry, writes the correct constraint,
+and updates the lockfile in the same step.
+
+This is not hypothetical. `gen/go/go.mod` was hand-written in ENT-194 and
+pinned `google.golang.org/protobuf` a patch behind and `connectrpc.com/connect`
+a full minor behind, for no reason other than that those were the versions
+the author remembered.
+
+**When a sibling workspace already pins a version, still use the tool, and
+pass that version explicitly:**
+
+```bash
+bun add pg@8.21.0
+```
+
+Matching the sibling matters more than being newest: two versions of the same
+package in one lockfile is a bug waiting for a confusing afternoon. Passing
+the version keeps that property without hand-editing anything.
+
+**Lockfiles are committed.** Commit the manifest and the lockfile in the same
+commit, or the next person's install resolves something different from yours.
+
+**Generated code pins two things that must move together.** The codegen
+plugin version in `buf.gen.yaml` and the runtime library version in
+`gen/go/go.mod` are a matched pair: generated output expects a compatible
+runtime. Bumping one means bumping both, re-running `buf generate`, and
+committing the regenerated output. The CI drift check will catch you if you
+forget the last step, but not if you forget the first.
+
 ## Commands
 
 Run these from the repository root. The root scripts proxy into the
