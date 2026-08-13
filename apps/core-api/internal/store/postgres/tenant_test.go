@@ -34,6 +34,12 @@ func testStore(t *testing.T) *Store {
 
 	store, err := New(t.Context(), dsn, testIssuer)
 	if err != nil {
+		// Skips on a laptop, fails in CI. A self-skipping suite that reports
+		// green while testing nothing is how a security boundary stops being
+		// covered without anyone deciding to stop covering it.
+		if os.Getenv("KINDLAST_REQUIRE_STACK") != "" {
+			t.Fatalf("KINDLAST_REQUIRE_STACK is set, so this must not skip: %s unreachable (%v)", dsn, err)
+		}
 		t.Skipf("compose stack not reachable at %s (%v); "+
 			"run: docker compose -f deploy/compose.yaml up -d", dsn, err)
 	}

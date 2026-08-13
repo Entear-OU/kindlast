@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 )
@@ -46,33 +47,77 @@ type Provider struct {
 	JWKSURI string
 }
 
-// Discover fetches and validates the discovery document for an issuer.
+// Transport is how this package reaches the authorization server, as distinct
+// from the identity that server claims.
 //
-// The issuer in the response must equal the issuer that was asked for. That
-// check is not ceremony: without it, an attacker who can influence the
-// configured issuer URL can point the resource server at a document naming
-// someone else's issuer and JWKS, and every subsequent token verifies against
-// keys they control. RFC 8414 §3.3 requires the comparison for exactly this
-// reason.
-func Discover(ctx context.Context, client *http.Client, issuer string) (*Provider, error) {
-	if client == nil {
-		client = defaultClient()
-	}
-	url := strings.TrimSuffix(issuer, "/") + DiscoveryPath
+// The separation exists because the two are genuinely different in a container
+// deployment, and conflating them is what makes "just configure an issuer URL"
+// insufficient in practice (§18.2 is right about the principle and quiet about
+// this). The bundled Zitadel advertises `http://localhost:8300` as its issuer,
+// because that is where a browser reaches it for the redirect flow. From
+// inside the compose network there is no such address: the container answers
+// at `auth:8080`, and it routes by Host, so a request without the right Host
+// header reaches the wrong virtual server.
+//
+// So `core-api` needs to say: fetch from here, send this Host, and expect the
+// document to claim that issuer. Three facts, not one.
+type Transport struct {
+	// Client bounds the requests. Nil uses a sensible default.
+	Client *http.Client
 
+	// Host overrides the Host header. Empty sends the URL's own host, which is
+	// correct everywhere the issuer is reachable at the address it advertises.
+	Host string
+}
+
+func (t *Transport) client() *http.Client {
+	if t == nil || t.Client == nil {
+		return defaultClient()
+	}
+	return t.Client
+}
+
+func (t *Transport) get(ctx context.Context, url string) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("oidc: building discovery request: %w", err)
+		return nil, fmt.Errorf("oidc: building request for %s: %w", url, err)
 	}
+	if t != nil && t.Host != "" {
+		// net/http reads the Host header off the request field, not the map.
+		request.Host = t.Host
+	}
+	return t.client().Do(request)
+}
 
-	response, err := client.Do(request)
+// Discover fetches and validates the discovery document for an issuer that is
+// reachable at the address it advertises.
+func Discover(ctx context.Context, transport *Transport, issuer string) (*Provider, error) {
+	return DiscoverAt(ctx, transport, strings.TrimSuffix(issuer, "/")+DiscoveryPath, issuer)
+}
+
+// DiscoverAt fetches the discovery document from an address that need not be
+// the issuer's own, and requires the document to claim the issuer expected.
+//
+// The issuer comparison is not ceremony: without it, anyone who can influence
+// where this service fetches its configuration can hand it a document naming
+// their issuer and their JWKS, and every subsequent token verifies against
+// keys they control. RFC 8414 §3.3 requires the comparison for that reason.
+//
+// The endpoints in the document are rebased onto the address they were fetched
+// from. That sounds like a liberty and is the opposite: the alternative is to
+// fetch keys from whatever host a document names, where here the only host
+// ever contacted is the one an operator configured. It is also the only way
+// the document is usable at all when the issuer's advertised address does not
+// resolve on this network.
+func DiscoverAt(ctx context.Context, transport *Transport, discoveryURL, expectedIssuer string) (*Provider, error) {
+	response, err := transport.get(ctx, discoveryURL)
 	if err != nil {
-		return nil, fmt.Errorf("oidc: fetching %s: %w", url, err)
+		return nil, fmt.Errorf("oidc: fetching %s: %w", discoveryURL, err)
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("oidc: discovery at %s returned %s", url, response.Status)
+		return nil, fmt.Errorf("oidc: discovery at %s returned %s", discoveryURL, response.Status)
 	}
 
 	var document struct {
@@ -87,15 +132,45 @@ func Discover(ctx context.Context, client *http.Client, issuer string) (*Provide
 		return nil, fmt.Errorf("oidc: parsing discovery document: %w", err)
 	}
 
-	if document.Issuer != strings.TrimSuffix(issuer, "/") && document.Issuer != issuer {
-		return nil, fmt.Errorf("oidc: discovery document declares issuer %q, asked for %q",
-			document.Issuer, issuer)
+	if document.Issuer != strings.TrimSuffix(expectedIssuer, "/") && document.Issuer != expectedIssuer {
+		return nil, fmt.Errorf("oidc: discovery document at %s declares issuer %q, expected %q",
+			discoveryURL, document.Issuer, expectedIssuer)
 	}
 	if document.JWKSURI == "" {
-		return nil, fmt.Errorf("oidc: discovery document for %s declares no jwks_uri", issuer)
+		return nil, fmt.Errorf("oidc: discovery document at %s declares no jwks_uri", discoveryURL)
 	}
 
-	return &Provider{Issuer: document.Issuer, JWKSURI: document.JWKSURI}, nil
+	jwksURI, err := rebase(document.JWKSURI, discoveryURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Provider{Issuer: document.Issuer, JWKSURI: jwksURI}, nil
+}
+
+// rebase puts an advertised endpoint on the origin it was fetched from.
+//
+// A no-op in the ordinary case where the issuer is reachable at the address it
+// advertises, which keeps this invisible for anyone not running a split
+// network.
+func rebase(advertised, fetchedFrom string) (string, error) {
+	target, err := neturl.Parse(advertised)
+	if err != nil {
+		return "", fmt.Errorf("oidc: discovery document declares an unparseable jwks_uri %q: %w", advertised, err)
+	}
+	source, err := neturl.Parse(fetchedFrom)
+	if err != nil {
+		return "", fmt.Errorf("oidc: unparseable discovery url %q: %w", fetchedFrom, err)
+	}
+
+	if target.Scheme == source.Scheme && target.Host == source.Host {
+		return advertised, nil
+	}
+
+	rebased := *target
+	rebased.Scheme = source.Scheme
+	rebased.Host = source.Host
+	return rebased.String(), nil
 }
 
 // defaultClient bounds every call this package makes.

@@ -51,6 +51,16 @@ const (
 	testAudience = "kindlast-core-api-test"
 )
 
+// unavailable skips locally and fails in CI. See requireStack.
+func unavailable(t *testing.T, format string, args ...any) {
+	t.Helper()
+
+	if os.Getenv("KINDLAST_REQUIRE_STACK") != "" {
+		t.Fatalf("KINDLAST_REQUIRE_STACK is set, so this must not skip: "+format, args...)
+	}
+	t.Skipf(format, args...)
+}
+
 func appDSN() string {
 	if dsn := os.Getenv("PG_APP_URL"); dsn != "" {
 		return dsn
@@ -156,12 +166,18 @@ type stack struct {
 }
 
 // requireStack skips loudly rather than passing on an absent dependency.
+//
+// Except in CI, where KINDLAST_REQUIRE_STACK turns the skip into a failure.
+// A suite that self-skips is right for a laptop and wrong for a pipeline: a
+// green run that quietly tested nothing is how coverage disappears without
+// anyone deciding to remove it. The compose and integration suites already
+// work this way, so this keeps the property rather than inventing one.
 func requireStack(t *testing.T, issuer string) *stack {
 	t.Helper()
 
 	store, err := postgres.New(t.Context(), appDSN(), issuer)
 	if err != nil {
-		t.Skipf("compose stack not reachable at %s (%v); "+
+		unavailable(t, "compose stack not reachable at %s (%v); "+
 			"run: docker compose -f deploy/compose.yaml up -d", appDSN(), err)
 	}
 	t.Cleanup(store.Close)
@@ -169,7 +185,7 @@ func requireStack(t *testing.T, issuer string) *stack {
 	client := redis.NewClient(&redis.Options{Addr: redisAddr()})
 	if err := client.Ping(t.Context()).Err(); err != nil {
 		_ = client.Close()
-		t.Skipf("redis not reachable at %s (%v)", redisAddr(), err)
+		unavailable(t, "redis not reachable at %s (%v)", redisAddr(), err)
 	}
 	t.Cleanup(func() { _ = client.Close() })
 

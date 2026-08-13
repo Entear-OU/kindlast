@@ -184,3 +184,12 @@ func writeJSON(w http.ResponseWriter, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(body)
 }
+
+// nowPlusTenMinutes and signClaims are small helpers for tests that build
+// claim maps directly rather than starting from authServer.claims.
+func nowPlusTenMinutes() int64 { return time.Now().Add(10 * time.Minute).Unix() }
+
+func signClaims(t *testing.T, kid string, claims map[string]any) string {
+	t.Helper()
+	return signWith(t, signingKey(), kid, jwt.MapClaims(claims))
+}

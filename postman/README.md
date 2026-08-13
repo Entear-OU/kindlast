@@ -23,8 +23,31 @@ For anything needing a token, fill in `client_id` and `client_secret`. The
 seed job generates them, so read them off the volume rather than guessing:
 
 ```bash
+# the web OIDC client (authorization code + PKCE, needs a browser)
 docker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/web-client.json
+
+# the client-credentials service user, which needs no browser (ENT-195)
+docker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/core-api-client.json
 ```
+
+Two things about the client-credentials request are worth knowing before it
+confuses you, both measured against this stack rather than taken from a doc.
+
+**`client_id` is the service user's username, not its id.** The secret
+response carries its own `clientId` and that is the one to use. Passing the
+numeric user id returns `invalid_client: client not found`, which is a
+misleading way to spend twenty minutes.
+
+**The audience is Zitadel's project id.** Request the reserved scope
+`urn:zitadel:iam:org:project:id:{projectId}:aud` or the token comes back
+scoped to the client itself and `core-api` refuses it, correctly, as minted
+for someone else. The project id is on the volume too, in
+`core-api-audience.txt`, which is also where `core-api` reads it from.
+
+A token so obtained reaches `core-api` and passes authentication. It is then
+refused at the scope stage, because Zitadel's access tokens carry no `scope`
+claim; see `scripts/validate-core-api-auth.sh`, which explains that gap where
+it shows up.
 
 ## What is in here, and what will not stay
 

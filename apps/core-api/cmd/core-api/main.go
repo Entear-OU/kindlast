@@ -9,10 +9,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,10 +32,45 @@ import (
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
+	// The runtime image is distroless: no shell, no curl, no wget. A compose
+	// healthcheck therefore has to be the binary itself, which is the standard
+	// way round this and cheaper than reintroducing a package manager into the
+	// image just to probe a port.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		if err := healthcheck(); err != nil {
+			logger.Error("healthcheck failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := run(logger); err != nil {
 		logger.Error("core-api stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+// healthcheck probes the readiness endpoint on the loopback interface.
+func healthcheck() error {
+	addr := os.Getenv("KINDLAST_CORE_API_LISTEN")
+	if addr == "" {
+		addr = ":8080"
+	}
+	if strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1" + addr
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	response, err := client.Get("http://" + addr + "/readyz")
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("readyz returned %s", response.Status)
+	}
+	return nil
 }
 
 func run(logger *slog.Logger) error {
@@ -50,14 +87,21 @@ func run(logger *slog.Logger) error {
 	//
 	// Retried because `auth` and `core-api` start together and losing that
 	// race is ordinary rather than exceptional.
-	provider, err := discoverWithRetry(ctx, logger, cfg.OIDCIssuer)
+	transport := &oidc.Transport{Host: cfg.OIDCHostHeader}
+
+	discoveryURL := cfg.OIDCDiscoveryURL
+	if discoveryURL == "" {
+		discoveryURL = strings.TrimSuffix(cfg.OIDCIssuer, "/") + oidc.DiscoveryPath
+	}
+
+	provider, err := discoverWithRetry(ctx, logger, transport, discoveryURL, cfg.OIDCIssuer)
 	if err != nil {
 		return err
 	}
 	logger.Info("discovered the authorization server",
-		"issuer", provider.Issuer, "jwks_uri", provider.JWKSURI)
+		"issuer", provider.Issuer, "jwks_uri", provider.JWKSURI, "fetched_from", discoveryURL)
 
-	keys := oidc.NewKeySet(provider.JWKSURI, nil)
+	keys := oidc.NewKeySet(provider.JWKSURI, transport)
 	if err := keys.Warm(ctx); err != nil {
 		// Not fatal, deliberately. A freshly seeded Zitadel has generated no
 		// signing key yet and serves an empty set, which is correct rather
@@ -135,19 +179,24 @@ func run(logger *slog.Logger) error {
 
 // discoverWithRetry waits for the authorization server rather than crash
 // looping against it.
-func discoverWithRetry(ctx context.Context, logger *slog.Logger, issuer string) (*oidc.Provider, error) {
+func discoverWithRetry(
+	ctx context.Context,
+	logger *slog.Logger,
+	transport *oidc.Transport,
+	discoveryURL, expectedIssuer string,
+) (*oidc.Provider, error) {
 	const attempts = 30
 
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
-		provider, err := oidc.Discover(ctx, nil, issuer)
+		provider, err := oidc.DiscoverAt(ctx, transport, discoveryURL, expectedIssuer)
 		if err == nil {
 			return provider, nil
 		}
 		lastErr = err
 
 		logger.Info("waiting for the authorization server",
-			"issuer", issuer, "attempt", attempt, "error", err)
+			"discovery_url", discoveryURL, "attempt", attempt, "error", err)
 
 		select {
 		case <-ctx.Done():

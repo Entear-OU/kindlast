@@ -29,6 +29,22 @@ type Config struct {
 	// discovered, so a self-hoster can point at their own IdP (§18.2).
 	OIDCIssuer string
 
+	// OIDCDiscoveryURL is where to fetch the discovery document, when that is
+	// not the issuer's own address.
+	//
+	// Optional, and empty is the ordinary case. It exists because the bundled
+	// Zitadel advertises `http://localhost:8300`, which is where a browser
+	// reaches it, and core-api is on the compose network where no such address
+	// exists. The document must still declare OIDCIssuer, so this changes
+	// where configuration is fetched from and never what is trusted.
+	OIDCDiscoveryURL string
+
+	// OIDCHostHeader overrides the Host header sent to the authorization
+	// server. Zitadel routes by Host, so reaching it at `auth:8080` while it
+	// believes it is `localhost:8300` needs this or the request lands on the
+	// wrong virtual server.
+	OIDCHostHeader string
+
 	// OIDCAudience is the audience this resource server accepts, and only this
 	// one.
 	//
@@ -59,12 +75,14 @@ type Config struct {
 // Load reads the environment.
 func Load() (*Config, error) {
 	cfg := &Config{
-		ListenAddr:      valueOr("KINDLAST_CORE_API_LISTEN", ":8080"),
-		OIDCIssuer:      os.Getenv("KINDLAST_OIDC_ISSUER"),
-		OIDCAudience:    os.Getenv("KINDLAST_OIDC_AUDIENCE"),
-		OIDCScopeClaims: splitList(os.Getenv("KINDLAST_OIDC_SCOPE_CLAIMS")),
-		DatabaseURL:     os.Getenv("KINDLAST_DATABASE_URL"),
-		RedisAddr:       os.Getenv("KINDLAST_REDIS_ADDR"),
+		ListenAddr:       valueOr("KINDLAST_CORE_API_LISTEN", ":8080"),
+		OIDCIssuer:       os.Getenv("KINDLAST_OIDC_ISSUER"),
+		OIDCDiscoveryURL: os.Getenv("KINDLAST_OIDC_DISCOVERY_URL"),
+		OIDCHostHeader:   os.Getenv("KINDLAST_OIDC_HOST_HEADER"),
+		OIDCAudience:     audience(),
+		OIDCScopeClaims:  splitList(os.Getenv("KINDLAST_OIDC_SCOPE_CLAIMS")),
+		DatabaseURL:      os.Getenv("KINDLAST_DATABASE_URL"),
+		RedisAddr:        os.Getenv("KINDLAST_REDIS_ADDR"),
 	}
 
 	var missing []string
@@ -97,6 +115,36 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// audience reads the accepted audience from the environment, or from a file
+// named by KINDLAST_OIDC_AUDIENCE_FILE.
+//
+// The file exists for the bundled stack, where the audience is Zitadel's
+// project id and therefore not known until the seed job has run. The seed
+// writes it to the shared volume the same way it already writes the web
+// client's credentials, so compose needs no value baked in and no manual step
+// between `up` and a working service. The environment wins where both are
+// present, so a real deployment never depends on the file.
+func audience() string {
+	if value := strings.TrimSpace(os.Getenv("KINDLAST_OIDC_AUDIENCE")); value != "" {
+		return value
+	}
+
+	path := strings.TrimSpace(os.Getenv("KINDLAST_OIDC_AUDIENCE_FILE"))
+	if path == "" {
+		return ""
+	}
+
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		// Deliberately not fatal here: Load reports it as a missing value,
+		// which is the same message an operator would get for any other
+		// unset setting rather than a stack trace about a file they may not
+		// know is involved.
+		return ""
+	}
+	return strings.TrimSpace(string(contents))
 }
 
 func valueOr(name, fallback string) string {

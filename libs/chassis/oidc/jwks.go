@@ -50,9 +50,9 @@ const DefaultRefetchCooldown = time.Minute
 // Found on the real stack while building the Postman collection against a
 // clean checkout, and recorded at §1.4.
 type KeySet struct {
-	uri      string
-	client   *http.Client
-	cooldown time.Duration
+	uri       string
+	transport *Transport
+	cooldown  time.Duration
 
 	// now is injectable so the refetch policy can be tested without sleeping.
 	now func() time.Time
@@ -71,16 +71,13 @@ type KeySet struct {
 
 // NewKeySet returns a cache for the JWKS served at uri. It performs no I/O;
 // call Warm to populate it at boot, or let the first token drive the fetch.
-func NewKeySet(uri string, client *http.Client) *KeySet {
-	if client == nil {
-		client = defaultClient()
-	}
+func NewKeySet(uri string, transport *Transport) *KeySet {
 	return &KeySet{
-		uri:      uri,
-		client:   client,
-		cooldown: DefaultRefetchCooldown,
-		now:      time.Now,
-		keys:     map[string]crypto.PublicKey{},
+		uri:       uri,
+		transport: transport,
+		cooldown:  DefaultRefetchCooldown,
+		now:       time.Now,
+		keys:      map[string]crypto.PublicKey{},
 	}
 }
 
@@ -169,12 +166,7 @@ func (k *KeySet) mayRefetchLocked() bool {
 }
 
 func (k *KeySet) fetchLocked(ctx context.Context) error {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, k.uri, nil)
-	if err != nil {
-		return fmt.Errorf("oidc: building jwks request: %w", err)
-	}
-
-	response, err := k.client.Do(request)
+	response, err := k.transport.get(ctx, k.uri)
 	if err != nil {
 		return fmt.Errorf("oidc: fetching jwks from %s: %w", k.uri, err)
 	}
