@@ -1,0 +1,183 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: Kindlast Core API
+    version: 1.0.0
+paths:
+    /api/v1/invitations/{token}:accept:
+        post:
+            tags:
+                - OrgService
+            description: |-
+                Joins the organisation named by an invitation token.
+
+                 Scope is `openid` rather than `org:manage`: the caller is not managing an
+                 organisation, they are redeeming a capability they were sent, and they
+                 hold no role anywhere until this succeeds. Requiring an organisation scope
+                 would mean an invitee could never accept their first invitation.
+            operationId: OrgService_AcceptInvitation
+            parameters:
+                - name: token
+                  in: path
+                  description: |-
+                    The raw token from the invitation link. Stored hashed, never in the
+                     clear, so this value never matches anything a database dump contains.
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AcceptInvitationResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/me:
+        get:
+            tags:
+                - SessionService
+            description: |-
+                Returns the caller, their memberships with roles, and the active
+                 organisation. On a subject it has never seen, it provisions a personal
+                 organisation and an owner membership in one transaction before returning
+                 (ENT-196), which is why this is a plain unary call rather than a read.
+            operationId: SessionService_GetCurrentUser
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetCurrentUserResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+components:
+    schemas:
+        AcceptInvitationResponse:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                    description: |-
+                        The organisation just joined, so the client can make it active without a
+                         second round trip.
+                orgName:
+                    type: string
+                role:
+                    type: string
+                    description: 'The role the invitation granted: owner, member or viewer.'
+        GetCurrentUserResponse:
+            type: object
+            properties:
+                user:
+                    allOf:
+                        - $ref: '#/components/schemas/User'
+                    description: |-
+                        The verified identity. Sourced from the token's claims rather than from
+                         our database: the IdP owns users, this system owns memberships (§20.1).
+                memberships:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Membership'
+                    description: |-
+                        Every organisation the caller belongs to, with the role they hold in it.
+                         A consultant serving several client companies is a realistic user here,
+                         so this is a list rather than a single value.
+                activeOrgId:
+                    type: string
+                    description: |-
+                        The organisation this request resolved to, which travels per request
+                         rather than living in the token, so switching needs no re-minting.
+                plan:
+                    type: string
+                    description: |-
+                        The active organisation's plan, so the console can gate features without
+                         a second call. Billing keys on the organisation, not the user.
+        GoogleProtobufAny:
+            type: object
+            properties:
+                '@type':
+                    type: string
+                    description: The type of the serialized message.
+            additionalProperties: true
+            description: Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.
+        Membership:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                orgName:
+                    type: string
+                role:
+                    type: string
+                    description: |-
+                        One of owner, member, viewer. Approval authority is a regulatory-relevant
+                         fact, so it earns a role boundary (§20.1).
+        Status:
+            type: object
+            properties:
+                code:
+                    type: integer
+                    description: The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
+                    format: int32
+                message:
+                    type: string
+                    description: A developer-facing error message, which should be in English. Any user-facing error message should be localized and sent in the [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.
+                details:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/GoogleProtobufAny'
+                    description: A list of messages that carry the error details.  There is a common set of message types for APIs to use.
+            description: 'The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).'
+        User:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: |-
+                        The IdP subject claim. The tenancy key is org_id; this identifies the
+                         human, and is what created_by and approved_by record.
+                email:
+                    type: string
+                displayName:
+                    type: string
+                emailVerified:
+                    type: boolean
+                    description: |-
+                        Gates finding approval: an unverified address must not be able to sign
+                         off a regulatory decision (§1.7).
+tags:
+    - name: OrgService
+      description: |-
+        Organisations and membership (core-api-surface §20.1).
+
+         Only AcceptInvitation is defined here. The rest of the organisation surface
+         (list, create, update, members, roles, invite) is build-order step 2, and
+         defining it now would mean a contract nobody has verified against a handler.
+
+         Accept is here rather than there because of an ordering constraint in the
+         signup slice that is easy to get wrong and expensive to discover later: an
+         invited user must accept BEFORE their first GetCurrentUser call, or
+         just-in-time provisioning sees a subject with no membership and gives them a
+         personal organisation they never asked for, alongside the one they were
+         invited to (§1.8).
+    - name: SessionService
+      description: |-
+        The console bootstrap call, and the first authenticated endpoint in the
+         system (core-api-surface §1.5, §20.1).
+
+         Only GetCurrentUser is defined here. The rest of the public surface arrives
+         with the issues that implement it; defining it early would mean a contract
+         nobody has verified against a handler.

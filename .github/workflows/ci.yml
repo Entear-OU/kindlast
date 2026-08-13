@@ -141,6 +141,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, so `buf breaking` below can resolve main from the
+          # local clone. Comparing against the remote URL would need
+          # credentials for a private repository; comparing against `.git`
+          # needs only the objects, and a shallow clone does not have them.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -155,6 +161,29 @@ jobs:
 
       - name: Lint protos
         run: buf lint
+
+      # The merge gate ENT-199 adds, and the reason it exists now rather than
+      # when a stranger first integrates: a field removed or a tag reused is
+      # free to fix today and an external breaking change the moment anyone
+      # depends on it. Policy in proto/EVOLUTION.md.
+      #
+      # `ref=refs/remotes/origin/main`, not `branch=main`, and the difference
+      # is not cosmetic. On a pull request actions/checkout leaves the PR
+      # branch checked out and main present only as a remote-tracking ref, so
+      # asking for a *branch* named main fails with "couldn't find remote ref
+      # main". Reproduced by cloning this repo and deleting the local main,
+      # because testing it in a normal clone proves nothing: a developer's
+      # clone has refs/heads/main and CI does not.
+      #
+      # The explicit fetch guarantees the ref exists rather than depending on
+      # what actions/checkout happens to populate.
+      #
+      # On a push to main this compares main against itself, which is a no-op
+      # rather than a special case worth branching on.
+      - name: Check for breaking proto changes
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          buf breaking --against '.git#ref=refs/remotes/origin/main'
 
       # gen/ is committed so a reviewer reads the same bytes the build uses.
       # That only holds if CI notices when the two diverge, hence regenerating
