@@ -53,10 +53,19 @@ const clockSkewLeeway = 30 * time.Second
 // needs no re-minting and there is exactly one source of truth for membership
 // (§20.1).
 type Claims struct {
+	// Issuer is the authorization server that minted this token, already
+	// verified to be the configured one. Carried because it is half of the
+	// identity: the subject is only unique within an issuer, so anything
+	// deriving a stable user id needs both (see libs/chassis/subject).
+	Issuer        string
 	Subject       string
 	Email         string
 	EmailVerified bool
-	Scopes        []string
+	// Name is the OIDC `name` claim, used only as a human-readable label.
+	// Never for identity, and never for authorization: it is self-asserted at
+	// many providers and changes freely.
+	Name   string
+	Scopes []string
 	// TokenID is the `jti`, and it is what the Redis deny-list keys on to
 	// close the revocation window local verification opens (§1.4, §15.1).
 	TokenID   string
@@ -173,9 +182,11 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 	}
 
 	return &Claims{
+		Issuer:        claims.Issuer,
 		Subject:       claims.Subject,
 		Email:         claims.Email,
 		EmailVerified: bool(claims.EmailVerified),
+		Name:          claims.Name,
 		Scopes:        claims.scopes(v.scopeClaims),
 		TokenID:       claims.ID,
 		ExpiresAt:     expires.Time,
@@ -210,6 +221,7 @@ type tokenClaims struct {
 
 	Email         string       `json:"email,omitempty"`
 	EmailVerified flexibleBool `json:"email_verified,omitempty"`
+	Name          string       `json:"name,omitempty"`
 
 	// raw keeps the whole payload so WithScopeClaims can reach a claim this
 	// struct does not name.

@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "kindlast/options/v1/scope.proto";
+
+// Organisations and membership (core-api-surface §20.1).
+//
+// Only AcceptInvitation is defined here. The rest of the organisation surface
+// (list, create, update, members, roles, invite) is build-order step 2, and
+// defining it now would mean a contract nobody has verified against a handler.
+//
+// Accept is here rather than there because of an ordering constraint in the
+// signup slice that is easy to get wrong and expensive to discover later: an
+// invited user must accept BEFORE their first GetCurrentUser call, or
+// just-in-time provisioning sees a subject with no membership and gives them a
+// personal organisation they never asked for, alongside the one they were
+// invited to (§1.8).
+service OrgService {
+  // Joins the organisation named by an invitation token.
+  //
+  // Scope is `openid` rather than `org:manage`: the caller is not managing an
+  // organisation, they are redeeming a capability they were sent, and they
+  // hold no role anywhere until this succeeds. Requiring an organisation scope
+  // would mean an invitee could never accept their first invitation.
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse) {
+    option (kindlast.options.v1.required_scope) = "openid";
+  }
+}
+
+message AcceptInvitationRequest {
+  // The raw token from the invitation link. Stored hashed, never in the
+  // clear, so this value never matches anything a database dump contains.
+  string token = 1;
+}
+
+message AcceptInvitationResponse {
+  // The organisation just joined, so the client can make it active without a
+  // second round trip.
+  string org_id = 1;
+  string org_name = 2;
+  // The role the invitation granted: owner, member or viewer.
+  string role = 3;
+}

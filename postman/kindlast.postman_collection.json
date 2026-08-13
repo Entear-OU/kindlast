@@ -283,7 +283,7 @@
       "description": "The proto surface. Today it is reached through web rather than directly, because core-api binds no published port, so there is no host to point at (ENT-191). CI asserts that absence rather than trusting it.\n\nThat is a fact about the current phase, not about the design. Web, mobile and third parties are all intended clients of this system, and build-order step 7b opens this surface deliberately, once there is a stable contract behind it. Until then Postman is on the wrong side of a door that is shut because nothing needs it open yet, and nothing in this folder can answer until web exists (ENT-197).\n\nThe interceptor chain in front of these endpoints is live and tested as of ENT-195, and it is client-agnostic by construction: it verifies every token itself rather than trusting which door a request arrived through. To exercise it today, join the network:\n\n```bash\ndocker run --rm --network kindlast_default curlimages/curl:8.11.1 \\\n  -sS -X POST http://core-api:8080/kindlast.core.v1.SessionService/GetCurrentUser \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer <the token from Auth (Zitadel)>' \\\n  -H 'X-Kindlast-Org: {{org_id}}' -d '{}'\n```\n\nOr run `./scripts/validate-core-api-auth.sh`, which drives the whole chain and explains what each result proves.\n\nOnce buf emits OpenAPI (§23.2), these requests should be generated from it rather than maintained here by hand.",
       "item": [
         {
-          "name": "Me (NOT YET IMPLEMENTED, ENT-196)",
+          "name": "Me (implemented in core-api; needs web to be reachable, ENT-197)",
           "request": {
             "method": "GET",
             "header": [
@@ -299,11 +299,11 @@
               "host": ["{{api_base_url}}"],
               "path": ["me"]
             },
-            "description": "The console bootstrap call: user, memberships with roles, active organisation, plan.\n\nOn a subject it has never seen it provisions a personal organisation and an owner membership in one transaction, idempotent on the `sub` claim. Required scope: `openid`, declared on the proto method."
+            "description": "The console bootstrap call: user, memberships with roles, active organisation, plan.\n\nOn a subject it has never seen it provisions a personal organisation and an owner membership in one transaction, idempotent on the `sub` claim. Required scope: `openid`, declared on the proto method.\n\n**Implemented as of ENT-196**, and still not answerable from here: this path goes through `web`, which does not exist until ENT-197, and core-api publishes no port for Postman to reach directly. The Connect procedure is `/kindlast.core.v1.SessionService/GetCurrentUser`; see the folder description for the one-liner that calls it from inside the compose network.\n\nTwo behaviours worth knowing before you read a response. **The organisation header is optional on the first call** and must be: a client that has never signed in cannot know an organisation id, because none exists yet, so omitting it resolves the caller's default. And a brand-new organisation has no subscription row, so `plan` comes back `free` rather than empty."
           }
         },
         {
-          "name": "Accept invitation (NOT YET IMPLEMENTED, ENT-196)",
+          "name": "Accept invitation (implemented in core-api; needs web to be reachable, ENT-197)",
           "request": {
             "method": "POST",
             "header": [
@@ -314,7 +314,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["invitations", "{{invitation_token}}:accept"]
             },
-            "description": "Ordering matters and is easy to get wrong: this must run **before** the first `/api/v1/me`. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to."
+            "description": "Ordering matters and is easy to get wrong: this must run **before** the first `/api/v1/me`. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to.\n\n**Implemented as of ENT-196.** The Connect procedure is `/kindlast.core.v1.OrgService/AcceptInvitation`, and the body is `{\"token\": \"...\"}`. Required scope is `openid`, not `org:manage`: the caller is redeeming a capability they were sent and holds no role anywhere until it succeeds, so an organisation scope would make a first invitation impossible to accept.\n\nThe token is sent in the clear here and stored hashed, so the value in the database never matches this one. Issuing invitations is not built yet (build-order step 2); until then a fixture is written directly, which is what the tests do.\n\nExpired, already accepted and never existed all answer `not_found` alike, deliberately, so this cannot be used to discover which tokens are real."
           }
         }
       ]

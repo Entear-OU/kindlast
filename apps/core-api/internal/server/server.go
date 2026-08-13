@@ -7,6 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 )
@@ -51,6 +52,7 @@ func New(deps Dependencies) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(), chain))
+	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(), chain))
 
 	// Unauthenticated by design, and bound to the internal listener only.
 	// Requiring a credential here is a common reflex that breaks orchestrator

@@ -68,6 +68,55 @@ describe.skipIf(!reachable)('FORCE ROW LEVEL SECURITY on every tenant table', ()
     }
   })
 
+  /**
+   * The sweep above keys on org_id, which is the right definition of a tenant
+   * table and the wrong definition of "everything that needs a policy".
+   *
+   * ENT-196 added `user_identities`, which holds an issuer, a subject and an
+   * email, and deliberately carries no org_id: identity is not tenant-scoped,
+   * because one human is the same person across several organisations. It is
+   * personal data with no org_id, so every assertion in this file would have
+   * stayed green had it shipped with no RLS at all.
+   *
+   * AGENTS.md already states the rule as "every table in public has RLS
+   * enabled and forced". This asserts the rule as written rather than a
+   * weaker version of it. There is deliberately no allow-list: a table that
+   * genuinely needs no policy can have one that is simply permissive, and
+   * writing that down is a decision somebody made rather than an omission
+   * nobody noticed.
+   */
+  it('every table in public has RLS enabled and forced, org_id or not', async () => {
+    const r = await superuser.query(`
+      select relname
+      from pg_class
+      where relnamespace = 'public'::regnamespace
+        and relkind = 'r'
+        and not (relrowsecurity and relforcerowsecurity)
+      order by relname
+    `)
+    expect(
+      r.rows.map((x) => x.relname),
+      'tables in public without RLS enabled AND forced',
+    ).toEqual([])
+  })
+
+  it('the tables ENT-196 added for provisioning are policed', async () => {
+    const r = await superuser.query(`
+      select relname, relrowsecurity, relforcerowsecurity
+      from pg_class
+      where relnamespace = 'public'::regnamespace
+        and relname in ('user_identities', 'invitations')
+      order by relname
+    `)
+    // Named explicitly, so deleting them is a decision rather than a silent
+    // reduction in what the sweep above happens to cover.
+    expect(r.rows).toHaveLength(2)
+    for (const row of r.rows) {
+      expect(row.relrowsecurity, `${row.relname} rowsecurity`).toBe(true)
+      expect(row.relforcerowsecurity, `${row.relname} force rowsecurity`).toBe(true)
+    }
+  })
+
   it('every RLS-enabled table in public is also forced (no owner loophole anywhere)', async () => {
     const r = await superuser.query(`
       select relname from pg_class
