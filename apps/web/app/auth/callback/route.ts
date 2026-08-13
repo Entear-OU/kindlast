@@ -3,6 +3,7 @@ import { exchangeCode, safeReturnTo } from '@/lib/auth/flow'
 import { consumeState } from '@/lib/auth/state'
 import { createSession, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth/session'
 import { subjectOf } from '@/lib/auth/claims'
+import { acceptInvitation, activeOrgFrom, getCurrentUser } from '@/lib/auth/client'
 
 /**
  * The other end of the authorization request.
@@ -55,51 +56,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/sign-in?error=exchange', origin))
   }
 
+  // The invitation is redeemed before the first GetCurrentUser, and the
+  // ordering is not incidental: get it backwards and just-in-time
+  // provisioning sees a subject with no membership and creates a personal
+  // organisation alongside the one they were invited to (§1.8).
+  //
+  // Best effort, both of them. A failure here must not strand someone holding
+  // a valid token on an error page: they are signed in either way, and both
+  // calls are idempotent on the subject, so the next navigation can retry.
+  if (preAuth.invitationToken) {
+    await acceptInvitation(tokens.accessToken, preAuth.invitationToken)
+  }
+
+  // The bootstrap. For a first-time arrival this is the call that creates the
+  // organisation, so it has to happen before the session is written or there
+  // is nothing to name in the active-organisation header.
+  const me = await getCurrentUser(tokens.accessToken)
+
   const sessionId = await createSession({
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     idToken: tokens.idToken,
     expiresAt: tokens.expiresAt,
     subject,
-    orgId: null,
+    orgId: activeOrgFrom(me),
   })
-
-  // The invitation is accepted before the first /api/v1/me, and the ordering
-  // is not incidental: get it backwards and just-in-time provisioning sees a
-  // subject with no membership and creates a personal organisation alongside
-  // the one they were invited to (§1.8).
-  if (preAuth.invitationToken) {
-    await acceptInvitation(tokens.accessToken, preAuth.invitationToken)
-  }
 
   const response = NextResponse.redirect(new URL(safeReturnTo(preAuth.returnTo), origin))
   response.cookies.set(SESSION_COOKIE, sessionId, sessionCookieOptions())
   return response
-}
-
-/**
- * Redeeming the invitation, best effort.
- *
- * A failure here must not strand a signed-in user on an error page: they have
- * a valid session, and the invitation can be accepted again from the link.
- * Provisioning is idempotent on the subject, so the worst case is a personal
- * organisation they can leave.
- */
-async function acceptInvitation(accessToken: string, token: string): Promise<void> {
-  const base = process.env.KINDLAST_CORE_API_URL
-  if (!base) return
-
-  try {
-    await fetch(`${base}/kindlast.core.v1.OrgService/AcceptInvitation`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ token }),
-      cache: 'no-store',
-    })
-  } catch (error) {
-    console.error('auth/callback invitation', error)
-  }
 }
