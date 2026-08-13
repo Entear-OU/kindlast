@@ -1,13 +1,17 @@
 name: CI
 
-# Two jobs that run in parallel (ENT-153), so wall-clock is the slower of the
-# two rather than their sum:
+# Three jobs that run in parallel (ENT-153, ENT-192), so wall-clock is the
+# slowest of them rather than their sum:
 #
 #   1. `unit` — lint, typecheck, and the unit/component suite. No services, so a
 #      unit regression fails fast and is never entangled with — or skipped
 #      because of — the Supabase stack.
-#   2. `integration` — the integration suite (tests/integration/) against a
-#      booted Supabase stack.
+#   2. `integration`: the integration suite (apps/web/tests/integration/)
+#      against a booted Supabase stack (the legacy stack the web app still
+#      runs on).
+#   3. `stack`: the self-managed compose stack (deploy/compose.yaml) plus
+#      the database isolation suite (db/tests/), which is the RLS security
+#      boundary check for the organisation tenancy model.
 #
 # The integration suites self-skip when the local stack is unreachable
 # (describe.skipIf(isLocalSupabaseReachable)), so the integration job boots
@@ -131,3 +135,64 @@ jobs:
       - name: Stop Supabase
         if: always()
         run: supabase stop
+
+  stack:
+    name: Compose stack & isolation tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The new self-managed stack (ENT-192): postgres-app with the role
+      # split, the goose migration job, Zitadel, redis and the edge. This is
+      # the stack the db test suite runs against, and the suite is the RLS
+      # security boundary check. Mirroring the Supabase job above, the job
+      # boots the stack and fails loudly if it does not come up, rather than
+      # letting the suite silently skip.
+      - name: Start the kindlast stack
+        run: docker compose -f deploy/compose.yaml up -d
+
+      - name: Wait for the seed job to finish
+        run: |
+          for i in $(seq 1 90); do
+            status="$(docker inspect kindlast-seed --format '{{.State.Status}}' 2>/dev/null || echo missing)"
+            if [ "$status" = "exited" ]; then
+              exit_code="$(docker inspect kindlast-seed --format '{{.State.ExitCode}}')"
+              echo "seed exited with ${exit_code}"
+              exit "$exit_code"
+            fi
+            sleep 2
+          done
+          echo "seed job did not finish in time"
+          exit 1
+
+      # Guard: a healthy stack means migrations applied by the job container
+      # and Zitadel serving OIDC discovery (the ENT-192 acceptance criteria).
+      - name: Verify the stack is reachable
+        run: |
+          curl --fail --silent --show-error \
+            http://localhost:8300/.well-known/openid-configuration > /dev/null
+          curl --fail --silent --show-error http://localhost:8000/healthz > /dev/null
+
+      - name: Database isolation tests
+        run: bun run test:db
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose.yaml logs --tail 100
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f deploy/compose.yaml down -v

@@ -1,0 +1,14 @@
+# The edge of the stack (core-api-surface §0). Today it owns the front door
+# and a health endpoint; web and core-api claim their routes at build-order
+# step 1. Zitadel stays on its own published port for now because it
+# validates the Host header against its external domain, and proxying it
+# through here would couple the two configs for no step-0 benefit.
+:80 {
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle {
+		respond "kindlast edge: no routes yet (web and core-api arrive at build-order step 1)" 404
+	}
+}

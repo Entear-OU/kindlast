@@ -188,8 +188,21 @@ apps/web/lib/
 └── supabase/           # Client, server and middleware helpers
 
 data/corpus/            # GDPR, AI Act, EDPB and enforcement source data
-supabase/migrations/    # Versioned schema
+supabase/migrations/    # Versioned schema (legacy stack the web app runs on)
+db/migrations/          # Squashed baseline for the self-managed stack (goose)
+db/tests/               # Database isolation suite (RLS security boundary)
+deploy/                 # compose.yaml, Postgres role split, Zitadel, Caddy
 docs/                   # Self-hosting, maintainer workflow, brand
+```
+
+### The local backend stack
+
+The self-managed stack (Postgres with the tenancy role split, Zitadel as the
+OIDC provider, Redis, Caddy) comes up with one command and seeds itself:
+
+```bash
+docker compose -f deploy/compose.yaml up -d
+bun run test:db   # the database isolation suite, against that stack
 ```
 
 ## Testing

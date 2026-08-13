@@ -1,0 +1,212 @@
+# The Kindlast local stack (ENT-192, core-api-surface §0.4, §14).
+#
+# One command from a clean checkout:
+#
+#     docker compose -f deploy/compose.yaml up -d
+#
+# brings up, in dependency order, all under the single `kindlast` compose
+# project:
+#
+#   postgres-app       pgvector/pg17. THE domain database. Roles are split by
+#                      deploy/postgres/init/01-roles.sh before anything else
+#                      touches it: kindlast_migrator owns the schema,
+#                      kindlast_app (NOSUPERUSER, NOBYPASSRLS) serves requests,
+#                      kindlast_vector_ro waits for the chunk tables. See the
+#                      init script for why this split is the whole point.
+#   migrate            goose job container. Applies db/migrations as
+#                      kindlast_migrator and MUST exit zero before anything
+#                      that talks to the schema starts. Migrations are a job,
+#                      not boot code: N replicas racing the same DDL is the
+#                      failure mode this shape prevents (§14.2).
+#   postgres-platform  Infrastructure state whose schemas we do not own:
+#                      zitadel now, temporal + temporal_visibility at
+#                      build-order step 8. The application NEVER connects
+#                      here, and nobody hand-writes migrations for it.
+#   auth               Zitadel, self-migrating on boot, OIDC discovery at
+#                      http://localhost:${KINDLAST_AUTH_PORT:-8300}/.well-known/openid-configuration
+#   seed               Dev/test fixtures: two organisations with members in
+#                      postgres-app, and the OAuth project + `web` client +
+#                      role set in Zitadel. Idempotent; a re-run is a no-op.
+#   redis              Sessions (web) and limits/deny-list (core-api) later.
+#                      AOF on, noeviction: a cache policy that silently drops
+#                      a session or a rate-limit counter is the trap §15.3
+#                      exists to prevent.
+#   edge               Caddy. Terminates the stack's front door; today it
+#                      serves a health endpoint and reserves the routes web
+#                      and core-api will claim in build-order step 1.
+#
+# Passwords: every default below is a LOCAL DEVELOPMENT value. Override via
+# environment or an env file for anything that leaves a laptop.
+
+name: kindlast
+
+volumes:
+  postgres-app-data:
+  postgres-platform-data:
+  redis-data:
+  zitadel-machinekey:
+
+services:
+  postgres-app:
+    container_name: kindlast-postgres-app
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_PASSWORD: ${KINDLAST_PG_SUPER_PASSWORD:-postgres-dev-password}
+      KINDLAST_MIGRATOR_PASSWORD: ${KINDLAST_MIGRATOR_PASSWORD:-migrator-dev-password}
+      KINDLAST_APP_PASSWORD: ${KINDLAST_APP_PASSWORD:-app-dev-password}
+      KINDLAST_VECTOR_RO_PASSWORD: ${KINDLAST_VECTOR_RO_PASSWORD:-vector-ro-dev-password}
+    volumes:
+      - postgres-app-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:${KINDLAST_PG_APP_PORT:-5433}:5432"
+    healthcheck:
+      # The init scripts create the kindlast database last, so its presence
+      # is the "roles and grants are in place" signal, not just "postmaster
+      # answers".
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kindlast"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    container_name: kindlast-migrate
+    image: kukymbr/goose-docker:3.24.2
+    restart: "no"
+    depends_on:
+      postgres-app:
+        condition: service_healthy
+    volumes:
+      - ../db/migrations:/migrations:ro
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: host=postgres-app port=5432 user=kindlast_migrator password=${KINDLAST_MIGRATOR_PASSWORD:-migrator-dev-password} dbname=kindlast sslmode=disable
+      GOOSE_COMMAND: up
+
+  postgres-platform:
+    container_name: kindlast-postgres-platform
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: ${KINDLAST_PLATFORM_SUPER_PASSWORD:-platform-dev-password}
+      ZITADEL_DB_PASSWORD: ${KINDLAST_ZITADEL_DB_PASSWORD:-zitadel-db-dev-password}
+    volumes:
+      - postgres-platform-data:/var/lib/postgresql/data
+      - ./postgres/platform-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zitadel"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # The zitadel image runs as uid 1000 but a fresh named volume is created
+  # root-owned; hand it over before auth first writes its PAT there.
+  machinekey-init:
+    container_name: kindlast-machinekey-init
+    image: alpine:3.21
+    restart: "no"
+    command: ["chown", "-R", "1000:1000", "/machinekey"]
+    volumes:
+      - zitadel-machinekey:/machinekey
+
+  auth:
+    container_name: kindlast-auth
+    image: ghcr.io/zitadel/zitadel:v2.71.2
+    depends_on:
+      postgres-platform:
+        condition: service_healthy
+      machinekey-init:
+        condition: service_completed_successfully
+    command: >
+      start-from-init
+      --masterkey "${KINDLAST_ZITADEL_MASTERKEY:-DevMasterkeyMustBe32CharsLong!!!}"
+    environment:
+      # Env rather than --tlsMode so the `zitadel ready` healthcheck probes
+      # over http too.
+      ZITADEL_TLS_ENABLED: "false"
+      ZITADEL_DATABASE_POSTGRES_HOST: postgres-platform
+      ZITADEL_DATABASE_POSTGRES_PORT: 5432
+      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${KINDLAST_ZITADEL_DB_PASSWORD:-zitadel-db-dev-password}
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${KINDLAST_PLATFORM_SUPER_PASSWORD:-platform-dev-password}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+      ZITADEL_EXTERNALDOMAIN: localhost
+      ZITADEL_EXTERNALPORT: ${KINDLAST_AUTH_PORT:-8300}
+      ZITADEL_EXTERNALSECURE: "false"
+      # First boot provisions an admin human and a machine user whose PAT
+      # lands on the shared volume; the seed job uses that PAT to create the
+      # project, the web OIDC client and the role set via the API.
+      ZITADEL_FIRSTINSTANCE_ORG_NAME: Kindlast
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: admin
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${KINDLAST_ZITADEL_ADMIN_PASSWORD:-Password1!}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: seed-bot
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: Seed Bot
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "2099-01-01T00:00:00Z"
+      ZITADEL_FIRSTINSTANCE_PATPATH: /machinekey/seed-bot-pat.txt
+    volumes:
+      - zitadel-machinekey:/machinekey
+    ports:
+      - "127.0.0.1:${KINDLAST_AUTH_PORT:-8300}:8080"
+    healthcheck:
+      test: ["CMD", "/app/zitadel", "ready"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  seed:
+    container_name: kindlast-seed
+    image: alpine:3.21
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      auth:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres-app
+      PGDATABASE: kindlast
+      PGUSER: kindlast_migrator
+      PGPASSWORD: ${KINDLAST_MIGRATOR_PASSWORD:-migrator-dev-password}
+      ZITADEL_URL: http://auth:8080
+      ZITADEL_HOST_HEADER: "localhost:${KINDLAST_AUTH_PORT:-8300}"
+      WEB_REDIRECT_URI: ${KINDLAST_WEB_REDIRECT_URI:-http://localhost:3000/auth/callback}
+    volumes:
+      - ./seed/seed.sh:/seed.sh:ro
+      - ./seed/seed.sql:/seed.sql:ro
+      # rw: the seed writes the created web client's credentials back to the
+      # shared volume (web-client.json) for the web app to read in dev.
+      - zitadel-machinekey:/machinekey
+    command: ["/bin/sh", "/seed.sh"]
+
+  redis:
+    container_name: kindlast-redis
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:${KINDLAST_REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  edge:
+    container_name: kindlast-edge
+    image: caddy:2-alpine
+    depends_on:
+      auth:
+        condition: service_healthy
+    volumes:
+      - ./edge/Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "127.0.0.1:${KINDLAST_EDGE_PORT:-8000}:80"

@@ -1,0 +1,17 @@
+{
+  "name": "@kindlast/db-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "pg": "^8.21.0",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  }
+}
