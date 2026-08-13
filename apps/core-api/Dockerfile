@@ -53,7 +53,14 @@ COPY --from=build /out/core-api /core-api
 
 USER nonroot:nonroot
 
-# No EXPOSE and no published port anywhere. `web` reaches this over the
-# internal network, which is the point of the BFF arrangement in §1.2: a
-# leaked access token cannot be replayed against core-api from the internet.
+# No EXPOSE and no published port anywhere, which is a statement about now
+# rather than about the architecture.
+#
+# Web, mobile and third-party clients are all intended from the start, so this
+# service is not shaped around any one of them. Staying dark is defence while
+# `web` is the only client that exists: it removes an exposed surface nobody
+# needs yet. Build-order step 7b opens the door deliberately, once there is a
+# stable contract behind it. Nothing in the code assumes the door stays shut,
+# and the interceptor chain verifies every token itself rather than trusting
+# where a request came from.
 ENTRYPOINT ["/core-api"]

@@ -123,7 +123,9 @@ step "4. The whole chain, over the compose network"
 published="$(docker inspect kindlast-core-api --format '{{json .NetworkSettings.Ports}}')"
 if [ "$published" = "{}" ] || [ "$published" = "null" ]; then
   pass "core-api publishes no port (${published})"
-  note "a leaked access token cannot be replayed against it from the internet"
+  note "true of this phase rather than of the design: web, mobile and third"
+  note "parties are all intended clients, and build-order step 7b opens this"
+  note "surface deliberately. Until then there is nothing to expose it for."
 else
   fail "core-api publishes ports, and must not: ${published}"
 fi

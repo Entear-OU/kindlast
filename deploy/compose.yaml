@@ -196,10 +196,14 @@ services:
   # The resource server (ENT-195). Note what is absent: any `ports` stanza.
   #
   # core-api is reachable only on this network, which is an acceptance
-  # criterion rather than a preference. `web` calls it server-side, the browser
-  # never does, and a leaked access token therefore cannot be replayed against
-  # it from the internet (§0.4, §1.2). The only exception §1.7 anticipates is
-  # `/webhooks/*` routed through `edge`, and there are no webhooks yet.
+  # criterion about the current phase rather than a property of the design.
+  #
+  # Web, mobile and third parties are all intended clients from the start, so
+  # this service is not shaped around `web`. It stays dark because `web` is the
+  # only client that exists yet, and an unexposed surface is one fewer thing to
+  # defend. Step 7b in the build order opens it deliberately, behind a contract
+  # that is stable by then. Until it does, the only exception §1.7 anticipates
+  # is `/webhooks/*` routed through `edge`, and there are no webhooks yet.
   #
   # Reaching it by hand, for validation:
   #   docker compose -f deploy/compose.yaml exec core-api /core-api healthcheck

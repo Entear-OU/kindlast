@@ -261,10 +261,12 @@ jobs:
             (cd "$module" && go test ./...)
           done
 
-      # core-api is reachable only on the compose network, which is an
-      # acceptance criterion rather than a preference: a leaked access token
-      # must not be replayable against it from the internet (§0.4, §1.2).
-      # Asserted rather than trusted to a missing `ports` stanza nobody reads.
+      # core-api is reachable only on the compose network today, and this
+      # asserts that rather than trusting a missing `ports` stanza nobody
+      # reads. It is a check on the current phase, not on the architecture:
+      # web, mobile and third parties are all intended clients, and build-order
+      # step 7b opens this surface deliberately. When that lands, this
+      # assertion is expected to change with it.
       - name: core-api publishes no port, and still answers internally
         run: |
           published="$(docker inspect kindlast-core-api --format '{{json .NetworkSettings.Ports}}')"

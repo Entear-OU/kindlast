@@ -153,9 +153,10 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	// h2c, so gRPC clients work over plaintext on the internal network. There
-	// is no TLS here because there is no public listener: `edge` terminates
-	// TLS, and core-api binds no published port at all (§0.4).
+	// h2c, so gRPC clients work over plaintext on the internal network. TLS is
+	// terminated at `edge` rather than here, which is a deployment choice
+	// about where the edge sits and not an assumption that this service only
+	// ever serves one client from inside one network.
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           h2c.NewHandler(handler, &http2.Server{}),
