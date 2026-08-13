@@ -75,18 +75,40 @@ func mapClaims(a *authServer, subjectClaim string, extra map[string]any) jwt.Map
 	return claims
 }
 
+// chainMigratorPool opens a migrator pool behind the same skip-or-fail gate
+// requireStack uses.
+//
+// Every test here reaches it only after requireStack, so today the gate is
+// belt and braces. It exists because the equivalent helper in the store
+// package did not have one, and a single test that called a fixture helper
+// before the gate turned an absent database into a red build in the `go` CI
+// job, where no stack runs at all.
+func chainMigratorPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+
+	pool, err := pgxpool.New(context.Background(), migratorDSNForChain())
+	if err == nil {
+		err = pool.Ping(context.Background())
+	}
+	if err != nil {
+		if pool != nil {
+			pool.Close()
+		}
+		unavailable(t, "migrator not reachable at %s (%v)", migratorDSNForChain(), err)
+	}
+
+	t.Cleanup(pool.Close)
+	return pool
+}
+
 // insertInvitation writes one as the migrator, standing in for the owner-only
 // invite endpoint that is build-order step 2.
 func insertInvitation(t *testing.T, orgID, email, role, token string) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), migratorDSNForChain())
-	if err != nil {
-		t.Fatalf("connecting as the migrator: %v", err)
-	}
-	defer pool.Close()
+	pool := chainMigratorPool(t)
 
-	_, err = pool.Exec(context.Background(), `
+	_, err := pool.Exec(context.Background(), `
 		insert into invitations (org_id, email, role, token_hash, expires_at)
 		values ($1, $2, $3, $4, now() + interval '1 hour')
 	`, orgID, email, role, postgres.HashInvitationToken(token))
@@ -98,11 +120,7 @@ func insertInvitation(t *testing.T, orgID, email, role, token string) {
 func removeInvitation(t *testing.T, token string) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), migratorDSNForChain())
-	if err != nil {
-		t.Fatalf("connecting as the migrator: %v", err)
-	}
-	defer pool.Close()
+	pool := chainMigratorPool(t)
 
 	if _, err := pool.Exec(context.Background(),
 		`delete from invitations where token_hash = $1`, postgres.HashInvitationToken(token)); err != nil {

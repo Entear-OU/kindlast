@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"os"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/libs/chassis/subject"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ENT-196 through the whole chain rather than at the store layer.
@@ -21,7 +21,13 @@ import (
 // authentication, revocation, scope and tenancy, into the handler, and back
 // out as a response. Everything in between is the real thing.
 
+// migratorDSNForChain honours PG_MIGRATOR_URL like every other connection
+// helper here. Hardcoding it would mean this one fixture path silently ignored
+// the environment CI and a non-default local setup both use.
 func migratorDSNForChain() string {
+	if dsn := os.Getenv("PG_MIGRATOR_URL"); dsn != "" {
+		return dsn
+	}
 	return "postgres://kindlast_migrator:migrator-dev-password@127.0.0.1:5433/kindlast"
 }
 
@@ -35,11 +41,7 @@ func forget(t *testing.T, issuer, claim string) {
 		t.Fatalf("deriving the user id: %v", err)
 	}
 
-	pool, err := pgxpool.New(context.Background(), migratorDSNForChain())
-	if err != nil {
-		t.Fatalf("connecting as the migrator: %v", err)
-	}
-	defer pool.Close()
+	pool := chainMigratorPool(t)
 
 	for _, statement := range []string{
 		`delete from memberships where org_id in (select id from organisations where personal_owner_id = $1)`,

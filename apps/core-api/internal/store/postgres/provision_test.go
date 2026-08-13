@@ -24,6 +24,37 @@ func migratorDSN() string {
 	return "postgres://kindlast_migrator:migrator-dev-password@127.0.0.1:5433/kindlast"
 }
 
+// migratorPool opens a pool as the migrator, which bypasses RLS, for the
+// fixture work that has to happen outside the policies under test.
+//
+// It carries the same skip-or-fail gate as testStore, and that is not
+// symmetry for its own sake. A test that reached a migrator connection without
+// passing through the gate would fail hard in the `go` CI job, where there is
+// no stack at all and every other test skips. That is exactly what happened:
+// one test called a fixture helper before testStore and turned an absent
+// database into a red build.
+func migratorPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+
+	pool, err := pgxpool.New(context.Background(), migratorDSN())
+	if err == nil {
+		err = pool.Ping(context.Background())
+	}
+	if err != nil {
+		if pool != nil {
+			pool.Close()
+		}
+		if os.Getenv("KINDLAST_REQUIRE_STACK") != "" {
+			t.Fatalf("KINDLAST_REQUIRE_STACK is set, so this must not skip: %s unreachable (%v)", migratorDSN(), err)
+		}
+		t.Skipf("compose stack not reachable at %s (%v); "+
+			"run: docker compose -f deploy/compose.yaml up -d", migratorDSN(), err)
+	}
+
+	t.Cleanup(pool.Close)
+	return pool
+}
+
 // cleanup removes everything a test subject created, as the migrator, which
 // bypasses RLS.
 //
@@ -34,11 +65,7 @@ func migratorDSN() string {
 func cleanup(t *testing.T, subjects ...string) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), migratorDSN())
-	if err != nil {
-		t.Fatalf("connecting as the migrator to clean up: %v", err)
-	}
-	defer pool.Close()
+	pool := migratorPool(t)
 
 	for _, s := range subjects {
 		userID, err := subject.UUID(testIssuer, s)
@@ -93,11 +120,7 @@ func personalOrgCount(t *testing.T, store *Store, subjectClaim string) int {
 		t.Fatalf("deriving the user id: %v", err)
 	}
 
-	pool, err := pgxpool.New(context.Background(), migratorDSN())
-	if err != nil {
-		t.Fatalf("connecting as the migrator: %v", err)
-	}
-	defer pool.Close()
+	pool := migratorPool(t)
 
 	var count int
 	err = pool.QueryRow(context.Background(),
@@ -443,18 +466,14 @@ func TestAnExpiredOrUnknownInvitationIsRefused(t *testing.T) {
 // The stored token is a hash, so a database dump does not yield a working
 // invitation.
 func TestTheInvitationTokenIsNotStoredInTheClear(t *testing.T) {
+	pool := migratorPool(t)
+
 	token := fmt.Sprintf("invitation-secrecy-%d", time.Now().UnixNano())
 	createInvitation(t, alphaOrg, "secrecy@example.com", org.RoleMember, token, time.Hour)
 	t.Cleanup(func() { deleteInvitation(t, token) })
 
-	pool, err := pgxpool.New(t.Context(), migratorDSN())
-	if err != nil {
-		t.Fatalf("connecting: %v", err)
-	}
-	defer pool.Close()
-
 	var found int
-	err = pool.QueryRow(t.Context(),
+	err := pool.QueryRow(t.Context(),
 		`select count(*) from invitations where token_hash = $1`, token).Scan(&found)
 	if err != nil {
 		t.Fatalf("querying: %v", err)
@@ -469,13 +488,9 @@ func TestTheInvitationTokenIsNotStoredInTheClear(t *testing.T) {
 func createInvitation(t *testing.T, orgID, email, role, token string, validFor time.Duration) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), migratorDSN())
-	if err != nil {
-		t.Fatalf("connecting as the migrator: %v", err)
-	}
-	defer pool.Close()
+	pool := migratorPool(t)
 
-	_, err = pool.Exec(context.Background(), `
+	_, err := pool.Exec(context.Background(), `
 		insert into invitations (org_id, email, role, token_hash, expires_at)
 		values ($1, $2, $3, $4, now() + $5::interval)
 	`, orgID, email, role, HashInvitationToken(token), fmt.Sprintf("%d seconds", int(validFor.Seconds())))
@@ -487,11 +502,7 @@ func createInvitation(t *testing.T, orgID, email, role, token string, validFor t
 func deleteInvitation(t *testing.T, token string) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), migratorDSN())
-	if err != nil {
-		t.Fatalf("connecting as the migrator: %v", err)
-	}
-	defer pool.Close()
+	pool := migratorPool(t)
 
 	if _, err := pool.Exec(context.Background(),
 		`delete from invitations where token_hash = $1`, HashInvitationToken(token)); err != nil {
