@@ -19,6 +19,7 @@ import (
 func Services() []protoreflect.ServiceDescriptor {
 	files := []protoreflect.FileDescriptor{
 		corev1.File_kindlast_core_v1_session_proto,
+		corev1.File_kindlast_core_v1_org_proto,
 	}
 
 	var services []protoreflect.ServiceDescriptor

@@ -60,8 +60,7 @@ func TestAValidTokenReachesTheHandler(t *testing.T) {
 		interceptor.OrgHeader: alphaOrg,
 	})
 
-	assertCode(t, err, connect.CodeUnimplemented,
-		"a valid token did not reach the handler")
+	assertOK(t, err, "a valid token did not reach the handler")
 }
 
 func TestTheChainRefusesWhatItShould(t *testing.T) {
@@ -212,8 +211,7 @@ func TestTheInterceptorEnforcesTheDeclaredValueNotAFixedOne(t *testing.T) {
 			"Authorization":       "Bearer " + a.token(t, adaUser, "findings:act"),
 			interceptor.OrgHeader: alphaOrg,
 		})
-		assertCode(t, err, connect.CodeUnimplemented,
-			"the interceptor refused the scope the method actually declared")
+		assertOK(t, err, "the interceptor refused the scope the method actually declared")
 	})
 }
 
@@ -262,7 +260,7 @@ func TestARevokedTokenStopsWorkingBeforeItExpires(t *testing.T) {
 	clearRevocation(t, live, revokedID)
 	t.Cleanup(func() { clearRevocation(t, live, revokedID) })
 
-	assertCode(t, call(t, client, headers), connect.CodeUnimplemented,
+	assertOK(t, call(t, client, headers),
 		"the token did not work before being revoked, so revoking it proves nothing")
 
 	expiry := time.Now().Add(10 * time.Minute)
@@ -304,6 +302,22 @@ func clearRevocation(t *testing.T, live *stack, tokenID string) {
 
 	if err := live.redis.Del(context.Background(), "test:denylist:"+tokenID).Err(); err != nil {
 		t.Fatalf("clearing the deny-list entry: %v", err)
+	}
+}
+
+// assertOK is what "the whole chain passed" looks like now that ENT-196
+// implemented the handler.
+//
+// Until then these assertions expected `unimplemented`, because reaching a
+// stub was the only available proof that authentication, revocation, scope and
+// tenancy had all passed. A real response is a strictly better proof, and the
+// refusal cases below are unchanged, which is the point: replacing the handler
+// did not weaken any of them.
+func assertOK(t *testing.T, err error, why string) {
+	t.Helper()
+
+	if err != nil {
+		t.Fatalf("call failed with %v (%v): %s", connect.CodeOf(err), err, why)
 	}
 }
 

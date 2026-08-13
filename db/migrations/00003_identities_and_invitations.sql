@@ -91,6 +91,32 @@ create unique index organisations_one_personal_org_per_owner
   on public.organisations (personal_owner_id)
   where personal_owner_id is not null;
 
+-- An organisation is visible to the person it was provisioned for, in addition
+-- to being visible to its members.
+--
+-- This looks like a convenience and is a requirement, for a reason that is not
+-- obvious until it bites. `organisations_select_member` in 00002 makes a row
+-- visible through `memberships`, so during provisioning there is a moment when
+-- the organisation exists and the membership does not, and in that moment its
+-- creator cannot see it.
+--
+-- That matters because of how Postgres treats INSERT ... ON CONFLICT under
+-- RLS: the proposed row must satisfy a SELECT policy, whether or not the
+-- statement has a RETURNING clause and whether or not a conflicting row
+-- actually exists. So the upsert that makes concurrent provisioning safe is
+-- refused with "new row violates row-level security policy", which reads as a
+-- permissions bug and is really a chicken-and-egg one. Measured against this
+-- schema rather than reasoned about: a plain insert succeeds, and adding any
+-- `on conflict` clause to the same statement fails.
+--
+-- Narrower than it looks: it grants sight of an organisation only to the one
+-- subject it was created for, which is a fact about their own data. Policies
+-- are OR-ed, so this widens nothing for anybody else.
+create policy organisations_select_personal_owner on public.organisations
+  for select using (
+    personal_owner_id = (select current_setting('app.current_user_id')::uuid)
+  );
+
 -- invitations -----------------------------------------------------------------
 --
 -- A tenant table: org_id, indexed first, RLS enabled and forced, per the rule
