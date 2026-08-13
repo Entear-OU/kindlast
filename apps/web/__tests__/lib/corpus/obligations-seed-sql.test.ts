@@ -11,10 +11,10 @@ import { buildObligationsSeedMigration } from '@/lib/corpus/obligations-seed'
  * drift guard that keeps the committed migration in sync with the corpus.
  */
 
-const CORPUS_PATH = resolve(__dirname, '../../../data/corpus/obligations.json')
+const CORPUS_PATH = resolve(__dirname, '../../../../../data/corpus/obligations.json')
 const MIGRATION_PATH = resolve(
   __dirname,
-  '../../../supabase/migrations/20260602120000_seed_obligations_catalogue.sql',
+  '../../../../../supabase/migrations/20260602120000_seed_obligations_catalogue.sql',
 )
 
 const corpus: ObligationsData = parseObligationsData(

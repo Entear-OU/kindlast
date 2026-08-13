@@ -1,13 +1,13 @@
 #!/usr/bin/env tsx
 /**
- * Ingest the curated DPA enforcement-decisions snapshot into the regulatory
- * corpus (ENT-99). Idempotent — re-runs merge by `slug`, so calling this
+ * Ingest the curated EDPB / WP29 guidelines snapshot into the regulatory
+ * corpus (ENT-50). Idempotent — re-runs merge by `slug`, so calling this
  * script twice produces the same row state, not duplicates.
  *
- *   bun run ingest:enforcement
+ *   bun run ingest:edpb-guidelines
  *
  *   # or call directly:
- *   tsx scripts/ingest-enforcement.ts data/corpus/enforcement-decisions.json
+ *   tsx scripts/ingest-edpb-guidelines.ts data/corpus/edpb-guidelines.json
  *
  * Auth: corpus tables have no INSERT policy for anon/authenticated, so
  * this MUST run with the service-role key. The script bails loudly if
@@ -22,7 +22,7 @@ import { argv, cwd, exit, loadEnvFile } from 'node:process'
 
 import { createClient } from '@supabase/supabase-js'
 
-import { ingestEnforcementDecisions, parseEnforcementData } from '../lib/corpus/enforcement'
+import { ingestGuidelines, parseGuidelinesData } from '../lib/corpus/guidelines'
 
 // Load env from .env.local (local dev) then .env (fallback). Both files are
 // optional; if they're missing, we expect the caller to have set env vars
@@ -35,7 +35,7 @@ for (const file of ['.env.local', '.env']) {
   }
 }
 
-const DEFAULT_SNAPSHOT = 'data/corpus/enforcement-decisions.json'
+const DEFAULT_SNAPSHOT = '../../data/corpus/edpb-guidelines.json'
 
 async function main(): Promise<void> {
   const dataPath = argv[2] ?? DEFAULT_SNAPSHOT
@@ -44,14 +44,14 @@ async function main(): Promise<void> {
 
   if (!supabaseUrl || !serviceKey) {
     console.error(
-      'ingest:enforcement: SUPABASE_URL and SUPABASE_SECRET_KEY must be set ' +
+      'ingest:edpb-guidelines: SUPABASE_URL and SUPABASE_SECRET_KEY must be set ' +
         '(check .env.local for local dev, or export them for remote).',
     )
     exit(1)
   }
 
   const absolutePath = resolve(cwd(), dataPath)
-  console.log(`ingest:enforcement: loading ${absolutePath}`)
+  console.log(`ingest:edpb-guidelines: loading ${absolutePath}`)
 
   let raw: unknown
   try {
@@ -59,34 +59,36 @@ async function main(): Promise<void> {
     raw = JSON.parse(text)
   } catch (err) {
     console.error(
-      `ingest:enforcement: failed to read/parse ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
+      `ingest:edpb-guidelines: failed to read/parse ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
     )
     exit(1)
   }
 
   let data
   try {
-    data = parseEnforcementData(raw)
+    data = parseGuidelinesData(raw)
   } catch (err) {
-    console.error('ingest:enforcement: source data is malformed:')
+    console.error('ingest:edpb-guidelines: source data is malformed:')
     console.error(err instanceof Error ? err.message : String(err))
     exit(1)
   }
 
   console.log(
-    `ingest:enforcement: validated payload — ${data.decisions.length} decisions`,
+    `ingest:edpb-guidelines: validated payload — ${data.guidelines.length} guidelines`,
   )
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const result = await ingestEnforcementDecisions(supabase, data)
-  console.log(`ingest:enforcement: done — ${result.decisionsUpserted} decisions upserted.`)
+  const result = await ingestGuidelines(supabase, data)
+  console.log(
+    `ingest:edpb-guidelines: done — ${result.guidelinesUpserted} guidelines upserted.`,
+  )
 }
 
 main().catch((err) => {
-  console.error('ingest:enforcement: failed:')
+  console.error('ingest:edpb-guidelines: failed:')
   console.error(err instanceof Error ? err.stack ?? err.message : String(err))
   exit(1)
 })

@@ -65,8 +65,13 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # `bun run typecheck`, not `bunx tsc`. bunx resolves a compiler from the
+      # registry when the binary is not linked at the root, so CI silently ran
+      # a newer TypeScript than the pinned one and failed on a stricter
+      # default. Going through the workspace script uses the version in the
+      # lockfile, which is the one developers run locally.
       - name: Typecheck
-        run: bunx tsc --noEmit
+        run: bun run typecheck
 
       # `bun run test:unit`, never `bun test`. The latter is Bun's own runner;
       # this repo's suite is Vitest, and `bun test` would collect none of it and

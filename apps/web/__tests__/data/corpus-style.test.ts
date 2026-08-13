@@ -15,7 +15,7 @@ import path from 'node:path'
  * same way, except in numeric ranges where a plain hyphen is used instead.
  */
 
-const CORPUS_DIR = path.resolve(__dirname, '../../data/corpus')
+const CORPUS_DIR = path.resolve(__dirname, '../../../../data/corpus')
 
 const EM_DASH = '—'
 const EN_DASH = '–'

@@ -21,7 +21,8 @@ import { parseRegulationData } from '@/lib/corpus/ingest'
  */
 
 function loadSnapshot(relative: string): unknown {
-  const absolute = resolve(process.cwd(), relative)
+  // The corpus stays at the repo root; the suite runs from apps/web.
+  const absolute = resolve(process.cwd(), '../..', relative)
   const text = readFileSync(absolute, 'utf8')
   return JSON.parse(text)
 }

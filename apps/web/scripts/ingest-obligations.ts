@@ -1,19 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * Ingest the curated EDPB / WP29 guidelines snapshot into the regulatory
- * corpus (ENT-50). Idempotent — re-runs merge by `slug`, so calling this
- * script twice produces the same row state, not duplicates.
+ * Ingest the curated obligations catalogue snapshot (ENT-52). Idempotent —
+ * re-runs merge by `slug`, so calling this script twice produces the same
+ * row state, not duplicates.
  *
- *   bun run ingest:edpb-guidelines
+ *   bun run ingest:obligations
  *
  *   # or call directly:
- *   tsx scripts/ingest-edpb-guidelines.ts data/corpus/edpb-guidelines.json
+ *   tsx scripts/ingest-obligations.ts data/corpus/obligations.json
  *
- * Auth: corpus tables have no INSERT policy for anon/authenticated, so
- * this MUST run with the service-role key. The script bails loudly if
- * either env var is missing — silently falling back to the anon key
- * would write zero rows and look "successful", which is the worst
- * possible failure mode for a one-shot ingest job.
+ * Auth: the `obligations` table has no INSERT policy for anon /
+ * authenticated, so this MUST run with the service-role key. The script
+ * bails loudly if either env var is missing — silently falling back to
+ * the anon key would write zero rows and look "successful", which is the
+ * worst possible failure mode for a one-shot ingest job.
  */
 
 import { readFile } from 'node:fs/promises'
@@ -22,7 +22,7 @@ import { argv, cwd, exit, loadEnvFile } from 'node:process'
 
 import { createClient } from '@supabase/supabase-js'
 
-import { ingestGuidelines, parseGuidelinesData } from '../lib/corpus/guidelines'
+import { ingestObligations, parseObligationsData } from '../lib/corpus/obligations'
 
 // Load env from .env.local (local dev) then .env (fallback). Both files are
 // optional; if they're missing, we expect the caller to have set env vars
@@ -35,7 +35,7 @@ for (const file of ['.env.local', '.env']) {
   }
 }
 
-const DEFAULT_SNAPSHOT = 'data/corpus/edpb-guidelines.json'
+const DEFAULT_SNAPSHOT = '../../data/corpus/obligations.json'
 
 async function main(): Promise<void> {
   const dataPath = argv[2] ?? DEFAULT_SNAPSHOT
@@ -44,14 +44,14 @@ async function main(): Promise<void> {
 
   if (!supabaseUrl || !serviceKey) {
     console.error(
-      'ingest:edpb-guidelines: SUPABASE_URL and SUPABASE_SECRET_KEY must be set ' +
+      'ingest:obligations: SUPABASE_URL and SUPABASE_SECRET_KEY must be set ' +
         '(check .env.local for local dev, or export them for remote).',
     )
     exit(1)
   }
 
   const absolutePath = resolve(cwd(), dataPath)
-  console.log(`ingest:edpb-guidelines: loading ${absolutePath}`)
+  console.log(`ingest:obligations: loading ${absolutePath}`)
 
   let raw: unknown
   try {
@@ -59,36 +59,36 @@ async function main(): Promise<void> {
     raw = JSON.parse(text)
   } catch (err) {
     console.error(
-      `ingest:edpb-guidelines: failed to read/parse ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
+      `ingest:obligations: failed to read/parse ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
     )
     exit(1)
   }
 
   let data
   try {
-    data = parseGuidelinesData(raw)
+    data = parseObligationsData(raw)
   } catch (err) {
-    console.error('ingest:edpb-guidelines: source data is malformed:')
+    console.error('ingest:obligations: source data is malformed:')
     console.error(err instanceof Error ? err.message : String(err))
     exit(1)
   }
 
   console.log(
-    `ingest:edpb-guidelines: validated payload — ${data.guidelines.length} guidelines`,
+    `ingest:obligations: validated payload — ${data.obligations.length} obligations`,
   )
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const result = await ingestGuidelines(supabase, data)
+  const result = await ingestObligations(supabase, data)
   console.log(
-    `ingest:edpb-guidelines: done — ${result.guidelinesUpserted} guidelines upserted.`,
+    `ingest:obligations: done — ${result.obligationsUpserted} obligations upserted.`,
   )
 }
 
 main().catch((err) => {
-  console.error('ingest:edpb-guidelines: failed:')
+  console.error('ingest:obligations: failed:')
   console.error(err instanceof Error ? err.stack ?? err.message : String(err))
   exit(1)
 })

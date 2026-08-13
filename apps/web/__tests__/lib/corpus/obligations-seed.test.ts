@@ -24,7 +24,7 @@ import { parseObligationsData } from '@/lib/corpus/obligations'
  * shrink below MVP.
  */
 
-const SNAPSHOT_PATH = resolve(__dirname, '../../../data/corpus/obligations.json')
+const SNAPSHOT_PATH = resolve(__dirname, '../../../../../data/corpus/obligations.json')
 
 describe('data/corpus/obligations.json', () => {
   const raw = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'))

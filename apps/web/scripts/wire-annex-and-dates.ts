@@ -26,8 +26,8 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cwd, exit } from 'node:process'
 
-const AI_ACT_PATH = 'data/corpus/eu-ai-act.json'
-const ANNEX_III_PATH = 'data/corpus/eu-ai-act-annex-iii.json'
+const AI_ACT_PATH = '../../data/corpus/eu-ai-act.json'
+const ANNEX_III_PATH = '../../data/corpus/eu-ai-act-annex-iii.json'
 
 const ARTICLE_4_EFFECTIVE_DATE = '2025-02-02'
 

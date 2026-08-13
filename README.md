@@ -136,7 +136,7 @@ defaults to `console`, so local development needs no email credentials.
 bun run dev              # dev server
 bun run build            # production build
 bun run lint             # ESLint
-bunx tsc --noEmit        # typecheck
+bun run typecheck        # typecheck
 bun run test             # everything
 bun run test:unit        # unit and component tests
 bun run test:integration # integration tests, needs Supabase running
@@ -169,7 +169,7 @@ See [supabase/README.md](./supabase/README.md).
 ## Project structure
 
 ```
-app/
+apps/web/app/
 ├── (public)/           # Landing, login
 ├── (authed)/           # Console: dashboard, feed, records, settings, billing
 │   ├── onboarding/     # Conversational profile building
@@ -177,7 +177,7 @@ app/
 │   └── records/        # ROPA, AI systems, DSAR
 └── api/                # Route handlers, including scheduled agent endpoints
 
-lib/
+apps/web/lib/
 ├── analyst/            # Finding generation, narrative, critic
 ├── corpus/             # Regulatory knowledge base and obligations
 ├── notifications/      # Comms: dispatch, briefings, signed one-tap links
