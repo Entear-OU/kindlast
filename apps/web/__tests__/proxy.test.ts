@@ -35,10 +35,18 @@ vi.mock('next/server', async () => {
 
 const SESSION_COOKIE = 'kindlast_session'
 
-function requestFor(pathname: string, options: { session?: boolean } = {}): NextRequest {
+const CSRF_COOKIE = 'kindlast_csrf'
+
+function requestFor(
+  pathname: string,
+  options: { session?: boolean; csrf?: string } = {},
+): NextRequest {
   const request = new NextRequest(new URL(`http://localhost:3000${pathname}`))
   if (options.session) {
     request.cookies.set(SESSION_COOKIE, 'a-session-id')
+  }
+  if (options.csrf) {
+    request.cookies.set(CSRF_COOKIE, options.csrf)
   }
   return request
 }
@@ -48,7 +56,7 @@ describe('proxy', () => {
     vi.clearAllMocks()
   })
 
-  it.each(['/dashboard', '/onboarding', '/feed', '/records'])(
+  it.each(['/workspace', '/dashboard', '/onboarding', '/feed', '/records'])(
     'sends a signed-out visitor from %s to sign-in',
     async (path) => {
       const { proxy } = await import('@/proxy')
@@ -58,6 +66,49 @@ describe('proxy', () => {
       expect(response.url).toContain('/sign-in')
     },
   )
+
+  /**
+   * The CSRF token is minted here because here is the only place that can.
+   *
+   * It is a double-submit token, so the page rendering the sign-out form has
+   * to read it and echo it in the body. Minting it in that server component
+   * cannot work: Next refuses cookie writes during a page render, which threw
+   * on every authenticated page and took the whole layout down with it. A
+   * route handler could set it, but only for requests that reach one, and a
+   * signed-in person navigating between pages never does.
+   *
+   * Middleware sets cookies on the response and runs before any page renders,
+   * which makes it the one place the token is guaranteed to exist by the time
+   * a form needs it.
+   */
+  it('issues a CSRF token to a signed-in visitor who has none', async () => {
+    const { proxy } = await import('@/proxy')
+    const response = await proxy(requestFor('/workspace', { session: true }))
+
+    expect(response.cookies.set).toHaveBeenCalledWith(
+      CSRF_COOKIE,
+      expect.any(String),
+      expect.objectContaining({ httpOnly: false }),
+    )
+  })
+
+  it('leaves an existing CSRF token alone, so a rendered form stays valid', async () => {
+    // Re-minting on every navigation would invalidate the token already
+    // embedded in a form on the page the person is looking at.
+    const { proxy } = await import('@/proxy')
+    const response = await proxy(
+      requestFor('/workspace', { session: true, csrf: 'already-issued' }),
+    )
+
+    expect(response.cookies.set).not.toHaveBeenCalled()
+  })
+
+  it('does not issue a CSRF token to someone with no session', async () => {
+    const { proxy } = await import('@/proxy')
+    const response = await proxy(requestFor('/'))
+
+    expect(response.cookies.set).not.toHaveBeenCalled()
+  })
 
   it('carries the attempted path so sign-in can return there', async () => {
     const { proxy } = await import('@/proxy')
@@ -73,12 +124,15 @@ describe('proxy', () => {
     expect(response).toMatchObject({ type: 'next' })
   })
 
-  it('sends someone who already has a session away from sign-in', async () => {
+  it('sends someone who already has a session to the workspace', async () => {
+    // /workspace rather than /dashboard: the legacy dashboard still gates on
+    // a Supabase session, which no longer exists now that the auth path is
+    // OIDC, so sending someone there would bounce them straight back out.
     const { proxy } = await import('@/proxy')
     const response = await proxy(requestFor('/sign-in', { session: true }))
 
     expect(response).toMatchObject({ type: 'redirect' })
-    expect(response.url).toContain('/dashboard')
+    expect(response.url).toContain('/workspace')
   })
 
   it.each(['/', '/sign-in', '/features', '/auth/login', '/auth/callback'])(

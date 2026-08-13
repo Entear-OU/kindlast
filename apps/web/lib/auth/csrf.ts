@@ -12,27 +12,22 @@
  * session cookie alongside it.
  */
 import { cookies } from 'next/headers'
-import { randomToken } from './pkce'
 
 export const CSRF_COOKIE = 'kindlast_csrf'
 
 /**
- * Returns the current token, minting one if there is none.
+ * Reads the current token. Does not mint one, and cannot.
  *
- * Called from a server component that renders a form, so the cookie and the
- * rendered value are always the same token.
+ * This is called from the server component that renders the sign-out form,
+ * and Next refuses cookie writes during a page render: the earlier version
+ * minted on a miss, which threw inside the authenticated layout and took every
+ * page rendered in it down with it. The proxy issues the cookie instead, on
+ * the response, before any page renders.
+ *
+ * Empty when there is no session, which is correct rather than a fallback: a
+ * signed-out visitor has nothing to sign out of.
  */
 export async function csrfToken(): Promise<string> {
   const jar = await cookies()
-  const existing = jar.get(CSRF_COOKIE)?.value
-  if (existing) return existing
-
-  const token = randomToken(32)
-  jar.set(CSRF_COOKIE, token, {
-    httpOnly: false,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-  })
-  return token
+  return jar.get(CSRF_COOKIE)?.value ?? ''
 }
