@@ -20,7 +20,9 @@
     "ingest:obligations": "bun scripts/ingest-obligations.ts ../../data/corpus/obligations.json",
     "generate:obligations-seed": "bun scripts/generate-obligations-seed.ts",
     "ingest:enforcement": "bun scripts/ingest-enforcement.ts ../../data/corpus/enforcement-decisions.json",
-    "wire:ai-act-annex": "bun scripts/wire-annex-and-dates.ts"
+    "wire:ai-act-annex": "bun scripts/wire-annex-and-dates.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",
@@ -59,6 +61,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

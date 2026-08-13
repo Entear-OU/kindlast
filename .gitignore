@@ -87,3 +87,8 @@ apps/*/bin/
 # churns on unrelated commands, and CI passes without it.
 go.work.sum
 
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/

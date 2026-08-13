@@ -1,21 +1,105 @@
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { exchangeCode, safeReturnTo } from '@/lib/auth/flow'
+import { consumeState } from '@/lib/auth/state'
+import { createSession, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth/session'
+import { subjectOf } from '@/lib/auth/claims'
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
+/**
+ * The other end of the authorization request.
+ *
+ * This replaced the Supabase code exchange that lived here. Kindlast is being
+ * moved off Supabase, and the auth path goes first because it is the one part
+ * with a finished replacement: core-api verifies tokens and serves
+ * /api/v1/me, so nothing here needs Supabase any more.
+ *
+ * Order matters and is worth reading. State is verified and consumed before
+ * anything else happens, because it is the only thing tying this callback to a
+ * request this server actually started. Then the code is exchanged on the back
+ * channel. Only then does a session exist.
+ */
+export async function GET(request: NextRequest) {
+  const { searchParams, origin } = request.nextUrl
+
+  // The user declined at the IdP, or the IdP refused. Not an error worth a
+  // stack trace: it is a person changing their mind.
+  const denied = searchParams.get('error')
+  if (denied) {
+    return NextResponse.redirect(new URL('/sign-in?error=denied', origin))
+  }
+
   const code = searchParams.get('code')
-  const origin = new URL(request.url).origin
-
-  if (!code) {
-    return NextResponse.redirect(new URL('/login', origin))
+  const state = searchParams.get('state')
+  if (!code || !state) {
+    return NextResponse.redirect(new URL('/sign-in?error=state', origin))
   }
 
-  const supabase = await createClient()
-  const { error } = await supabase.auth.exchangeCodeForSession(code)
-
-  if (error) {
-    return NextResponse.redirect(new URL('/login', origin))
+  // Single use, and atomic: two concurrent callbacks cannot both succeed.
+  // An unknown or expired state is indistinguishable from a forged one here,
+  // which is the correct amount of information to act on.
+  const preAuth = await consumeState(state)
+  if (!preAuth) {
+    return NextResponse.redirect(new URL('/sign-in?error=state', origin))
   }
 
-  return NextResponse.redirect(new URL('/onboarding', origin))
+  let tokens
+  try {
+    tokens = await exchangeCode(code, preAuth.verifier)
+  } catch (error) {
+    console.error('auth/callback exchange', error)
+    return NextResponse.redirect(new URL('/sign-in?error=exchange', origin))
+  }
+
+  const subject = subjectOf(tokens.accessToken)
+  if (!subject) {
+    console.error('auth/callback: access token carries no subject')
+    return NextResponse.redirect(new URL('/sign-in?error=exchange', origin))
+  }
+
+  const sessionId = await createSession({
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    idToken: tokens.idToken,
+    expiresAt: tokens.expiresAt,
+    subject,
+    orgId: null,
+  })
+
+  // The invitation is accepted before the first /api/v1/me, and the ordering
+  // is not incidental: get it backwards and just-in-time provisioning sees a
+  // subject with no membership and creates a personal organisation alongside
+  // the one they were invited to (§1.8).
+  if (preAuth.invitationToken) {
+    await acceptInvitation(tokens.accessToken, preAuth.invitationToken)
+  }
+
+  const response = NextResponse.redirect(new URL(safeReturnTo(preAuth.returnTo), origin))
+  response.cookies.set(SESSION_COOKIE, sessionId, sessionCookieOptions())
+  return response
+}
+
+/**
+ * Redeeming the invitation, best effort.
+ *
+ * A failure here must not strand a signed-in user on an error page: they have
+ * a valid session, and the invitation can be accepted again from the link.
+ * Provisioning is idempotent on the subject, so the worst case is a personal
+ * organisation they can leave.
+ */
+async function acceptInvitation(accessToken: string, token: string): Promise<void> {
+  const base = process.env.KINDLAST_CORE_API_URL
+  if (!base) return
+
+  try {
+    await fetch(`${base}/kindlast.core.v1.OrgService/AcceptInvitation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ token }),
+      cache: 'no-store',
+    })
+  } catch (error) {
+    console.error('auth/callback invitation', error)
+  }
 }

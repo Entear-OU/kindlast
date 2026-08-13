@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { GuillocheMark } from '@/components/landing/guilloche-mark'
 
@@ -87,11 +88,13 @@ export function SignInCard({
           Continue to your compliance workspace.
         </p>
 
-        {/* The rule draws rather than fades: the one gesture that reads as
-            something being ruled onto a page. */}
-        <div
+        {/* Separator rather than a styled div: it is the Base UI primitive
+            this codebase already wraps, and it carries the correct ARIA role
+            for a divider rather than leaving a bare element for a screen
+            reader to puzzle over. */}
+        <Separator
           data-rule
-          className="mt-7 h-px w-full origin-left bg-border animate-in fade-in-0 zoom-in-x-50 duration-500 fill-mode-backwards [animation-delay:200ms] motion-reduce:animate-none"
+          className="mt-7 origin-left animate-in fade-in-0 zoom-in-x-50 duration-500 fill-mode-backwards [animation-delay:200ms] motion-reduce:animate-none"
         />
 
         <div className="mt-7 space-y-2.5">
