@@ -321,6 +321,7 @@ func toProto(memberships []org.Membership) []*corev1.Membership {
 		out = append(out, &corev1.Membership{
 			OrgId:   m.OrgID,
 			OrgName: m.OrgName,
+			OrgSlug: m.OrgSlug,
 			Role:    m.Role,
 		})
 	}

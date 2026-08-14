@@ -352,7 +352,7 @@ func TestAnInvitedUserJoinsTheExistingOrganisationAndGetsNoPersonalOne(t *testin
 	if err != nil {
 		t.Fatalf("beginning: %v", err)
 	}
-	orgID, orgName, role, err := tenant.AcceptInvitation(t.Context(), token)
+	joined, err := tenant.AcceptInvitation(t.Context(), token)
 	if err != nil {
 		t.Fatalf("accepting: %v", err)
 	}
@@ -360,14 +360,19 @@ func TestAnInvitedUserJoinsTheExistingOrganisationAndGetsNoPersonalOne(t *testin
 		t.Fatalf("committing: %v", err)
 	}
 
-	if orgID != alphaOrg {
-		t.Fatalf("joined %q, want %q", orgID, alphaOrg)
+	if joined.OrgID != alphaOrg {
+		t.Fatalf("joined %q, want %q", joined.OrgID, alphaOrg)
 	}
-	if role != org.RoleMember {
-		t.Fatalf("role = %q, want the role the invitation granted", role)
+	if joined.Role != org.RoleMember {
+		t.Fatalf("role = %q, want the role the invitation granted", joined.Role)
 	}
-	if orgName == "" {
+	if joined.OrgName == "" {
 		t.Fatal("no organisation name came back")
+	}
+	// Without the slug the caller cannot build the URL to redirect into, which
+	// is the whole reason accept returns anything beyond an id (ENT-198).
+	if joined.OrgSlug == "" {
+		t.Fatal("no organisation slug came back")
 	}
 
 	// Now the first /me. Provisioning must find a membership and create
@@ -413,7 +418,7 @@ func TestAnInvitationCannotBeUsedTwice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("beginning: %v", err)
 	}
-	if _, _, _, err := first.AcceptInvitation(t.Context(), token); err != nil {
+	if _, err := first.AcceptInvitation(t.Context(), token); err != nil {
 		t.Fatalf("first accept: %v", err)
 	}
 	if err := first.Commit(t.Context()); err != nil {
@@ -426,7 +431,7 @@ func TestAnInvitationCannotBeUsedTwice(t *testing.T) {
 	}
 	defer second.Rollback(t.Context())
 
-	if _, _, _, err := second.AcceptInvitation(t.Context(), token); err == nil {
+	if _, err := second.AcceptInvitation(t.Context(), token); err == nil {
 		t.Fatal("an already-accepted invitation was accepted again")
 	}
 }
@@ -456,7 +461,7 @@ func TestAnExpiredOrUnknownInvitationIsRefused(t *testing.T) {
 			}
 			defer tenant.Rollback(t.Context())
 
-			if _, _, _, err := tenant.AcceptInvitation(t.Context(), testCase.token); err == nil {
+			if _, err := tenant.AcceptInvitation(t.Context(), testCase.token); err == nil {
 				t.Fatalf("%s invitation was accepted", testCase.name)
 			}
 		})

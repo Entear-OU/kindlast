@@ -46,4 +46,8 @@ message AcceptInvitationResponse {
   string org_name = 2;
   // The role the invitation granted: owner, member or viewer.
   string role = 3;
+  // The URL segment to redirect into, so an accepted invitation lands the
+  // person inside the organisation they just joined rather than at a page
+  // that has to look it up again (§20.1, ENT-198).
+  string org_slug = 4;
 }

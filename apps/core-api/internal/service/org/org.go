@@ -12,6 +12,10 @@ import (
 	"errors"
 
 	"connectrpc.com/connect"
+	// Aliased because this package is itself called org: the service and the
+	// domain rules it serves share a name, and only one of them can be `org`
+	// inside this file.
+	domain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
@@ -20,7 +24,7 @@ import (
 // accepting is what this handler needs of the request's transaction, declared
 // where it is used rather than exported from the store (§21.6).
 type accepting interface {
-	AcceptInvitation(ctx context.Context, token string) (orgID, orgName, role string, err error)
+	AcceptInvitation(ctx context.Context, token string) (domain.Joined, error)
 }
 
 // Service implements corev1connect.OrgServiceHandler.
@@ -49,7 +53,7 @@ func (s *Service) AcceptInvitation(
 			errors.New("the tenant transaction cannot accept invitations"))
 	}
 
-	orgID, orgName, role, err := store.AcceptInvitation(ctx, req.Msg.GetToken())
+	joined, err := store.AcceptInvitation(ctx, req.Msg.GetToken())
 	if errors.Is(err, postgres.ErrInvitationNotUsable) {
 		// One answer for expired, already accepted and never existed. The
 		// caller who legitimately holds a token needs no more than this, and
@@ -62,8 +66,9 @@ func (s *Service) AcceptInvitation(
 	}
 
 	return connect.NewResponse(&corev1.AcceptInvitationResponse{
-		OrgId:   orgID,
-		OrgName: orgName,
-		Role:    role,
+		OrgId:   joined.OrgID,
+		OrgName: joined.OrgName,
+		OrgSlug: joined.OrgSlug,
+		Role:    joined.Role,
 	}), nil
 }

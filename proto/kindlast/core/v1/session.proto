@@ -64,4 +64,13 @@ message Membership {
   // One of owner, member, viewer. Approval authority is a regulatory-relevant
   // fact, so it earns a role boundary (§20.1).
   string role = 3;
+  // The URL segment every console route for this organisation hangs off, as in
+  // `/o/{org_slug}/feed` (§20.1, ENT-198).
+  //
+  // Derived from the name when the organisation is created and immutable
+  // afterwards, so it does not follow a rename: slugs live in bookmarks and in
+  // emailed capability-token links, which are exactly the links a compliance
+  // product has to keep working. A client that wants a label shows org_name; a
+  // client that wants a link uses this.
+  string org_slug = 4;
 }

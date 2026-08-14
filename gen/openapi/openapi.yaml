@@ -78,6 +78,12 @@ components:
                 role:
                     type: string
                     description: 'The role the invitation granted: owner, member or viewer.'
+                orgSlug:
+                    type: string
+                    description: |-
+                        The URL segment to redirect into, so an accepted invitation lands the
+                         person inside the organisation they just joined rather than at a page
+                         that has to look it up again (§20.1, ENT-198).
         GetCurrentUserResponse:
             type: object
             properties:
@@ -125,6 +131,17 @@ components:
                     description: |-
                         One of owner, member, viewer. Approval authority is a regulatory-relevant
                          fact, so it earns a role boundary (§20.1).
+                orgSlug:
+                    type: string
+                    description: |-
+                        The URL segment every console route for this organisation hangs off, as in
+                         `/o/{org_slug}/feed` (§20.1, ENT-198).
+
+                         Derived from the name when the organisation is created and immutable
+                         afterwards, so it does not follow a rename: slugs live in bookmarks and in
+                         emailed capability-token links, which are exactly the links a compliance
+                         product has to keep working. A client that wants a label shows org_name; a
+                         client that wants a link uses this.
         Status:
             type: object
             properties:

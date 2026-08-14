@@ -38,6 +38,21 @@ type Subject struct {
 type Membership struct {
 	OrgID   string
 	OrgName string
+	// OrgSlug is the URL segment the console routes on (§20.1, ENT-198).
+	// Derived from the name when the organisation is created and never
+	// recomputed, so it does not follow a rename.
+	OrgSlug string
+	Role    string
+}
+
+// Joined is the organisation an invitation just admitted someone to.
+//
+// Carries the slug as well as the id because the caller's next move is a
+// redirect into it, and the URL is built from the slug (ENT-198).
+type Joined struct {
+	OrgID   string
+	OrgName string
+	OrgSlug string
 	Role    string
 }
 
