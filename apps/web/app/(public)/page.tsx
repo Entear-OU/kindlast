@@ -73,8 +73,7 @@ export default function LandingPage() {
               >
                 Compliance fails quietly, and it fails on the days nobody
                 remembered to check. Kindlast turns that regulatory surface into
-                a plain-language action plan your team can act on, without hiring
-                a DPO to keep watch.
+                a plain-language action plan your team can act on.
               </p>
             </div>
           </div>
