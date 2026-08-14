@@ -25,31 +25,34 @@ Set up scheduling. It is described below.
 |---|---|
 | Bun | 1.3 or later, for installing and running scripts |
 | Node.js | 22.13 or later, since Next.js runs on it |
-| Postgres | Via Supabase, which supplies auth, RLS, and pgvector |
+| Docker | For the bundled stack: Postgres, the OIDC provider, Redis, the edge |
+| Postgres | 17 with pgvector, supplied by the stack |
 | Scheduler | Anything that can make an authenticated HTTP GET on a cron schedule |
 
-## Supabase
+## The stack
 
-Kindlast depends on Supabase for more than a database: authentication, Row
-Level Security policies, and pgvector for the regulatory corpus. A bare
-Postgres instance will not work without significant modification.
-
-Two options:
-
-- **Supabase Cloud.** The free tier is enough to evaluate with.
-- **Self-hosted Supabase.** See their [self-hosting guide](https://supabase.com/docs/guides/self-hosting).
-  You are then running Kindlast and Supabase, which is a materially bigger
-  commitment.
-
-Once you have a project, apply the schema:
+Kindlast no longer depends on a hosted platform. Everything it needs runs from
+one compose file, and the removal of that dependency is the point: you are not
+signing up for anyone's cloud to run this.
 
 ```bash
-supabase link --project-ref <your-project-ref>
-supabase db push
+docker compose -f deploy/compose.yaml up -d
 ```
 
-Migrations live in `supabase/migrations/` and are the only supported way to
-change the schema.
+That gives you Postgres with the tenancy role split applied, migrations run by
+a job container that must exit zero, Zitadel serving OIDC discovery, Redis, and
+a Caddy edge. Tear it down with `down -v`.
+
+**The role split is not decoration and should survive any substitution you
+make.** A plain Postgres superuser bypasses row level security entirely, and so
+does a table owner unless the table forces it. The failure mode is silent:
+every query succeeds, and tenant isolation is simply absent. So the application
+connects as a role that owns nothing, cannot bypass RLS, and holds table-level
+grants only. If you point Kindlast at your own Postgres, reproduce that
+separation before anything else, and run `bun run test:db` to check you did:
+it asserts the properties over `pg_class` rather than trusting configuration.
+
+Schema changes flow through goose migrations in `db/migrations/`.
 
 ## Environment variables
 
@@ -57,29 +60,29 @@ change the schema.
 this table. What follows is the required-versus-optional split, which is the
 part that is hard to work out from the file alone.
 
-The variables below configure the Next.js app against Supabase, which is the
-stack this document describes. The self-managed stack in `deploy/` is being
-built alongside it and is not yet what you would run; its resource server has
-its own settings, including how to point it at an IdP other than the bundled
-one, in
-[docs/core-api-configuration.md](./core-api-configuration.md). One thing there
-is worth knowing before you deploy anything rather than after: the OIDC issuer
-is part of every derived user id, so changing it later is an identity
-migration and not a settings edit.
+The web app's own OIDC settings are written by `./scripts/web-env.sh` from the
+running stack and should not be filled in by hand. The resource server has its
+own settings, including how to point it at an IdP other than the bundled one,
+in [docs/core-api-configuration.md](./core-api-configuration.md). One thing
+there is worth knowing before you deploy rather than after: the OIDC issuer is
+part of every derived user id, so changing it later is an identity migration
+and not a settings edit.
 
 ### Required
 
 | Variable | Why |
 |---|---|
-| `SUPABASE_URL` | Your project URL |
-| `SUPABASE_PUBLISHABLE_KEY` | Client-side (anon) key |
-| `SUPABASE_SECRET_KEY` | Server-side key. Never expose this to the browser. |
-| `OPENAI_API_KEY` | Powers onboarding chat and compliance profile extraction. Nothing works without it. |
+| `OPENAI_API_KEY` | Powers the agent loop. Nothing intelligent works without it. |
 | `NOTIFICATION_TOKEN_SECRET` | Signs one-tap approve, reject and unsubscribe links. Must be a long random string. |
 | `CRON_SECRET` | Bearer token the scheduled endpoints require. Must be a long random string. |
 
 Generate the two secrets with something like `openssl rand -hex 32`. They are
 independent and should not be the same value.
+
+Both are for surfaces currently being rebuilt: the notification and scheduled
+paths went with the Supabase removal, so nothing reads these yet. They are
+listed because the values should be settled before the surfaces return, not
+improvised on the day.
 
 ### Required for the full agent loop
 
@@ -153,10 +156,13 @@ does not deliver mail to the bundled Mailpit on this stack, so a test that
 waited for a verification message would be red for a reason unrelated to the
 code it covers.
 
-**The legacy console is not reachable on this stack.** The dashboard, feed,
-records and settings pages still gate on a Supabase session and read Supabase
-for their data, and the auth path no longer creates one. `/workspace` is the
-authenticated entry point until they are ported.
+**The console is being rebuilt, so expect it to be absent.** The dashboard,
+feed, compliance records, settings, billing and onboarding pages were removed
+with Supabase: their tenancy was Supabase's `auth.uid()` row level security,
+and authentication no longer produces a Supabase session. What you get today is
+the marketing site, the sign-in flow and `/workspace`. Each surface returns on
+core-api, and it is worth saying plainly rather than leaving you to discover
+it: this is not yet a system you would run a compliance programme on.
 
 ## Scheduling the agents
 

@@ -18,6 +18,17 @@
  * The repository is public and every other page on this site ends by telling
  * people to go and check it. So the rule for anything in this file: it exists
  * in the tree, and the entry names where.
+ *
+ * **The `source` paths below are in git history rather than in the working
+ * tree right now.** ENT-200 removed the Supabase-backed implementations of
+ * these registers, because their tenancy was Supabase's `auth.uid()` row level
+ * security and the auth path no longer produces a Supabase session. Each is
+ * being rebuilt on core-api, and each entry is repointed as its surface lands.
+ *
+ * The claims themselves are unchanged and are not decoration: they describe
+ * what this product does, and the reason to record the gap here rather than
+ * quietly leave a path that resolves to nothing is that a stale citation on a
+ * page inviting people to check the code is worse than no citation.
  */
 
 export interface Register {

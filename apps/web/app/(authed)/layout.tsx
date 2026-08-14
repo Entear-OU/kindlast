@@ -5,11 +5,12 @@ import { SignOutForm } from '@/components/auth/sign-out-form'
 /**
  * Shared layout for authenticated routes (ENT-91).
  *
- * Currently wraps `/onboarding`; ENT-46 will plug the dashboard nav into the
- * same shell. The header keeps two affordances visible at all times:
+ * Wraps `/workspace`, which is currently the only authenticated page: the
+ * console it used to wrap went with the Supabase removal (ENT-200), and each
+ * page returns as its surface is rebuilt on core-api. The header keeps two
+ * affordances visible at all times:
  *
- *   - a Kindlast brand link back to `/onboarding` (the user's home until the
- *     dashboard exists), and
+ *   - a Kindlast brand link back to `/workspace` (the person's home), and
  *   - a sign-out button that submits to the `signOut` server action and
  *     bounces to the identity provider’s end-session endpoint.
  *
@@ -64,7 +65,7 @@ export default function AuthedLayout({
       <header className="border-b border-border/60 bg-background">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-3">
           <Link
-            href="/onboarding"
+            href="/workspace"
             className="flex items-center gap-2 text-foreground transition-opacity hover:opacity-80"
           >
             <span className="text-foreground">

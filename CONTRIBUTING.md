@@ -29,28 +29,27 @@ you like elsewhere.
 - **Node.js 22.13 or later.** Bun installs the dependencies and runs the
   scripts, but Next.js and Vitest both execute on Node, so you need both. CI
   runs Node 22.
-- **[Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)**,
-  needed only for the integration tests and any database work.
-- **Docker**, required by `supabase start`.
+- **Docker**, for the local stack: Postgres, the OIDC provider, Redis, the Go
+  API and the edge. Needed for database work and the end-to-end tests.
 
 ### Getting running
 
 ```bash
 bun install
-cp .env.example .env
+docker compose -f deploy/compose.yaml up -d   # Postgres, Zitadel, Redis, core-api, edge
+./scripts/web-env.sh                          # writes apps/web/.env.local from the stack
 bun run dev
 ```
 
-The app boots without most environment variables. `.env.example` documents what
-each one unlocks. Notably `EMAIL_PROVIDER` defaults to `console`, so local
-development and CI need no email credentials.
+The marketing site boots without any of this. Signing in does not: the app is a
+confidential OAuth client and needs the credentials the stack's seed job
+created, which is what `web-env.sh` fetches. Do not write that file by hand,
+and re-run the script after `docker compose down -v`, which discards the volume
+holding them.
 
-For anything touching the database, boot the local stack:
-
-```bash
-supabase start
-supabase db reset    # replay all migrations from scratch
-```
+`.env.example` documents the remaining variables and what each unlocks. Notably
+`EMAIL_PROVIDER` defaults to `console`, so local development and CI need no
+email credentials.
 
 ## Testing
 
@@ -62,18 +61,24 @@ tests will be asked for them, so it is quicker to write them as you go.
 ```bash
 bun run test              # everything
 bun run test:unit         # unit and component tests (apps/web/__tests__/)
-bun run test:integration  # integration tests (apps/web/tests/integration/), needs Supabase running
+bun run test:e2e          # the sign-in round trip, needs the compose stack
+bun run test:db           # tenant isolation (db/tests/), needs the compose stack
 bun run test:watch        # watch mode
 bun run test:coverage     # with coverage
 ```
 
-[Vitest](https://vitest.dev) for unit and integration tests,
-[React Testing Library](https://testing-library.com/react) for components.
+[Vitest](https://vitest.dev) for unit tests,
+[React Testing Library](https://testing-library.com/react) for components,
+[Playwright](https://playwright.dev) for the browser journey, and Go's standard
+`testing` package for the API.
 
-The integration suites self-skip when the local Supabase stack is unreachable,
-so a green `bun run test` locally does not necessarily mean the integration tests
-ran. CI boots the stack and fails loudly if it is missing, so they cannot
-silently disappear there.
+The database suite self-skips when the local stack is unreachable, so a green
+`bun run test` locally does not necessarily mean it ran. CI boots the stack and
+fails loudly if it is missing, so it cannot silently disappear there. If you add
+a suite that needs a service, give it the same treatment.
+
+The end-to-end suite creates its own throwaway users through the identity
+provider's admin API, so it needs the stack up but no accounts of yours.
 
 Before pushing:
 

@@ -126,7 +126,7 @@ test.describe('the signup journey', () => {
     browser,
   }) => {
     // Provisioning is idempotent on the subject, and a second arrival is what
-    // proves it. The count is the assertion: reaching the dashboard twice
+    // proves it. The count is the assertion: reaching the workspace twice
     // would look identical whether one organisation existed or two did.
     const before = await countOrganisations()
 

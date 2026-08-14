@@ -89,11 +89,22 @@ needs three things, none of which are in this repo yet:
 Maintainers and anyone with write access are exempt from the check, so this
 does not add friction to internal work.
 
-## Supabase
+## Migrations
 
-Migrations are pushed to the hosted project after a PR merges, never before,
-and never applied ad-hoc through Studio or MCP. See
-[`supabase/README.md`](../supabase/README.md).
+Schema changes are goose migrations in `db/migrations/`, applied by the job
+container in `deploy/compose.yaml`. The job must exit zero or the stack is not
+considered up, which is what stops a half-migrated database from looking
+healthy.
 
-You will need the project ref from the Supabase dashboard to run
-`supabase link`. It is deliberately not committed to the repo.
+Migrations are applied to a deployed environment after a PR merges, never
+before, and never by hand against a live database.
+
+The rule that matters more than the mechanics: a new tenant table needs
+`org_id`, `FORCE ROW LEVEL SECURITY`, and policies in the two-GUC form. Do not
+take that on trust when reviewing. `bun run test:db` asserts it over
+`pg_class`, and it will fail the PR rather than let an unprotected table
+through.
+
+Supabase was removed in ENT-200. Its 38 migrations are in git history at
+`supabase/migrations/`, last present in commit `db0bf83`, and they are the
+reference for the surfaces still to be rebuilt on core-api.

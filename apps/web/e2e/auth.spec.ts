@@ -93,8 +93,8 @@ test.describe('protected routes', () => {
   test('sends a signed-out visitor to sign-in, remembering where they were going', async ({
     page,
   }) => {
-    await page.goto('/dashboard')
+    await page.goto('/workspace')
 
-    await expect(page).toHaveURL(/\/sign-in\?returnTo=%2Fdashboard/)
+    await expect(page).toHaveURL(/\/sign-in\?returnTo=%2Fworkspace/)
   })
 })
