@@ -56,12 +56,22 @@ func (t *Tenant) Memberships(ctx context.Context) ([]org.Membership, error) {
 //
 // Upsert rather than insert, because the email on a token can change and the
 // last one seen is the useful one.
+//
+// The coalesce is what makes "last one seen" mean the last one actually seen.
+// An absent claim means the token did not say, not that the address is gone,
+// and the two are easy to conflate into a statement that quietly nulls a good
+// row. That is not hypothetical here: the bundled Zitadel puts no email in an
+// access token at all, so provisioning learns the address from userinfo and
+// then every subsequent call arrives with nothing. Assigning excluded.email
+// unconditionally would erase it on the very next page load, leaving a
+// user_identities row that answers nobody, which is the one thing this table
+// exists to prevent.
 func (t *Tenant) RecordIdentity(ctx context.Context, subject org.Subject) error {
 	_, err := t.tx.Exec(ctx, `
 		insert into user_identities (user_id, issuer, subject, email)
 		values ($1, $2, $3, nullif($4, ''))
 		on conflict (user_id) do update
-		set email = excluded.email,
+		set email = coalesce(excluded.email, user_identities.email),
 		    updated_at = now()
 	`, t.userID, subject.Issuer, subject.Subject, subject.Email)
 	if err != nil {

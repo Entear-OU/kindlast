@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
@@ -99,7 +100,17 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	logger.Info("discovered the authorization server",
-		"issuer", provider.Issuer, "jwks_uri", provider.JWKSURI, "fetched_from", discoveryURL)
+		"issuer", provider.Issuer, "jwks_uri", provider.JWKSURI,
+		"userinfo_endpoint", provider.UserInfoURI, "fetched_from", discoveryURL)
+
+	if provider.UserInfoURI == "" {
+		// Worth a line at boot, because the symptom otherwise appears much
+		// later and looks unrelated: organisations named after subject claims,
+		// for one deployment and not another.
+		logger.Warn("the authorization server declares no userinfo endpoint; " +
+			"organisations created on first sign-in will be named from the subject claim " +
+			"when the access token carries no name or email")
+	}
 
 	keys := oidc.NewKeySet(provider.JWKSURI, transport)
 	if err := keys.Warm(ctx); err != nil {
@@ -145,6 +156,7 @@ func run(logger *slog.Logger) error {
 		Verifier: verifier,
 		DenyList: revocations,
 		Tenants:  tenantOpener{store},
+		Profiles: identity.NewUserInfo(provider.UserInfoURI, transport),
 		Ready: func(ctx context.Context) error {
 			return store.Ping(ctx)
 		},

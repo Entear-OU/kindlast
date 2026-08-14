@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
@@ -85,7 +86,21 @@ var testKey = sync.OnceValue(func() *rsa.PrivateKey {
 
 // authServer is the authorization server double: discovery, a JWKS, and real
 // RS256 signatures over tokens minted in the suite.
-type authServer struct{ server *httptest.Server }
+//
+// It also serves userinfo, because the interesting case is a provider whose
+// access tokens carry no profile claims. That is not a hypothetical shape: it
+// is what the bundled Zitadel issues, and a suite that only ever mints tokens
+// carrying `name` and `email` proves nothing about the deployment it ships to.
+type authServer struct {
+	server *httptest.Server
+
+	mu       sync.Mutex
+	userinfo map[string]any
+	// userinfoDown makes the endpoint refuse, which is how the fail-soft path
+	// is exercised: provisioning must survive an authorization server that is
+	// unreachable at exactly the wrong moment.
+	userinfoDown bool
+}
 
 func newAuthServer(t *testing.T) *authServer {
 	t.Helper()
@@ -95,9 +110,21 @@ func newAuthServer(t *testing.T) *authServer {
 
 	mux.HandleFunc(oidc.DiscoveryPath, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]string{
-			"issuer":   a.server.URL,
-			"jwks_uri": a.server.URL + "/keys",
+			"issuer":            a.server.URL,
+			"jwks_uri":          a.server.URL + "/keys",
+			"userinfo_endpoint": a.server.URL + "/userinfo",
 		})
+	})
+	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {
+		a.mu.Lock()
+		down, body := a.userinfoDown, a.userinfo
+		a.mu.Unlock()
+
+		if down {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		writeJSON(w, body)
 	})
 	mux.HandleFunc("/keys", func(w http.ResponseWriter, r *http.Request) {
 		public := &testKey().PublicKey
@@ -111,6 +138,38 @@ func newAuthServer(t *testing.T) *authServer {
 	a.server = httptest.NewServer(mux)
 	t.Cleanup(a.server.Close)
 	return a
+}
+
+// serveUserInfo sets what the userinfo endpoint returns for the subject given.
+func (a *authServer) serveUserInfo(subject string, profile map[string]any) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	body := map[string]any{"sub": subject}
+	for key, value := range profile {
+		body[key] = value
+	}
+	a.userinfo = body
+}
+
+// profiles builds the production adapter against this server's discovered
+// userinfo endpoint, rather than a stub. Same reason the verifier is real: a
+// stub here would make every assertion about naming a fact about the stub.
+func (a *authServer) profiles(t *testing.T) *identity.UserInfo {
+	t.Helper()
+
+	provider, err := oidc.Discover(t.Context(), nil, a.server.URL)
+	if err != nil {
+		t.Fatalf("discovery: %v", err)
+	}
+	return identity.NewUserInfo(provider.UserInfoURI, nil)
+}
+
+// takeUserInfoDown makes every userinfo request fail.
+func (a *authServer) takeUserInfoDown() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.userinfoDown = true
 }
 
 // token mints a token for a subject carrying the scopes given.
@@ -209,11 +268,11 @@ func (o tenantOpener) BeginTenant(ctx context.Context, subject, orgID string) (i
 
 // serve starts a Connect server behind the given interceptors and returns a
 // client for it.
-func serve(t *testing.T, interceptors ...connect.Interceptor) corev1connect.SessionServiceClient {
+func serve(t *testing.T, a *authServer, interceptors ...connect.Interceptor) corev1connect.SessionServiceClient {
 	t.Helper()
 
 	mux := http.NewServeMux()
-	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(),
+	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(a.profiles(t)),
 		connect.WithInterceptors(interceptors...)))
 
 	server := httptest.NewServer(mux)

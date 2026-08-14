@@ -509,3 +509,108 @@ func deleteInvitation(t *testing.T, token string) {
 		t.Fatalf("deleting the invitation: %v", err)
 	}
 }
+
+// An absent email claim must not erase a known address.
+//
+// The sequence is the shipped one against Zitadel, whose access tokens carry
+// no email at all: provisioning learns the address from userinfo and records
+// it, and every later call arrives with nothing. An unconditional
+// `set email = excluded.email` nulls the row on the very next page load, and
+// nothing anywhere reports it. What is lost is the reverse mapping from a
+// derived uuid back to a person, which is what makes a subject access request
+// answerable, so the failure is quiet and lands in the one place a GDPR
+// product cannot afford it.
+func TestAKnownEmailSurvivesACallThatCarriesNone(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	claim := fmt.Sprintf("email-keep-%d", time.Now().UnixNano())
+	t.Cleanup(func() { forgetSubject(t, claim) })
+
+	known := org.Subject{Issuer: testIssuer, Subject: claim, Email: "ada@example.com"}
+	if err := recordIdentityOnce(ctx, store, known); err != nil {
+		t.Fatalf("recording the first identity: %v", err)
+	}
+	if got := recordedEmail(t, claim); got != "ada@example.com" {
+		t.Fatalf("email = %q after the first call, want it stored", got)
+	}
+
+	// The same subject, one page load later, on a token with no email claim.
+	if err := recordIdentityOnce(ctx, store,
+		org.Subject{Issuer: testIssuer, Subject: claim}); err != nil {
+		t.Fatalf("recording the second identity: %v", err)
+	}
+
+	if got := recordedEmail(t, claim); got != "ada@example.com" {
+		t.Fatalf("email = %q after a call carrying none, want the known address kept", got)
+	}
+}
+
+// A new address on a later token still wins, so this is "do not erase" rather
+// than "never change".
+func TestANewEmailStillReplacesTheOldOne(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+
+	claim := fmt.Sprintf("email-change-%d", time.Now().UnixNano())
+	t.Cleanup(func() { forgetSubject(t, claim) })
+
+	for _, email := range []string{"before@example.com", "after@example.com"} {
+		if err := recordIdentityOnce(ctx, store,
+			org.Subject{Issuer: testIssuer, Subject: claim, Email: email}); err != nil {
+			t.Fatalf("recording %s: %v", email, err)
+		}
+	}
+
+	if got := recordedEmail(t, claim); got != "after@example.com" {
+		t.Fatalf("email = %q, want the most recent one actually seen", got)
+	}
+}
+
+func recordIdentityOnce(ctx context.Context, store *Store, s org.Subject) error {
+	tenant, err := store.BeginTenant(ctx, s.Subject, "")
+	if err != nil {
+		return err
+	}
+	defer tenant.Rollback(ctx)
+
+	if err := tenant.RecordIdentity(ctx, s); err != nil {
+		return err
+	}
+	return tenant.Commit(ctx)
+}
+
+// recordedEmail reads the row as the migrator, because user_identities is
+// behind the same policies as everything else and this assertion wants the
+// unfiltered truth rather than what one tenant can see.
+func recordedEmail(t *testing.T, subjectClaim string) string {
+	t.Helper()
+
+	userID, err := subject.UUID(testIssuer, subjectClaim)
+	if err != nil {
+		t.Fatalf("deriving the user id: %v", err)
+	}
+
+	var email *string
+	if err := migratorPool(t).QueryRow(context.Background(),
+		`select email from user_identities where user_id = $1`, userID).Scan(&email); err != nil {
+		t.Fatalf("reading the recorded email: %v", err)
+	}
+	if email == nil {
+		return ""
+	}
+	return *email
+}
+
+func forgetSubject(t *testing.T, subjectClaim string) {
+	t.Helper()
+
+	userID, err := subject.UUID(testIssuer, subjectClaim)
+	if err != nil {
+		t.Fatalf("deriving the user id: %v", err)
+	}
+	if _, err := migratorPool(t).Exec(context.Background(),
+		`delete from user_identities where user_id = $1`, userID); err != nil {
+		t.Fatalf("cleaning up: %v", err)
+	}
+}

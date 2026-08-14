@@ -243,3 +243,109 @@ func TestAnUnknownInvitationIsNotFoundThroughTheChain(t *testing.T) {
 
 	assertCode(t, err, connect.CodeNotFound, "an unknown invitation token was accepted")
 }
+
+// The defect this closes, reproduced at the level it was found.
+//
+// Every other provisioning test above mints a token carrying `name` and
+// `email`, so every one of them passes while the shipped stack does not: the
+// bundled Zitadel puts neither claim in an access token, provisioning falls
+// through to the `sub`, and a real person's first organisation is named after
+// a snowflake integer. Observed on the running stack as an organisation called
+// `386250729179840515`.
+//
+// So the token here carries what Zitadel actually issues, which is nothing
+// describing the human, and the name has to come from userinfo instead.
+func TestAnOrganisationIsNamedFromUserInfoWhenTheTokenCarriesNoProfile(t *testing.T) {
+	a := newAuthServer(t)
+	client, _ := buildChain(t, a, realScopes(t))
+
+	claim := fmt.Sprintf("chain-nameless-%d", time.Now().UnixNano())
+	forget(t, a.server.URL, claim)
+	t.Cleanup(func() { forget(t, a.server.URL, claim) })
+
+	a.serveUserInfo(claim, map[string]any{
+		"name":  "Ada Lovelace",
+		"email": "ada@example.com",
+	})
+
+	me, err := meCall(t, client, map[string]string{
+		// No name claim and no email claim, exactly as Zitadel mints them.
+		"Authorization": "Bearer " + a.tokenWithClaims(t, mapClaims(a, claim, nil)),
+	})
+	if err != nil {
+		t.Fatalf("a subject with no profile claims could not complete its first call: %v", err)
+	}
+
+	if len(me.GetMemberships()) != 1 {
+		t.Fatalf("memberships = %d, want exactly 1", len(me.GetMemberships()))
+	}
+	if got := me.GetMemberships()[0].GetOrgName(); got != "Ada Lovelace" {
+		t.Fatalf("organisation name = %q, want it derived from userinfo; "+
+			"a name equal to the subject claim is the ENT-198 blocker this test exists for", got)
+	}
+}
+
+// Provisioning must not depend on the authorization server being reachable.
+//
+// The whole reason verification is local (§1.4) is that a page render survives
+// `auth` being down. A userinfo call that could fail the request would hand
+// that property back on the one request where a user has no organisation yet,
+// which is the worst moment to fail: they would be signed in with nowhere to
+// be, and a retry loop against a service that is already unwell.
+func TestProvisioningSurvivesUserInfoBeingUnreachable(t *testing.T) {
+	a := newAuthServer(t)
+	client, _ := buildChain(t, a, realScopes(t))
+
+	claim := fmt.Sprintf("chain-nouserinfo-%d", time.Now().UnixNano())
+	forget(t, a.server.URL, claim)
+	t.Cleanup(func() { forget(t, a.server.URL, claim) })
+
+	a.takeUserInfoDown()
+
+	me, err := meCall(t, client, map[string]string{
+		"Authorization": "Bearer " + a.tokenWithClaims(t, mapClaims(a, claim, nil)),
+	})
+	if err != nil {
+		t.Fatalf("provisioning failed because userinfo was down: %v", err)
+	}
+
+	if len(me.GetMemberships()) != 1 {
+		t.Fatalf("memberships = %d, want exactly 1 even with no profile available", len(me.GetMemberships()))
+	}
+	// Degraded, not broken: the subject claim is a poor label and it is still
+	// better than an organisation with no name at all.
+	if got := me.GetMemberships()[0].GetOrgName(); got != claim {
+		t.Fatalf("organisation name = %q, want the subject claim as the last-resort fallback", got)
+	}
+}
+
+// A token that does carry the claims must not trigger a network call at all.
+//
+// This is the property that keeps userinfo off the hot path: a conformant
+// provider that puts `name` in the access token should never cause this
+// service to talk to the authorization server during a request.
+func TestUserInfoIsNotConsultedWhenTheTokenAlreadyCarriesAProfile(t *testing.T) {
+	a := newAuthServer(t)
+	client, _ := buildChain(t, a, realScopes(t))
+
+	claim := fmt.Sprintf("chain-hasprofile-%d", time.Now().UnixNano())
+	forget(t, a.server.URL, claim)
+	t.Cleanup(func() { forget(t, a.server.URL, claim) })
+
+	// Down, so consulting it would fail the assertion below rather than
+	// silently succeed.
+	a.takeUserInfoDown()
+
+	me, err := meCall(t, client, map[string]string{
+		"Authorization": "Bearer " + a.tokenWithClaims(t, mapClaims(a, claim, map[string]any{
+			"name": "Grace Hopper", "email": "grace@example.com",
+		})),
+	})
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+
+	if got := me.GetMemberships()[0].GetOrgName(); got != "Grace Hopper" {
+		t.Fatalf("organisation name = %q, want it from the token's own claims", got)
+	}
+}

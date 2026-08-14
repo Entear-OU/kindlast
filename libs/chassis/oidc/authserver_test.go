@@ -55,6 +55,17 @@ type authServer struct {
 	mu          sync.Mutex
 	keys        map[string]*rsa.PrivateKey
 	jwksFetches int
+
+	// The userinfo half, which exists because Zitadel's access tokens carry no
+	// profile claims at all. Recording the bearer token it was called with is
+	// the only way to assert that the endpoint is called as the user rather
+	// than as the service.
+	userinfo         map[string]any
+	userinfoStatus   int
+	userinfoFetches  int
+	userinfoAuthSeen string
+
+	omitUserInfoFromDiscovery bool
 }
 
 // newAuthServer starts a server that already holds a signing key.
@@ -72,6 +83,16 @@ func newLazyAuthServer(t *testing.T) *authServer {
 	return startAuthServer(t, map[string]*rsa.PrivateKey{})
 }
 
+// newBareAuthServer starts a server whose discovery document declares only the
+// two things a resource server actually requires. A provider is free to offer
+// no userinfo endpoint, and verification must still work.
+func newBareAuthServer(t *testing.T) *authServer {
+	t.Helper()
+	a := startAuthServer(t, map[string]*rsa.PrivateKey{"key-1": signingKey()})
+	a.omitUserInfoFromDiscovery = true
+	return a
+}
+
 func startAuthServer(t *testing.T, keys map[string]*rsa.PrivateKey) *authServer {
 	t.Helper()
 
@@ -79,10 +100,28 @@ func startAuthServer(t *testing.T, keys map[string]*rsa.PrivateKey) *authServer 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(oidc.DiscoveryPath, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]string{
+		document := map[string]string{
 			"issuer":   a.issuer(),
 			"jwks_uri": a.issuer() + "/oauth/v2/keys",
-		})
+		}
+		if !a.omitUserInfoFromDiscovery {
+			document["userinfo_endpoint"] = a.issuer() + "/oidc/v1/userinfo"
+		}
+		writeJSON(w, document)
+	})
+
+	mux.HandleFunc("/oidc/v1/userinfo", func(w http.ResponseWriter, r *http.Request) {
+		a.mu.Lock()
+		a.userinfoFetches++
+		a.userinfoAuthSeen = r.Header.Get("Authorization")
+		status, body := a.userinfoStatus, a.userinfo
+		a.mu.Unlock()
+
+		if status != 0 && status != http.StatusOK {
+			w.WriteHeader(status)
+			return
+		}
+		writeJSON(w, body)
 	})
 
 	mux.HandleFunc("/oauth/v2/keys", func(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +157,34 @@ func (a *authServer) fetchCount() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.jwksFetches
+}
+
+func (a *authServer) userInfoURI() string { return a.server.URL + "/oidc/v1/userinfo" }
+
+// serveUserInfo sets the document the userinfo endpoint returns.
+func (a *authServer) serveUserInfo(body map[string]any) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.userinfo = body
+}
+
+// failUserInfo makes the endpoint answer with a status instead of a document.
+func (a *authServer) failUserInfo(status int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.userinfoStatus = status
+}
+
+func (a *authServer) userInfoFetchCount() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.userinfoFetches
+}
+
+func (a *authServer) userInfoAuthorization() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.userinfoAuthSeen
 }
 
 // claims returns a token body that passes every check, so each test can spoil

@@ -45,6 +45,18 @@ const DiscoveryPath = "/.well-known/openid-configuration"
 type Provider struct {
 	Issuer  string
 	JWKSURI string
+
+	// UserInfoURI is the OIDC Core §5.3 endpoint, and it is empty when the
+	// document declares none.
+	//
+	// It is here rather than in the "anything more would be a Zitadel-shaped
+	// assumption" category above because it is the opposite of one: an access
+	// token is not obliged to carry `name` or `email`, several providers do not
+	// carry them, and this is the standard place to ask. A caller that needs a
+	// human-readable identity has exactly two conformant options, this or an id
+	// token it was never given, so leaving it undiscovered would push every
+	// caller into provider-specific guesswork.
+	UserInfoURI string
 }
 
 // Transport is how this package reaches the authorization server, as distinct
@@ -121,8 +133,9 @@ func DiscoverAt(ctx context.Context, transport *Transport, discoveryURL, expecte
 	}
 
 	var document struct {
-		Issuer  string `json:"issuer"`
-		JWKSURI string `json:"jwks_uri"`
+		Issuer      string `json:"issuer"`
+		JWKSURI     string `json:"jwks_uri"`
+		UserInfoURI string `json:"userinfo_endpoint"`
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
@@ -140,12 +153,26 @@ func DiscoverAt(ctx context.Context, transport *Transport, discoveryURL, expecte
 		return nil, fmt.Errorf("oidc: discovery document at %s declares no jwks_uri", discoveryURL)
 	}
 
-	jwksURI, err := rebase(document.JWKSURI, discoveryURL)
+	jwksURI, err := rebase("jwks_uri", document.JWKSURI, discoveryURL)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Provider{Issuer: document.Issuer, JWKSURI: jwksURI}, nil
+	// Absent is not an error. A resource server needs the JWKS to do its job;
+	// userinfo is wanted by some callers and required by none, so a provider
+	// that omits it stays usable and the caller decides what to do without it.
+	var userInfoURI string
+	if document.UserInfoURI != "" {
+		if userInfoURI, err = rebase("userinfo_endpoint", document.UserInfoURI, discoveryURL); err != nil {
+			return nil, err
+		}
+	}
+
+	return &Provider{
+		Issuer:      document.Issuer,
+		JWKSURI:     jwksURI,
+		UserInfoURI: userInfoURI,
+	}, nil
 }
 
 // rebase puts an advertised endpoint on the origin it was fetched from.
@@ -153,10 +180,10 @@ func DiscoverAt(ctx context.Context, transport *Transport, discoveryURL, expecte
 // A no-op in the ordinary case where the issuer is reachable at the address it
 // advertises, which keeps this invisible for anyone not running a split
 // network.
-func rebase(advertised, fetchedFrom string) (string, error) {
+func rebase(field, advertised, fetchedFrom string) (string, error) {
 	target, err := neturl.Parse(advertised)
 	if err != nil {
-		return "", fmt.Errorf("oidc: discovery document declares an unparseable jwks_uri %q: %w", advertised, err)
+		return "", fmt.Errorf("oidc: discovery document declares an unparseable %s %q: %w", field, advertised, err)
 	}
 	source, err := neturl.Parse(fetchedFrom)
 	if err != nil {
