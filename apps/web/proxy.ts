@@ -26,13 +26,16 @@ import { randomToken } from '@/lib/auth/pkce'
 /**
  * Prefixes that need a session. Everything else is public.
  *
- * One entry, because one authenticated page exists. The console prefixes that
- * used to be here went with the pages themselves (ENT-200): they gated on a
- * Supabase session that the OIDC auth path no longer creates, so every one of
- * them redirected the visitor straight back out. Each returns as its surface
- * is rebuilt on core-api.
+ * `/o/` covers the whole console in one entry, because every authenticated
+ * route lives under `/o/{slug}/` now (ENT-198). That is the lasting benefit of
+ * URL-scoped organisations here: surfaces return one by one as they are
+ * rebuilt on core-api (ENT-200), and not one of them needs a line adding to
+ * this list, so there is no way to ship a page that quietly is not covered.
+ *
+ * `/workspace` stays because it still resolves: it is in bookmarks and in
+ * DEFAULT_RETURN_TO, and it redirects into the caller's organisation.
  */
-const PROTECTED = ['/workspace']
+const PROTECTED = ['/o/', '/workspace']
 
 /**
  * Paths the auth flow owns, which must never be redirected.

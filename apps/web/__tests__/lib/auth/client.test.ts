@@ -79,6 +79,36 @@ describe('getCurrentUser', () => {
     expect(me?.memberships[0].orgId).toBe('a0000000-0000-4000-8000-000000000001')
   })
 
+  it('keeps the whole answer, not only the memberships', async () => {
+    // The response carries the signed-in person, the active organisation and
+    // the plan, and every one of them has a caller: the workspace greets
+    // someone by email, and ENT-198 routes on the slug. Normalising the
+    // memberships is not a licence to drop the rest, and dropping it is
+    // invisible at the call site because the fields are all optional.
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        user: { email: 'ada@example.com', name: 'Ada Lovelace', emailVerified: true },
+        memberships: [
+          {
+            orgId: 'a0000000-0000-4000-8000-000000000001',
+            orgName: 'Ada Lovelace',
+            orgSlug: 'ada-lovelace',
+            role: 'owner',
+          },
+        ],
+        activeOrgId: 'a0000000-0000-4000-8000-000000000001',
+        plan: 'free',
+      }),
+    )
+
+    const me = await getCurrentUser(ACCESS_TOKEN)
+
+    expect(me?.user?.email).toBe('ada@example.com')
+    expect(me?.activeOrgId).toBe('a0000000-0000-4000-8000-000000000001')
+    expect(me?.plan).toBe('free')
+    expect(me?.memberships[0].orgSlug).toBe('ada-lovelace')
+  })
+
   it('returns null rather than throwing when core-api refuses', async () => {
     // A failed bootstrap must not strand someone who holds a valid session on
     // an error page. They are signed in; the call can be retried on the next

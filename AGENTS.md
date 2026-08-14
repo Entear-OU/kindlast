@@ -54,7 +54,17 @@ onboarding) was removed with it, because its tenancy was Supabase's
 `auth.uid()` row level security and the OIDC auth path produces no Supabase
 session: every one of those pages redirected the visitor straight back out.
 Each returns as its surface is rebuilt on core-api, and ENT-200 lists them in
-build order. The authenticated surface today is `/workspace`.
+build order. The authenticated surface today is `/o/{slug}/`, where the slug
+names an organisation (ENT-198). `/workspace` still resolves and redirects
+into the caller's organisation, because it is in bookmarks and is where a
+sign-in with no destination lands.
+
+Every authenticated route lives under `/o/{slug}/`, and that is a tenancy
+boundary rather than a URL style. The organisation comes from the path on
+every request and is never remembered between them: with it held in a cookie,
+a consultant with three tabs open switches in one and silently changes what
+the other two are showing. A slug the caller does not belong to is **404, not
+403**, and never a redirect into one they do.
 
 The legacy schema those pages read is not lost. Its 38 migrations are in git
 history at `supabase/migrations/`, last present in commit `db0bf83`, and they

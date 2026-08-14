@@ -41,7 +41,14 @@ export async function GET(
       // rather than a broken flow.
       register: true,
       invitationToken: token,
-      returnTo: '/dashboard',
+      // No destination, deliberately. The organisation this invitation joins
+      // is not known until the callback has redeemed it, and its URL is built
+      // from a slug that only exists after that. `/workspace` (the default)
+      // resolves the caller into it once there is something to resolve.
+      //
+      // This used to name `/dashboard`, which the Supabase removal deleted:
+      // accepting an invitation ended on a 404, at the one moment a new user
+      // has no idea whether the product works.
     })
     return NextResponse.redirect(url)
   } catch (error) {

@@ -104,9 +104,10 @@ test.describe('the signup journey', () => {
 
     await signIn(page, user)
 
-    // Back on our origin, past the callback, with a session that survived the
-    // navigation. The proxy would have bounced us to /sign-in without one.
-    await page.waitForURL(/localhost:3000\/workspace/, { timeout: 30_000 })
+    // Back on our origin, past the callback, and resolved through /workspace
+    // into the organisation's own URL. The proxy would have bounced us to
+    // /sign-in without a session that survived the navigation.
+    await page.waitForURL(/localhost:3000\/o\/[a-z0-9-]+$/, { timeout: 30_000 })
 
     const cookies = await page.context().cookies()
     expect(cookies.some((c) => c.name.startsWith('kindlast'))).toBe(true)
@@ -114,7 +115,6 @@ test.describe('the signup journey', () => {
     // The page actually rendered as an authenticated one. A redirect landing
     // on the right URL is not the same as a page that could read the session,
     // and it is the second that the acceptance criterion asks for.
-    await expect(page.getByRole('heading', { name: /workspace/i })).toBeVisible()
     await expect(page.getByTestId('active-org')).toBeVisible()
 
     // The bootstrap actually happened. Without this the test would pass on a
@@ -138,10 +138,35 @@ test.describe('the signup journey', () => {
 
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
     await signIn(page, user)
-    await page.waitForURL(/localhost:3000\/workspace/, { timeout: 30_000 })
+    await page.waitForURL(/localhost:3000\/o\/[a-z0-9-]+$/, { timeout: 30_000 })
 
     expect(await countOrganisations()).toBe(before)
 
     await context.close()
+  })
+
+  // The ENT-198 criterion that is a tenancy property rather than a routing
+  // one: a slug the caller does not belong to is 404, not 403, and above all
+  // not a quiet redirect into an organisation they DO belong to.
+  //
+  // A redirect would be the comfortable thing to build and the wrong thing to
+  // ship. It changes what a URL means underneath whoever bookmarked it, which
+  // in a product where links carry approval decisions means someone signing
+  // off against a company they did not open.
+  test('an organisation the caller does not belong to is not found, and does not redirect', async ({
+    page,
+  }) => {
+    await page.goto('/sign-in')
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    await signIn(page, user)
+    await page.waitForURL(/localhost:3000\/o\/[a-z0-9-]+$/, { timeout: 30_000 })
+
+    const response = await page.goto('/o/an-organisation-that-is-not-mine')
+
+    expect(response?.status()).toBe(404)
+    // Still on the URL that was asked for. If this had become the caller's own
+    // organisation, the address bar would say so.
+    await expect(page).toHaveURL(/\/o\/an-organisation-that-is-not-mine$/)
+    await expect(page.getByTestId('active-org')).toHaveCount(0)
   })
 })
