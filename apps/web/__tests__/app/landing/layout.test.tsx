@@ -12,7 +12,7 @@ describe('PublicLayout', () => {
     render(
       <PublicLayout>
         <p>page body</p>
-      </PublicLayout>
+      </PublicLayout>,
     )
     expect(screen.getByText('page body')).toBeInTheDocument()
   })
@@ -21,15 +21,15 @@ describe('PublicLayout', () => {
     render(
       <PublicLayout>
         <p>page body</p>
-      </PublicLayout>
+      </PublicLayout>,
     )
     const nav = screen.getByRole('navigation')
     expect(
-      screen.getByRole('link', { name: /^How it works$/i })
+      screen.getByRole('link', { name: /^How it works$/i }),
     ).toHaveAttribute('href', '/how-it-works')
     expect(screen.getByRole('link', { name: /^Features$/i })).toHaveAttribute(
       'href',
-      '/features'
+      '/features',
     )
     expect(nav).toBeInTheDocument()
   })
@@ -38,7 +38,7 @@ describe('PublicLayout', () => {
     const { container } = render(
       <PublicLayout>
         <p>page body</p>
-      </PublicLayout>
+      </PublicLayout>,
     )
     expect(container.innerHTML).not.toMatch(/href="#/)
   })
@@ -47,7 +47,7 @@ describe('PublicLayout', () => {
     render(
       <PublicLayout>
         <p>page body</p>
-      </PublicLayout>
+      </PublicLayout>,
     )
     const cta = screen.getByRole('link', { name: /Read the source/i })
     expect(cta).toHaveAttribute('href', 'https://github.com/Entear-OU/kindlast')
@@ -62,11 +62,13 @@ describe('PublicLayout', () => {
     render(
       <PublicLayout>
         <p>page body</p>
-      </PublicLayout>
+      </PublicLayout>,
     )
     expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull()
     expect(
-      screen.queryAllByRole('link').filter((el) => el.getAttribute('href') === '/login')
+      screen
+        .queryAllByRole('link')
+        .filter((el) => el.getAttribute('href') === '/login'),
     ).toHaveLength(0)
   })
 
@@ -74,7 +76,7 @@ describe('PublicLayout', () => {
     const { container } = render(
       <PublicLayout>
         <p>page body</p>
-      </PublicLayout>
+      </PublicLayout>,
     )
     expect(container.textContent ?? '').not.toMatch(/waitlist/i)
     expect(container.innerHTML).not.toMatch(/tally\.so/i)
@@ -84,13 +86,13 @@ describe('PublicLayout', () => {
     render(
       <PublicLayout>
         <p>page body</p>
-      </PublicLayout>
+      </PublicLayout>,
     )
     // Exact name match: the header's icon-only repo link is labelled
     // "Kindlast on GitHub", so a fuzzy match would find two links.
     expect(screen.getByRole('link', { name: 'kindlast' })).toHaveAttribute(
       'href',
-      '/'
+      '/',
     )
   })
 })

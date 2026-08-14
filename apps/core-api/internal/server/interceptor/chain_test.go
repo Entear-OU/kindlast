@@ -7,15 +7,16 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
-	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
-	optionsv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/options/v1"
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
+	optionsv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/options/v1"
 )
 
 // The procedure the one real RPC is served at.

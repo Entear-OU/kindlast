@@ -7,10 +7,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 )
 
 // ErrInvitationNotUsable covers expired, already accepted, and never existed.

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 
 	"connectrpc.com/connect"
+
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"

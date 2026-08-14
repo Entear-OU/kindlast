@@ -68,7 +68,10 @@ describe('getWebSearchProvider', () => {
     process.env.TAVILY_API_KEY = 'env-key'
 
     // Passing apiKey overrides the env var.
-    const provider = getWebSearchProvider({ provider: 'tavily', apiKey: 'explicit-key' })
+    const provider = getWebSearchProvider({
+      provider: 'tavily',
+      apiKey: 'explicit-key',
+    })
     expect(provider.name).toBe('tavily')
   })
 })

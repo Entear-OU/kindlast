@@ -11,10 +11,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Entear-OU/kindlast/libs/chassis/subject"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Entear-OU/kindlast/libs/chassis/subject"
 )
 
 // ErrNotAMember is returned when the caller asked to act in an organisation

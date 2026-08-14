@@ -3,12 +3,14 @@ package interceptor_test
 import (
 	"context"
 	"fmt"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+
 	"connectrpc.com/connect"
+
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/libs/chassis/subject"

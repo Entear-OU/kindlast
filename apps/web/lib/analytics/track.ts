@@ -10,10 +10,7 @@ import { track } from '@vercel/analytics'
  */
 
 export type UpgradeSource =
-  | 'finding_cap'
-  | 'finding_detail'
-  | 'executor_approve'
-  | 'ropa_cap'
+  'finding_cap' | 'finding_detail' | 'executor_approve' | 'ropa_cap'
 
 export interface UpgradePromptProps {
   source: UpgradeSource

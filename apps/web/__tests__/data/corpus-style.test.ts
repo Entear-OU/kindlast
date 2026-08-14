@@ -23,11 +23,17 @@ const EN_DASH = '–'
 const corpusFiles = readdirSync(CORPUS_DIR).filter((f) => f.endsWith('.json'))
 
 /** Every string value in the tree, with a dotted path for readable failures. */
-function collectStrings(node: unknown, at = '$'): Array<{ path: string; value: string }> {
+function collectStrings(
+  node: unknown,
+  at = '$',
+): Array<{ path: string; value: string }> {
   if (typeof node === 'string') return [{ path: at, value: node }]
-  if (Array.isArray(node)) return node.flatMap((v, i) => collectStrings(v, `${at}[${i}]`))
+  if (Array.isArray(node))
+    return node.flatMap((v, i) => collectStrings(v, `${at}[${i}]`))
   if (node && typeof node === 'object') {
-    return Object.entries(node).flatMap(([k, v]) => collectStrings(v, `${at}.${k}`))
+    return Object.entries(node).flatMap(([k, v]) =>
+      collectStrings(v, `${at}.${k}`),
+    )
   }
   return []
 }
@@ -46,7 +52,10 @@ describe('regulatory corpus house style (ENT-187)', () => {
         .filter((s) => s.value.includes(EM_DASH))
         .map((s) => `${s.path}: ${excerpt(s.value, EM_DASH)}`)
 
-      expect(offenders, `${offenders.length} string(s) contain an em dash`).toEqual([])
+      expect(
+        offenders,
+        `${offenders.length} string(s) contain an em dash`,
+      ).toEqual([])
     })
 
     it('contains no en dashes', () => {
@@ -54,7 +63,10 @@ describe('regulatory corpus house style (ENT-187)', () => {
         .filter((s) => s.value.includes(EN_DASH))
         .map((s) => `${s.path}: ${excerpt(s.value, EN_DASH)}`)
 
-      expect(offenders, `${offenders.length} string(s) contain an en dash`).toEqual([])
+      expect(
+        offenders,
+        `${offenders.length} string(s) contain an en dash`,
+      ).toEqual([])
     })
 
     // Guards the fix itself rather than the style rule. A careless
@@ -74,7 +86,10 @@ describe('regulatory corpus house style (ENT-187)', () => {
   // all five. A blanket check would fail on the four that have no fine amounts
   // and say nothing useful about them.
   it('preserves euro signs in enforcement fine amounts', () => {
-    const raw = readFileSync(path.join(CORPUS_DIR, 'enforcement-decisions.json'), 'utf8')
+    const raw = readFileSync(
+      path.join(CORPUS_DIR, 'enforcement-decisions.json'),
+      'utf8',
+    )
     expect(raw).toContain('€')
   })
 })

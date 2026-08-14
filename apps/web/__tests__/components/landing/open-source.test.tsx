@@ -10,7 +10,7 @@ describe('OpenSource', () => {
     // questions. Unlike the sections above it the heading is one unbroken
     // string, so it wraps to the measure rather than at a hard-coded <br />.
     expect(
-      screen.getByText(/Europe shouldn’t build this twice\./i)
+      screen.getByText(/Europe shouldn’t build this twice\./i),
     ).toBeInTheDocument()
   })
 
@@ -30,7 +30,10 @@ describe('OpenSource', () => {
   it('links to the GitHub repository', () => {
     render(<OpenSource />)
     const link = screen.getByRole('link', { name: /Read the source/i })
-    expect(link).toHaveAttribute('href', 'https://github.com/Entear-OU/kindlast')
+    expect(link).toHaveAttribute(
+      'href',
+      'https://github.com/Entear-OU/kindlast',
+    )
   })
 
   it('opens the repository in a new tab safely', () => {
@@ -59,7 +62,7 @@ describe('OpenSource', () => {
     // a CSS background, hidden from assistive tech, never announced.
     const { container } = render(<OpenSource />)
     const mark = Array.from(container.querySelectorAll('div')).find((el) =>
-      el.getAttribute('style')?.includes('guilloche-rosette.svg')
+      el.getAttribute('style')?.includes('guilloche-rosette.svg'),
     )
     expect(mark).toBeDefined()
     expect(mark).toHaveAttribute('aria-hidden', 'true')
@@ -75,10 +78,15 @@ describe('OpenSource', () => {
     // intersection nodes. The original assertion caught that too and was
     // measuring the wrong thing.
     const { container } = render(<OpenSource />)
-    const tealGlows = Array.from(container.querySelectorAll('[style]')).filter((el) => {
-      const style = el.getAttribute('style') ?? ''
-      return style.includes('radial-gradient') && /0\s*,\s*201\s*,\s*167/.test(style)
-    })
+    const tealGlows = Array.from(container.querySelectorAll('[style]')).filter(
+      (el) => {
+        const style = el.getAttribute('style') ?? ''
+        return (
+          style.includes('radial-gradient') &&
+          /0\s*,\s*201\s*,\s*167/.test(style)
+        )
+      },
+    )
     expect(tealGlows).toHaveLength(0)
   })
 })

@@ -46,21 +46,21 @@ describe('SiteHeader', () => {
       expect(toggle).toHaveAttribute('aria-expanded', 'true')
 
       const panel = screen.getByRole('navigation', { name: /mobile/i })
-      expect(within(panel).getByRole('link', { name: /how it works/i })).toHaveAttribute(
-        'href',
-        '/how-it-works'
-      )
-      expect(within(panel).getByRole('link', { name: /features/i })).toHaveAttribute(
-        'href',
-        '/features'
-      )
+      expect(
+        within(panel).getByRole('link', { name: /how it works/i }),
+      ).toHaveAttribute('href', '/how-it-works')
+      expect(
+        within(panel).getByRole('link', { name: /features/i }),
+      ).toHaveAttribute('href', '/features')
     })
 
     it('closes on Escape', async () => {
       const user = userEvent.setup()
       render(<SiteHeader />)
       await user.click(screen.getByRole('button', { name: /menu/i }))
-      expect(screen.getByRole('navigation', { name: /mobile/i })).toBeInTheDocument()
+      expect(
+        screen.getByRole('navigation', { name: /mobile/i }),
+      ).toBeInTheDocument()
 
       await user.keyboard('{Escape}')
       expect(screen.queryByRole('navigation', { name: /mobile/i })).toBeNull()
@@ -89,7 +89,7 @@ describe('SiteHeader', () => {
         .then(() => {
           const panel = screen.getByRole('navigation', { name: /mobile/i })
           expect(
-            within(panel).getByRole('link', { name: /read the source/i })
+            within(panel).getByRole('link', { name: /read the source/i }),
           ).toHaveAttribute('href', 'https://github.com/Entear-OU/kindlast')
         })
     })

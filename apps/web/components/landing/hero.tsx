@@ -25,7 +25,6 @@ export function Hero() {
     // measures against the viewport with the URL bar collapsed, so the plate
     // overflows and the page shifts as the bar hides. `dvh` tracks it.
     <section className="relative flex min-h-[100dvh] items-center overflow-hidden bg-[#0A141F]">
-
       {/* Plate. `priority` because this is the LCP element. */}
       <Image
         src="/imagery/hero-grid.webp"
@@ -65,11 +64,13 @@ export function Hero() {
         }}
       />
 
-      <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+      <div
+        className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+        aria-hidden="true"
+      />
 
       <div className="relative mx-auto w-full max-w-5xl px-6 py-28 lg:px-8">
         <div className="flex flex-col items-center text-center">
-
           {/* Eyebrow */}
           <div className="mb-10 inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 backdrop-blur-sm">
             <span className="relative flex h-2 w-2">
@@ -90,9 +91,9 @@ export function Hero() {
 
           {/* Sub */}
           <p className="mt-9 max-w-[560px] text-[1.1875rem] font-medium leading-[1.78] tracking-[-0.01em] text-white/60">
-            Four agents watch your GDPR and EU AI Act obligations, turn what they
-            find into one specific action, and wait for your approval before
-            anything changes.
+            Four agents watch your GDPR and EU AI Act obligations, turn what
+            they find into one specific action, and wait for your approval
+            before anything changes.
           </p>
 
           {/* Action. Reading the source is the only ask: there is nothing to
@@ -129,7 +130,6 @@ export function Hero() {
               </span>
             ))}
           </div>
-
         </div>
       </div>
     </section>

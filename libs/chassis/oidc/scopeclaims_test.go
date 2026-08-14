@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // Scopes have to be readable from wherever the authorization server actually
@@ -77,7 +76,7 @@ func TestScopesAreReadFromWhicheverClaimCarriesThem(t *testing.T) {
 			delete(claims, "scope")
 			claims[testCase.claim] = testCase.value
 
-			verified, err := verifier.Verify(t.Context(), a.mint(t, "key-1", jwt.MapClaims(claims)))
+			verified, err := verifier.Verify(t.Context(), a.mint(t, "key-1", claims))
 			if err != nil {
 				t.Fatalf("verifying: %v", err)
 			}

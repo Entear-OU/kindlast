@@ -13,9 +13,7 @@ describe('Hero', () => {
 
   it('renders the subtitle about the agents', () => {
     render(<Hero />)
-    expect(
-      screen.getByText(/GDPR and EU AI Act/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/GDPR and EU AI Act/i)).toBeInTheDocument()
   })
 
   it('renders "Read the source" as the primary call to action', () => {
@@ -42,7 +40,9 @@ describe('Hero', () => {
     render(<Hero />)
     expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull()
     expect(
-      screen.queryAllByRole('link').filter((el) => el.getAttribute('href') === '/login')
+      screen
+        .queryAllByRole('link')
+        .filter((el) => el.getAttribute('href') === '/login'),
     ).toHaveLength(0)
   })
 

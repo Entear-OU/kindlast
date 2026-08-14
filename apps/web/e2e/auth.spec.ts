@@ -17,14 +17,20 @@ test.describe('sign-in surface', () => {
   test('offers a hand-off and never a password field', async ({ page }) => {
     await page.goto('/sign-in')
 
-    await expect(page.getByRole('heading', { name: 'Sign in', level: 1 })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Sign in', level: 1 }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Continue', exact: true }),
+    ).toBeVisible()
 
     // The claim the page makes about itself has to be true of the page. A
     // password field here would mean this application had started handling
     // credentials, which §1.7 says it never does.
     await expect(page.locator('input[type="password"]')).toHaveCount(0)
-    await expect(page.getByText('Kindlast never receives your password')).toBeVisible()
+    await expect(
+      page.getByText('Kindlast never receives your password'),
+    ).toBeVisible()
   })
 
   test('the card is actually visible, not merely present', async ({ page }) => {
@@ -39,7 +45,10 @@ test.describe('sign-in surface', () => {
     await expect(card).toHaveCSS('opacity', '1')
 
     for (const name of ['Continue', 'Create an account']) {
-      await expect(page.getByRole('button', { name, exact: true })).toHaveCSS('opacity', '1')
+      await expect(page.getByRole('button', { name, exact: true })).toHaveCSS(
+        'opacity',
+        '1',
+      )
     }
   })
 })
@@ -50,7 +59,9 @@ test.describe('hand-off to the identity provider', () => {
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
 
     // Lands on the authorization server, not on anything of ours.
-    await page.waitForURL(/\/oauth\/v2\/authorize|\/ui\/v2\/login|\/login/, { timeout: 15_000 })
+    await page.waitForURL(/\/oauth\/v2\/authorize|\/ui\/v2\/login|\/login/, {
+      timeout: 15_000,
+    })
 
     const url = new URL(page.url())
     const authorize = url.searchParams
@@ -71,7 +82,9 @@ test.describe('hand-off to the identity provider', () => {
 })
 
 test.describe('sign-out', () => {
-  test('refuses a GET, so a prefetched link cannot end a session', async ({ request }) => {
+  test('refuses a GET, so a prefetched link cannot end a session', async ({
+    request,
+  }) => {
     // The bug class this guards is the one in §1.7: link prefetchers, mail
     // scanners and security appliances all issue GETs.
     const response = await request.get('/auth/logout', { maxRedirects: 0 })

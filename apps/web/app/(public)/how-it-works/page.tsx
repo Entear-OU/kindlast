@@ -50,7 +50,10 @@ export default function HowItWorksPage() {
             ].join(', '),
           }}
         />
-        <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+        <div
+          className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+          aria-hidden="true"
+        />
 
         <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
           <p className="mb-5 text-[13px] font-bold uppercase tracking-[0.18em] text-white/40">
@@ -67,11 +70,11 @@ export default function HowItWorksPage() {
 
           <div className="mt-9 max-w-[620px] space-y-5">
             <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em] text-white/55">
-              Those two promises pull in opposite directions, and holding both is
-              the entire design. An agent that waits to be prompted is a form. An
-              agent that acts on its own is a liability you have to audit. So
-              Kindlast splits the work across four agents, and puts the only
-              irreversible step behind a human.
+              Those two promises pull in opposite directions, and holding both
+              is the entire design. An agent that waits to be prompted is a
+              form. An agent that acts on its own is a liability you have to
+              audit. So Kindlast splits the work across four agents, and puts
+              the only irreversible step behind a human.
             </p>
             <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em] text-white/55">
               What follows is the pipeline as it is actually built. To keep it
@@ -88,13 +91,22 @@ export default function HowItWorksPage() {
           signal card butts straight up against the dark plate above, and the
           two read as one welded object rather than as a statement followed by
           the thing it introduces. */}
-      <section className="pt-24 pb-28 sm:pt-32 sm:pb-36" style={{ backgroundColor: '#F5F4F0' }}>
+      <section
+        className="pt-24 pb-28 sm:pt-32 sm:pb-36"
+        style={{ backgroundColor: '#F5F4F0' }}
+      >
         <AgentPipeline />
       </section>
 
       {/* Close */}
-      <section className="relative overflow-hidden py-24 sm:py-32" style={{ backgroundColor: '#0D1B2A' }}>
-        <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+      <section
+        className="relative overflow-hidden py-24 sm:py-32"
+        style={{ backgroundColor: '#0D1B2A' }}
+      >
+        <div
+          className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+          aria-hidden="true"
+        />
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden="true"

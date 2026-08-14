@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
 )
 
 // The audience this resource server accepts, and the only one. §1.4: core-api

@@ -58,7 +58,10 @@ interface CallOptions {
  * core-api call failed is still signed in, and turning that into an error page
  * would trade a degraded screen for a locked door.
  */
-async function call<T>(method: string, options: CallOptions): Promise<T | null> {
+async function call<T>(
+  method: string,
+  options: CallOptions,
+): Promise<T | null> {
   const base = baseUrl()
   if (!base) return null
 
@@ -103,10 +106,15 @@ async function call<T>(method: string, options: CallOptions): Promise<T | null> 
  * declares `openid` rather than a real permission: a caller who holds nothing
  * has to be able to reach the call that grants them something.
  */
-export async function getCurrentUser(accessToken: string): Promise<CurrentUser | null> {
-  const me = await call<CurrentUser>('kindlast.core.v1.SessionService/GetCurrentUser', {
-    accessToken,
-  })
+export async function getCurrentUser(
+  accessToken: string,
+): Promise<CurrentUser | null> {
+  const me = await call<CurrentUser>(
+    'kindlast.core.v1.SessionService/GetCurrentUser',
+    {
+      accessToken,
+    },
+  )
 
   // Connect omits empty repeated fields rather than sending [], so a person
   // with no memberships comes back as {}. Normalising the one field that has
@@ -121,7 +129,10 @@ export async function getCurrentUser(accessToken: string): Promise<CurrentUser |
   return { ...me, memberships: me.memberships ?? [] }
 }
 
-export async function acceptInvitation(accessToken: string, token: string): Promise<boolean> {
+export async function acceptInvitation(
+  accessToken: string,
+  token: string,
+): Promise<boolean> {
   const result = await call('kindlast.core.v1.OrgService/AcceptInvitation', {
     accessToken,
     body: { token },

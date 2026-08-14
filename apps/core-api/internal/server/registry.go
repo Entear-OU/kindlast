@@ -6,8 +6,9 @@
 package server
 
 import (
-	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 )
 
 // Services returns every proto service core-api exposes.

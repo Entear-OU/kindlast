@@ -53,7 +53,10 @@ export default function WhyPage() {
             ].join(', '),
           }}
         />
-        <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+        <div
+          className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+          aria-hidden="true"
+        />
 
         <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
           <p className="mb-5 text-[13px] font-bold uppercase tracking-[0.18em] text-white/40">
@@ -69,9 +72,9 @@ export default function WhyPage() {
           <div className="mt-9 max-w-[620px] space-y-5">
             <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em] text-white/55">
               The received wisdom is that these pull against each other: that
-              European rules are a tax on building, and that moving quickly means
-              cutting corners on the rights the rules exist to protect. Founders
-              are told to pick one.
+              European rules are a tax on building, and that moving quickly
+              means cutting corners on the rights the rules exist to protect.
+              Founders are told to pick one.
             </p>
             <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em] text-white/55">
               We think that framing is the actual problem. It produces companies
@@ -81,16 +84,20 @@ export default function WhyPage() {
             </p>
             <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em] text-white/55">
               What is missing is not more regulation or less of it. It is
-              infrastructure: something that holds the regulatory surface for you,
-              continuously, so that respecting people costs a founder attention
-              rather than months. That is the whole reason this exists.
+              infrastructure: something that holds the regulatory surface for
+              you, continuously, so that respecting people costs a founder
+              attention rather than months. That is the whole reason this
+              exists.
             </p>
           </div>
         </div>
       </section>
 
       {/* What that means in practice */}
-      <section className="relative overflow-hidden py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
+      <section
+        className="relative overflow-hidden py-24 sm:py-32"
+        style={{ backgroundColor: '#F5F4F0' }}
+      >
         <TechnicalGrid
           labels={[
             { text: '[ VELOCITY ]', top: '12%', right: '2.5%', drift: -70 },
@@ -117,17 +124,17 @@ export default function WhyPage() {
                 style={{ color: 'rgba(13,27,42,0.5)' }}
               >
                 Nobody rebuilds TLS to ship a web app. It is handled, it is
-                shared, and the work happens on top of it. The regulatory surface
-                should sit in the same place: solved once, in the open, and
-                maintained by everyone who depends on it.
+                shared, and the work happens on top of it. The regulatory
+                surface should sit in the same place: solved once, in the open,
+                and maintained by everyone who depends on it.
               </p>
               <p
                 className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]"
                 style={{ color: 'rgba(13,27,42,0.5)' }}
               >
-                That is why the whole engine is public under AGPL-3.0 rather than
-                sold as a black box. A moat around compliance plumbing would slow
-                down exactly the companies we want moving faster.
+                That is why the whole engine is public under AGPL-3.0 rather
+                than sold as a black box. A moat around compliance plumbing
+                would slow down exactly the companies we want moving faster.
               </p>
             </div>
           </div>
@@ -135,15 +142,31 @@ export default function WhyPage() {
       </section>
 
       {/* Principles */}
-      <section className="relative overflow-hidden py-24 sm:py-32" style={{ backgroundColor: '#0D1B2A' }}>
+      <section
+        className="relative overflow-hidden py-24 sm:py-32"
+        style={{ backgroundColor: '#0D1B2A' }}
+      >
         <TechnicalGrid
           tone="light"
           labels={[
-            { text: '[ UNESCO · OECD · EU AI ACT ]', top: '7%', right: '2.5%', drift: -60 },
-            { text: '[ HELD TO, NOT ASPIRED TO ]', top: '92%', left: '2%', drift: -40 },
+            {
+              text: '[ UNESCO · OECD · EU AI ACT ]',
+              top: '7%',
+              right: '2.5%',
+              drift: -60,
+            },
+            {
+              text: '[ HELD TO, NOT ASPIRED TO ]',
+              top: '92%',
+              left: '2%',
+              drift: -40,
+            },
           ]}
         />
-        <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+        <div
+          className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+          aria-hidden="true"
+        />
 
         <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
           <p className="mb-5 text-[13px] font-bold uppercase tracking-[0.18em] text-white/35">
@@ -154,9 +177,9 @@ export default function WhyPage() {
           </h2>
           <p className="mt-7 max-w-[620px] text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em] text-white/45">
             These are the widely agreed principles for responsible AI. Each one
-            here is paired with the mechanism behind it, because a principle with
-            nothing enforcing it is a poster. Every mechanism named is in the
-            repository and you can go and check it.
+            here is paired with the mechanism behind it, because a principle
+            with nothing enforcing it is a poster. Every mechanism named is in
+            the repository and you can go and check it.
           </p>
 
           <dl className="mt-16 grid gap-x-12 gap-y-12 sm:grid-cols-2">

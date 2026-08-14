@@ -18,8 +18,8 @@ import * as THREE from 'three'
  * city rather than as an effect laid on top of it.
  */
 
-const GRID = 44          // lines per axis
-const SPAN = 60          // world units across
+const GRID = 44 // lines per axis
+const SPAN = 60 // world units across
 const TEAL = 0x00c9a7
 
 function prefersReducedMotion() {
@@ -64,7 +64,7 @@ export function HeroLattice() {
       52,
       host.clientWidth / Math.max(host.clientHeight, 1),
       0.1,
-      200
+      200,
     )
     camera.position.set(0, 6.5, 26)
     camera.lookAt(0, 0, -6)
@@ -123,7 +123,7 @@ export function HeroLattice() {
       ([entry]) => {
         visible = entry.isIntersecting
       },
-      { threshold: 0 }
+      { threshold: 0 },
     )
     io.observe(host)
 

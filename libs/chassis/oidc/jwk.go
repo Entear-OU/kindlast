@@ -129,7 +129,12 @@ func (k jwk) ecPublicKey() (*ecdsa.PublicKey, error) {
 		X:     new(big.Int).SetBytes(x),
 		Y:     new(big.Int).SetBytes(y),
 	}
-	if !curve.IsOnCurve(key.X, key.Y) {
+	// Deprecated as a low-level unsafe API; crypto/ecdh's NewPublicKey does the
+	// same on-curve check from the same encoding. Swapping it is security
+	// relevant, since this is what rejects a bad key fetched from a JWKS
+	// endpoint before it verifies a token, so it gets its own test-first change
+	// in ENT-216 rather than a mechanical edit here.
+	if !curve.IsOnCurve(key.X, key.Y) { //nolint:staticcheck // SA1019, see ENT-216
 		return nil, fmt.Errorf("oidc: ec point for %q is not on the curve", k.Crv)
 	}
 	return key, nil

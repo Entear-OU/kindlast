@@ -94,7 +94,7 @@ export function AgentPipeline() {
                 end: 'bottom 65%',
                 scrub: 0.4,
               },
-            }
+            },
           )
         }
       })
@@ -112,7 +112,6 @@ export function AgentPipeline() {
   return (
     <div ref={rootRef} className="mx-auto max-w-5xl px-6 lg:px-8">
       <div className="lg:grid lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-14">
-
         {/* Sticky signal rail. The one dark object on the warm ground, which
             is also how the open-source repo card announces itself. */}
         <aside className="mb-12 lg:mb-0">
@@ -121,7 +120,10 @@ export function AgentPipeline() {
               className="relative overflow-hidden rounded-3xl"
               style={{ backgroundColor: '#0D1B2A' }}
             >
-              <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+              <div
+                className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+                aria-hidden="true"
+              />
               <div
                 className="pointer-events-none absolute inset-0"
                 aria-hidden="true"
@@ -172,7 +174,10 @@ export function AgentPipeline() {
 
                 {/* Stage ticks. Decoration plus orientation, never the only
                     carrier of information, so it is hidden from assistive tech. */}
-                <div className="mt-7 flex items-center gap-2" aria-hidden="true">
+                <div
+                  className="mt-7 flex items-center gap-2"
+                  aria-hidden="true"
+                >
                   {PIPELINE_STAGES.map((stage, index) => (
                     <span
                       key={stage.id}
@@ -310,7 +315,10 @@ export function AgentPipeline() {
                     backgroundColor: 'rgba(0,201,167,0.06)',
                   }}
                 >
-                  <p className="text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(13,27,42,0.4)' }}>
+                  <p
+                    className="text-[12px] font-bold uppercase tracking-[0.18em]"
+                    style={{ color: 'rgba(13,27,42,0.4)' }}
+                  >
                     Signal state: {stage.signal.status}
                   </p>
                   <p
@@ -324,7 +332,6 @@ export function AgentPipeline() {
             ))}
           </ol>
         </div>
-
       </div>
     </div>
   )

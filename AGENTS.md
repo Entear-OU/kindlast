@@ -133,6 +133,8 @@ workspaces, so you rarely need to `cd`.
 
 ```bash
 bun run dev              # the Next.js app
+bun run format           # Prettier, writes
+bun run format:check     # Prettier, what CI runs
 bun run lint             # ESLint
 bun run typecheck        # tsc, through the workspace so the version is pinned
 bun run test:unit        # unit and component tests, no services needed
@@ -149,12 +151,25 @@ For the Go workspace:
 ```bash
 buf lint                 # proto lint
 buf generate             # regenerate gen/, which is committed
+golangci-lint run ./...  # lint and formatting, from within a module directory
+golangci-lint fmt ./...  # gofmt and goimports, writes
 go build ./... && go test ./...   # run from within a module directory
 ```
 
 `buf` is pinned (see the CI workflow for the version). Generated code is
 committed and CI fails on drift, so run `buf generate` and commit the result
 whenever a proto changes.
+
+`golangci-lint` is pinned too, and CI installs the same version. One
+`.golangci.yml` at the root serves all three modules; the reasoning for each
+enabled linter is in that file rather than here, because that is where
+somebody disagreeing with one will be looking.
+
+Both formatters are checked by CI and neither is checked by review. If a diff
+is nothing but layout, run `bun run format` or `golangci-lint fmt` rather than
+arguing about it. Markdown and YAML are deliberately outside Prettier's reach:
+the prose here is hand-wrapped, and a formatter would flatten emphasis that
+was put there on purpose.
 
 ## The local stack
 

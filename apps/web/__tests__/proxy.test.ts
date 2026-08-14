@@ -17,11 +17,16 @@ import { NextRequest } from 'next/server'
  */
 
 vi.mock('next/server', async () => {
-  const actual = await vi.importActual<typeof import('next/server')>('next/server')
+  const actual =
+    await vi.importActual<typeof import('next/server')>('next/server')
   return {
     ...actual,
     NextResponse: {
-      next: vi.fn(() => ({ type: 'next', cookies: { set: vi.fn() }, headers: new Headers() })),
+      next: vi.fn(() => ({
+        type: 'next',
+        cookies: { set: vi.fn() },
+        headers: new Headers(),
+      })),
       redirect: vi.fn((url: URL) => ({
         type: 'redirect',
         status: 307,
@@ -152,7 +157,9 @@ describe('proxy', () => {
     // here already holding one from an earlier sign-in. Redirecting them would
     // strand the authorization code and break re-authentication.
     const { proxy } = await import('@/proxy')
-    const response = await proxy(requestFor('/auth/callback', { session: true }))
+    const response = await proxy(
+      requestFor('/auth/callback', { session: true }),
+    )
 
     expect(response).toMatchObject({ type: 'next' })
   })

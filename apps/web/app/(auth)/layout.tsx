@@ -15,7 +15,11 @@ import Link from 'next/link'
  * The wordmark stays as the one way out, because a screen with no exit is its
  * own trap.
  */
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default function AuthLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
       <header className="px-6 py-6 sm:px-10">

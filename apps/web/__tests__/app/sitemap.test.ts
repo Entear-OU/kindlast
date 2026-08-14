@@ -30,10 +30,10 @@ describe('sitemap', () => {
 
   it('ranks the pipeline explainer above the capability detail', () => {
     const byPath = Object.fromEntries(
-      sitemap().map((entry) => [new URL(entry.url).pathname, entry])
+      sitemap().map((entry) => [new URL(entry.url).pathname, entry]),
     )
     expect(byPath['/how-it-works'].priority).toBeGreaterThan(
-      byPath['/features'].priority as number
+      byPath['/features'].priority as number,
     )
   })
 })

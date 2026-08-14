@@ -3,11 +3,12 @@ package server_test
 import (
 	"testing"
 
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
-	"github.com/Entear-OU/kindlast/libs/chassis/scope"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
+	"github.com/Entear-OU/kindlast/libs/chassis/scope"
 )
 
 // The reflection test ENT-191 asks for: walk the service descriptors this

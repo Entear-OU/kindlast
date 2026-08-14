@@ -170,7 +170,7 @@ func (k *KeySet) fetchLocked(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("oidc: fetching jwks from %s: %w", k.uri, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("oidc: jwks at %s returned %s", k.uri, response.Status)

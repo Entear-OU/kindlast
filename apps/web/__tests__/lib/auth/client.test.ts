@@ -49,7 +49,9 @@ describe('getCurrentUser', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
     const [url, init] = fetchMock.mock.calls[0]
 
-    expect(url).toBe('http://core-api:8080/kindlast.core.v1.SessionService/GetCurrentUser')
+    expect(url).toBe(
+      'http://core-api:8080/kindlast.core.v1.SessionService/GetCurrentUser',
+    )
     expect(init.method).toBe('POST')
     expect(init.headers.Authorization).toBe(`Bearer ${ACCESS_TOKEN}`)
   })
@@ -69,14 +71,18 @@ describe('getCurrentUser', () => {
   it('returns the memberships provisioning created', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
-        memberships: [{ orgId: 'a0000000-0000-4000-8000-000000000001', role: 'owner' }],
+        memberships: [
+          { orgId: 'a0000000-0000-4000-8000-000000000001', role: 'owner' },
+        ],
       }),
     )
 
     const me = await getCurrentUser(ACCESS_TOKEN)
 
     expect(me?.memberships).toHaveLength(1)
-    expect(me?.memberships[0].orgId).toBe('a0000000-0000-4000-8000-000000000001')
+    expect(me?.memberships[0].orgId).toBe(
+      'a0000000-0000-4000-8000-000000000001',
+    )
   })
 
   it('keeps the whole answer, not only the memberships', async () => {
@@ -87,7 +93,11 @@ describe('getCurrentUser', () => {
     // invisible at the call site because the fields are all optional.
     fetchMock.mockResolvedValue(
       jsonResponse({
-        user: { email: 'ada@example.com', name: 'Ada Lovelace', emailVerified: true },
+        user: {
+          email: 'ada@example.com',
+          name: 'Ada Lovelace',
+          emailVerified: true,
+        },
         memberships: [
           {
             orgId: 'a0000000-0000-4000-8000-000000000001',
@@ -113,7 +123,9 @@ describe('getCurrentUser', () => {
     // A failed bootstrap must not strand someone who holds a valid session on
     // an error page. They are signed in; the call can be retried on the next
     // navigation.
-    fetchMock.mockResolvedValue(jsonResponse({ code: 'permission_denied' }, 403))
+    fetchMock.mockResolvedValue(
+      jsonResponse({ code: 'permission_denied' }, 403),
+    )
 
     expect(await getCurrentUser(ACCESS_TOKEN)).toBeNull()
   })
@@ -128,7 +140,9 @@ describe('getCurrentUser', () => {
 
 describe('activeOrgFrom', () => {
   it('picks the single membership a newly provisioned person has', () => {
-    expect(activeOrgFrom({ memberships: [{ orgId: 'org-1', role: 'owner' }] })).toBe('org-1')
+    expect(
+      activeOrgFrom({ memberships: [{ orgId: 'org-1', role: 'owner' }] }),
+    ).toBe('org-1')
   })
 
   it('is null when there are no memberships, so nothing invents a tenancy', () => {

@@ -18,7 +18,7 @@ describe('LandingPage', () => {
   it('renders the capability summary and points at the features route', () => {
     render(<LandingPage />)
     expect(
-      screen.getByRole('link', { name: /capabilities in detail/i })
+      screen.getByRole('link', { name: /capabilities in detail/i }),
     ).toHaveAttribute('href', '/features')
   })
 

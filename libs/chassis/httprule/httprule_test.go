@@ -4,12 +4,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Entear-OU/kindlast/libs/chassis/httprule"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+
+	"github.com/Entear-OU/kindlast/libs/chassis/httprule"
 )
 
 // Fixtures are built in code rather than imported from kindlast.core.v1,

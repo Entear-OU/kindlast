@@ -1,9 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { exchangeCode, safeReturnTo } from '@/lib/auth/flow'
 import { consumeState } from '@/lib/auth/state'
-import { createSession, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth/session'
+import {
+  createSession,
+  sessionCookieOptions,
+  SESSION_COOKIE,
+} from '@/lib/auth/session'
 import { subjectOf } from '@/lib/auth/claims'
-import { acceptInvitation, activeOrgFrom, getCurrentUser } from '@/lib/auth/client'
+import {
+  acceptInvitation,
+  activeOrgFrom,
+  getCurrentUser,
+} from '@/lib/auth/client'
 
 /**
  * The other end of the authorization request.
@@ -82,7 +90,9 @@ export async function GET(request: NextRequest) {
     orgId: activeOrgFrom(me),
   })
 
-  const response = NextResponse.redirect(new URL(safeReturnTo(preAuth.returnTo), origin))
+  const response = NextResponse.redirect(
+    new URL(safeReturnTo(preAuth.returnTo), origin),
+  )
   response.cookies.set(SESSION_COOKIE, sessionId, sessionCookieOptions())
   return response
 }

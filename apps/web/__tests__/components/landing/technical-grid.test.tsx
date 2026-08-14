@@ -1,6 +1,9 @@
 import { render } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
-import { TechnicalGrid, DEFAULT_LABELS } from '@/components/landing/technical-grid'
+import {
+  TechnicalGrid,
+  DEFAULT_LABELS,
+} from '@/components/landing/technical-grid'
 
 describe('TechnicalGrid', () => {
   it('is decorative and hidden from assistive technology', () => {
@@ -22,7 +25,9 @@ describe('TechnicalGrid', () => {
 
   it('accepts a caller-supplied label set', () => {
     const { container } = render(
-      <TechnicalGrid labels={[{ text: '[ CUSTOM ]', top: '10%', left: '5%' }]} />
+      <TechnicalGrid
+        labels={[{ text: '[ CUSTOM ]', top: '10%', left: '5%' }]}
+      />,
     )
     expect(container.textContent).toContain('[ CUSTOM ]')
     expect(container.textContent).not.toContain('[ WATCHER')

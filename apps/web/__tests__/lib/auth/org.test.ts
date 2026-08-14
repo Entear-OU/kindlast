@@ -57,11 +57,15 @@ describe('resolveOrgFrom', () => {
     const second = resolveOrgFrom(me, 'bedrock')
 
     expect(first.status === 'ok' && first.membership.orgId).toBe(ACME.orgId)
-    expect(second.status === 'ok' && second.membership.orgId).toBe(BEDROCK.orgId)
+    expect(second.status === 'ok' && second.membership.orgId).toBe(
+      BEDROCK.orgId,
+    )
   })
 
   it('reports a slug the caller does not belong to as not-a-member, for a 404', () => {
-    expect(resolveOrgFrom({ memberships: [ACME] }, 'bedrock').status).toBe('not-a-member')
+    expect(resolveOrgFrom({ memberships: [ACME] }, 'bedrock').status).toBe(
+      'not-a-member',
+    )
   })
 
   it('answers identically for an organisation that does not exist at all', () => {
@@ -125,6 +129,8 @@ describe('landingPathFor', () => {
     // absence of an organisation.
     expect(landingPathFor({ memberships: [] })).toBeNull()
     expect(landingPathFor(null)).toBeNull()
-    expect(landingPathFor({ memberships: [{ orgId: ACME.orgId, role: 'owner' }] })).toBeNull()
+    expect(
+      landingPathFor({ memberships: [{ orgId: ACME.orgId, role: 'owner' }] }),
+    ).toBeNull()
   })
 })

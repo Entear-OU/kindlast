@@ -55,23 +55,20 @@ let cachedToken: string | undefined
 async function seedBotToken(): Promise<string> {
   if (cachedToken) return cachedToken
 
-  const { stdout } = await run(
-    'docker',
-    [
-      'compose',
-      '-f',
-      COMPOSE_FILE,
-      'run',
-      '--rm',
-      '--no-deps',
-      '-T',
-      '--entrypoint',
-      'sh',
-      'seed',
-      '-c',
-      'cat /machinekey/seed-bot-pat.txt',
-    ],
-  )
+  const { stdout } = await run('docker', [
+    'compose',
+    '-f',
+    COMPOSE_FILE,
+    'run',
+    '--rm',
+    '--no-deps',
+    '-T',
+    '--entrypoint',
+    'sh',
+    'seed',
+    '-c',
+    'cat /machinekey/seed-bot-pat.txt',
+  ])
 
   const token = stdout.trim()
   if (!token) {
@@ -96,7 +93,9 @@ async function management(method: string, path: string, body?: unknown) {
   })
 
   if (!response.ok) {
-    throw new Error(`${method} ${path} -> ${response.status}: ${await response.text()}`)
+    throw new Error(
+      `${method} ${path} -> ${response.status}: ${await response.text()}`,
+    )
   }
 
   return response.json()
@@ -112,13 +111,17 @@ export async function createVerifiedUser(label: string): Promise<FixtureUser> {
   const unique = `${label}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
   const email = `${unique}@kindlast.test`
 
-  const created = await management('POST', '/management/v1/users/human/_import', {
-    userName: email,
-    profile: { firstName: 'Fixture', lastName: label },
-    email: { email, isEmailVerified: true },
-    password: FIXTURE_PASSWORD,
-    passwordChangeRequired: false,
-  })
+  const created = await management(
+    'POST',
+    '/management/v1/users/human/_import',
+    {
+      userName: email,
+      profile: { firstName: 'Fixture', lastName: label },
+      email: { email, isEmailVerified: true },
+      password: FIXTURE_PASSWORD,
+      passwordChangeRequired: false,
+    },
+  )
 
   return { id: created.userId, username: email, email }
 }

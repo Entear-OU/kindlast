@@ -12,10 +12,11 @@ import (
 	"errors"
 	"fmt"
 
-	optionsv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/options/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+
+	optionsv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/options/v1"
 )
 
 // ErrUndeclared is returned for a method carrying no required_scope option.

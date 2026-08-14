@@ -121,7 +121,10 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!reachable) return
   // organisations cascades through memberships and every tenant table.
-  await migrator.query(`delete from organisations where id in ($1, $2)`, [orgA, orgB])
+  await migrator.query(`delete from organisations where id in ($1, $2)`, [
+    orgA,
+    orgB,
+  ])
   await Promise.all([migrator.end(), app.end(), superuser.end()])
 })
 
@@ -154,7 +157,10 @@ describe.skipIf(!reachable)('two-org isolation as kindlast_app', () => {
       ['dsars', ids.b.dsar],
     ]
     for (const [table, id] of byId) {
-      const r = await app.query(`select count(*)::int as n from ${table} where id = $1`, [id])
+      const r = await app.query(
+        `select count(*)::int as n from ${table} where id = $1`,
+        [id],
+      )
       expect(r.rows[0].n, `${table} must hide org B's row from org A`).toBe(0)
     }
     // And the blunter form: filtering by the other org's id returns nothing.
@@ -167,9 +173,17 @@ describe.skipIf(!reachable)('two-org isolation as kindlast_app', () => {
 
   it('a user with no membership reads nothing at all, even with the GUCs set to a real org', async () => {
     await setTenant(app, orgA, strayUser)
-    for (const table of ['findings', 'dsars', 'compliance_profiles', 'organisations']) {
+    for (const table of [
+      'findings',
+      'dsars',
+      'compliance_profiles',
+      'organisations',
+    ]) {
       const r = await app.query(`select count(*)::int as n from ${table}`)
-      expect(r.rows[0].n, `${table} must be empty for a user with no membership`).toBe(0)
+      expect(
+        r.rows[0].n,
+        `${table} must be empty for a user with no membership`,
+      ).toBe(0)
     }
   })
 
@@ -209,12 +223,15 @@ describe.skipIf(!reachable)('the app role is genuinely unprivileged', () => {
   })
 })
 
-describe.skipIf(!reachable)('non-vacuity: the superuser path still sees everything', () => {
-  it('the superuser reads rows across both orgs', async () => {
-    const r = await superuser.query(
-      `select count(*)::int as n from findings where org_id in ($1, $2)`,
-      [orgA, orgB],
-    )
-    expect(r.rows[0].n).toBe(2)
-  })
-})
+describe.skipIf(!reachable)(
+  'non-vacuity: the superuser path still sees everything',
+  () => {
+    it('the superuser reads rows across both orgs', async () => {
+      const r = await superuser.query(
+        `select count(*)::int as n from findings where org_id in ($1, $2)`,
+        [orgA, orgB],
+      )
+      expect(r.rows[0].n).toBe(2)
+    })
+  },
+)

@@ -13,7 +13,11 @@
 
 import { createConsoleEmailProvider } from './console'
 import { createResendProvider } from './resend'
-import { EmailProviderError, type EmailProvider, type EmailProviderName } from './types'
+import {
+  EmailProviderError,
+  type EmailProvider,
+  type EmailProviderName,
+} from './types'
 
 const KNOWN_PROVIDERS: ReadonlyArray<EmailProviderName> = ['resend', 'console']
 
@@ -35,7 +39,9 @@ function resolveProviderName(explicit?: EmailProviderName): EmailProviderName {
   return value as EmailProviderName
 }
 
-export function getEmailProvider(options?: GetEmailProviderOptions): EmailProvider {
+export function getEmailProvider(
+  options?: GetEmailProviderOptions,
+): EmailProvider {
   if (options?.override) return options.override
 
   const name = resolveProviderName(options?.provider)

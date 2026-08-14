@@ -5,7 +5,9 @@ import NotFound from '@/app/not-found'
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: ComponentProps<'a'>) => (
-    <a href={href} {...props}>{children}</a>
+    <a href={href} {...props}>
+      {children}
+    </a>
   ),
 }))
 

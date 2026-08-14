@@ -19,7 +19,8 @@ const SAMPLE_RESPONSE = {
   results: [
     {
       url: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
-      raw_content: 'Article 6 — Lawfulness of processing\n\nProcessing shall be lawful…',
+      raw_content:
+        'Article 6 — Lawfulness of processing\n\nProcessing shall be lawful…',
       images: [],
     },
   ],
@@ -82,7 +83,9 @@ describe('createTavilyProvider', () => {
     mockFetchOnce(SAMPLE_RESPONSE)
     const provider = createTavilyProvider({ apiKey: 'tvly-test-key' })
 
-    const result = await provider.fetchUrl('https://eur-lex.europa.eu/eli/reg/2016/679/oj')
+    const result = await provider.fetchUrl(
+      'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
+    )
 
     expect(result.provider).toBe('tavily')
     expect(result.url).toBe('https://eur-lex.europa.eu/eli/reg/2016/679/oj')
@@ -115,9 +118,9 @@ describe('createTavilyProvider', () => {
     })
     const provider = createTavilyProvider({ apiKey: 'tvly-test-key' })
 
-    await expect(provider.fetchUrl('https://example.invalid/missing')).rejects.toThrow(
-      /failed.*404/i,
-    )
+    await expect(
+      provider.fetchUrl('https://example.invalid/missing'),
+    ).rejects.toThrow(/failed.*404/i)
   })
 
   it('throws WebSearchProviderError when Tavily returns no result for the requested URL', async () => {
@@ -145,7 +148,9 @@ describe('createTavilyProvider', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const provider = createTavilyProvider({ apiKey: 'tvly-test-key' })
-    await provider.fetchUrl('https://eur-lex.europa.eu/eli/reg/2016/679/oj', { timeoutMs: 100 })
+    await provider.fetchUrl('https://eur-lex.europa.eu/eli/reg/2016/679/oj', {
+      timeoutMs: 100,
+    })
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 })

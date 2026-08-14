@@ -62,7 +62,8 @@ async function fetchProvider(): Promise<Provider> {
   // web needs the same three facts core-api does: fetch here, send this Host,
   // expect that issuer. See docs/core-api-configuration.md.
   const discoveryUrl =
-    process.env.KINDLAST_OIDC_DISCOVERY_URL ?? `${trimSlash(issuer)}${DISCOVERY_PATH}`
+    process.env.KINDLAST_OIDC_DISCOVERY_URL ??
+    `${trimSlash(issuer)}${DISCOVERY_PATH}`
   const hostHeader = process.env.KINDLAST_OIDC_HOST_HEADER
 
   const response = await fetch(discoveryUrl, {
@@ -71,7 +72,9 @@ async function fetchProvider(): Promise<Provider> {
   })
   if (!response.ok) {
     cached = null
-    throw new Error(`OIDC discovery at ${discoveryUrl} returned ${response.status}`)
+    throw new Error(
+      `OIDC discovery at ${discoveryUrl} returned ${response.status}`,
+    )
   }
 
   const document = (await response.json()) as DiscoveryDocument
@@ -87,7 +90,10 @@ async function fetchProvider(): Promise<Provider> {
     )
   }
 
-  const authorizationEndpoint = required(document.authorization_endpoint, 'authorization_endpoint')
+  const authorizationEndpoint = required(
+    document.authorization_endpoint,
+    'authorization_endpoint',
+  )
   const tokenEndpoint = required(document.token_endpoint, 'token_endpoint')
   const jwksUri = required(document.jwks_uri, 'jwks_uri')
 
@@ -99,8 +105,14 @@ async function fetchProvider(): Promise<Provider> {
     // the address it advertises, which is the ordinary case.
     authorizationEndpoint: rebase(authorizationEndpoint, discoveryUrl),
     tokenEndpoint: rebase(tokenEndpoint, discoveryUrl),
-    revocationEndpoint: optionalRebase(document.revocation_endpoint, discoveryUrl),
-    endSessionEndpoint: optionalRebase(document.end_session_endpoint, discoveryUrl),
+    revocationEndpoint: optionalRebase(
+      document.revocation_endpoint,
+      discoveryUrl,
+    ),
+    endSessionEndpoint: optionalRebase(
+      document.end_session_endpoint,
+      discoveryUrl,
+    ),
     userinfoEndpoint: optionalRebase(document.userinfo_endpoint, discoveryUrl),
     jwksUri: rebase(jwksUri, discoveryUrl),
   }
@@ -119,7 +131,9 @@ export function browserAuthorizationEndpoint(provider: Provider): string {
 }
 
 export function browserEndSessionEndpoint(provider: Provider): string | null {
-  return provider.endSessionEndpoint ? rebase(provider.endSessionEndpoint, provider.issuer) : null
+  return provider.endSessionEndpoint
+    ? rebase(provider.endSessionEndpoint, provider.issuer)
+    : null
 }
 
 function rebase(endpoint: string, onto: string): string {
@@ -134,7 +148,10 @@ function rebase(endpoint: string, onto: string): string {
   return target.toString()
 }
 
-function optionalRebase(endpoint: string | undefined, onto: string): string | null {
+function optionalRebase(
+  endpoint: string | undefined,
+  onto: string,
+): string | null {
   return endpoint ? rebase(endpoint, onto) : null
 }
 

@@ -49,7 +49,10 @@ vi.mock('@/lib/auth/redis', () => ({
 const SESSION_ID = 'a-session-id'
 const KEY = 'web:session:' + SESSION_ID
 
-function sessionExpiringIn(seconds: number, overrides: Partial<Session> = {}): Session {
+function sessionExpiringIn(
+  seconds: number,
+  overrides: Partial<Session> = {},
+): Session {
   return {
     accessToken: 'old-access',
     refreshToken: 'old-refresh',

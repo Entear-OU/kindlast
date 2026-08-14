@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 	"github.com/Entear-OU/kindlast/libs/chassis/subject"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Provisioning, against the real database, because every interesting property

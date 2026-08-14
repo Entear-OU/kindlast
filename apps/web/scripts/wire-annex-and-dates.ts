@@ -104,7 +104,9 @@ function main(): void {
       `  Annex ${merged.label}: ${merged.items.length} items, effectiveDate = ${merged.effectiveDate}`,
     )
   } else {
-    console.log(`wire-annex-and-dates: ${annexAbs} not found — relying on existing annexes[] in snapshot`)
+    console.log(
+      `wire-annex-and-dates: ${annexAbs} not found — relying on existing annexes[] in snapshot`,
+    )
   }
 
   // Two-space indent + trailing newline matches the agent's output convention.
@@ -115,7 +117,9 @@ function main(): void {
   // overlap with the canonical regulation file.
   if (existsSync(annexAbs)) {
     rmSync(annexAbs)
-    console.log(`wire-annex-and-dates: removed ${annexAbs} (merged into ${AI_ACT_PATH})`)
+    console.log(
+      `wire-annex-and-dates: removed ${annexAbs} (merged into ${AI_ACT_PATH})`,
+    )
   }
 
   console.log('wire-annex-and-dates: done.')
@@ -125,6 +129,6 @@ try {
   main()
 } catch (err) {
   console.error('wire-annex-and-dates: failed:')
-  console.error(err instanceof Error ? err.stack ?? err.message : String(err))
+  console.error(err instanceof Error ? (err.stack ?? err.message) : String(err))
   exit(1)
 }

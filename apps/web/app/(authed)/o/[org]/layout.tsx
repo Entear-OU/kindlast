@@ -59,9 +59,12 @@ export default async function OrgLayout({
           <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">
             Workspace unavailable
           </h1>
-          <p data-testid="org-unavailable" className="mt-2 text-sm text-muted-foreground">
-            The workspace service could not be reached, so this organisation could not be
-            loaded. Your session is unaffected: reload in a moment.
+          <p
+            data-testid="org-unavailable"
+            className="mt-2 text-sm text-muted-foreground"
+          >
+            The workspace service could not be reached, so this organisation
+            could not be loaded. Your session is unaffected: reload in a moment.
           </p>
         </main>
       </ConsoleChrome>

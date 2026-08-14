@@ -7,7 +7,12 @@
  * dispatcher leaves the outbox row pending for a later retry.
  */
 
-import { EmailProviderError, type EmailMessage, type EmailProvider, type SendResult } from './types'
+import {
+  EmailProviderError,
+  type EmailMessage,
+  type EmailProvider,
+  type SendResult,
+} from './types'
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
 
@@ -17,7 +22,10 @@ export interface ResendProviderConfig {
   from: string
 }
 
-export function createResendProvider({ apiKey, from }: ResendProviderConfig): EmailProvider {
+export function createResendProvider({
+  apiKey,
+  from,
+}: ResendProviderConfig): EmailProvider {
   return {
     name: 'resend',
     async send(message: EmailMessage): Promise<SendResult> {

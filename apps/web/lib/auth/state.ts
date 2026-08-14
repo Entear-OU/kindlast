@@ -34,7 +34,10 @@ export interface PreAuthState {
   createdAt: number
 }
 
-export async function stashState(state: string, value: PreAuthState): Promise<void> {
+export async function stashState(
+  state: string,
+  value: PreAuthState,
+): Promise<void> {
   await redis().set(PREFIX + state, JSON.stringify(value), 'EX', TTL_SECONDS)
 }
 
@@ -46,7 +49,9 @@ export async function stashState(state: string, value: PreAuthState): Promise<vo
  * to be usable exactly once. GETDEL is atomic, so two concurrent callbacks
  * cannot both succeed.
  */
-export async function consumeState(state: string): Promise<PreAuthState | null> {
+export async function consumeState(
+  state: string,
+): Promise<PreAuthState | null> {
   const raw = await redis().getdel(PREFIX + state)
   if (!raw) return null
 

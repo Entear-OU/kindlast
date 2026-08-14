@@ -161,7 +161,10 @@ export default function FeaturesPage() {
             { text: '[ ONE ROW ]', top: '93%', left: '2%', drift: -40 },
           ]}
         />
-        <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+        <div
+          className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+          aria-hidden="true"
+        />
 
         <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
           <p className="mb-5 text-[13px] font-bold uppercase tracking-[0.18em] text-white/35">
@@ -207,7 +210,10 @@ export default function FeaturesPage() {
                     {field.column}
                   </span>
                 </dt>
-                <dd className="mt-2.5 text-[15px] font-semibold leading-[1.55] tracking-[-0.01em]" style={{ color: '#00C9A7' }}>
+                <dd
+                  className="mt-2.5 text-[15px] font-semibold leading-[1.55] tracking-[-0.01em]"
+                  style={{ color: '#00C9A7' }}
+                >
                   {field.value}
                 </dd>
                 <dd className="mt-2.5 max-w-[46ch] text-[14px] font-medium leading-[1.7] tracking-[-0.005em] text-white/40">
@@ -274,9 +280,7 @@ export default function FeaturesPage() {
           {/* The guarantees. Stated as limits, because a limit is the only
               capability claim on this page a buyer cannot verify by using the
               product, and so the only one that has to be falsifiable in code. */}
-          <h2
-            className="mt-24 max-w-[16ch] text-[2.5rem] font-black leading-[0.95] tracking-[-0.035em] text-[#0D1B2A] sm:text-[3.25rem] text-balance"
-          >
+          <h2 className="mt-24 max-w-[16ch] text-[2.5rem] font-black leading-[0.95] tracking-[-0.035em] text-[#0D1B2A] sm:text-[3.25rem] text-balance">
             What it will not do.
           </h2>
 
@@ -311,8 +315,14 @@ export default function FeaturesPage() {
       </section>
 
       {/* Onward. Deliberately one exit, not a menu. */}
-      <section className="relative overflow-hidden py-24 sm:py-28" style={{ backgroundColor: '#0A141F' }}>
-        <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+      <section
+        className="relative overflow-hidden py-24 sm:py-28"
+        style={{ backgroundColor: '#0A141F' }}
+      >
+        <div
+          className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+          aria-hidden="true"
+        />
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden="true"
@@ -323,7 +333,10 @@ export default function FeaturesPage() {
         />
 
         <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
-          <p className="mb-5 text-[13px] font-bold uppercase tracking-[0.18em]" style={{ color: 'rgba(0,201,167,0.75)' }}>
+          <p
+            className="mb-5 text-[13px] font-bold uppercase tracking-[0.18em]"
+            style={{ color: 'rgba(0,201,167,0.75)' }}
+          >
             The part that matters
           </p>
           <h2 className="max-w-[18ch] text-[2.5rem] font-black leading-[0.95] tracking-[-0.035em] text-white sm:text-[3.5rem] text-balance">

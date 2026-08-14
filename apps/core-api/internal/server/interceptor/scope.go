@@ -7,8 +7,9 @@ import (
 	"sort"
 
 	"connectrpc.com/connect"
-	"github.com/Entear-OU/kindlast/libs/chassis/scope"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	"github.com/Entear-OU/kindlast/libs/chassis/scope"
 )
 
 // ErrUndeclaredMethod is returned by NewScope when a registered RPC carries no

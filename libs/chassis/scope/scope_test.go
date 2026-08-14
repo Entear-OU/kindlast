@@ -4,12 +4,13 @@ import (
 	"errors"
 	"testing"
 
-	optionsv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/options/v1"
-	"github.com/Entear-OU/kindlast/libs/chassis/scope"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+
+	optionsv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/options/v1"
+	"github.com/Entear-OU/kindlast/libs/chassis/scope"
 )
 
 // The fixtures here are built in code rather than imported from

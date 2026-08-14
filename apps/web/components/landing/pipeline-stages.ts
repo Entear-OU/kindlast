@@ -65,7 +65,8 @@ export const PIPELINE_STAGES: PipelineStage[] = [
     index: '01',
     agent: 'The Watcher',
     headline: 'It checks every day, so nobody has to remember to',
-    plain: 'Every day it looks through your compliance record for problems, without being asked.',
+    plain:
+      'Every day it looks through your compliance record for problems, without being asked.',
     body: [
       'Once a day it goes looking for three kinds of trouble: deadlines coming up, things the law expects you to have that you do not, and customer data requests that are running out of time to answer.',
       'Nothing triggers it. You do not open an app or start a scan. This is the difference between compliance you remember to do and compliance that happens.',
@@ -135,7 +136,8 @@ export const PIPELINE_STAGES: PipelineStage[] = [
     index: '04',
     agent: 'The Hands',
     headline: 'It does nothing until you say yes',
-    plain: 'Nothing changes unless you approve it, and everything that happens is written down.',
+    plain:
+      'Nothing changes unless you approve it, and everything that happens is written down.',
     body: [
       'Until you approve, nothing happens. There is no route for it to act on its own, and a finding you ignore simply stays open. This is deliberate: an agent that can change your records unsupervised is a liability, not a help.',
       'When you do approve, it does the one thing that was proposed and nothing else, then records what happened, when, and that you approved it. That record cannot be edited afterwards, which is what makes it worth anything to an auditor.',
