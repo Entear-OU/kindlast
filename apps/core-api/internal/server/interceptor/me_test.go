@@ -319,6 +319,120 @@ func TestProvisioningSurvivesUserInfoBeingUnreachable(t *testing.T) {
 	}
 }
 
+// An organisation named after a subject claim repairs itself on the next
+// sign-in.
+//
+// This is the ordering constraint in §20.1 rather than a cosmetic tidy-up.
+// Slugs are immutable once minted, so a name that is really an identifier has
+// to be corrected BEFORE ENT-198 derives a URL from it; afterwards the ugly
+// name is permanent and the rename is no longer defensible, because a slug in
+// a bookmark and an emailed approval link would both stop resolving.
+//
+// A migration cannot do this: userinfo needs the caller's own access token and
+// there is no caller during a migration. So it happens here, once, for each
+// affected person, the next time they arrive.
+//
+// The sequence below is the real history: an organisation created while no
+// profile was available, then the same person coming back.
+func TestAnOrganisationNamedAfterTheSubjectIsRenamedOnTheNextSignIn(t *testing.T) {
+	a := newAuthServer(t)
+	client, _ := buildChain(t, a, realScopes(t))
+
+	claim := fmt.Sprintf("chain-rename-%d", time.Now().UnixNano())
+	forget(t, a.server.URL, claim)
+	t.Cleanup(func() { forget(t, a.server.URL, claim) })
+
+	// First arrival, with nothing available to name it after.
+	a.takeUserInfoDown()
+	first, err := meCall(t, client, map[string]string{
+		"Authorization": "Bearer " + a.tokenWithClaims(t, mapClaims(a, claim, nil)),
+	})
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if got := first.GetMemberships()[0].GetOrgName(); got != claim {
+		t.Fatalf("organisation name = %q, want the subject claim; "+
+			"this test needs the defect present before it can prove the repair", got)
+	}
+
+	// The same person, later, on a stack where userinfo now answers.
+	a.bringUserInfoUp()
+	a.serveUserInfo(claim, map[string]any{"name": "Ada Lovelace", "email": "ada@example.com"})
+
+	second, err := meCall(t, client, map[string]string{
+		"Authorization": "Bearer " + a.tokenWithClaims(t, mapClaims(a, claim, nil)),
+	})
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+
+	if got := second.GetMemberships()[0].GetOrgName(); got != "Ada Lovelace" {
+		t.Fatalf("organisation name = %q, want it repaired to the person's name", got)
+	}
+	if len(second.GetMemberships()) != 1 {
+		t.Fatalf("memberships = %d, want the same one renamed rather than a second created",
+			len(second.GetMemberships()))
+	}
+	if second.GetMemberships()[0].GetOrgId() != first.GetMemberships()[0].GetOrgId() {
+		t.Fatal("the organisation id changed; a rename must not create a new organisation")
+	}
+
+	// The identity row is repaired in the same pass, and this is the only
+	// chance it gets: the profile is fetched once for this person and never
+	// again after the rename. Users who predate the fix would otherwise keep a
+	// row that maps a derived uuid back to nobody, which is what a subject
+	// access request has to be answered from.
+	if got := recordedEmailFor(t, a.server.URL, claim); got != "ada@example.com" {
+		t.Fatalf("recorded email = %q, want the repair to have restored it", got)
+	}
+}
+
+// The rename condition is evaluated on every sign-in forever, so it must cost
+// nothing when there is nothing to repair.
+//
+// The assertion counts requests at the server rather than checking the
+// response, and that distinction is the whole test. Every failure on this path
+// degrades quietly by design, so a wasted round trip to the authorization
+// server and no call at all produce byte-identical responses. Asserting on the
+// outcome would pass just as happily against an implementation that consulted
+// userinfo on every page render for every user, forever.
+func TestANormallyNamedOrganisationNeverConsultsUserInfoAgain(t *testing.T) {
+	a := newAuthServer(t)
+	client, _ := buildChain(t, a, realScopes(t))
+
+	claim := fmt.Sprintf("chain-norename-%d", time.Now().UnixNano())
+	forget(t, a.server.URL, claim)
+	t.Cleanup(func() { forget(t, a.server.URL, claim) })
+
+	a.serveUserInfo(claim, map[string]any{"name": "Grace Hopper", "email": "grace@example.com"})
+	if _, err := meCall(t, client, map[string]string{
+		"Authorization": "Bearer " + a.tokenWithClaims(t, mapClaims(a, claim, nil)),
+	}); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+
+	// One fetch, for provisioning. Everything after this must add none.
+	afterProvisioning := a.userInfoFetchCount()
+
+	for range 3 {
+		second, err := meCall(t, client, map[string]string{
+			"Authorization": "Bearer " + a.tokenWithClaims(t, mapClaims(a, claim, nil)),
+		})
+		if err != nil {
+			t.Fatalf("returning call: %v", err)
+		}
+		if got := second.GetMemberships()[0].GetOrgName(); got != "Grace Hopper" {
+			t.Fatalf("organisation name = %q, want it left alone", got)
+		}
+	}
+
+	if got := a.userInfoFetchCount(); got != afterProvisioning {
+		t.Fatalf("userinfo fetches went from %d to %d across three returning calls; "+
+			"a caller with nothing to repair must not reach the authorization server at all",
+			afterProvisioning, got)
+	}
+}
+
 // A token that does carry the claims must not trigger a network call at all.
 //
 // This is the property that keeps userinfo off the hot path: a conformant

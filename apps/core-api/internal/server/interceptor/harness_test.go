@@ -100,6 +100,11 @@ type authServer struct {
 	// is exercised: provisioning must survive an authorization server that is
 	// unreachable at exactly the wrong moment.
 	userinfoDown bool
+	// userinfoFetches counts requests, because "this path makes no network
+	// call" cannot be asserted from an outcome. Every failure here degrades
+	// quietly by design, so a wasted call and no call at all produce the same
+	// response, and only the server can tell them apart.
+	userinfoFetches int
 }
 
 func newAuthServer(t *testing.T) *authServer {
@@ -117,6 +122,7 @@ func newAuthServer(t *testing.T) *authServer {
 	})
 	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
+		a.userinfoFetches++
 		down, body := a.userinfoDown, a.userinfo
 		a.mu.Unlock()
 
@@ -170,6 +176,21 @@ func (a *authServer) takeUserInfoDown() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.userinfoDown = true
+}
+
+func (a *authServer) userInfoFetchCount() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.userinfoFetches
+}
+
+// bringUserInfoUp reverses it, so one test can play out the sequence that
+// produced the real defect: an organisation created while no profile was
+// available, and the same person coming back later.
+func (a *authServer) bringUserInfoUp() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.userinfoDown = false
 }
 
 // token mints a token for a subject carrying the scopes given.

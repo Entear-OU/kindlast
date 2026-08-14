@@ -28,6 +28,7 @@ type provisioning interface {
 	Memberships(context.Context) ([]org.Membership, error)
 	RecordIdentity(context.Context, org.Subject) error
 	ProvisionPersonalOrganisation(context.Context, org.Plan) (bool, error)
+	RenamePersonalOrganisation(ctx context.Context, currentName, newName string) (bool, error)
 	UseOrganisation(context.Context, string) error
 	Plan(context.Context) (string, error)
 }
@@ -147,6 +148,8 @@ func (s *Service) GetCurrentUser(
 			return nil, connect.NewError(connect.CodeInternal,
 				fmt.Errorf("provisioning left %s with no membership", claims.Subject))
 		}
+	} else {
+		memberships = s.repairSubjectNamedOrganisation(ctx, store, subject, memberships)
 	}
 
 	activeOrg := tenant.OrgID()
@@ -183,6 +186,85 @@ func (s *Service) GetCurrentUser(
 		ActiveOrgId: activeOrg,
 		Plan:        subscriptionPlan,
 	}), nil
+}
+
+// repairSubjectNamedOrganisation renames a personal organisation that is still
+// called after its owner's subject claim.
+//
+// Why this is not a migration: the name has to come from userinfo, userinfo
+// needs the caller's own access token, and a migration has no caller. So the
+// repair happens the next time the person arrives, once, and then never again.
+//
+// Why it has to happen before ENT-198 rather than with it: slugs are derived
+// from the name and immutable once minted (§20.1). A slug derived from an
+// identifier is permanent, and renaming afterwards would break the bookmarks
+// and emailed approval links that immutability exists to protect. Correcting
+// the name while no slug exists costs nothing; correcting it later is not
+// available at any price.
+//
+// The guard is a string comparison against data already in hand, so a caller
+// with a normally-named organisation pays nothing, and in particular makes no
+// network call. That matters because this runs on every sign-in forever.
+//
+// Every failure leaves the name as it was and returns the memberships
+// unchanged. A repair that cannot happen now can happen on the next sign-in,
+// and none of it is worth failing a request over.
+func (s *Service) repairSubjectNamedOrganisation(
+	ctx context.Context,
+	store provisioning,
+	subject org.Subject,
+	memberships []org.Membership,
+) []org.Membership {
+	index := -1
+	for i, m := range memberships {
+		if m.OrgName == subject.Subject {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		return memberships
+	}
+
+	repaired := s.withProfile(ctx, subject)
+	name := org.PersonalOrganisationName(repaired)
+	if name == subject.Subject {
+		// Nothing better is available. Leaving it alone beats writing the same
+		// identifier back and logging a repair that repaired nothing.
+		return memberships
+	}
+
+	renamed, err := store.RenamePersonalOrganisation(ctx, subject.Subject, name)
+	if err != nil {
+		slog.WarnContext(ctx, "could not rename an organisation named after a subject claim",
+			slog.String("reason", err.Error()))
+		return memberships
+	}
+	if !renamed {
+		// The row was not this caller's personal organisation, or somebody
+		// renamed it in between. Either way the answer must describe the
+		// database rather than the attempt.
+		return memberships
+	}
+
+	// The same fetch that supplied the name also supplied an email, and this
+	// caller's identity row was written before any of that was available, so
+	// it holds none. Recording it here is the only chance it gets: the fetch
+	// happens once per affected person and never again after the rename, so
+	// skipping it would leave exactly the users who predate the fix with a
+	// user_identities row that maps a uuid back to nobody. That row is what
+	// makes a subject access request answerable, which is not optional in a
+	// GDPR product.
+	if err := store.RecordIdentity(ctx, repaired); err != nil {
+		// Non-fatal on purpose: the rename succeeded and is the thing the
+		// caller is waiting on. This is bookkeeping, and it can be retried by
+		// any later call that carries an email.
+		slog.WarnContext(ctx, "renamed an organisation but could not record the identity behind it",
+			slog.String("reason", err.Error()))
+	}
+
+	memberships[index].OrgName = name
+	return memberships
 }
 
 // withProfile fills in a name and email the access token did not carry.
