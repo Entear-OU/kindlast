@@ -3,12 +3,18 @@ name: CI
 # Three jobs that run in parallel (ENT-153, ENT-192), so wall-clock is the
 # slowest of them rather than their sum:
 #
-#   1. `unit` — lint, typecheck, and the unit/component suite. No services, so a
-#      unit regression fails fast and is never entangled with a stack boot.
+#   1. `unit` — formatting, lint, typecheck, and the unit/component suite. No
+#      services, so a unit regression fails fast and is never entangled with a
+#      stack boot.
 #   2. `stack`: the self-managed compose stack (deploy/compose.yaml) plus
 #      the database isolation suite (db/tests/), which is the RLS security
 #      boundary check for the organisation tenancy model.
-#   3. `go`: proto codegen drift and the Go suites.
+#   3. `go`: proto codegen drift, golangci-lint, and the Go suites.
+#
+# Formatting is checked in both language jobs rather than in a fourth job of
+# its own (ENT-214). A separate job would pay a fresh checkout and toolchain
+# setup to run something that takes seconds, and would report formatting as a
+# thing apart from the code it formats.
 #
 # The Supabase integration job was removed with the suite it ran (ENT-200).
 # What it protected is worth restating, because the property has to be kept as
@@ -65,6 +71,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # First, because it is the cheapest thing that can fail and the easiest
+      # to fix: `bun run format` and commit. Prettier's version is pinned in
+      # the lockfile, so this checks the same bytes a contributor's editor
+      # produces rather than whatever the registry offers today.
+      - name: Format check
+        run: bun run format:check
+
       - name: Lint
         run: bun run lint
 
@@ -94,10 +107,15 @@ jobs:
           # needs only the objects, and a shallow clone does not have them.
           fetch-depth: 0
 
+      # Matches go.work and the `stack` job below. It said 1.24 until ENT-214,
+      # which worked only because the go command silently downloaded a newer
+      # toolchain to satisfy go.work's `go 1.25.0` on every run. Two Go
+      # versions in one workflow is a bad footing for a linter, whose findings
+      # depend on the language version it parses with.
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       # Pinned, for the same reason the Bun version is pinned above: a codegen
       # toolchain that moves on its own produces a diff nobody asked for, in a
@@ -139,6 +157,32 @@ jobs:
           buf generate
           git diff --exit-code -- gen/ \
             || { echo "gen/ is out of date; run 'buf generate' and commit"; exit 1; }
+
+      # Installed through the official action rather than `go install`, which is
+      # a departure from how buf is installed above and the reason is wall
+      # clock: the action fetches a prebuilt binary in seconds, where building
+      # golangci-lint from source compiles a hundred or so linters on every
+      # run. `install-only` because the loop below covers three modules, and
+      # one step that names them all beats three copies of the same step.
+      #
+      # Both versions are pinned. The linter version especially: a linter that
+      # moves on its own turns somebody's unrelated pull request red, on a day
+      # they changed nothing it complains about.
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.12.2
+          install-only: true
+
+      # `run` covers the formatters too, so this is the Go equivalent of the
+      # format check and the lint step in the `unit` job at once. Config is one
+      # .golangci.yml at the root, shared by all three modules.
+      - name: Lint every module
+        run: |
+          for module in apps/core-api libs/chassis gen/go; do
+            echo "== $module"
+            (cd "$module" && golangci-lint run ./...)
+          done
 
       - name: Build and test every module
         run: |
