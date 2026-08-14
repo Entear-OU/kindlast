@@ -12,6 +12,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
+	"github.com/Entear-OU/kindlast/libs/chassis/subject"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -83,6 +84,28 @@ func mapClaims(a *authServer, subjectClaim string, extra map[string]any) jwt.Map
 // package did not have one, and a single test that called a fixture helper
 // before the gate turned an absent database into a red build in the `go` CI
 // job, where no stack runs at all.
+// recordedEmailFor reads what user_identities holds for a subject, as the
+// migrator, because that table is behind the same forced policies as
+// everything else and this assertion wants the unfiltered truth.
+func recordedEmailFor(t *testing.T, issuer, claim string) string {
+	t.Helper()
+
+	userID, err := subject.UUID(issuer, claim)
+	if err != nil {
+		t.Fatalf("deriving the user id: %v", err)
+	}
+
+	var email *string
+	if err := chainMigratorPool(t).QueryRow(context.Background(),
+		`select email from user_identities where user_id = $1`, userID).Scan(&email); err != nil {
+		t.Fatalf("reading the recorded email: %v", err)
+	}
+	if email == nil {
+		return ""
+	}
+	return *email
+}
+
 func chainMigratorPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 

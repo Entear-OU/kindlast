@@ -138,6 +138,32 @@ Anyone running the IdP behind a reverse proxy, or on a different internal
 hostname, needs these two optional settings. Leave both empty when the issuer
 is reachable at the address it advertises, which is the ordinary case.
 
+## What an access token has to carry, and what it does not
+
+Two claims decide how well this works, and only one of them is required.
+
+`sub` is required and is half of every user's identity. Everything else about
+authorization comes from scopes, which need not live in the standard `scope`
+claim; see `KINDLAST_OIDC_SCOPE_CLAIMS` above.
+
+`name` and `email` are **not** required, and several providers omit them from
+access tokens entirely. The bundled Zitadel is one: its access tokens describe
+the grant and say nothing about the human. That matters exactly once per user,
+when someone signs in for the first time and their personal organisation is
+named after them.
+
+So core-api asks the provider's **userinfo endpoint** instead, discovered from
+the same document as the JWKS and called with the caller's own access token.
+It happens only on the request that provisions an organisation, never on an
+ordinary page render: putting the authorization server in the path of every
+request is precisely what local token verification exists to avoid.
+
+A provider that declares no `userinfo_endpoint` still works. core-api logs a
+warning at boot, and a first organisation is then named from the `sub` claim,
+which for Zitadel-style providers means a name like `386250729179840515`.
+Usable, ugly, and worth knowing about before your users see it rather than
+after.
+
 ## Changing the issuer is an identity migration, not a config edit
 
 `memberships.user_id` is a `uuid`. Zitadel subjects are snowflake integers

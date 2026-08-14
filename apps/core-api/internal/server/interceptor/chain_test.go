@@ -28,7 +28,7 @@ func buildChain(t *testing.T, a *authServer, scopes *interceptor.Scope) (corev1c
 
 	live := requireStack(t, a.server.URL)
 
-	return serve(t,
+	return serve(t, a,
 		interceptor.Auth(a.verifier(t)),
 		interceptor.JTI(live.revocations),
 		scopes.Interceptor(),

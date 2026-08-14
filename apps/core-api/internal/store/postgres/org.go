@@ -56,12 +56,22 @@ func (t *Tenant) Memberships(ctx context.Context) ([]org.Membership, error) {
 //
 // Upsert rather than insert, because the email on a token can change and the
 // last one seen is the useful one.
+//
+// The coalesce is what makes "last one seen" mean the last one actually seen.
+// An absent claim means the token did not say, not that the address is gone,
+// and the two are easy to conflate into a statement that quietly nulls a good
+// row. That is not hypothetical here: the bundled Zitadel puts no email in an
+// access token at all, so provisioning learns the address from userinfo and
+// then every subsequent call arrives with nothing. Assigning excluded.email
+// unconditionally would erase it on the very next page load, leaving a
+// user_identities row that answers nobody, which is the one thing this table
+// exists to prevent.
 func (t *Tenant) RecordIdentity(ctx context.Context, subject org.Subject) error {
 	_, err := t.tx.Exec(ctx, `
 		insert into user_identities (user_id, issuer, subject, email)
 		values ($1, $2, $3, nullif($4, ''))
 		on conflict (user_id) do update
-		set email = excluded.email,
+		set email = coalesce(excluded.email, user_identities.email),
 		    updated_at = now()
 	`, t.userID, subject.Issuer, subject.Subject, subject.Email)
 	if err != nil {
@@ -134,6 +144,33 @@ func (t *Tenant) ProvisionPersonalOrganisation(ctx context.Context, plan org.Pla
 	}
 
 	return true, nil
+}
+
+// RenamePersonalOrganisation repairs a personal organisation still named after
+// its owner's subject claim.
+//
+// Two conditions narrow this beyond what RLS already enforces, and both are
+// deliberate. `personal_owner_id = t.userID` means this can only ever touch an
+// organisation created for this caller by provisioning, never a real one they
+// happen to own; and `name = $2` means it only replaces the exact identifier
+// it was asked to replace, so a caller who has since renamed their
+// organisation to something they chose keeps it, even if this runs late.
+//
+// The update policy (`organisations_update_owner`, 00002) requires owner, so
+// the statement is enforced twice over. That is not redundancy for its own
+// sake: the policy is the security boundary and these predicates are about
+// touching the right row, which are different questions (§0.5).
+func (t *Tenant) RenamePersonalOrganisation(ctx context.Context, currentName, newName string) (bool, error) {
+	tag, err := t.tx.Exec(ctx, `
+		update organisations
+		set name = $3
+		where personal_owner_id = $1
+		  and name = $2
+	`, t.userID, currentName, newName)
+	if err != nil {
+		return false, fmt.Errorf("postgres: renaming the personal organisation: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // UseOrganisation points the transaction's tenancy GUC at an organisation.

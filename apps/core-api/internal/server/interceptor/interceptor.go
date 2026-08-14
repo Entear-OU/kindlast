@@ -40,6 +40,7 @@ type contextKey int
 const (
 	claimsKey contextKey = iota
 	tenantKey
+	tokenKey
 )
 
 // WithClaims attaches a verified identity to the context.
@@ -60,6 +61,35 @@ func WithClaims(ctx context.Context, claims *oidc.Claims) context.Context {
 func ClaimsFrom(ctx context.Context) (*oidc.Claims, bool) {
 	claims, ok := ctx.Value(claimsKey).(*oidc.Claims)
 	return claims, ok && claims != nil
+}
+
+// WithToken attaches the raw bearer credential the request arrived with.
+//
+// Carrying a live credential further into the process than it strictly has to
+// go is a cost, so it is worth saying what buys it. Some things can only be
+// asked of the authorization server *as the caller*: OIDC userinfo is the
+// standard example, and it is the only conformant way to learn a display name
+// when the access token carries none. Passing the caller's own token is what
+// makes that request authorised by the person it concerns, rather than this
+// service using a privileged credential to read about whoever it likes.
+//
+// The bounds that keep the cost small: the key is unexported, so no package
+// outside this one can retrieve the value without going through TokenFrom; the
+// value lives only as long as the request; and it is never logged. Treat it as
+// a credential everywhere it is read.
+func WithToken(ctx context.Context, raw string) context.Context {
+	return context.WithValue(ctx, tokenKey, raw)
+}
+
+// TokenFrom returns the raw bearer credential, for the narrow set of callers
+// that must present it upstream on the caller's behalf.
+//
+// Never use this to make an authorization decision. The verified Claims are
+// the only thing that has been checked; this is the uninterpreted string the
+// client sent.
+func TokenFrom(ctx context.Context) (string, bool) {
+	raw, ok := ctx.Value(tokenKey).(string)
+	return raw, ok && raw != ""
 }
 
 // WithTenant attaches the resolved organisation and its open transaction.

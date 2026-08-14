@@ -23,6 +23,11 @@ type Dependencies struct {
 	DenyList interceptor.DenyList
 	Tenants  interceptor.TenantOpener
 
+	// Profiles resolves a display name and email when the access token carries
+	// neither. Nil is allowed: provisioning then names an organisation from the
+	// subject claim, which is worse and not broken.
+	Profiles session.Profiles
+
 	// Ready reports whether the service's dependencies are reachable. Nil
 	// means always ready.
 	Ready func(context.Context) error
@@ -51,7 +56,7 @@ func New(deps Dependencies) (http.Handler, error) {
 	)
 
 	mux := http.NewServeMux()
-	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(), chain))
+	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(deps.Profiles), chain))
 	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(), chain))
 
 	// Unauthenticated by design, and bound to the internal listener only.

@@ -51,7 +51,10 @@ func Auth(verifier TokenVerifier) connect.UnaryInterceptorFunc {
 				return nil, connect.NewError(connect.CodeUnauthenticated, redactVerificationError(err))
 			}
 
-			return next(WithClaims(ctx, claims), req)
+			// The token travels alongside the claims, not instead of them.
+			// Everything downstream that decides anything reads the claims;
+			// see WithToken for the one thing this is for.
+			return next(WithToken(WithClaims(ctx, claims), raw), req)
 		}
 	}
 }
