@@ -141,4 +141,59 @@ else
   echo "seed: web client exists (${APP_ID})"
 fi
 
+# Mail, so that registration and verification actually complete on this stack.
+#
+# Without this, everything looks configured and nothing is delivered: Zitadel
+# accepts the sign-up form, tries to send a verification code, and fails. The
+# person is left with an account they cannot activate, and the only sign is a
+# line in the auth container's log.
+#
+# Two things here cost an afternoon each and neither is guessable.
+#
+# **Zitadel will not use an SMTP provider that has no credentials**, and the
+# error it reports for one is `Errors.SMTPConfig.NotFound`. That is not a
+# missing config: `ListSMTPConfigs` returns it, the projection row is present
+# with state active, and the notifier still refuses it, which sends you looking
+# for a config that was there all along (zitadel/zitadel#8344). So a username
+# and password are set even though Mailpit wants neither, and that is why
+# compose runs Mailpit with `MP_SMTP_AUTH_ACCEPT_ANY` and
+# `MP_SMTP_AUTH_ALLOW_INSECURE`: any credentials are accepted, so these values
+# are arbitrary and development-only.
+#
+# **Creating a provider does not enable it.** It has to be activated in a
+# second call, and a provider that exists but is inactive fails exactly the
+# same way as one that does not exist.
+echo "seed: ensuring the mail provider"
+# `.result // []`, because a search that matches nothing omits the key
+# entirely rather than returning an empty array, and iterating null is a jq
+# error printed on the one path that is completely normal: the first boot.
+SMTP_ID="$(api POST /admin/v1/smtp/_search '{}' \
+  | jq -r '(.result // [])[] | select(.description == "Mailpit, the local development mailbox") | .id' \
+  | head -n 1)"
+
+if [ -z "$SMTP_ID" ]; then
+  SMTP_ID="$(api POST /admin/v1/smtp "{
+    \"senderAddress\": \"${SMTP_SENDER_ADDRESS}\",
+    \"senderName\": \"${SMTP_SENDER_NAME}\",
+    \"host\": \"${SMTP_HOST}\",
+    \"tls\": false,
+    \"description\": \"Mailpit, the local development mailbox\",
+    \"user\": \"${SMTP_USER}\",
+    \"password\": \"${SMTP_PASSWORD}\"
+  }" | jq -r '.id')"
+  echo "seed: created mail provider ${SMTP_ID}"
+else
+  echo "seed: mail provider exists (${SMTP_ID})"
+fi
+
+# Activation is idempotent in effect but not in status: activating one that is
+# already active answers 400 AlreadyActive, which is a success for our purposes
+# and must not fail the job. `api` uses curl -sf, so the non-2xx is swallowed
+# here deliberately.
+if api POST "/admin/v1/smtp/${SMTP_ID}/_activate" '{}' >/dev/null 2>&1; then
+  echo "seed: mail provider activated"
+else
+  echo "seed: mail provider already active"
+fi
+
 echo "seed: done"

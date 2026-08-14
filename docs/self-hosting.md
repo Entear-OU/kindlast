@@ -151,10 +151,29 @@ bun run --cwd apps/web test:e2e
 This drives a real authorization code flow: a browser, Zitadel's hosted login,
 the redirect back, and the provisioning call that gives a new person their
 first organisation. It creates its own throwaway users through Zitadel's
-management API with the email already verified, which is deliberate. Zitadel
-does not deliver mail to the bundled Mailpit on this stack, so a test that
-waited for a verification message would be red for a reason unrelated to the
-code it covers.
+management API with the email already verified, which keeps the suite fast and
+independent of message delivery rather than working around a broken stack.
+
+### Mail
+
+Mail works on this stack. The seed job configures Zitadel to deliver to the
+bundled Mailpit, so registration, verification and password reset all complete,
+and every message is readable at `http://localhost:8025`.
+
+One trap is worth knowing, because it cost an afternoon and the error points
+somewhere else entirely. **Zitadel refuses to use an SMTP provider that has no
+credentials, and reports that refusal as `Errors.SMTPConfig.NotFound`.** The
+config is not missing: `ListSMTPConfigs` returns it, the projection row is
+present with state active, and the notifier still declines it
+([zitadel/zitadel#8344](https://github.com/zitadel/zitadel/issues/8344)). The
+symptom is a sign-up that completes with no message ever arriving and a single
+line in the `auth` container's log.
+
+So the seed sets a username and password even though Mailpit wants neither,
+which is why Mailpit runs with `MP_SMTP_AUTH_ACCEPT_ANY`: any credentials are
+accepted, so the values are arbitrary and development-only. Pointing at a real
+SMTP server means replacing them, along with `SMTP_HOST` and the sender
+address, in the `seed` service's environment.
 
 **The console is being rebuilt, so expect it to be absent.** The dashboard,
 feed, compliance records, settings, billing and onboarding pages were removed
