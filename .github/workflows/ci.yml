@@ -4,31 +4,30 @@ name: CI
 # slowest of them rather than their sum:
 #
 #   1. `unit` — lint, typecheck, and the unit/component suite. No services, so a
-#      unit regression fails fast and is never entangled with — or skipped
-#      because of — the Supabase stack.
-#   2. `integration`: the integration suite (apps/web/tests/integration/)
-#      against a booted Supabase stack (the legacy stack the web app still
-#      runs on).
-#   3. `stack`: the self-managed compose stack (deploy/compose.yaml) plus
+#      unit regression fails fast and is never entangled with a stack boot.
+#   2. `stack`: the self-managed compose stack (deploy/compose.yaml) plus
 #      the database isolation suite (db/tests/), which is the RLS security
 #      boundary check for the organisation tenancy model.
+#   3. `go`: proto codegen drift and the Go suites.
 #
-# The integration suites self-skip when the local stack is unreachable
-# (describe.skipIf(isLocalSupabaseReachable)), so the integration job boots
-# Supabase and fails loudly if it isn't reachable — integration coverage can
-# never silently disappear. Keeping the two as separate jobs also guarantees the
-# unit tests always run and must pass, even if the Supabase setup later fails.
+# The Supabase integration job was removed with the suite it ran (ENT-200).
+# What it protected is worth restating, because the property has to be kept as
+# each surface is rebuilt on core-api: a suite that self-skips when its stack
+# is unreachable proves nothing on a green run, so the job booted the stack and
+# failed loudly if it could not. `stack` does exactly that for the compose
+# stack today. Any rebuilt integration coverage must boot its dependencies the
+# same way rather than skipping quietly.
 #
-# Both jobs are required for the workflow to conclude `success`, so the
-# auto-merge workflow (gated on the whole CI run) still waits for both.
+# All jobs are required for the workflow to conclude `success`, so the
+# auto-merge workflow (gated on the whole CI run) waits for every one.
 #
 # Fork safety: this workflow is safe to run on pull requests from forks and is
 # meant to. It reads no secrets, holds only `contents: read`, and every step
-# operates on the checked-out tree rather than on PR metadata. The local
-# Supabase stack the integration job boots needs no credentials, so external
-# contributions get the same signal maintainers do. Keep it that way: adding a
-# secret to this workflow would silently break CI for every external PR, since
-# GitHub withholds secrets from forked runs.
+# operates on the checked-out tree rather than on PR metadata. The stacks it
+# boots need no credentials, so external contributions get the same signal
+# maintainers do. Keep it that way: adding a secret to this workflow would
+# silently break CI for every external PR, since GitHub withholds secrets from
+# forked runs.
 
 on:
   push:
@@ -82,59 +81,6 @@ jobs:
       # still exit 0.
       - name: Unit tests
         run: bun run test:unit
-
-  integration:
-    name: Integration tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      # Boots only the containers the integration suite needs — Postgres + Auth
-      # + PostgREST + Kong on the default local ports (54321/54322), applying
-      # every migration in supabase/migrations. The excluded containers (Studio,
-      # Storage, Realtime, Edge Runtime/Functions, imgproxy, Vector, Analytics,
-      # Inbucket, postgres-meta) are unused by the tests and shave the slowest
-      # step (`supabase start`) by skipping their image pulls + health checks.
-      - name: Start Supabase
-        run: >
-          supabase start
-          -x studio,imgproxy,storage,realtime,edge-runtime,functions,vector,analytics,inbucket,meta
-
-      # Guard: if the stack didn't come up, fail here rather than let the
-      # integration suites silently skip and the run pass green. Mirrors
-      # isLocalSupabaseReachable() in tests/integration/helpers/supabase.ts.
-      - name: Verify Supabase is reachable
-        env:
-          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
-        run: |
-          curl --fail --silent --show-error \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            http://127.0.0.1:54321/auth/v1/health
-
-      - name: Integration tests
-        run: bun run test:integration
-
-      - name: Stop Supabase
-        if: always()
-        run: supabase stop
 
   go:
     name: Proto codegen & Go tests

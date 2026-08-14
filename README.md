@@ -94,10 +94,12 @@ Where this is heading next is in the [roadmap](./docs/ROADMAP.md).
 |-------|-----------|
 | Framework | Next.js 16 (App Router) |
 | UI | shadcn/ui + Tailwind CSS v4 |
-| Database | Supabase (Postgres + Auth + RLS + pgvector) |
+| API | Go, Connect RPC, protobuf contract |
+| Database | Postgres with pgvector, forced row level security |
+| Identity | OIDC (Zitadel in the bundled stack), authorization code with PKCE |
 | AI | Vercel AI SDK |
 | Validation | Zod |
-| Testing | Vitest + React Testing Library |
+| Testing | Vitest, React Testing Library, Playwright, Go `testing` |
 
 ## Quickstart
 
@@ -105,8 +107,7 @@ Where this is heading next is in the [roadmap](./docs/ROADMAP.md).
 
 - [Bun](https://bun.sh) 1.3+
 - Node.js 22.13+ (Bun installs and runs scripts; Next.js and Vitest run on Node)
-- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
-- Docker, required by `supabase start`
+- Docker, for the local stack
 
 ### Running locally
 
@@ -115,17 +116,19 @@ git clone https://github.com/Entear-OU/kindlast.git
 cd kindlast
 bun install
 
-cp .env.example .env
-# At minimum set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY and OPENAI_API_KEY
-
-supabase start        # local Postgres, Auth, Studio
-supabase db reset     # apply all migrations
+docker compose -f deploy/compose.yaml up -d   # Postgres, Zitadel, Redis, core-api, edge
+./scripts/web-env.sh                          # writes apps/web/.env.local from the stack
 
 bun run dev
 ```
 
-The app runs at <http://localhost:3000>, Supabase Studio at
-<http://localhost:54323>.
+The app runs at <http://localhost:3000>, the authorization server at
+<http://localhost:8300>, and core-api through the edge at
+<http://localhost:8000>.
+
+Do not write `apps/web/.env.local` by hand. The OAuth client is generated per
+environment into a docker volume, so `web-env.sh` is the only path to it, and
+it has to be re-run after `docker compose down -v` discards that volume.
 
 `.env.example` documents every variable and what it unlocks. `EMAIL_PROVIDER`
 defaults to `console`, so local development needs no email credentials.
@@ -139,7 +142,8 @@ bun run lint             # ESLint
 bun run typecheck        # typecheck
 bun run test             # everything
 bun run test:unit        # unit and component tests
-bun run test:integration # integration tests, needs Supabase running
+bun run test:e2e         # the sign-in round trip, needs the compose stack
+bun run test:db          # tenant isolation, needs the compose stack
 bun run test:coverage    # with coverage
 ```
 
@@ -154,17 +158,20 @@ absolutely nothing. The guide covers it.
 
 ## Database
 
-All schema changes flow through versioned migrations in `supabase/migrations/`.
-Never apply DDL directly to a remote project.
+All schema changes flow through versioned goose migrations in `db/migrations/`,
+applied by a job container that must exit zero before the stack is considered
+up. Never apply DDL by hand.
 
 ```bash
-supabase migration new <slug>   # create a migration
-supabase db reset               # replay all migrations locally
-supabase db push --dry-run      # preview against remote
-supabase db push                # apply
+docker compose -f deploy/compose.yaml up -d   # applies every migration
+bun run test:db                               # asserts tenant isolation holds
 ```
 
-See [supabase/README.md](./supabase/README.md).
+Tenancy is not a filter, it is a security boundary. Every table in `public` has
+row level security **enabled and forced**, the application connects as a role
+that owns nothing and cannot bypass it, and `bun run test:db` checks those
+properties over `pg_class` rather than trusting convention. Read the row level
+security section of [AGENTS.md](./AGENTS.md) before adding a table.
 
 ## Project structure
 
@@ -178,17 +185,11 @@ apps/web/app/
 └── api/                # Route handlers, including scheduled agent endpoints
 
 apps/web/lib/
-├── analyst/            # Finding generation, narrative, critic
-├── corpus/             # Regulatory knowledge base and obligations
-├── notifications/      # Comms: dispatch, briefings, signed one-tap links
+├── auth/               # OIDC client, PKCE, Redis sessions, the core-api client
 ├── email/              # Swappable email provider seam
-├── websearch/          # Verbatim regulatory text fetch at citation time
-├── records/            # ROPA, AI systems, DSAR
-├── billing/            # Swappable billing provider seam
-└── supabase/           # Client, server and middleware helpers
+└── websearch/          # Verbatim regulatory text fetch at citation time
 
 data/corpus/            # GDPR, AI Act, EDPB and enforcement source data
-supabase/migrations/    # Versioned schema (legacy stack the web app runs on)
 db/migrations/          # Squashed baseline for the self-managed stack (goose)
 db/tests/               # Database isolation suite (RLS security boundary)
 deploy/                 # compose.yaml, Postgres role split, Zitadel, Caddy
@@ -210,9 +211,15 @@ bun run test:db   # the database isolation suite, against that stack
 The project follows test-driven development, and it is not decorative. Failing
 test first, minimum implementation, then refactor green.
 
-Note that the integration suites self-skip when the local Supabase stack is
-unreachable, so a green `bun run test` locally does not necessarily mean they ran.
-CI boots the stack and fails loudly if it is missing.
+Note that the database suite self-skips when the local stack is unreachable, so
+a green `bun run test` locally does not necessarily mean it ran. CI boots the
+stack and fails loudly if it is missing.
+
+The compliance console (dashboard, feed, records, settings, billing) is being
+rebuilt. It was removed with Supabase, because its tenancy was Supabase's
+`auth.uid()` row level security and authentication no longer produces a
+Supabase session. What exists today is the marketing site, the sign-in flow and
+`/workspace`; the rest returns surface by surface on `core-api`.
 
 ## Contributing
 

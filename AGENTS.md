@@ -39,15 +39,26 @@ proto/               The contract, single source of truth for service boundaries
 db/migrations/       goose migrations for the self-managed stack
 db/tests/            Database isolation suite (the RLS security boundary)
 deploy/              compose.yaml, Postgres role split, Zitadel, Caddy
-supabase/            The legacy stack the web app still runs on
 data/corpus/         GDPR, AI Act, EDPB and enforcement source data
 postman/             HTTP collection for the local stack
 docs/                Self-hosting, maintainer workflow, brand
 ```
 
-Two backends exist at once, deliberately. `apps/web` still reads Supabase in
-production while the self-managed stack in `deploy/` is built out underneath
-it. Do not assume a change to one is visible to the other.
+**Supabase is gone** (ENT-200). There is one backend now: the self-managed
+stack in `deploy/`, with the domain schema in `db/migrations/` and the service
+in `apps/core-api/`.
+
+What that cost is worth knowing before you go looking for a page that is not
+there. The console (dashboard, feed, compliance records, settings, billing,
+onboarding) was removed with it, because its tenancy was Supabase's
+`auth.uid()` row level security and the OIDC auth path produces no Supabase
+session: every one of those pages redirected the visitor straight back out.
+Each returns as its surface is rebuilt on core-api, and ENT-200 lists them in
+build order. The authenticated surface today is `/workspace`.
+
+The legacy schema those pages read is not lost. Its 38 migrations are in git
+history at `supabase/migrations/`, last present in commit `db0bf83`, and they
+are the reference for what each rebuilt surface has to carry.
 
 ## Package manager
 
@@ -115,7 +126,7 @@ bun run dev              # the Next.js app
 bun run lint             # ESLint
 bun run typecheck        # tsc, through the workspace so the version is pinned
 bun run test:unit        # unit and component tests, no services needed
-bun run test:integration # integration tests, needs the Supabase stack
+bun run test:e2e         # the sign-in round trip, needs the compose stack
 bun run test:db          # database isolation suite, needs the compose stack
 ```
 
@@ -246,13 +257,18 @@ Three test suites, and they are not interchangeable:
 | Suite | Needs | Covers |
 |---|---|---|
 | `test:unit` | nothing | TypeScript modules and components |
-| `test:integration` | Supabase running | the legacy stack's database behaviour |
+| `test:e2e` | the compose stack | the sign-in round trip, in a real browser |
 | `test:db` | the compose stack | tenant isolation and privileges |
 
-The integration and database suites **self-skip when their stack is
-unreachable**, so a green local run does not prove they ran. CI boots each
-stack and fails loudly if it cannot, which is what stops coverage
-disappearing silently. Keep that property if you touch CI.
+The database suite **self-skips when its stack is unreachable**, so a green
+local run does not prove it ran. CI boots the stack and fails loudly if it
+cannot, which is what stops coverage disappearing silently. Keep that property
+if you touch CI, and give any suite you add the same treatment: the Supabase
+integration job was removed with its suite (ENT-200), and the property it
+protected outlives it.
+
+`test:e2e` is not yet a CI gate. It needs the compose stack and a browser, and
+wiring that is its own piece of work.
 
 ## Git strategy
 

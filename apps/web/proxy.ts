@@ -23,15 +23,16 @@ import { randomToken } from '@/lib/auth/pkce'
  * Nothing here talks to a network at all.
  */
 
-/** Prefixes that need a session. Everything else is public. */
-const PROTECTED = [
-  '/workspace',
-  '/dashboard',
-  '/onboarding',
-  '/feed',
-  '/records',
-  '/settings',
-]
+/**
+ * Prefixes that need a session. Everything else is public.
+ *
+ * One entry, because one authenticated page exists. The console prefixes that
+ * used to be here went with the pages themselves (ENT-200): they gated on a
+ * Supabase session that the OIDC auth path no longer creates, so every one of
+ * them redirected the visitor straight back out. Each returns as its surface
+ * is rebuilt on core-api.
+ */
+const PROTECTED = ['/workspace']
 
 /**
  * Paths the auth flow owns, which must never be redirected.

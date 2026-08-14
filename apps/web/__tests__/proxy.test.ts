@@ -56,7 +56,7 @@ describe('proxy', () => {
     vi.clearAllMocks()
   })
 
-  it.each(['/workspace', '/dashboard', '/onboarding', '/feed', '/records'])(
+  it.each(['/workspace'])(
     'sends a signed-out visitor from %s to sign-in',
     async (path) => {
       const { proxy } = await import('@/proxy')
@@ -111,23 +111,25 @@ describe('proxy', () => {
   })
 
   it('carries the attempted path so sign-in can return there', async () => {
+    // A nested path rather than the bare prefix, because the whole point is
+    // that the person lands back where they were going.
     const { proxy } = await import('@/proxy')
-    const response = await proxy(requestFor('/records/ropa'))
+    const response = await proxy(requestFor('/workspace/reports'))
 
-    expect(response.url).toContain('returnTo=%2Frecords%2Fropa')
+    expect(response.url).toContain('returnTo=%2Fworkspace%2Freports')
   })
 
   it('lets a visitor carrying a session cookie through', async () => {
     const { proxy } = await import('@/proxy')
-    const response = await proxy(requestFor('/dashboard', { session: true }))
+    const response = await proxy(requestFor('/workspace', { session: true }))
 
     expect(response).toMatchObject({ type: 'next' })
   })
 
   it('sends someone who already has a session to the workspace', async () => {
-    // /workspace rather than /dashboard: the legacy dashboard still gates on
-    // a Supabase session, which no longer exists now that the auth path is
-    // OIDC, so sending someone there would bounce them straight back out.
+    // The console pages that used to be the destination are gone (ENT-200):
+    // they gated on a Supabase session the OIDC path no longer creates, so
+    // sending anyone there bounced them straight back out.
     const { proxy } = await import('@/proxy')
     const response = await proxy(requestFor('/sign-in', { session: true }))
 
