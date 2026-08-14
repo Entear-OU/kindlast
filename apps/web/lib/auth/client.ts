@@ -17,6 +17,12 @@ export const ORG_HEADER = 'Kindlast-Org-Id'
 export interface Membership {
   orgId: string
   orgName?: string
+  /**
+   * The URL segment this organisation's console routes hang off. Derived from
+   * the name when the organisation was created and immutable afterwards, so it
+   * is safe in a bookmark and does not follow a rename (ENT-198).
+   */
+  orgSlug?: string
   role?: string
 }
 
@@ -103,10 +109,16 @@ export async function getCurrentUser(accessToken: string): Promise<CurrentUser |
   })
 
   // Connect omits empty repeated fields rather than sending [], so a person
-  // with no memberships comes back as {}. Normalising here keeps every caller
-  // from having to know that.
+  // with no memberships comes back as {}. Normalising the one field that has
+  // to be an array keeps every caller from having to know that.
+  //
+  // Spread rather than rebuilt from named fields, deliberately. An earlier
+  // version returned `{ memberships }` alone, which silently dropped the user,
+  // the active organisation and the plan; nothing failed, because every one of
+  // those is optional, so the workspace simply stopped greeting anyone by name
+  // and nobody noticed until slugs needed the same journey.
   if (!me) return null
-  return { memberships: me.memberships ?? [] }
+  return { ...me, memberships: me.memberships ?? [] }
 }
 
 export async function acceptInvitation(accessToken: string, token: string): Promise<boolean> {

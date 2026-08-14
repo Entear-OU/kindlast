@@ -219,7 +219,8 @@ The compliance console (dashboard, feed, records, settings, billing) is being
 rebuilt. It was removed with Supabase, because its tenancy was Supabase's
 `auth.uid()` row level security and authentication no longer produces a
 Supabase session. What exists today is the marketing site, the sign-in flow and
-`/workspace`; the rest returns surface by surface on `core-api`.
+an organisation's own page at `/o/{slug}/`; the rest returns surface by surface
+on `core-api`.
 
 ## Contributing
 

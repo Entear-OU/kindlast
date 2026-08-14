@@ -179,7 +179,8 @@ address, in the `seed` service's environment.
 feed, compliance records, settings, billing and onboarding pages were removed
 with Supabase: their tenancy was Supabase's `auth.uid()` row level security,
 and authentication no longer produces a Supabase session. What you get today is
-the marketing site, the sign-in flow and `/workspace`. Each surface returns on
+the marketing site, the sign-in flow and an organisation's own page at
+`/o/{slug}/`, which signing in resolves you into. Each surface returns on
 core-api, and it is worth saying plainly rather than leaving you to discover
 it: this is not yet a system you would run a compliance programme on.
 

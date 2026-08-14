@@ -214,7 +214,16 @@ type Membership struct {
 	OrgName string                 `protobuf:"bytes,2,opt,name=org_name,json=orgName,proto3" json:"org_name,omitempty"`
 	// One of owner, member, viewer. Approval authority is a regulatory-relevant
 	// fact, so it earns a role boundary (§20.1).
-	Role          string `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
+	Role string `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
+	// The URL segment every console route for this organisation hangs off, as in
+	// `/o/{org_slug}/feed` (§20.1, ENT-198).
+	//
+	// Derived from the name when the organisation is created and immutable
+	// afterwards, so it does not follow a rename: slugs live in bookmarks and in
+	// emailed capability-token links, which are exactly the links a compliance
+	// product has to keep working. A client that wants a label shows org_name; a
+	// client that wants a link uses this.
+	OrgSlug       string `protobuf:"bytes,4,opt,name=org_slug,json=orgSlug,proto3" json:"org_slug,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -270,6 +279,13 @@ func (x *Membership) GetRole() string {
 	return ""
 }
 
+func (x *Membership) GetOrgSlug() string {
+	if x != nil {
+		return x.OrgSlug
+	}
+	return ""
+}
+
 var File_kindlast_core_v1_session_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_session_proto_rawDesc = "" +
@@ -285,12 +301,13 @@ const file_kindlast_core_v1_session_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12%\n" +
-	"\x0eemail_verified\x18\x04 \x01(\bR\remailVerified\"R\n" +
+	"\x0eemail_verified\x18\x04 \x01(\bR\remailVerified\"m\n" +
 	"\n" +
 	"Membership\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x19\n" +
 	"\borg_name\x18\x02 \x01(\tR\aorgName\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role2\x94\x01\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x19\n" +
+	"\borg_slug\x18\x04 \x01(\tR\aorgSlug2\x94\x01\n" +
 	"\x0eSessionService\x12\x81\x01\n" +
 	"\x0eGetCurrentUser\x12'.kindlast.core.v1.GetCurrentUserRequest\x1a(.kindlast.core.v1.GetCurrentUserResponse\"\x1c\x8a\xb5\x18\x06openid\x82\xd3\xe4\x93\x02\f\x12\n" +
 	"/api/v1/meB\xc4\x01\n" +

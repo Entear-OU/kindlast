@@ -76,7 +76,11 @@ type AcceptInvitationResponse struct {
 	OrgId   string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	OrgName string `protobuf:"bytes,2,opt,name=org_name,json=orgName,proto3" json:"org_name,omitempty"`
 	// The role the invitation granted: owner, member or viewer.
-	Role          string `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
+	Role string `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
+	// The URL segment to redirect into, so an accepted invitation lands the
+	// person inside the organisation they just joined rather than at a page
+	// that has to look it up again (§20.1, ENT-198).
+	OrgSlug       string `protobuf:"bytes,4,opt,name=org_slug,json=orgSlug,proto3" json:"org_slug,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -132,17 +136,25 @@ func (x *AcceptInvitationResponse) GetRole() string {
 	return ""
 }
 
+func (x *AcceptInvitationResponse) GetOrgSlug() string {
+	if x != nil {
+		return x.OrgSlug
+	}
+	return ""
+}
+
 var File_kindlast_core_v1_org_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_org_proto_rawDesc = "" +
 	"\n" +
 	"\x1akindlast/core/v1/org.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"/\n" +
 	"\x17AcceptInvitationRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"`\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"{\n" +
 	"\x18AcceptInvitationResponse\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x19\n" +
 	"\borg_name\x18\x02 \x01(\tR\aorgName\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role2\xae\x01\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x19\n" +
+	"\borg_slug\x18\x04 \x01(\tR\aorgSlug2\xae\x01\n" +
 	"\n" +
 	"OrgService\x12\x9f\x01\n" +
 	"\x10AcceptInvitation\x12).kindlast.core.v1.AcceptInvitationRequest\x1a*.kindlast.core.v1.AcceptInvitationResponse\"4\x8a\xb5\x18\x06openid\x82\xd3\xe4\x93\x02$\"\"/api/v1/invitations/{token}:acceptB\xc0\x01\n" +

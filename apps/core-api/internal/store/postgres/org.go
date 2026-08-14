@@ -10,6 +10,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ErrInvitationNotUsable covers expired, already accepted, and never existed.
@@ -25,7 +26,7 @@ var ErrInvitationNotUsable = errors.New("postgres: invitation is not usable")
 // rows, so this runs under RLS rather than around it.
 func (t *Tenant) Memberships(ctx context.Context) ([]org.Membership, error) {
 	rows, err := t.tx.Query(ctx, `
-		select m.org_id::text, o.name, m.role
+		select m.org_id::text, o.name, o.slug, m.role
 		from memberships m
 		join organisations o on o.id = m.org_id
 		where m.user_id = $1
@@ -39,7 +40,7 @@ func (t *Tenant) Memberships(ctx context.Context) ([]org.Membership, error) {
 	var memberships []org.Membership
 	for rows.Next() {
 		var m org.Membership
-		if err := rows.Scan(&m.OrgID, &m.OrgName, &m.Role); err != nil {
+		if err := rows.Scan(&m.OrgID, &m.OrgName, &m.OrgSlug, &m.Role); err != nil {
 			return nil, fmt.Errorf("postgres: scanning membership: %w", err)
 		}
 		memberships = append(memberships, m)
@@ -114,17 +115,11 @@ func (t *Tenant) RecordIdentity(ctx context.Context, subject org.Subject) error 
 func (t *Tenant) ProvisionPersonalOrganisation(ctx context.Context, plan org.Plan) (created bool, err error) {
 	orgID := uuid.New().String()
 
-	tag, err := t.tx.Exec(ctx, `
-		insert into organisations (id, name, personal_owner_id)
-		values ($1, $2, $3)
-		on conflict (personal_owner_id) where personal_owner_id is not null
-		do nothing
-	`, orgID, plan.OrganisationName, t.userID)
+	created, err = t.insertOrganisation(ctx, orgID, plan)
 	if err != nil {
-		return false, fmt.Errorf("postgres: creating the personal organisation: %w", err)
+		return false, err
 	}
-
-	if tag.RowsAffected() == 0 {
+	if !created {
 		// Another transaction got there first. Not an error: the desired end
 		// state exists, which is all idempotence promises. The caller re-reads
 		// rather than trusting either outcome.
@@ -144,6 +139,81 @@ func (t *Tenant) ProvisionPersonalOrganisation(ctx context.Context, plan org.Pla
 	}
 
 	return true, nil
+}
+
+// maxSlugAttempts bounds the collision search.
+//
+// Twenty-five people sharing one derived name is already implausible, and the
+// number matters less than the bound existing: without one, a bug that made
+// every attempt collide would spin against the database rather than fail.
+const maxSlugAttempts = 25
+
+// insertOrganisation writes the organisation row, taking the first slug the
+// unique constraint will accept.
+//
+// The slug is derived by `org_slug` in the database rather than in Go, so the
+// rule here and the rule the ENT-198 backfill used are the same rule. A second
+// implementation would be one that can drift, and a slug is immutable once
+// minted (§20.1), so a drifted rule produces URLs nobody can correct.
+//
+// Collisions are found rather than predicted, and that is deliberate. Asking
+// "is this slug free" before inserting would be both a race and a lie: a race
+// because another transaction can take it in between, and a lie because RLS
+// hides other organisations from this caller, so the answer would describe
+// only the slugs they can already see. Letting the unique constraint refuse
+// the insert asks the only question that has a true answer.
+//
+// Each attempt runs inside a savepoint, which is what makes retrying possible
+// at all: a unique violation marks the whole transaction as aborted, and an
+// aborted transaction cannot go on to try anything else, let alone the
+// membership insert and the re-read the caller depends on.
+func (t *Tenant) insertOrganisation(ctx context.Context, orgID string, plan org.Plan) (bool, error) {
+	for ordinal := 1; ordinal <= maxSlugAttempts; ordinal++ {
+		savepoint, err := t.tx.Begin(ctx)
+		if err != nil {
+			return false, fmt.Errorf("postgres: opening a savepoint for the slug attempt: %w", err)
+		}
+
+		tag, err := savepoint.Exec(ctx, `
+			insert into organisations (id, name, slug, personal_owner_id)
+			values ($1, $2, org_slug($2, $4), $3)
+			on conflict (personal_owner_id) where personal_owner_id is not null
+			do nothing
+		`, orgID, plan.OrganisationName, t.userID, ordinal)
+
+		if err != nil {
+			_ = savepoint.Rollback(ctx)
+			if isSlugCollision(err) {
+				continue
+			}
+			return false, fmt.Errorf("postgres: creating the personal organisation: %w", err)
+		}
+
+		if err := savepoint.Commit(ctx); err != nil {
+			return false, fmt.Errorf("postgres: committing the slug attempt: %w", err)
+		}
+		return tag.RowsAffected() > 0, nil
+	}
+
+	return false, fmt.Errorf(
+		"postgres: no free slug for an organisation named %q after %d attempts",
+		plan.OrganisationName, maxSlugAttempts)
+}
+
+// isSlugCollision distinguishes "that slug is taken" from every other unique
+// violation this statement can raise.
+//
+// Named constraint rather than bare error code, because the same statement can
+// violate the personal-owner index, and treating that as a collision would
+// retry a conflict that `on conflict do nothing` has already handled
+// correctly.
+func isSlugCollision(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	const uniqueViolation = "23505"
+	return pgErr.Code == uniqueViolation && pgErr.ConstraintName == "organisations_slug_key"
 }
 
 // RenamePersonalOrganisation repairs a personal organisation still named after
@@ -226,10 +296,16 @@ func (t *Tenant) Plan(ctx context.Context) (string, error) {
 //
 // The token is hashed here and only the hash reaches the database, so the
 // value stored is useless to anyone reading a dump.
-func (t *Tenant) AcceptInvitation(ctx context.Context, token string) (orgID, orgName, role string, err error) {
+// The slug comes back with the rest, because the caller's next move is a
+// redirect into the organisation just joined, and that URL is built from the
+// slug. Returning without it would mean a second round trip on the one path
+// where the person is already waiting on a redirect.
+func (t *Tenant) AcceptInvitation(ctx context.Context, token string) (invitation org.Joined, err error) {
 	if token == "" {
-		return "", "", "", ErrInvitationNotUsable
+		return org.Joined{}, ErrInvitationNotUsable
 	}
+
+	var orgID string
 
 	// coalesce, because the function returns null for the three not-usable
 	// cases and a null does not scan into a string.
@@ -237,29 +313,30 @@ func (t *Tenant) AcceptInvitation(ctx context.Context, token string) (orgID, org
 		select coalesce(accept_invitation($1)::text, '')
 	`, HashInvitationToken(token)).Scan(&orgID)
 	if err != nil {
-		return "", "", "", fmt.Errorf("postgres: accepting the invitation: %w", err)
+		return org.Joined{}, fmt.Errorf("postgres: accepting the invitation: %w", err)
 	}
 	if orgID == "" {
-		return "", "", "", ErrInvitationNotUsable
+		return org.Joined{}, ErrInvitationNotUsable
 	}
 
 	// Re-read through RLS rather than trusting the definer function's word:
 	// the membership now exists, so the organisation is visible by ordinary
 	// policy, and if it somehow is not then the join did not happen.
+	joined := org.Joined{OrgID: orgID}
 	err = t.tx.QueryRow(ctx, `
-		select o.name, m.role
+		select o.name, o.slug, m.role
 		from organisations o
 		join memberships m on m.org_id = o.id and m.user_id = $2
 		where o.id = $1
-	`, orgID, t.userID).Scan(&orgName, &role)
+	`, orgID, t.userID).Scan(&joined.OrgName, &joined.OrgSlug, &joined.Role)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", "", fmt.Errorf("postgres: invitation accepted but no membership is visible for %s", orgID)
+		return org.Joined{}, fmt.Errorf("postgres: invitation accepted but no membership is visible for %s", orgID)
 	}
 	if err != nil {
-		return "", "", "", fmt.Errorf("postgres: reading the joined organisation: %w", err)
+		return org.Joined{}, fmt.Errorf("postgres: reading the joined organisation: %w", err)
 	}
 
-	return orgID, orgName, role, nil
+	return joined, nil
 }
 
 // HashInvitationToken is exported so whatever issues an invitation stores the
