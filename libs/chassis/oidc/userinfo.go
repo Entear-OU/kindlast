@@ -73,7 +73,7 @@ func FetchUserInfo(
 	if err != nil {
 		return nil, fmt.Errorf("oidc: fetching userinfo: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("oidc: userinfo returned %s", response.Status)

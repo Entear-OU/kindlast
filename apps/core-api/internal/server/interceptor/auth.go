@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
+
 	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
 )
 
@@ -75,12 +76,12 @@ func bearerToken(header string) (string, error) {
 
 	scheme, credential, found := strings.Cut(header, " ")
 	if !found || !strings.EqualFold(scheme, "Bearer") {
-		return "", errors.New("Authorization header is not a Bearer credential")
+		return "", errors.New("the Authorization header is not a Bearer credential")
 	}
 
 	credential = strings.TrimSpace(credential)
 	if credential == "" {
-		return "", errors.New("Bearer credential is empty")
+		return "", errors.New("the Bearer credential is empty")
 	}
 	return credential, nil
 }

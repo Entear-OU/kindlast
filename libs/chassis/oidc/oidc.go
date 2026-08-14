@@ -126,7 +126,7 @@ func DiscoverAt(ctx context.Context, transport *Transport, discoveryURL, expecte
 	if err != nil {
 		return nil, fmt.Errorf("oidc: fetching %s: %w", discoveryURL, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("oidc: discovery at %s returned %s", discoveryURL, response.Status)

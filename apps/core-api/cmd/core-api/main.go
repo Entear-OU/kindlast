@@ -18,6 +18,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+	"golang.org/x/net/http2"
+
+	// Deprecated in favour of http.Server.Protocols. Replacing it changes how
+	// this process negotiates HTTP/2 rather than renaming a call, so it needs
+	// the compose stack to prove gRPC still reaches core-api over plaintext.
+	// Tracked in ENT-216, not fixed inside a formatting chore.
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck // SA1019, see ENT-216
+
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
@@ -25,9 +34,6 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	"github.com/Entear-OU/kindlast/libs/chassis/denylist"
 	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
-	"github.com/redis/go-redis/v9"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 )
 
 func main() {
@@ -61,12 +67,22 @@ func healthcheck() error {
 		addr = "127.0.0.1" + addr
 	}
 
+	// Built through NewRequestWithContext rather than client.Get, because a
+	// request with no context cannot be cancelled. The context is Background
+	// here and the client's own timeout still bounds the probe, so this is the
+	// same three seconds it always was, now expressed where a caller can reach
+	// it.
 	client := &http.Client{Timeout: 3 * time.Second}
-	response, err := client.Get("http://" + addr + "/readyz")
+	request, err := http.NewRequestWithContext(
+		context.Background(), http.MethodGet, "http://"+addr+"/readyz", nil)
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("readyz returned %s", response.Status)
@@ -135,7 +151,7 @@ func run(logger *slog.Logger) error {
 	defer store.Close()
 
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	revocations := denylist.NewRedis(redisClient, "")
 
@@ -171,7 +187,7 @@ func run(logger *slog.Logger) error {
 	// ever serves one client from inside one network.
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           h2c.NewHandler(handler, &http2.Server{}),
+		Handler:           h2c.NewHandler(handler, &http2.Server{}), //nolint:staticcheck // SA1019, see ENT-216
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

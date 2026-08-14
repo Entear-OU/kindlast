@@ -14,8 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
 )
 
 // A real authorization server double, per §13.2: an RSA keypair generated in
@@ -173,12 +174,6 @@ func (a *authServer) failUserInfo(status int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.userinfoStatus = status
-}
-
-func (a *authServer) userInfoFetchCount() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.userinfoFetches
 }
 
 func (a *authServer) userInfoAuthorization() string {

@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/libs/chassis/subject"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // interceptorsFor assembles the production chain, in the production order, so

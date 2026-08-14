@@ -16,6 +16,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
@@ -24,8 +27,6 @@ import (
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/libs/chassis/denylist"
 	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/redis/go-redis/v9"
 )
 
 // These tests drive the real chain: real signed tokens against a real JWKS,

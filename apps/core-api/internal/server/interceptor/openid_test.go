@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 )
 
 // The end of the problem measured in ENT-195, through the whole chain.
