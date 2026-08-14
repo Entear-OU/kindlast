@@ -60,7 +60,9 @@ async function skipSecondFactorOffer(page: Page) {
  * attached.
  */
 async function signIn(page: Page, user: FixtureUser) {
-  const loginName = page.locator('input[name="loginName"], input[type="email"]').first()
+  const loginName = page
+    .locator('input[name="loginName"], input[type="email"]')
+    .first()
   await loginName.waitFor({ state: 'visible', timeout: 20_000 })
   await loginName.fill(user.username)
   await page
@@ -68,7 +70,9 @@ async function signIn(page: Page, user: FixtureUser) {
     .first()
     .click()
 
-  const password = page.locator('input[name="password"], input[type="password"]').first()
+  const password = page
+    .locator('input[name="password"], input[type="password"]')
+    .first()
   await password.waitFor({ state: 'visible', timeout: 20_000 })
   await password.fill(FIXTURE_PASSWORD)
   await page

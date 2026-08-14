@@ -32,9 +32,12 @@ const AREAS = [
 
 export function CapabilitySummary() {
   return (
-    <section id="capabilities" className="py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
+    <section
+      id="capabilities"
+      className="py-24 sm:py-32"
+      style={{ backgroundColor: '#F5F4F0' }}
+    >
       <div className="mx-auto max-w-5xl px-6 lg:px-8">
-
         <div className="grid items-start gap-12 lg:grid-cols-2">
           <div>
             <p
@@ -54,9 +57,10 @@ export function CapabilitySummary() {
               className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]"
               style={{ color: 'rgba(13,27,42,0.5)' }}
             >
-              Kindlast holds a live picture of your obligations under the GDPR and
-              the EU AI Act, and keeps checking it against what your business
-              actually does. Nothing here waits for you to remember to open it.
+              Kindlast holds a live picture of your obligations under the GDPR
+              and the EU AI Act, and keeps checking it against what your
+              business actually does. Nothing here waits for you to remember to
+              open it.
             </p>
           </div>
         </div>
@@ -100,7 +104,6 @@ export function CapabilitySummary() {
             See how it works
           </Link>
         </div>
-
       </div>
     </section>
   )

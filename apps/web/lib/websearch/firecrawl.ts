@@ -34,7 +34,10 @@ export function createFirecrawlProvider(
   }
   return {
     name: 'firecrawl',
-    async fetchUrl(_url: string, _opts?: FetchUrlOptions): Promise<FetchUrlResult> {
+    async fetchUrl(
+      _url: string,
+      _opts?: FetchUrlOptions,
+    ): Promise<FetchUrlResult> {
       throw new WebSearchProviderError(
         'firecrawl',
         'not implemented yet — set WEBSEARCH_PROVIDER=tavily until the Firecrawl impl lands',

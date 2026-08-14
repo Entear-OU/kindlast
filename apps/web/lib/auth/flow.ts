@@ -4,7 +4,11 @@
  * Shared by /auth/login and /auth/signup, which differ by one parameter, and
  * by /auth/callback, which is the other end of the same conversation.
  */
-import { browserAuthorizationEndpoint, discoverProvider, requireEnv } from './oidc'
+import {
+  browserAuthorizationEndpoint,
+  discoverProvider,
+  requireEnv,
+} from './oidc'
 import { createPkce, randomToken } from './pkce'
 import { safeReturnTo } from './return-to'
 import { stashState } from './state'
@@ -38,7 +42,9 @@ export interface StartOptions {
  * browser. That is the whole point of PKCE: an authorization code intercepted
  * in the redirect is useless without it.
  */
-export async function startAuthorization(options: StartOptions): Promise<string> {
+export async function startAuthorization(
+  options: StartOptions,
+): Promise<string> {
   const provider = await discoverProvider()
   const pkce = await createPkce()
   const state = randomToken(32)
@@ -87,7 +93,10 @@ export interface TokenSet {
  * this process, which is what makes `web` a confidential client rather than a
  * public one (§1.2).
  */
-export async function exchangeCode(code: string, verifier: string): Promise<TokenSet> {
+export async function exchangeCode(
+  code: string,
+  verifier: string,
+): Promise<TokenSet> {
   const provider = await discoverProvider()
 
   const body = new URLSearchParams({

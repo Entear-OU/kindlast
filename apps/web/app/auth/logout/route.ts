@@ -34,7 +34,11 @@ export async function POST(request: NextRequest) {
   const submitted = form?.get('csrf')
   const expected = request.cookies.get(CSRF_COOKIE)?.value
 
-  if (typeof submitted !== 'string' || !expected || !safeEqual(submitted, expected)) {
+  if (
+    typeof submitted !== 'string' ||
+    !expected ||
+    !safeEqual(submitted, expected)
+  ) {
     return NextResponse.json({ error: 'invalid csrf token' }, { status: 403 })
   }
 
@@ -54,8 +58,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.redirect(await endSessionUrl(origin, idToken), { status: 303 })
-  response.cookies.set(SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 })
+  const response = NextResponse.redirect(await endSessionUrl(origin, idToken), {
+    status: 303,
+  })
+  response.cookies.set(SESSION_COOKIE, '', {
+    ...sessionCookieOptions(),
+    maxAge: 0,
+  })
   await clearSessionCookie()
   return response
 }
@@ -66,7 +75,10 @@ export async function POST(request: NextRequest) {
  * Without it, signing out here and clicking sign-in again walks straight back
  * in through the IdP's own session, which looks like sign-out being broken.
  */
-async function endSessionUrl(origin: string, idToken: string | null): Promise<string> {
+async function endSessionUrl(
+  origin: string,
+  idToken: string | null,
+): Promise<string> {
   try {
     const provider = await discoverProvider()
     const endSession = browserEndSessionEndpoint(provider)

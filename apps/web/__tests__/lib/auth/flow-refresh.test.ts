@@ -17,7 +17,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const discoverProvider = vi.fn()
 
 vi.mock('@/lib/auth/oidc', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/auth/oidc')>('@/lib/auth/oidc')
+  const actual =
+    await vi.importActual<typeof import('@/lib/auth/oidc')>('@/lib/auth/oidc')
   return { ...actual, discoverProvider: () => discoverProvider() }
 })
 
@@ -114,13 +115,17 @@ describe('refreshTokens', () => {
 
     const { refreshTokens } = await import('@/lib/auth/flow')
     await expect(refreshTokens('spent-token')).rejects.toThrow(/400/)
-    await expect(refreshTokens('spent-token')).rejects.not.toThrow(/invalid_grant/)
+    await expect(refreshTokens('spent-token')).rejects.not.toThrow(
+      /invalid_grant/,
+    )
   })
 
   it('throws when the response carries no access token', async () => {
     fetchMock.mockResolvedValue(tokenResponse({ token_type: 'Bearer' }))
 
     const { refreshTokens } = await import('@/lib/auth/flow')
-    await expect(refreshTokens('the-refresh-token')).rejects.toThrow(/access token/i)
+    await expect(refreshTokens('the-refresh-token')).rejects.toThrow(
+      /access token/i,
+    )
   })
 })

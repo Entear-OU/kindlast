@@ -18,11 +18,16 @@ import { orgPath, resolveOrg } from '@/lib/auth/org'
  * a layout cannot hand props to a page. It costs nothing: `loadCurrentUser` is
  * request-cached, so both get the same answer from one round trip.
  */
-export default async function OrgHomePage({ params }: { params: Promise<{ org: string }> }) {
+export default async function OrgHomePage({
+  params,
+}: {
+  params: Promise<{ org: string }>
+}) {
   const { org: slug } = await params
 
   const session = await currentSession()
-  if (!session) redirect(`/sign-in?returnTo=${encodeURIComponent(orgPath(slug))}`)
+  if (!session)
+    redirect(`/sign-in?returnTo=${encodeURIComponent(orgPath(slug))}`)
 
   const resolved = await resolveOrg(session.accessToken, slug)
   if (resolved.status === 'not-a-member') notFound()
@@ -38,8 +43,8 @@ export default async function OrgHomePage({ params }: { params: Promise<{ org: s
         {membership.orgName || slug}
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Signed in{me.user?.email ? ` as ${me.user.email}` : ''}. Your session is held on the
-        server; this browser holds an identifier and nothing else.
+        Signed in{me.user?.email ? ` as ${me.user.email}` : ''}. Your session is
+        held on the server; this browser holds an identifier and nothing else.
       </p>
 
       <section className="mt-8">
@@ -54,9 +59,13 @@ export default async function OrgHomePage({ params }: { params: Promise<{ org: s
           <p className="text-[15px] font-medium text-foreground">
             {membership.orgName || membership.orgId}
           </p>
-          <p className="mt-1 font-mono text-xs text-muted-foreground">/o/{slug}</p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
+            /o/{slug}
+          </p>
           {membership.role ? (
-            <p className="mt-1 text-sm text-muted-foreground">Your role: {membership.role}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Your role: {membership.role}
+            </p>
           ) : null}
         </div>
       </section>
@@ -79,7 +88,9 @@ export default async function OrgHomePage({ params }: { params: Promise<{ org: s
                     {m.orgName || m.orgSlug}
                   </Link>
                 ) : (
-                  <span className="text-muted-foreground">{m.orgName || m.orgId}</span>
+                  <span className="text-muted-foreground">
+                    {m.orgName || m.orgId}
+                  </span>
                 )}
               </li>
             ))}

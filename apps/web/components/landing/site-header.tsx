@@ -31,11 +31,33 @@ const ROUTES = [
 
 function KindlastIcon({ size = 32 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 56 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <rect width="56" height="56" rx="11" fill="#0D1B2A" />
       <rect x="12" y="8" width="9" height="40" rx="2" fill="white" />
-      <line x1="21" y1="28" x2="44" y2="9" stroke="white" strokeWidth="9" strokeLinecap="round" />
-      <line x1="21" y1="28" x2="44" y2="47" stroke="white" strokeWidth="9" strokeLinecap="round" />
+      <line
+        x1="21"
+        y1="28"
+        x2="44"
+        y2="9"
+        stroke="white"
+        strokeWidth="9"
+        strokeLinecap="round"
+      />
+      <line
+        x1="21"
+        y1="28"
+        x2="44"
+        y2="47"
+        stroke="white"
+        strokeWidth="9"
+        strokeLinecap="round"
+      />
       <circle cx="21" cy="28" r="5.5" fill="#00C9A7" />
     </svg>
   )
@@ -48,8 +70,12 @@ function MenuGlyph({ open, dark }: { open: boolean; dark: boolean }) {
   }`
   return (
     <span aria-hidden="true" className="relative block h-[14px] w-[20px]">
-      <span className={`${bar} ${open ? 'top-[6px] rotate-45' : 'top-[2px]'}`} />
-      <span className={`${bar} ${open ? 'top-[6px] -rotate-45' : 'top-[11px]'}`} />
+      <span
+        className={`${bar} ${open ? 'top-[6px] rotate-45' : 'top-[2px]'}`}
+      />
+      <span
+        className={`${bar} ${open ? 'top-[6px] -rotate-45' : 'top-[11px]'}`}
+      />
     </span>
   )
 }
@@ -119,8 +145,11 @@ export function SiteHeader() {
         ].join(' ')}
       >
         <div className="mx-auto flex h-[70px] max-w-5xl items-center justify-between px-6 lg:px-8">
-
-          <Link href="/" className="group flex items-center gap-2.5" onClick={() => setMenuOpen(false)}>
+          <Link
+            href="/"
+            className="group flex items-center gap-2.5"
+            onClick={() => setMenuOpen(false)}
+          >
             <KindlastIcon size={32} />
             <span
               className={[
@@ -189,7 +218,6 @@ export function SiteHeader() {
               <MenuGlyph open={menuOpen} dark={overDarkHero} />
             </button>
           </div>
-
         </div>
 
         {menuOpen ? (

@@ -83,7 +83,9 @@ export function SignInCard({
         data-document
         className="relative rounded-xl border border-border bg-card px-8 py-9 shadow-sm animate-in fade-in-0 slide-in-from-bottom-2 duration-500 fill-mode-backwards [animation-delay:90ms] motion-reduce:animate-none"
       >
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Sign in</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Sign in
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Continue to your compliance workspace.
         </p>

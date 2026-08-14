@@ -13,16 +13,25 @@
 
 import { createFirecrawlProvider } from './firecrawl'
 import { createTavilyProvider } from './tavily'
-import { WebSearchProviderError, type WebSearchProvider, type WebSearchProviderName } from './types'
+import {
+  WebSearchProviderError,
+  type WebSearchProvider,
+  type WebSearchProviderName,
+} from './types'
 
 export type GetProviderOptions = {
   provider?: WebSearchProviderName
   apiKey?: string
 }
 
-const KNOWN_PROVIDERS: ReadonlyArray<WebSearchProviderName> = ['tavily', 'firecrawl']
+const KNOWN_PROVIDERS: ReadonlyArray<WebSearchProviderName> = [
+  'tavily',
+  'firecrawl',
+]
 
-function resolveProviderName(explicit?: WebSearchProviderName): WebSearchProviderName {
+function resolveProviderName(
+  explicit?: WebSearchProviderName,
+): WebSearchProviderName {
   const value = explicit ?? process.env.WEBSEARCH_PROVIDER ?? 'tavily'
   if (!KNOWN_PROVIDERS.includes(value as WebSearchProviderName)) {
     throw new Error(
@@ -32,7 +41,9 @@ function resolveProviderName(explicit?: WebSearchProviderName): WebSearchProvide
   return value as WebSearchProviderName
 }
 
-export function getWebSearchProvider(options?: GetProviderOptions): WebSearchProvider {
+export function getWebSearchProvider(
+  options?: GetProviderOptions,
+): WebSearchProvider {
   const name = resolveProviderName(options?.provider)
 
   switch (name) {

@@ -45,14 +45,21 @@ export async function setTenant(
   orgId: string,
   userId: string,
 ): Promise<void> {
-  await client.query("select set_config('app.current_org_id', $1, false)", [orgId])
-  await client.query("select set_config('app.current_user_id', $1, false)", [userId])
+  await client.query("select set_config('app.current_org_id', $1, false)", [
+    orgId,
+  ])
+  await client.query("select set_config('app.current_user_id', $1, false)", [
+    userId,
+  ])
 }
 
 /** True when the compose stack's postgres-app answers on the expected port. */
 export async function isStackReachable(): Promise<boolean> {
   try {
-    const c = new Client({ connectionString: SUPER_URL, connectionTimeoutMillis: 2000 })
+    const c = new Client({
+      connectionString: SUPER_URL,
+      connectionTimeoutMillis: 2000,
+    })
     await c.connect()
     await c.end()
     return true

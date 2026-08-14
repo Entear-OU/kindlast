@@ -23,13 +23,19 @@ vi.mock('@/lib/auth/client', () => ({
   activeOrgFrom: (me: { memberships?: { orgId: string }[] } | null) =>
     me?.memberships?.[0]?.orgId ?? null,
 }))
-vi.mock('@/lib/auth/state', () => ({ consumeState: (...a: unknown[]) => consumeState(...a) }))
+vi.mock('@/lib/auth/state', () => ({
+  consumeState: (...a: unknown[]) => consumeState(...a),
+}))
 vi.mock('@/lib/auth/flow', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/auth/flow')>('@/lib/auth/flow')
+  const actual =
+    await vi.importActual<typeof import('@/lib/auth/flow')>('@/lib/auth/flow')
   return { ...actual, exchangeCode: (...a: unknown[]) => exchangeCode(...a) }
 })
 vi.mock('@/lib/auth/session', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/auth/session')>('@/lib/auth/session')
+  const actual =
+    await vi.importActual<typeof import('@/lib/auth/session')>(
+      '@/lib/auth/session',
+    )
   return { ...actual, createSession: (...a: unknown[]) => createSession(...a) }
 })
 
@@ -39,7 +45,9 @@ function callbackRequest(query: string): NextRequest {
 
 /** A token whose payload carries a subject, which is all the callback reads. */
 function accessTokenFor(subject: string): string {
-  const payload = Buffer.from(JSON.stringify({ sub: subject })).toString('base64url')
+  const payload = Buffer.from(JSON.stringify({ sub: subject })).toString(
+    'base64url',
+  )
   return `header.${payload}.signature`
 }
 
@@ -100,13 +108,24 @@ describe('GET /auth/callback', () => {
     })
 
     const { GET } = await import('@/app/auth/callback/route')
-    await GET(callbackRequest('?code=the-code&state=ours&code_verifier=attacker-supplied'))
+    await GET(
+      callbackRequest(
+        '?code=the-code&state=ours&code_verifier=attacker-supplied',
+      ),
+    )
 
-    expect(exchangeCode).toHaveBeenCalledWith('the-code', 'the-stashed-verifier')
+    expect(exchangeCode).toHaveBeenCalledWith(
+      'the-code',
+      'the-stashed-verifier',
+    )
   })
 
   it('creates a session and sets the cookie on success', async () => {
-    consumeState.mockResolvedValue({ verifier: 'v', returnTo: '/feed', createdAt: Date.now() })
+    consumeState.mockResolvedValue({
+      verifier: 'v',
+      returnTo: '/feed',
+      createdAt: Date.now(),
+    })
     exchangeCode.mockResolvedValue({
       accessToken: accessTokenFor('subject-1'),
       refreshToken: 'r',
@@ -125,7 +144,9 @@ describe('GET /auth/callback', () => {
     const cookie = response.cookies.get('kindlast_session')
     expect(cookie?.value).toBe('a-new-session-id')
     // The browser gets an id. Tokens stay in Redis (§1.2).
-    expect(response.headers.get('set-cookie')).not.toContain(accessTokenFor('subject-1'))
+    expect(response.headers.get('set-cookie')).not.toContain(
+      accessTokenFor('subject-1'),
+    )
     expect(cookie?.httpOnly).toBe(true)
   })
 
@@ -150,7 +171,11 @@ describe('GET /auth/callback', () => {
   })
 
   it('sends the person back to sign-in when the exchange fails', async () => {
-    consumeState.mockResolvedValue({ verifier: 'v', returnTo: '/dashboard', createdAt: Date.now() })
+    consumeState.mockResolvedValue({
+      verifier: 'v',
+      returnTo: '/dashboard',
+      createdAt: Date.now(),
+    })
     exchangeCode.mockRejectedValue(new Error('token endpoint said no'))
 
     const { GET } = await import('@/app/auth/callback/route')
@@ -185,14 +210,22 @@ describe('GET /auth/callback, provisioning', () => {
   })
 
   it('records the organisation provisioning returned on the session', async () => {
-    consumeState.mockResolvedValue({ verifier: 'v', returnTo: '/feed', createdAt: Date.now() })
-    getCurrentUser.mockResolvedValue({ memberships: [{ orgId: 'personal-org', role: 'owner' }] })
+    consumeState.mockResolvedValue({
+      verifier: 'v',
+      returnTo: '/feed',
+      createdAt: Date.now(),
+    })
+    getCurrentUser.mockResolvedValue({
+      memberships: [{ orgId: 'personal-org', role: 'owner' }],
+    })
 
     const { GET } = await import('@/app/auth/callback/route')
     await GET(callbackRequest('?code=abc&state=ours'))
 
     expect(getCurrentUser).toHaveBeenCalledWith(accessTokenFor('subject-1'))
-    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'personal-org' }))
+    expect(createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: 'personal-org' }),
+    )
   })
 
   it('accepts an invitation before provisioning, never after', async () => {
@@ -221,20 +254,31 @@ describe('GET /auth/callback, provisioning', () => {
     await GET(callbackRequest('?code=abc&state=ours'))
 
     expect(order).toEqual(['accept', 'me'])
-    expect(acceptInvitation).toHaveBeenCalledWith(accessTokenFor('subject-1'), 'invite-token')
+    expect(acceptInvitation).toHaveBeenCalledWith(
+      accessTokenFor('subject-1'),
+      'invite-token',
+    )
   })
 
   it('signs the person in anyway when provisioning fails', async () => {
     // A failed bootstrap is a degraded session, not a locked door. They hold a
     // valid token; the call can be retried on the next navigation.
-    consumeState.mockResolvedValue({ verifier: 'v', returnTo: '/feed', createdAt: Date.now() })
+    consumeState.mockResolvedValue({
+      verifier: 'v',
+      returnTo: '/feed',
+      createdAt: Date.now(),
+    })
     getCurrentUser.mockResolvedValue(null)
 
     const { GET } = await import('@/app/auth/callback/route')
     const response = await GET(callbackRequest('?code=abc&state=ours'))
 
-    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ orgId: null }))
+    expect(createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: null }),
+    )
     expect(response.headers.get('location')).toContain('/feed')
-    expect(response.cookies.get('kindlast_session')?.value).toBe('a-new-session-id')
+    expect(response.cookies.get('kindlast_session')?.value).toBe(
+      'a-new-session-id',
+    )
   })
 })

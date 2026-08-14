@@ -37,19 +37,27 @@ type TavilyExtractResponse = {
   response_time?: number
 }
 
-export function createTavilyProvider(options: TavilyProviderOptions): WebSearchProvider {
+export function createTavilyProvider(
+  options: TavilyProviderOptions,
+): WebSearchProvider {
   if (!options.apiKey) {
     // Fail loud at construction rather than at the first call. A missing
     // key with a silent no-op would look "successful" but return zero
     // content — exactly the worst failure mode for a citation surface.
-    throw new WebSearchProviderError('tavily', 'API key is required (set TAVILY_API_KEY)')
+    throw new WebSearchProviderError(
+      'tavily',
+      'API key is required (set TAVILY_API_KEY)',
+    )
   }
 
   const endpoint = options.endpoint ?? TAVILY_EXTRACT_URL
 
   return {
     name: 'tavily',
-    async fetchUrl(url: string, fetchOptions?: FetchUrlOptions): Promise<FetchUrlResult> {
+    async fetchUrl(
+      url: string,
+      fetchOptions?: FetchUrlOptions,
+    ): Promise<FetchUrlResult> {
       const timeoutMs = fetchOptions?.timeoutMs ?? DEFAULT_TIMEOUT_MS
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -87,7 +95,9 @@ export function createTavilyProvider(options: TavilyProviderOptions): WebSearchP
       try {
         payload = (await response.json()) as TavilyExtractResponse
       } catch (err) {
-        throw new WebSearchProviderError('tavily', 'malformed JSON response', { cause: err })
+        throw new WebSearchProviderError('tavily', 'malformed JSON response', {
+          cause: err,
+        })
       }
 
       const failed = payload.failed_results?.find((f) => f.url === url)
@@ -98,9 +108,13 @@ export function createTavilyProvider(options: TavilyProviderOptions): WebSearchP
         )
       }
 
-      const hit = payload.results?.find((r) => r.url === url) ?? payload.results?.[0]
+      const hit =
+        payload.results?.find((r) => r.url === url) ?? payload.results?.[0]
       if (!hit || !hit.raw_content) {
-        throw new WebSearchProviderError('tavily', `no result returned for ${url}`)
+        throw new WebSearchProviderError(
+          'tavily',
+          `no result returned for ${url}`,
+        )
       }
 
       return {

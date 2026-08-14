@@ -56,7 +56,10 @@ export async function readSession(id: string): Promise<Session | null> {
   }
 }
 
-export async function updateSession(id: string, session: Session): Promise<void> {
+export async function updateSession(
+  id: string,
+  session: Session,
+): Promise<void> {
   // KEEPTTL, so refreshing an access token does not silently extend the
   // session's own lifetime. Otherwise an active user is never signed out.
   await redis().set(PREFIX + id, JSON.stringify(session), 'KEEPTTL')
@@ -89,7 +92,10 @@ const REFRESH_LOCK_PREFIX = 'web:refresh:'
  * server must not destroy a session that is otherwise good: the call this was
  * for will fail, and the next one may well succeed.
  */
-export async function ensureFreshSession(id: string, session: Session): Promise<Session> {
+export async function ensureFreshSession(
+  id: string,
+  session: Session,
+): Promise<Session> {
   const now = Math.floor(Date.now() / 1000)
   if (session.expiresAt - now > REFRESH_SLACK_SECONDS) return session
   if (!session.refreshToken) return session

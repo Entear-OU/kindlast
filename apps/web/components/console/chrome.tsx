@@ -32,8 +32,24 @@ function KindlastMark() {
     >
       <rect width="56" height="56" rx="11" fill="currentColor" />
       <rect x="12" y="8" width="9" height="40" rx="2" fill="white" />
-      <line x1="21" y1="28" x2="44" y2="9" stroke="white" strokeWidth="9" strokeLinecap="round" />
-      <line x1="21" y1="28" x2="44" y2="47" stroke="white" strokeWidth="9" strokeLinecap="round" />
+      <line
+        x1="21"
+        y1="28"
+        x2="44"
+        y2="9"
+        stroke="white"
+        strokeWidth="9"
+        strokeLinecap="round"
+      />
+      <line
+        x1="21"
+        y1="28"
+        x2="44"
+        y2="47"
+        stroke="white"
+        strokeWidth="9"
+        strokeLinecap="round"
+      />
       <circle cx="21" cy="28" r="5.5" fill="#00C9A7" />
     </svg>
   )
@@ -60,7 +76,9 @@ export function ConsoleChrome({
               <span className="text-foreground">
                 <KindlastMark />
               </span>
-              <span className="text-[15px] font-extrabold tracking-[-0.02em]">kindlast</span>
+              <span className="text-[15px] font-extrabold tracking-[-0.02em]">
+                kindlast
+              </span>
             </Link>
             {orgName ? (
               <>

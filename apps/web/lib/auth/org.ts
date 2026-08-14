@@ -51,7 +51,10 @@ export const loadCurrentUser = cache(getCurrentUser)
  * someone who has no business knowing. Since only the caller's memberships are
  * ever consulted, this module could not tell them apart even if it wanted to.
  */
-export function resolveOrgFrom(me: CurrentUser | null, slug: string): OrgResolution {
+export function resolveOrgFrom(
+  me: CurrentUser | null,
+  slug: string,
+): OrgResolution {
   // Null means the call failed, which is not the same as belonging to
   // nothing. See the note on OrgResolution.
   if (!me) return { status: 'unavailable' }
@@ -76,7 +79,10 @@ export function resolveOrgFrom(me: CurrentUser | null, slug: string): OrgResolut
  * this is the I/O that would otherwise force a tenancy rule to be tested
  * through a fetch mock.
  */
-export async function resolveOrg(accessToken: string, slug: string): Promise<OrgResolution> {
+export async function resolveOrg(
+  accessToken: string,
+  slug: string,
+): Promise<OrgResolution> {
   return resolveOrgFrom(await loadCurrentUser(accessToken), slug)
 }
 

@@ -35,16 +35,21 @@ export default async function WorkspacePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-12">
-      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">Workspace</h1>
+      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">
+        Workspace
+      </h1>
       {me ? (
         <p data-testid="no-org" className="mt-2 text-sm text-muted-foreground">
-          You do not belong to an organisation yet, so there is nothing to open. Signing out and
-          back in will create one.
+          You do not belong to an organisation yet, so there is nothing to open.
+          Signing out and back in will create one.
         </p>
       ) : (
-        <p data-testid="workspace-unavailable" className="mt-2 text-sm text-muted-foreground">
-          The workspace service could not be reached, so your organisations could not be listed.
-          Your session is unaffected: reload in a moment.
+        <p
+          data-testid="workspace-unavailable"
+          className="mt-2 text-sm text-muted-foreground"
+        >
+          The workspace service could not be reached, so your organisations
+          could not be listed. Your session is unaffected: reload in a moment.
         </p>
       )}
     </main>

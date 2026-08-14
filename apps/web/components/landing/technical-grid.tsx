@@ -65,18 +65,20 @@ export function TechnicalGrid({
     const ctx = gsap.context(() => {
       const mm = gsap.matchMedia()
       mm.add('(prefers-reduced-motion: no-preference)', () => {
-        gsap.utils.toArray<HTMLElement>('[data-grid-label]', root).forEach((el) => {
-          gsap.to(el, {
-            y: Number(el.dataset.drift ?? 0),
-            ease: 'none',
-            scrollTrigger: {
-              trigger: root,
-              start: 'top bottom',
-              end: 'bottom top',
-              scrub: 0.6,
-            },
+        gsap.utils
+          .toArray<HTMLElement>('[data-grid-label]', root)
+          .forEach((el) => {
+            gsap.to(el, {
+              y: Number(el.dataset.drift ?? 0),
+              ease: 'none',
+              scrollTrigger: {
+                trigger: root,
+                start: 'top bottom',
+                end: 'bottom top',
+                scrub: 0.6,
+              },
+            })
           })
-        })
       })
       return () => mm.revert()
     }, root)
@@ -84,8 +86,10 @@ export function TechnicalGrid({
     return () => ctx.revert()
   }, [labels])
 
-  const rule = tone === 'dark' ? 'rgba(13,27,42,0.055)' : 'rgba(255,255,255,0.055)'
-  const node = tone === 'dark' ? 'rgba(13,27,42,0.16)' : 'rgba(255,255,255,0.18)'
+  const rule =
+    tone === 'dark' ? 'rgba(13,27,42,0.055)' : 'rgba(255,255,255,0.055)'
+  const node =
+    tone === 'dark' ? 'rgba(13,27,42,0.16)' : 'rgba(255,255,255,0.18)'
   const labelColor = tone === 'dark' ? 'text-[#0D1B2A]/25' : 'text-white/25'
 
   return (

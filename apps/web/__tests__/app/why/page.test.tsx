@@ -50,10 +50,10 @@ describe('WhyPage', () => {
   it('sends readers to the source and to the pipeline', () => {
     render(<WhyPage />)
     expect(
-      screen.getByRole('link', { name: /check the mechanisms/i })
+      screen.getByRole('link', { name: /check the mechanisms/i }),
     ).toHaveAttribute('href', 'https://github.com/Entear-OU/kindlast')
     expect(
-      screen.getByRole('link', { name: /see the pipeline/i })
+      screen.getByRole('link', { name: /see the pipeline/i }),
     ).toHaveAttribute('href', '/how-it-works')
   })
 

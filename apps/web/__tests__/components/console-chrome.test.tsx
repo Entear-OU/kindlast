@@ -22,7 +22,14 @@ vi.mock('@/components/auth/sign-out-form', () => ({
 
 // `next/link` resolves to a plain anchor in the test env (no Next runtime).
 vi.mock('next/link', () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string
+    children: React.ReactNode
+  }) => (
     <a href={href} {...rest}>
       {children}
     </a>

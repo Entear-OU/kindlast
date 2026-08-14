@@ -36,16 +36,24 @@ const GUARANTEES = [
 
 export function OpenSource() {
   return (
-    <section id="open-source" className="relative overflow-hidden py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
+    <section
+      id="open-source"
+      className="relative overflow-hidden py-24 sm:py-32"
+      style={{ backgroundColor: '#F5F4F0' }}
+    >
       <TechnicalGrid
         labels={[
           { text: '[ AGPL-3.0 ]', top: '11%', right: '2.5%', drift: -60 },
-          { text: '[ COPYLEFT · NETWORK USE ]', top: '38%', left: '2%', drift: -110 },
+          {
+            text: '[ COPYLEFT · NETWORK USE ]',
+            top: '38%',
+            left: '2%',
+            drift: -110,
+          },
           { text: '[ SELF-HOSTABLE ]', top: '72%', right: '2%', drift: -80 },
         ]}
       />
       <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
-
         {/* Full-width intro. The two sections above both use a left/right
             split, so a third would read as a template; giving the headline the
             full measure also stops it fracturing into four ragged lines. */}
@@ -59,16 +67,22 @@ export function OpenSource() {
           Europe shouldn&rsquo;t build this twice.
         </h2>
         <div className="mt-8 max-w-[620px] space-y-5">
-          <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]" style={{ color: 'rgba(13,27,42,0.5)' }}>
-            Every company shipping software in the EU hits the same GDPR and AI Act
-            questions, and almost every one of them answers from scratch. That is
-            months of founder time spent re-deriving obligations someone already
-            worked out.
+          <p
+            className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]"
+            style={{ color: 'rgba(13,27,42,0.5)' }}
+          >
+            Every company shipping software in the EU hits the same GDPR and AI
+            Act questions, and almost every one of them answers from scratch.
+            That is months of founder time spent re-deriving obligations someone
+            already worked out.
           </p>
-          <p className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]" style={{ color: 'rgba(13,27,42,0.5)' }}>
+          <p
+            className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]"
+            style={{ color: 'rgba(13,27,42,0.5)' }}
+          >
             Kindlast is {LICENSE_SPDX} licensed, so that groundwork is shared
-            infrastructure rather than a moat. Read it, run it yourself, or improve
-            it for everyone.
+            infrastructure rather than a moat. Read it, run it yourself, or
+            improve it for everyone.
           </p>
         </div>
 
@@ -100,7 +114,10 @@ export function OpenSource() {
           />
 
           {/* Grain, matching the hero treatment */}
-          <div className="noise pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
+          <div
+            className="noise pointer-events-none absolute inset-0 opacity-[0.05]"
+            aria-hidden="true"
+          />
 
           {/* Guilloche rosette, bled off the top-right corner.
               This is the engraved seal stamped on share certificates and
@@ -113,7 +130,6 @@ export function OpenSource() {
           <GuillocheMark className="pointer-events-none absolute -right-24 -top-28 h-[420px] w-[420px] opacity-[0.09] sm:-right-16 sm:h-[520px] sm:w-[520px]" />
 
           <div className="relative p-8 sm:p-12">
-
             {/* Repo identity */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
               <GitHubMark size={26} className="text-white shrink-0" />
@@ -161,10 +177,8 @@ export function OpenSource() {
                 Read the source
               </a>
             </div>
-
           </div>
         </div>
-
       </div>
     </section>
   )

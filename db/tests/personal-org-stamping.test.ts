@@ -22,7 +22,12 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { Client } from 'pg'
-import { connect, isStackReachable, SUPER_URL, MIGRATOR_URL } from './helpers/db'
+import {
+  connect,
+  isStackReachable,
+  SUPER_URL,
+  MIGRATOR_URL,
+} from './helpers/db'
 
 const reachable = await isStackReachable()
 
@@ -80,7 +85,10 @@ async function insertLegacyRows(c: Client): Promise<void> {
       `insert into subscriptions (user_id, plan, status) values ($1, $2, 'active')`,
       [user, user === userOne ? 'pro' : 'free'],
     )
-    await c.query(`insert into notification_preferences (user_id) values ($1)`, [user])
+    await c.query(
+      `insert into notification_preferences (user_id) values ($1)`,
+      [user],
+    )
   }
 }
 
@@ -135,13 +143,17 @@ describe.skipIf(!reachable)('personal organisation stamping', () => {
   it('row counts reconcile before and after on every stamped table', async () => {
     for (const t of TENANT_TABLES) {
       const r = await db.query(`select count(*)::int as n from ${t}`)
-      expect(r.rows[0].n, `${t} row count changed during stamping`).toBe(before[t])
+      expect(r.rows[0].n, `${t} row count changed during stamping`).toBe(
+        before[t],
+      )
     }
   })
 
   it('every row is stamped with its user personal org and org_id is NOT NULL', async () => {
     for (const t of TENANT_TABLES) {
-      const nulls = await db.query(`select count(*)::int as n from ${t} where org_id is null`)
+      const nulls = await db.query(
+        `select count(*)::int as n from ${t} where org_id is null`,
+      )
       expect(nulls.rows[0].n, `${t} has unstamped rows`).toBe(0)
     }
     // Rows created by user one live in the org user one owns, and only there.

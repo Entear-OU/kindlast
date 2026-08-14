@@ -25,7 +25,12 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { Client } from 'pg'
-import { connect, isStackReachable, SUPER_URL, MIGRATOR_URL } from './helpers/db'
+import {
+  connect,
+  isStackReachable,
+  SUPER_URL,
+  MIGRATOR_URL,
+} from './helpers/db'
 
 const reachable = await isStackReachable()
 
@@ -47,7 +52,11 @@ function migrationSql(file: string): string {
 }
 
 /** The schema every case here starts from: everything before slugs existed. */
-const PRIOR = ['00001_baseline.sql', '00002_organisations.sql', '00003_identities_and_invitations.sql']
+const PRIOR = [
+  '00001_baseline.sql',
+  '00002_organisations.sql',
+  '00003_identities_and_invitations.sql',
+]
 
 const SLUG_MIGRATION = '00004_org_slugs.sql'
 
@@ -80,7 +89,11 @@ async function scratchUpToSlugs(): Promise<Scratch> {
   }
 }
 
-async function newOrg(db: Client, name: string, personalOwner?: string): Promise<string> {
+async function newOrg(
+  db: Client,
+  name: string,
+  personalOwner?: string,
+): Promise<string> {
   const id = randomUUID()
   await db.query(
     `insert into organisations (id, name, personal_owner_id) values ($1, $2, $3)`,
@@ -137,7 +150,9 @@ describe.skipIf(!reachable)('organisation slugs', () => {
   it('gives every organisation a slug, and no two the same', async () => {
     const r = await s.db.query(`select slug from organisations`)
     const slugs = r.rows.map((row) => row.slug)
-    expect(slugs.every((slug) => typeof slug === 'string' && slug.length > 0)).toBe(true)
+    expect(
+      slugs.every((slug) => typeof slug === 'string' && slug.length > 0),
+    ).toBe(true)
     expect(new Set(slugs).size).toBe(slugs.length)
   })
 
@@ -209,11 +224,10 @@ describe.skipIf(!reachable)('organisation slugs', () => {
     // future writer that skips the derivation cannot mint an unroutable slug.
     for (const bad of ['Acme', '-acme', 'acme-', 'ac me', '']) {
       await expect(
-        s.db.query(`insert into organisations (id, name, slug) values ($1, $2, $3)`, [
-          randomUUID(),
-          'shape check',
-          bad,
-        ]),
+        s.db.query(
+          `insert into organisations (id, name, slug) values ($1, $2, $3)`,
+          [randomUUID(), 'shape check', bad],
+        ),
         `slug ${JSON.stringify(bad)} should be refused`,
       ).rejects.toThrow()
     }
@@ -221,20 +235,20 @@ describe.skipIf(!reachable)('organisation slugs', () => {
 
   it('refuses a duplicate slug', async () => {
     await expect(
-      s.db.query(`insert into organisations (id, name, slug) values ($1, $2, $3)`, [
-        randomUUID(),
-        'duplicate',
-        'acme',
-      ]),
+      s.db.query(
+        `insert into organisations (id, name, slug) values ($1, $2, $3)`,
+        [randomUUID(), 'duplicate', 'acme'],
+      ),
     ).rejects.toThrow()
   })
 
   it('leaves the slug alone when the organisation is renamed', async () => {
     // The immutability that bookmarks and emailed approval links depend on.
     // Nothing in the schema recomputes it, and this is what says so.
-    await s.db.query(`update organisations set name = 'Renamed Entirely' where id = $1`, [
-      ids.acme,
-    ])
+    await s.db.query(
+      `update organisations set name = 'Renamed Entirely' where id = $1`,
+      [ids.acme],
+    )
     expect(await slugOf(s.db, ids.acme)).toBe('acme-ltd')
   })
 })
@@ -267,11 +281,16 @@ describe.skipIf(!reachable)('the seed fixture', () => {
   })
 
   it('applies against a freshly migrated database', async () => {
-    const seed = readFileSync(resolve(__dirname, '../../deploy/seed/seed.sql'), 'utf8')
+    const seed = readFileSync(
+      resolve(__dirname, '../../deploy/seed/seed.sql'),
+      'utf8',
+    )
 
     await expect(s.db.query(seed)).resolves.toBeDefined()
 
-    const r = await s.db.query(`select name, slug from organisations order by name`)
+    const r = await s.db.query(
+      `select name, slug from organisations order by name`,
+    )
     expect(r.rows).toEqual([
       { name: 'Alpha Compliance GmbH', slug: 'alpha-compliance-gmbh' },
       { name: 'Beta Retail OU', slug: 'beta-retail-ou' },
@@ -279,7 +298,10 @@ describe.skipIf(!reachable)('the seed fixture', () => {
   })
 
   it('is idempotent, because the seed job reruns on every stack start', async () => {
-    const seed = readFileSync(resolve(__dirname, '../../deploy/seed/seed.sql'), 'utf8')
+    const seed = readFileSync(
+      resolve(__dirname, '../../deploy/seed/seed.sql'),
+      'utf8',
+    )
 
     await expect(s.db.query(seed)).resolves.toBeDefined()
 
@@ -326,9 +348,10 @@ describe.skipIf(!reachable)('the subject-named organisation guard', () => {
   it('proceeds once that organisation has been renamed', async () => {
     // The lazy rename having run is the only difference. Same database, so
     // this also proves the refusal above was about the name and nothing else.
-    await s.db.query(`update organisations set name = 'Ada Lovelace' where name = $1`, [
-      '386250729179840515',
-    ])
+    await s.db.query(
+      `update organisations set name = 'Ada Lovelace' where name = $1`,
+      ['386250729179840515'],
+    )
     await s.db.query(migrationSql(SLUG_MIGRATION))
 
     const r = await s.db.query(`select slug from organisations`)

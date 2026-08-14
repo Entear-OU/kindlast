@@ -87,7 +87,10 @@ export async function proxy(request: NextRequest) {
  * able to read it, and a cross-site attacker cannot, because reading a cookie
  * requires same-origin script. The value carries no authority by itself.
  */
-function withCsrfToken(request: NextRequest, response: NextResponse): NextResponse {
+function withCsrfToken(
+  request: NextRequest,
+  response: NextResponse,
+): NextResponse {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value)
   if (!hasSession) return response
 

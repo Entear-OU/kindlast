@@ -17,7 +17,9 @@ export function createConsoleEmailProvider(): EmailProvider {
     async send(message: EmailMessage): Promise<SendResult> {
       counter += 1
       const id = `console-${counter}`
-      console.info(`[email:console] → ${message.to} | ${message.subject} (${id})`)
+      console.info(
+        `[email:console] → ${message.to} | ${message.subject} (${id})`,
+      )
       return { id }
     },
   }

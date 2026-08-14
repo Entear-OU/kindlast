@@ -27,7 +27,7 @@ describe('HowItWorksPage', () => {
   it('renders the pipeline stages', () => {
     render(<HowItWorksPage />)
     expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(
-      PIPELINE_STAGES.length
+      PIPELINE_STAGES.length,
     )
   })
 
@@ -37,7 +37,7 @@ describe('HowItWorksPage', () => {
     expect(links.length).toBeGreaterThan(0)
     expect(links[0]).toHaveAttribute(
       'href',
-      'https://github.com/Entear-OU/kindlast'
+      'https://github.com/Entear-OU/kindlast',
     )
   })
 

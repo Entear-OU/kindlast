@@ -26,17 +26,39 @@ export default function LandingPage() {
           The ruled grid is the hero's WebGL lattice seen head on, so leaving
           the hero reads as the mesh settling rather than as a change of motif.
           Its marginalia are real operating facts, not decoration. */}
-      <section className="relative overflow-hidden py-24 sm:py-32" style={{ backgroundColor: '#F5F4F0' }}>
+      <section
+        className="relative overflow-hidden py-24 sm:py-32"
+        style={{ backgroundColor: '#F5F4F0' }}
+      >
         <TechnicalGrid
           labels={[
-            { text: '[ GDPR · IN FORCE 2018 ]', top: '10%', left: '2%', drift: -70 },
-            { text: '[ ART. 83 · PENALTIES ]', top: '34%', right: '2.5%', drift: -120 },
-            { text: '[ AI ACT · ANNEX III ]', top: '68%', left: '2%', drift: -90 },
-            { text: '[ DEADLINE · 2026-08-02 ]', top: '88%', right: '3%', drift: -50 },
+            {
+              text: '[ GDPR · IN FORCE 2018 ]',
+              top: '10%',
+              left: '2%',
+              drift: -70,
+            },
+            {
+              text: '[ ART. 83 · PENALTIES ]',
+              top: '34%',
+              right: '2.5%',
+              drift: -120,
+            },
+            {
+              text: '[ AI ACT · ANNEX III ]',
+              top: '68%',
+              left: '2%',
+              drift: -90,
+            },
+            {
+              text: '[ DEADLINE · 2026-08-02 ]',
+              top: '88%',
+              right: '3%',
+              drift: -50,
+            },
           ]}
         />
         <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
-
           {/* The headline stat trio is gone. It began as external facts (max
               fine, fine threshold, Annex III deadline), which went stale as the
               dates arrived and the figures moved, and its replacement (Daily,
@@ -64,8 +86,8 @@ export default function LandingPage() {
               >
                 Most teams lack the legal budget, the in-house expertise, or the
                 time to work out where they stand. GDPR has been in force since
-                2018 and fines are accelerating. The EU AI Act adds a second wave
-                of obligations on top.
+                2018 and fines are accelerating. The EU AI Act adds a second
+                wave of obligations on top.
               </p>
               <p
                 className="text-[1.0625rem] font-medium leading-[1.82] tracking-[-0.01em]"
@@ -77,7 +99,6 @@ export default function LandingPage() {
               </p>
             </div>
           </div>
-
         </div>
       </section>
 

@@ -66,7 +66,12 @@ describe('PIPELINE_STAGES', () => {
   })
 
   it('numbers the stages in pipeline order', () => {
-    expect(PIPELINE_STAGES.map((s) => s.index)).toEqual(['01', '02', '03', '04'])
+    expect(PIPELINE_STAGES.map((s) => s.index)).toEqual([
+      '01',
+      '02',
+      '03',
+      '04',
+    ])
   })
 })
 
@@ -75,7 +80,7 @@ describe('AgentPipeline', () => {
     render(<AgentPipeline />)
     for (const stage of PIPELINE_STAGES) {
       expect(
-        screen.getByRole('heading', { name: new RegExp(stage.agent, 'i') })
+        screen.getByRole('heading', { name: new RegExp(stage.agent, 'i') }),
       ).toBeInTheDocument()
     }
   })
@@ -86,7 +91,7 @@ describe('AgentPipeline', () => {
     expect(items).toHaveLength(PIPELINE_STAGES.length)
     items.forEach((item, i) => {
       expect(within(item).getByRole('heading')).toHaveTextContent(
-        PIPELINE_STAGES[i].agent
+        PIPELINE_STAGES[i].agent,
       )
     })
   })
@@ -159,13 +164,15 @@ describe('AgentPipeline', () => {
 
   it('carries a single named signal through the pipeline', () => {
     render(<AgentPipeline />)
-    expect(screen.getByText(/ropa-gap:marketing-analytics/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/ropa-gap:marketing-analytics/i),
+    ).toBeInTheDocument()
   })
 
   it('shows the first stage as the initial signal state', () => {
     render(<AgentPipeline />)
     expect(screen.getByTestId('signal-status')).toHaveTextContent(
-      PIPELINE_STAGES[0].signal.status
+      PIPELINE_STAGES[0].signal.status,
     )
   })
 
