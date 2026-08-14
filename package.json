@@ -12,6 +12,8 @@
     "build": "bun run --cwd apps/web build",
     "start": "bun run --cwd apps/web start",
     "lint": "bun run --cwd apps/web lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "typecheck": "bun run --cwd apps/web typecheck",
     "test": "bun run --cwd apps/web test",
     "test:unit": "bun run --cwd apps/web test:unit",
@@ -19,5 +21,8 @@
     "test:db": "bun run --cwd db/tests test",
     "test:watch": "bun run --cwd apps/web test:watch",
     "test:coverage": "bun run --cwd apps/web test:coverage"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6"
   }
 }
