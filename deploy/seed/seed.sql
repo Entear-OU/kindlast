@@ -8,9 +8,14 @@
 -- member (non-owner) role. The uuids are fixed so the web client and the
 -- future auth slice can reference them in dev.
 
-insert into organisations (id, name) values
-  ('a0000000-0000-4000-8000-000000000001', 'Alpha Compliance GmbH'),
-  ('b0000000-0000-4000-8000-000000000001', 'Beta Retail OU')
+-- The slug is derived here rather than written literally, through the same
+-- org_slug() the ENT-198 backfill and runtime provisioning use, so the fixture
+-- cannot drift from the rule it is meant to demonstrate. It is deterministic
+-- from a fixed name, so these stay 'alpha-compliance-gmbh' and
+-- 'beta-retail-ou' and are safe to reference from a test or a bookmark.
+insert into organisations (id, name, slug) values
+  ('a0000000-0000-4000-8000-000000000001', 'Alpha Compliance GmbH', org_slug('Alpha Compliance GmbH')),
+  ('b0000000-0000-4000-8000-000000000001', 'Beta Retail OU',        org_slug('Beta Retail OU'))
 on conflict (id) do nothing;
 
 insert into memberships (org_id, user_id, role) values

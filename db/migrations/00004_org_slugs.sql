@@ -43,7 +43,42 @@ declare
   v_room   integer := 63 - length(v_suffix);
   v_base   text;
 begin
-  v_base := btrim(regexp_replace(lower(coalesce(p_name, '')), '[^a-z0-9]+', '-', 'g'), '-');
+  v_base := lower(coalesce(p_name, ''));
+
+  -- Letters that expand to two in ASCII, before anything strips accents.
+  --
+  -- Order matters and the German pairs are why. Folding an umlaut to its base
+  -- letter gives `muller`, which is not how German writes it: the language's
+  -- own ASCII convention is `mueller`, and a compliance product sold into the
+  -- EU cannot mint a permanent URL that misspells a customer's name. The
+  -- Nordic and Icelandic pairs follow the same principle in their own
+  -- languages.
+  v_base := replace(v_base, 'ä', 'ae');
+  v_base := replace(v_base, 'ö', 'oe');
+  v_base := replace(v_base, 'ü', 'ue');
+  v_base := replace(v_base, 'ß', 'ss');
+  v_base := replace(v_base, 'æ', 'ae');
+  v_base := replace(v_base, 'œ', 'oe');
+  v_base := replace(v_base, 'ø', 'oe');
+  v_base := replace(v_base, 'å', 'aa');
+  v_base := replace(v_base, 'þ', 'th');
+  v_base := replace(v_base, 'ð', 'dh');
+
+  -- Every other accented Latin letter to its base. An explicit table rather
+  -- than the `unaccent` extension, and that is the load-bearing choice here:
+  -- a slug is immutable, so a derivation that behaves differently depending on
+  -- whether an optional extension happens to be installed would mint different
+  -- permanent URLs on two deployments of the same product. Determinism matters
+  -- more than coverage. The two operands are generated together and are the
+  -- same length by construction; changing one without the other silently
+  -- truncates the mapping.
+  v_base := translate(
+    v_base,
+    'àáâãçèéêëìíîïñòóôõùúûýÿāăąćĉċčďēĕėęěĝğġģĥĩīĭįĵķĺļľńņňōŏőŕŗřśŝşšţťũūŭůűųŵŷźżžłđħŧı',
+    'aaaaceeeeiiiinoooouuuyyaaaccccdeeeeegggghiiiijklllnnnooorrrssssttuuuuuuwyzzzldhti'
+  );
+
+  v_base := btrim(regexp_replace(v_base, '[^a-z0-9]+', '-', 'g'), '-');
 
   -- Truncate before the suffix is added, so the total still fits 63, and trim
   -- again in case the cut landed mid-hyphen and left a trailing one.
@@ -51,10 +86,14 @@ begin
     v_base := btrim(left(v_base, v_room), '-');
   end if;
 
-  -- A name with nothing alphanumeric in it ('///', or a script this rule
-  -- strips entirely) still has to yield something routable. An organisation
-  -- nobody can navigate to is worse than one with an ugly URL, and the
-  -- collision loop below turns the second such name into org-2.
+  -- A name with nothing alphanumeric in it still has to yield something
+  -- routable: '///', but also a name written entirely in a script this rule
+  -- does not transliterate, such as Greek or Cyrillic, which the step above
+  -- leaves untouched and the collapse above then strips to nothing. The check
+  -- constraint requires a leading alphanumeric, so without this such a name
+  -- could not be stored at all. An organisation nobody can navigate to is
+  -- worse than one with an ugly URL, and the collision loop below turns the
+  -- second such name into org-2.
   if v_base = '' then
     v_base := left('org', v_room);
   end if;

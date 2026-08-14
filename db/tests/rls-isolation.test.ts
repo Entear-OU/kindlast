@@ -66,10 +66,14 @@ async function seedOrg(
   user: string,
   f: (typeof ids)['a'],
 ): Promise<void> {
-  await c.query(`insert into organisations (id, name) values ($1, $2)`, [
-    org,
-    `test-org-${org.slice(0, 8)}`,
-  ])
+  // The slug is derived through org_slug() rather than written literally, for
+  // the reason the seed fixture does the same: one rule, in one place. It is
+  // NOT NULL as of ENT-198, so a fixture that omits it does not merely lack a
+  // slug, it fails to insert at all.
+  await c.query(
+    `insert into organisations (id, name, slug) values ($1, $2, org_slug($2))`,
+    [org, `test-org-${org.slice(0, 8)}`],
+  )
   await c.query(
     `insert into memberships (org_id, user_id, role) values ($1, $2, 'owner')`,
     [org, user],

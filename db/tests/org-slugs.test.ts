@@ -115,6 +115,13 @@ describe.skipIf(!reachable)('organisation slugs', () => {
     ids.symbols = await newOrg(s.db, '///')
     ids.long = await newOrg(s.db, 'A'.repeat(120))
     ids.longToo = await newOrg(s.db, 'a'.repeat(120))
+    ids.german = await newOrg(s.db, 'Müller GmbH')
+    ids.sharp = await newOrg(s.db, 'Weiß & Söhne')
+    ids.french = await newOrg(s.db, 'Société Générale')
+    ids.polish = await newOrg(s.db, 'Łódź Kompleks')
+    ids.nordic = await newOrg(s.db, 'Ørsted Energi')
+    ids.greek = await newOrg(s.db, 'Ελληνικά')
+    ids.cyrillic = await newOrg(s.db, 'Компания')
 
     await s.db.query(migrationSql(SLUG_MIGRATION))
   })
@@ -151,6 +158,42 @@ describe.skipIf(!reachable)('organisation slugs', () => {
   it('still produces a routable slug for a name with nothing routable in it', async () => {
     const slug = await slugOf(s.db, ids.symbols)
     expect(slug).toMatch(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/)
+  })
+
+  // Transliteration, decided in §20.1 after the bare rule was found to strip
+  // non-ASCII outright. The bare rule follows the specification exactly and
+  // produces `m-ller-gmbh`, which looks broken to precisely the customers an
+  // EU compliance product serves first, and slugs are immutable, so it had to
+  // be right before any were minted rather than fixed afterwards.
+  it('writes German umlauts the way German writes them in ASCII', async () => {
+    // `mueller`, not `muller` and certainly not `m-ller`. Folding the umlaut
+    // to its base letter misspells the name; the digraph is the language's own
+    // convention.
+    expect(await slugOf(s.db, ids.german)).toBe('mueller-gmbh')
+    expect(await slugOf(s.db, ids.sharp)).toBe('weiss-soehne')
+  })
+
+  it('folds other accented Latin letters to their base letter', async () => {
+    expect(await slugOf(s.db, ids.french)).toBe('societe-generale')
+    // Ł has no canonical decomposition, so it needs an explicit mapping or it
+    // silently becomes a hyphen and the name loses a letter.
+    expect(await slugOf(s.db, ids.polish)).toBe('lodz-kompleks')
+    expect(await slugOf(s.db, ids.nordic)).toBe('oersted-energi')
+  })
+
+  it('gives a name written in an untransliterated script a routable slug anyway', async () => {
+    // Greek and Cyrillic survive nothing above, so the collapse strips them to
+    // an empty string. The check constraint requires a leading alphanumeric,
+    // so without the fallback these could not be stored at all. Two of them
+    // also prove the fallback goes through the collision rule rather than
+    // colliding with itself.
+    const greek = await slugOf(s.db, ids.greek)
+    const cyrillic = await slugOf(s.db, ids.cyrillic)
+
+    for (const slug of [greek, cyrillic]) {
+      expect(slug).toMatch(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/)
+    }
+    expect(greek).not.toBe(cyrillic)
   })
 
   it('caps the slug at 63 characters, suffix included', async () => {
@@ -193,6 +236,55 @@ describe.skipIf(!reachable)('organisation slugs', () => {
       ids.acme,
     ])
     expect(await slugOf(s.db, ids.acme)).toBe('acme-ltd')
+  })
+})
+
+/**
+ * The seed fixture still applies to the schema the migrations produce.
+ *
+ * This exists because it did not, and nothing local noticed. Making
+ * `organisations.slug` NOT NULL broke `deploy/seed/seed.sql`, whose insert
+ * named only (id, name), so a clean `compose up` failed at the seed with
+ * psql's exit 3 while every suite here stayed green: the db tests build their
+ * own scratch databases, and the already-running local stack had seeded itself
+ * before the column existed. CI caught it on a genuinely fresh boot.
+ *
+ * The general lesson is worth the test rather than the discipline: the seed is
+ * schema-coupled code that no suite executed, so it could only be verified by
+ * booting the whole stack. Running it here against a freshly migrated database
+ * closes that gap for every future migration, not only this one.
+ */
+describe.skipIf(!reachable)('the seed fixture', () => {
+  let s: Scratch
+
+  beforeAll(async () => {
+    s = await scratchUpToSlugs()
+    await s.db.query(migrationSql(SLUG_MIGRATION))
+  })
+
+  afterAll(async () => {
+    await s?.drop()
+  })
+
+  it('applies against a freshly migrated database', async () => {
+    const seed = readFileSync(resolve(__dirname, '../../deploy/seed/seed.sql'), 'utf8')
+
+    await expect(s.db.query(seed)).resolves.toBeDefined()
+
+    const r = await s.db.query(`select name, slug from organisations order by name`)
+    expect(r.rows).toEqual([
+      { name: 'Alpha Compliance GmbH', slug: 'alpha-compliance-gmbh' },
+      { name: 'Beta Retail OU', slug: 'beta-retail-ou' },
+    ])
+  })
+
+  it('is idempotent, because the seed job reruns on every stack start', async () => {
+    const seed = readFileSync(resolve(__dirname, '../../deploy/seed/seed.sql'), 'utf8')
+
+    await expect(s.db.query(seed)).resolves.toBeDefined()
+
+    const r = await s.db.query(`select count(*)::int as n from organisations`)
+    expect(r.rows[0].n).toBe(2)
   })
 })
 
