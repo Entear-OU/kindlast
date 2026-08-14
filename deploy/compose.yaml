@@ -185,6 +185,15 @@ services:
       ZITADEL_URL: http://auth:8080
       ZITADEL_HOST_HEADER: "localhost:${KINDLAST_AUTH_PORT:-8300}"
       WEB_REDIRECT_URI: ${KINDLAST_WEB_REDIRECT_URI:-http://localhost:3000/auth/callback}
+      # Mail. The credentials are arbitrary and never checked: mailpit below
+      # runs with MP_SMTP_AUTH_ACCEPT_ANY. They exist because Zitadel refuses
+      # to use a provider that has none, and reports the refusal as
+      # SMTPConfig.NotFound; see the note in seed.sh.
+      SMTP_HOST: mailpit:1025
+      SMTP_SENDER_ADDRESS: noreply@kindlast.localhost
+      SMTP_SENDER_NAME: Kindlast
+      SMTP_USER: kindlast
+      SMTP_PASSWORD: kindlast-dev-password
     volumes:
       - ./seed/seed.sh:/seed.sh:ro
       - ./seed/seed.sql:/seed.sql:ro

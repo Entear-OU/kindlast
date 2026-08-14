@@ -157,6 +157,12 @@ role split applied, migrations applied by a job container that must exit zero,
 Zitadel serving OIDC discovery on `localhost:8300`, Redis, and a Caddy edge.
 Tear down with `down -v`.
 
+Mail is delivered to Mailpit, readable at `localhost:8025`, so registration and
+verification complete rather than silently going nowhere. The seed configures
+it, and the reason it sets credentials Mailpit does not want is written down in
+`deploy/seed/seed.sh`: Zitadel refuses a provider that has none and reports it
+as a config that does not exist.
+
 ## Row level security, which is the thing to get right
 
 A plain Postgres container starts with a superuser, and **superusers bypass

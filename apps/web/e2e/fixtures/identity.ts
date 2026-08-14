@@ -14,11 +14,17 @@ const run = promisify(execFile)
  * behaviour: verification is Zitadel's concern and Zitadel's test surface, and
  * what this repository owns is everything after the redirect comes back.
  *
- * It also sidesteps a bug rather than depending on it. Zitadel does not
- * deliver to Mailpit on this stack: its own projections show the config
- * present and active, and the notifier still answers SMTPConfig.NotFound
- * having never opened a connection. A journey test that waited for a message
- * would be red for a reason that has nothing to do with the code it covers.
+ * Mail does now work on this stack, so this is a choice about speed and blast
+ * radius rather than a workaround. A journey test that waited for a message
+ * would depend on Mailpit, on Zitadel's notifier, and on delivery timing, none
+ * of which is the code under test, and would fail for reasons that teach
+ * nothing about this repository.
+ *
+ * The reason mail used to go nowhere is worth keeping, because the error names
+ * the wrong thing: Zitadel refuses an SMTP provider that has no credentials
+ * and reports it as `SMTPConfig.NotFound`, while its own API and projection
+ * both show the config present and active (zitadel/zitadel#8344). The seed job
+ * now sets credentials Mailpit does not need for exactly this reason.
  */
 
 const ZITADEL_URL = process.env.KINDLAST_AUTH_URL ?? 'http://localhost:8300'
