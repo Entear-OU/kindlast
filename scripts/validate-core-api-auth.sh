@@ -150,7 +150,10 @@ if [ "$published" = "{}" ] || [ "$published" = "null" ]; then
   pass "core-api publishes no port (${published})"
   note "true of this phase rather than of the design: web, mobile and third"
   note "parties are all intended clients, and build-order step 7b opens this"
-  note "surface deliberately. Until then there is nothing to expose it for."
+  note "surface deliberately."
+  note "It is reachable, through the Caddy edge, which routes /kindlast.core.v1.*"
+  note "to it (ENT-197). That is the same door a container uses: no"
+  note "development-only shortcut that stops existing in production."
 else
   fail "core-api publishes ports, and must not: ${published}"
 fi
@@ -214,25 +217,37 @@ else
       skip "the stack was already warm; re-run with --fresh to observe this"
     fi
 
+    # No organisation header, deliberately. This is the bootstrap call, and a
+    # caller who has never signed in has none to send: it has to work without
+    # one, or a new user could never obtain one.
     body="$(incurl -sS -X POST "$CALL" -H 'Content-Type: application/json' \
-      -H "Authorization: Bearer ${TOKEN}" \
-      -H 'X-Kindlast-Org: a0000000-0000-4000-8000-000000000001' -d '{}' 2>/dev/null)"
+      -H "Authorization: Bearer ${TOKEN}" -d '{}' 2>/dev/null)"
 
     if printf '%s' "$body" | grep -q unauthenticated; then
       fail "the real token was refused at authentication: ${body}"
       note "if this says 'unknown signing key', the refetch is not working"
+    elif printf '%s' "$body" | grep -q permission_denied; then
+      fail "the real token was refused at the scope stage: ${body}"
+      note "GetCurrentUser declares 'openid', which verification asserts, so a"
+      note "valid token must reach it. A refusal here means withOpenID is not"
+      note "in the running binary: rebuild with"
+      note "  docker compose -f deploy/compose.yaml up -d --build core-api"
     else
-      pass "the real token passes signature, issuer, audience, expiry and jti"
-      note "it is refused later in the chain, and by which stage matters:"
+      pass "the real token passes the whole chain and provisions"
       note "  ${body}"
       note ""
-      note "KNOWN GAP, and it is an IdP configuration question rather than a bug"
-      note "here: Zitadel access tokens carry no 'scope' claim and no roles claim,"
-      note "whatever reserved scope is requested. Measured, not assumed. So the"
-      note "scope stage correctly refuses a token that declares no scopes at all."
-      note "The verifier reads scope/scp per RFC 9068 and takes extra claim names"
-      note "through KINDLAST_OIDC_SCOPE_CLAIMS, so pointing it at whatever claim"
-      note "the IdP does populate is configuration, not a code change."
+      note "Two things this proves, and the second was a live bug until ENT-197."
+      note ""
+      note "'openid' is not a permission and nothing grants it. Zitadel's access"
+      note "tokens carry no 'scope' and no 'scp' claim whatever is requested;"
+      note "with role assertion on they carry project roles, which"
+      note "KINDLAST_OIDC_SCOPE_CLAIMS names. Verification asserts 'openid'"
+      note "itself, so an endpoint declaring it is reachable by any valid token."
+      note ""
+      note "That is what makes a bootstrap possible. This call is where a new"
+      note "subject's organisation is created, so requiring a granted scope made"
+      note "it unreachable by every valid token: a caller could never reach the"
+      note "call that would grant them anything."
     fi
   fi
 fi

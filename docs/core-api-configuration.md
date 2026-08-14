@@ -67,6 +67,24 @@ worker before they are relied on.
 **For any other IdP**, point it at whichever claim that server populates:
 Keycloak's `realm_access.roles`, Entra's `roles`, and so on.
 
+### `openid` is the exception, and no configuration reaches it
+
+One value in the vocabulary is not a permission. Every other scope answers
+"may this client touch this kind of resource"; `openid` answers "did this
+caller arrive through an OIDC login", and a token that has passed signature,
+issuer, audience and expiry is exactly the proof of that.
+
+No authorization server issues a grant for it, because it is a request flag
+rather than a permission. Some servers, Keycloak among them, echo requested
+scopes back into the token, which is an implementation detail rather than a
+promise. So `libs/chassis/oidc` asserts it on every token it verifies, and no
+value of `KINDLAST_OIDC_SCOPE_CLAIMS` changes that or needs to.
+
+**The rule this creates: never declare `openid` on an endpoint that grants
+authority. It means signed in, not permitted.** The endpoints that declare it
+are bootstrap calls, reachable by a caller holding nothing, which they have to
+be, because they are where a caller's first grant comes from.
+
 ### The three shapes accepted
 
 A claim named here is read whether it is:

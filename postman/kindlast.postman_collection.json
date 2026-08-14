@@ -22,8 +22,8 @@
     },
     {
       "key": "api_base_url",
-      "value": "http://localhost:3000/api/v1",
-      "description": "Core API is reached through web, deliberately. It binds no published port (ENT-191), so there is no direct URL to put here."
+      "value": "http://localhost:8000",
+      "description": "core-api, through the Caddy edge (ENT-197). It still binds no published port of its own, so the edge is the only way in: the same door from the host as from another container, with no development-only shortcut. Paths are the Connect procedures, which are fully qualified proto names."
     },
     {
       "key": "client_id",
@@ -61,7 +61,7 @@
               "host": ["{{edge_base_url}}"],
               "path": ["healthz"]
             },
-            "description": "Returns `ok`. The edge reserves the routes web and core-api claim at build-order step 1."
+            "description": "Returns `ok`. The edge also routes `/kindlast.core.v1.*` to core-api as of ENT-197; web claims its own routes later in build-order step 1."
           },
           "event": [
             {
@@ -169,7 +169,7 @@
               "host": ["{{auth_base_url}}"],
               "path": ["oauth", "v2", "token"]
             },
-            "description": "A machine token, for exercising the API without a browser. The seed job creates the `core-api-client` service user this needs (ENT-195), so it works against any stack brought up with `docker compose -f deploy/compose.yaml up -d`.\n\nFill `client_id`, `client_secret` and `project_id` from the shared volume rather than guessing:\n\n```bash\ndocker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/core-api-client.json\ndocker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/core-api-audience.txt\n```\n\nTwo details were measured against this stack rather than taken from a specification, and both cost an afternoon to rediscover.\n\n**`client_id` is the service user's username, not its id.** The secret response carries its own `clientId`, and that is the one to send. Passing the numeric user id returns `invalid_client: client not found`.\n\n**The audience is Zitadel's project id**, which is why the reserved scope `urn:zitadel:iam:org:project:id:{project}:aud` is in the scope list. Without it the token comes back scoped to the client itself, and core-api refuses it, correctly, as minted for someone else.\n\nOne thing this token will not do yet: pass the scope check. Zitadel's access tokens carry no `scope`, no `scp` and no roles claim, whatever is requested here, so core-api refuses it at the scope stage with `permission_denied`. That is the chain failing closed rather than a broken request; ENT-197 closes it by enabling role assertion on the web application. See `docs/core-api-configuration.md`.\n\nThe **user** flow is authorization code with PKCE and cannot be driven from Postman end to end, because it involves a login form and a redirect back to web. Use a browser for that."
+            "description": "A machine token, for exercising the API without a browser. The seed job creates the `core-api-client` service user this needs (ENT-195), so it works against any stack brought up with `docker compose -f deploy/compose.yaml up -d`.\n\nFill `client_id`, `client_secret` and `project_id` from the shared volume rather than guessing:\n\n```bash\ndocker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/core-api-client.json\ndocker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/core-api-audience.txt\n```\n\nTwo details were measured against this stack rather than taken from a specification, and both cost an afternoon to rediscover.\n\n**`client_id` is the service user's username, not its id.** The secret response carries its own `clientId`, and that is the one to send. Passing the numeric user id returns `invalid_client: client not found`.\n\n**The audience is Zitadel's project id**, which is why the reserved scope `urn:zitadel:iam:org:project:id:{project}:aud` is in the scope list. Without it the token comes back scoped to the client itself, and core-api refuses it, correctly, as minted for someone else.\n\nThe scope story, which changed in ENT-197 and is worth reading before a `permission_denied` sends you looking in the wrong place. Zitadel's access tokens carry no `scope` and no `scp` claim whatever is requested here. With role assertion enabled they carry project roles under `urn:zitadel:iam:org:project:roles`, which `KINDLAST_OIDC_SCOPE_CLAIMS` points at, and that is what satisfies an endpoint declaring a real permission. `openid` is the exception: it is not a permission, nothing grants it, and verification asserts it, so an endpoint declaring it is reachable by any valid token. See `docs/core-api-configuration.md`.\n\nThe **user** flow is authorization code with PKCE and cannot be driven from Postman end to end, because it involves a login form and a redirect back to web. Use a browser for that."
           },
           "event": [
             {
@@ -280,41 +280,51 @@
     },
     {
       "name": "Core API v1",
-      "description": "The proto surface. Today it is reached through web rather than directly, because core-api binds no published port, so there is no host to point at (ENT-191). CI asserts that absence rather than trusting it.\n\nThat is a fact about the current phase, not about the design. Web, mobile and third parties are all intended clients of this system, and build-order step 7b opens this surface deliberately, once there is a stable contract behind it. Until then Postman is on the wrong side of a door that is shut because nothing needs it open yet, and nothing in this folder can answer until web exists (ENT-197).\n\nThe interceptor chain in front of these endpoints is live and tested as of ENT-195, and it is client-agnostic by construction: it verifies every token itself rather than trusting which door a request arrived through. To exercise it today, join the network:\n\n```bash\ndocker run --rm --network kindlast_default curlimages/curl:8.11.1 \\\n  -sS -X POST http://core-api:8080/kindlast.core.v1.SessionService/GetCurrentUser \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer <the token from Auth (Zitadel)>' \\\n  -H 'X-Kindlast-Org: {{org_id}}' -d '{}'\n```\n\nOr run `./scripts/validate-core-api-auth.sh`, which drives the whole chain and explains what each result proves.\n\nOnce buf emits OpenAPI (§23.2), these requests should be generated from it rather than maintained here by hand.",
+      "description": "The proto surface, reachable from here as of ENT-197. core-api still binds no published port of its own, and CI asserts that absence rather than trusting it; the Caddy edge routes `/kindlast.core.v1.*` to it instead. That is the same door a container uses, which is the point: there is no development-only shortcut that stops existing in production.\n\nThese are Connect calls. Every one is a POST with a JSON body, including the ones that only read, and the path is the fully qualified proto name rather than a REST-style noun. An empty body is a parse error; the empty request message is `{}`.\n\nThe interceptor chain in front of these endpoints is live and tested as of ENT-195, and it is client-agnostic by construction: it verifies every token itself rather than trusting which door a request arrived through. `./scripts/validate-core-api-auth.sh` drives the whole chain and explains what each result proves.\n\nOne asymmetry to expect between this folder and a browser. The client-credentials token from the Auth folder is a machine token: it carries the project roles, so it passes endpoints declaring a real permission. A human token from the authorization-code flow cannot be obtained here at all, because that flow involves a login form and a redirect back to web. Use a browser for that, or `bun run --cwd apps/web test:e2e`, which drives it end to end.\n\nOnce buf emits OpenAPI (§23.2), these requests should be generated from it rather than maintained here by hand.",
       "item": [
         {
-          "name": "Me (implemented in core-api; needs web to be reachable, ENT-197)",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" },
-              {
-                "key": "X-Kindlast-Org",
-                "value": "{{org_id}}",
-                "description": "The active organisation travels per request rather than in the token, so switching organisation needs no re-minting (§20.1)."
-              }
-            ],
-            "url": {
-              "raw": "{{api_base_url}}/me",
-              "host": ["{{api_base_url}}"],
-              "path": ["me"]
-            },
-            "description": "The console bootstrap call: user, memberships with roles, active organisation, plan.\n\nOn a subject it has never seen it provisions a personal organisation and an owner membership in one transaction, idempotent on the `sub` claim. Required scope: `openid`, declared on the proto method.\n\n**Implemented as of ENT-196**, and still not answerable from here: this path goes through `web`, which does not exist until ENT-197, and core-api publishes no port for Postman to reach directly. The Connect procedure is `/kindlast.core.v1.SessionService/GetCurrentUser`; see the folder description for the one-liner that calls it from inside the compose network.\n\nTwo behaviours worth knowing before you read a response. **The organisation header is optional on the first call** and must be: a client that has never signed in cannot know an organisation id, because none exists yet, so omitting it resolves the caller's default. And a brand-new organisation has no subscription row, so `plan` comes back `free` rather than empty."
-          }
-        },
-        {
-          "name": "Accept invitation (implemented in core-api; needs web to be reachable, ENT-197)",
+          "name": "Me (GetCurrentUser)",
           "request": {
             "method": "POST",
             "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              {
+                "key": "Kindlast-Org-Id",
+                "value": "{{org_id}}",
+                "description": "The active organisation travels per request rather than in the token, so switching organisation needs no re-minting (§20.1).\n\nDisable this header to exercise the bootstrap path: a caller who has never signed in has no organisation id to send, and the call has to work without one or a new user could never obtain one."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.SessionService/GetCurrentUser",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.SessionService", "GetCurrentUser"]
+            },
+            "description": "The console bootstrap call: user, memberships with roles, active organisation, plan.\n\nOn a subject it has never seen it provisions a personal organisation and an owner membership in one transaction, idempotent on the `sub` claim. Required scope: `openid`, declared on the proto method.\n\n**Answerable from here as of ENT-197**, now that the edge routes `/kindlast.core.v1.*` to core-api. It is a Connect call, so POST with a JSON body even though it reads: `{}` is the empty request message, and an empty body is a parse error rather than the same thing.\n\nWhat `openid` means here is worth knowing before it surprises you. It is not a permission and no authorization server grants it: verification asserts it, so a token that passed signature, issuer, audience and expiry carries it whether or not the IdP said anything about scopes. Measured on this stack, a real Zitadel access token carries seven project roles and no `openid` at all. That is why this endpoint is reachable by a caller holding no grants, which it has to be, because this is where their first grant comes from.\n\nTwo behaviours worth knowing before you read a response. **The organisation header is optional on the first call** and must be: a client that has never signed in cannot know an organisation id, because none exists yet, so omitting it resolves the caller's default. And a brand-new organisation has no subscription row, so `plan` comes back `free` rather than empty.\n\nOne rough edge, measured rather than assumed: the personal organisation is named from the token's display name or email, and Zitadel puts neither in an **access** token, so today it is named with the raw subject id. Cosmetic, visible on the first screen, and core-api's to fix."
+          }
+        },
+        {
+          "name": "Accept invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
-            "url": {
-              "raw": "{{api_base_url}}/invitations/{{invitation_token}}:accept",
-              "host": ["{{api_base_url}}"],
-              "path": ["invitations", "{{invitation_token}}:accept"]
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{invitation_token}}\"\n}"
             },
-            "description": "Ordering matters and is easy to get wrong: this must run **before** the first `/api/v1/me`. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to.\n\n**Implemented as of ENT-196.** The Connect procedure is `/kindlast.core.v1.OrgService/AcceptInvitation`, and the body is `{\"token\": \"...\"}`. Required scope is `openid`, not `org:manage`: the caller is redeeming a capability they were sent and holds no role anywhere until it succeeds, so an organisation scope would make a first invitation impossible to accept.\n\nThe token is sent in the clear here and stored hashed, so the value in the database never matches this one. Issuing invitations is not built yet (build-order step 2); until then a fixture is written directly, which is what the tests do.\n\nExpired, already accepted and never existed all answer `not_found` alike, deliberately, so this cannot be used to discover which tokens are real."
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.OrgService/AcceptInvitation",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.OrgService", "AcceptInvitation"]
+            },
+            "description": "Ordering matters and is easy to get wrong: this must run **before** the first GetCurrentUser. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to. `web`'s callback enforces that ordering (ENT-197); a direct caller has to keep it themselves.\n\n**Implemented as of ENT-196**, and reachable from here as of ENT-197. Required scope is `openid`, not `org:manage`: the caller is redeeming a capability they were sent and holds no role anywhere until it succeeds, so an organisation scope would make a first invitation impossible to accept.\n\nThe token is sent in the clear here and stored hashed, so the value in the database never matches this one. Issuing invitations is not built yet (build-order step 2); until then a fixture is written directly, which is what the tests do.\n\nExpired, already accepted and never existed all answer `not_found` alike, deliberately, so this cannot be used to discover which tokens are real."
           }
         }
       ]

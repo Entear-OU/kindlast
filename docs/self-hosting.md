@@ -114,6 +114,50 @@ bun run start          # serves on :3000
 Put a reverse proxy in front of it for TLS. Set `NEXT_PUBLIC_APP_URL` to the
 public origin, not the internal one.
 
+## Running the web app against the self-managed stack
+
+The stack in `deploy/` runs its own identity provider, so the web app needs
+the OAuth client the seed job created in Zitadel. Those credentials are
+generated per environment and written to a docker volume rather than to the
+repository, which means there is no host-side path to them. `web-env.sh` is
+that path:
+
+```bash
+docker compose -f deploy/compose.yaml up -d
+./scripts/web-env.sh          # writes apps/web/.env.local
+bun run dev
+```
+
+Re-run it after `docker compose down -v`. That discards the volume, so Zitadel
+issues a new client on the next boot and a stale `.env.local` starts failing
+with `invalid_client`, which is the likeliest cause of a sign-in that worked
+yesterday and does not today.
+
+**core-api is reached through the edge**, on `KINDLAST_EDGE_PORT` (default
+8000), which routes `/kindlast.core.v1.*` to it. core-api publishes no port of
+its own, deliberately: a caller on the host and a caller in another container
+come through the same door, so there is no development-only shortcut that
+stops existing in production.
+
+### Signing in end to end
+
+```bash
+bun run --cwd apps/web test:e2e
+```
+
+This drives a real authorization code flow: a browser, Zitadel's hosted login,
+the redirect back, and the provisioning call that gives a new person their
+first organisation. It creates its own throwaway users through Zitadel's
+management API with the email already verified, which is deliberate. Zitadel
+does not deliver mail to the bundled Mailpit on this stack, so a test that
+waited for a verification message would be red for a reason unrelated to the
+code it covers.
+
+**The legacy console is not reachable on this stack.** The dashboard, feed,
+records and settings pages still gate on a Supabase session and read Supabase
+for their data, and the auth path no longer creates one. `/workspace` is the
+authenticated entry point until they are ported.
+
 ## Scheduling the agents
 
 This is the part Vercel does for you and nothing else does.

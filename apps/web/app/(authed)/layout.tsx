@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { signOut } from '@/lib/auth/actions'
+import { SignOutForm } from '@/components/auth/sign-out-form'
 
 /**
  * Shared layout for authenticated routes (ENT-91).
@@ -11,7 +11,7 @@ import { signOut } from '@/lib/auth/actions'
  *   - a Kindlast brand link back to `/onboarding` (the user's home until the
  *     dashboard exists), and
  *   - a sign-out button that submits to the `signOut` server action and
- *     bounces to `/login`.
+ *     bounces to the identity provider’s end-session endpoint.
  *
  * Markup is a single column flex so children — chiefly the `OnboardingChat`'s
  * scrollable conversation — can claim the remaining viewport via `flex-1`.
@@ -74,14 +74,14 @@ export default function AuthedLayout({
               kindlast
             </span>
           </Link>
-          <form action={signOut}>
+          <SignOutForm>
             <button
               type="submit"
               className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               Sign out
             </button>
-          </form>
+          </SignOutForm>
         </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
