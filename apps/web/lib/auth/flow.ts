@@ -136,6 +136,66 @@ export async function exchangeCode(code: string, verifier: string): Promise<Toke
   }
 }
 
+/**
+ * Spends the refresh token for a new access token.
+ *
+ * The session outlives the access token deliberately (§1.2): the cookie is
+ * good for thirty days, the token for minutes or hours. Without this, that
+ * difference is not a feature but a bug on a delay, because a person who comes
+ * back the next day holds a session this server accepts and a token core-api
+ * refuses.
+ *
+ * Same back channel as the code exchange, for the same reason: the client
+ * secret goes from this process to the token endpoint and the browser is never
+ * involved.
+ */
+export async function refreshTokens(refreshToken: string): Promise<TokenSet> {
+  const provider = await discoverProvider()
+
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: requireEnv('KINDLAST_OIDC_CLIENT_ID'),
+    client_secret: requireEnv('KINDLAST_OIDC_CLIENT_SECRET'),
+  })
+
+  const response = await fetch(provider.tokenEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...hostHeader(),
+    },
+    body,
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    // Status only. The body carries client context, and this one is reached
+    // on every expiry, so it would be the noisiest place to leak it.
+    throw new Error(`Token refresh failed with ${response.status}`)
+  }
+
+  const token = (await response.json()) as {
+    access_token?: string
+    refresh_token?: string
+    id_token?: string
+    expires_in?: number
+  }
+
+  if (!token.access_token) {
+    throw new Error('Token endpoint returned no access token')
+  }
+
+  return {
+    accessToken: token.access_token,
+    // Null means "the server did not rotate", not "it is gone". Servers differ,
+    // and the caller keeps what it already holds.
+    refreshToken: token.refresh_token ?? null,
+    idToken: token.id_token ?? null,
+    expiresAt: Math.floor(Date.now() / 1000) + (token.expires_in ?? 600) - 30,
+  }
+}
+
 /** Revokes a refresh token at sign-out, so it cannot be used again. */
 export async function revokeToken(token: string): Promise<void> {
   const provider = await discoverProvider()
