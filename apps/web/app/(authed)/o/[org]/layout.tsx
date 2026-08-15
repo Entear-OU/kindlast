@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 
-import { ConsoleChrome } from '@/components/console/chrome'
+import { ConsoleShell } from '@/components/console/shell'
 import { currentSession } from '@/lib/auth/session'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 
@@ -54,7 +54,7 @@ export default async function OrgLayout({
     // whether this person belongs here, and answering "not found" would tell
     // them their organisation had been deleted during an outage.
     return (
-      <ConsoleChrome orgSlug={slug}>
+      <ConsoleShell orgSlug={slug}>
         <main className="mx-auto w-full max-w-3xl px-4 py-12">
           <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">
             Workspace unavailable
@@ -67,13 +67,13 @@ export default async function OrgLayout({
             could not be loaded. Your session is unaffected: reload in a moment.
           </p>
         </main>
-      </ConsoleChrome>
+      </ConsoleShell>
     )
   }
 
   return (
-    <ConsoleChrome orgSlug={slug} orgName={resolved.membership.orgName}>
+    <ConsoleShell orgSlug={slug} orgName={resolved.membership.orgName}>
       {children}
-    </ConsoleChrome>
+    </ConsoleShell>
   )
 }
