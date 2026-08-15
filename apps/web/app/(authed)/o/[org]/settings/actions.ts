@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 
 import { resolveOrg, orgPath } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
+import type { ActionState } from '@/lib/org/action-state'
 import {
   listMembers,
   removeMember,
@@ -27,13 +28,6 @@ import {
  * exception, it is a sentence the person needs to read, and Next's error
  * boundary would replace the page they were working on with an apology.
  */
-
-export interface ActionState {
-  status: 'idle' | 'ok' | 'error'
-  message: string
-}
-
-export const idle: ActionState = { status: 'idle', message: '' }
 
 /** Turns a Failure into something worth showing a person. */
 function say(error: Failure): ActionState {
