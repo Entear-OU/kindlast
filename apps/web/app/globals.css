@@ -54,8 +54,11 @@
   --card-foreground: oklch(0.145 0.033 243);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0.033 243);
-  --primary: oklch(0.748 0.118 176);
-  --primary-foreground: oklch(0.145 0.033 243);
+  /* Darkened from oklch(0.748 ...) so white label text is legible. Same hue
+     and chroma, lower lightness: white on the original teal measured 2.13:1,
+     which fails WCAG AA for any text size. This is 5.03:1. */
+  --primary: oklch(0.52 0.118 176);
+  --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -89,8 +92,11 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  /* The same teal as the light theme rather than the neutral this was, so a
+     primary button reads as the brand in both and white text works in both.
+     A near-white primary with white text measured 1.26:1. */
+  --primary: oklch(0.52 0.118 176);
+  --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);

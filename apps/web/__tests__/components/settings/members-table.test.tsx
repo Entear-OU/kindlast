@@ -19,7 +19,6 @@ import { MembersTable } from '@/components/settings/members-table'
  */
 
 vi.mock('@/app/(authed)/o/[org]/settings/actions', () => ({
-  idle: { status: 'idle', message: '' },
   updateMemberRoleAction: vi.fn(),
   removeMemberAction: vi.fn(),
 }))

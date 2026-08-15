@@ -4,11 +4,10 @@ import { useActionState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
-  idle,
   removeMemberAction,
   updateMemberRoleAction,
-  type ActionState,
 } from '@/app/(authed)/o/[org]/settings/actions'
+import { idle, type ActionState } from '@/lib/org/action-state'
 import type { Member } from '@/lib/org/client'
 
 const ROLES = ['owner', 'member', 'viewer'] as const

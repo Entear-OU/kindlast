@@ -5,11 +5,8 @@ import { useActionState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  idle,
-  renameOrganisationAction,
-  type ActionState,
-} from '@/app/(authed)/o/[org]/settings/actions'
+import { renameOrganisationAction } from '@/app/(authed)/o/[org]/settings/actions'
+import { idle, type ActionState } from '@/lib/org/action-state'
 
 /**
  * Renaming an organisation (ENT-202).
