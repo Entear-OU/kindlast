@@ -263,6 +263,12 @@ services:
       # kindlast_app: owns nothing, NOSUPERUSER, NOBYPASSRLS. Connecting as
       # anything else makes every policy in the schema a silent no-op (§14.1).
       KINDLAST_DATABASE_URL: postgres://kindlast_app:${KINDLAST_APP_PASSWORD:-app-dev-password}@postgres-app:5432/kindlast?sslmode=disable
+      # The producer pool (ENT-203). Without it SweepService is not served,
+      # which is a supported configuration: a deployment that wants no
+      # on-demand sweep trigger simply omits this. The role is created by
+      # deploy/postgres/init/01-roles.sh and cannot create findings through
+      # the application's pool by design.
+      KINDLAST_AGENT_DATABASE_URL: postgres://kindlast_agent:${KINDLAST_AGENT_PASSWORD:-agent-dev-password}@postgres-app:5432/kindlast?sslmode=disable
       KINDLAST_REDIS_ADDR: redis:6379
     volumes:
       - zitadel-machinekey:/machinekey:ro

@@ -71,6 +71,15 @@ type Config struct {
 	// RedisAddr is the shared instance holding the revocation deny-list.
 	RedisAddr string
 
+	// AgentDatabaseURL must connect as `kindlast_agent`, the producer role.
+	//
+	// Optional, and its absence is a supported configuration rather than a
+	// misconfiguration: a deployment that does not want an on-demand sweep
+	// endpoint leaves it unset and SweepService is not served at all. That is
+	// better than serving it and failing per request, and it means an existing
+	// deployment that has not created the role keeps working.
+	AgentDatabaseURL string
+
 	// BillingEnabled turns plan gating on. Off by default, and the default is
 	// the important half (§18.1).
 	//
@@ -101,6 +110,7 @@ func Load() (*Config, error) {
 		OIDCScopeClaims:  splitList(os.Getenv("KINDLAST_OIDC_SCOPE_CLAIMS")),
 		DatabaseURL:      os.Getenv("KINDLAST_DATABASE_URL"),
 		RedisAddr:        os.Getenv("KINDLAST_REDIS_ADDR"),
+		AgentDatabaseURL: os.Getenv("KINDLAST_AGENT_DATABASE_URL"),
 		BillingEnabled:   truthy(os.Getenv("KINDLAST_BILLING_ENABLED")),
 	}
 

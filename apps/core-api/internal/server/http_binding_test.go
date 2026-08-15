@@ -123,6 +123,19 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.DashboardService.GetDashboard": {
 			Method: "GET", Path: "/api/v1/dashboard",
 		},
+
+		// ENT-203. The only binding outside /api/v1, and the prefix is the
+		// reviewable part: /internal/v1 is not reachable through the edge's
+		// public routes and is not served to a browser client. The proto
+		// package is `platform` rather than `internal` only because Go gives
+		// any path segment called `internal` a visibility rule that would make
+		// the generated code unimportable; the route keeps the design's name.
+		//
+		// Still no {org_id}: a sweep names its organisation in the header like
+		// everything else.
+		"kindlast.platform.v1.SweepService.RunSweep": {
+			Method: "POST", Path: "/internal/v1/sweep",
+		},
 	}
 
 	got := map[string]httprule.Binding{}

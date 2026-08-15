@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
+	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
 )
 
 // Services returns every proto service core-api exposes.
@@ -27,6 +28,11 @@ func Services() []protoreflect.ServiceDescriptor {
 		// undeclared during the window where the proto has landed and the
 		// service has not.
 		corev1.File_kindlast_core_v1_findings_proto,
+		// The internal surface is enumerated here too, so the scope-declaration
+		// test covers it. An internal RPC is the last place an undeclared scope
+		// should be able to hide: these carry `internal:*`, which is the
+		// vocabulary that can act across organisations.
+		platformv1.File_kindlast_platform_v1_sweep_proto,
 	}
 
 	var services []protoreflect.ServiceDescriptor

@@ -558,6 +558,27 @@
           }
         },
         {
+          "name": "Run sweep",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"detectOnly\": false\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.SweepService/RunSweep",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.SweepService", "RunSweep"]
+            },
+            "description": "Runs the Watcher and then the Analyst for the organisation the header names. **Implemented as of ENT-203.** Required scope: `internal:ingest`.\n\n**This is the one request here the client-credentials token above is actually for.** Every other Core API request needs a human scope nobody is granted yet (ENT-221); this one needs a machine scope. It still needs that role granted to the service user, which the seed does not do yet.\n\n**Why this endpoint exists at all.** Nothing runs the sweeps on a schedule. 00001 dropped the three pg_cron jobs when the schema moved off Supabase, and the schedules return with Temporal at build-order step 8. Between those points a perfectly correct feed shows an empty state forever, because nothing has ever looked. This is how you make something happen now, and when Temporal lands it becomes the thing Temporal calls rather than being replaced.\n\n**It runs as a different database role.** `core-api` serves requests as `kindlast_app`, which deliberately cannot create findings: the thing exposed to the world should not be able to fabricate a claim about a customer's legal exposure. Sweeps run on a second pool as `kindlast_agent` (00008). If `KINDLAST_AGENT_DATABASE_URL` is unset the service is not served at all and this answers `unimplemented`, which is a supported configuration rather than a fault.\n\n**Per-organisation, never global.** A request with no `Kindlast-Org-Id` is refused with `invalid_argument` rather than defaulting. Doing nothing would look like success, and sweeping everyone has every customer in its blast radius, so sweeping the estate is a loop somebody writes deliberately.\n\n`detectOnly` runs the Watcher and skips the Analyst. Use it when the feed is empty and you need to know which half is quiet: the Watcher finding nothing wrong is a different failure from the Analyst failing to resolve an obligation.\n\n`findings` lower than `signals` is normal, not an error. A signal whose obligation slug resolves to nothing is skipped and logged, because a finding with no obligation behind it could not cite anything."
+          }
+        },
+        {
           "name": "Dashboard",
           "request": {
             "method": "POST",

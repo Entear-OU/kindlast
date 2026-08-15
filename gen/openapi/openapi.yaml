@@ -464,6 +464,44 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/sweep:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Runs the Watcher and then the Analyst for one organisation.
+
+                 The organisation comes from the `Kindlast-Org-Id` header, exactly as it
+                 does on the human surface. A sweep is per-organisation and never global:
+                 "sweep everyone" is an operation whose blast radius is every customer at
+                 once, and it should be a loop somebody writes deliberately rather than a
+                 parameter somebody can pass by accident.
+
+                 Synchronous, and that is a decision with a shelf life. A sweep over one
+                 organisation's profiles is fast enough to answer in a request today, and a
+                 synchronous call is far easier to operate because the caller learns whether
+                 it worked. When sweeps outgrow that, this returns a handle instead, which
+                 is a proto change rather than an architectural one.
+            operationId: SweepService_RunSweep
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RunSweepRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RunSweepResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
 components:
     schemas:
         AcceptInvitationResponse:
@@ -862,6 +900,41 @@ components:
         RemoveMemberResponse:
             type: object
             properties: {}
+        RunSweepRequest:
+            type: object
+            properties:
+                detectOnly:
+                    type: boolean
+                    description: |-
+                        Run the Watcher only, and skip converting its signals into findings.
+
+                         For diagnosing the producer: the Watcher deciding nothing is wrong is a
+                         different failure from the Analyst failing to resolve an obligation, and
+                         separating them turns one confusing empty feed into two answerable
+                         questions.
+        RunSweepResponse:
+            type: object
+            properties:
+                signals:
+                    type: integer
+                    description: |-
+                        Signals the Watcher raised. Deduplicated in the database, so a second sweep
+                         over unchanged data reports zero rather than repeating itself.
+                    format: int32
+                findings:
+                    type: integer
+                    description: |-
+                        Findings the Analyst created or refreshed from those signals. Zero when
+                         `detect_only` was set.
+
+                         Lower than `signals` is normal rather than an error: a signal whose
+                         obligation slug resolves to nothing is skipped and logged, because a
+                         finding with no obligation behind it could not cite anything.
+                    format: int32
+                ranAt:
+                    type: string
+                    description: When this sweep ran, which is what the console's "last checked" reads.
+                    format: date-time
         SeverityCounts:
             type: object
             properties:
@@ -1065,3 +1138,36 @@ tags:
          Only GetCurrentUser is defined here. The rest of the public surface arrives
          with the issues that implement it; defining it early would mean a contract
          nobody has verified against a handler.
+    - name: SweepService
+      description: |-
+        The platform surface: things the platform calls, never a browser.
+
+         WHY THIS IS `platform` AND THE ROUTE IS `/internal/v1`
+
+         The design calls this surface "internal" and the HTTP path below keeps that
+         name, because that is what it is and what an operator will look for. The
+         proto package cannot: Go gives any path segment called `internal` a
+         visibility rule, so generated code under `gen/go/kindlast/internal/v1` is
+         importable only from within `gen/go/kindlast/...` and nothing in core-api can
+         use it. That is a toolchain constraint rather than a design one, so the
+         design's name stays on the route and the package takes another.
+
+         A separate package from `kindlast.core.v1` either way, and the separation is
+         the point rather than filing. Everything in `core.v1` is reachable by a
+         human's token through `web`. Nothing here is, or should ever become so:
+         these RPCs declare `internal:*` scopes, which the seed issues to service
+         clients through client credentials and never to the browser client. Keeping
+         them apart makes "is this reachable by a person" a question answered by the
+         import path.
+
+         WHY A SWEEP HAS TO BE TRIGGERED AT ALL
+
+         Nothing runs the Watcher or the Analyst on a schedule. 00001 dropped the
+         three pg_cron jobs when the schema moved off Supabase, and the schedules
+         return with Temporal at build-order step 8. Between those two points a
+         perfectly correct feed shows an empty state forever, because nothing has ever
+         looked.
+
+         This is the seam that fills the gap: something outside can ask for a sweep
+         now. When Temporal lands it becomes the thing Temporal calls rather than
+         being replaced, so the schedule arrives as a caller rather than a rewrite.
