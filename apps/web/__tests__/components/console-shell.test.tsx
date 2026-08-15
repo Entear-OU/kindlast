@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 // The layout posts to /auth/logout through SignOutForm, which mints a CSRF
@@ -98,8 +98,12 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
         <div>child</div>
       </ConsoleShell>,
     )
-    expect(screen.getByRole('link', { name: /kindlast/i })).toBeInTheDocument()
+    // Two brand links now, one per layout: the sidebar's and the phone
+    // header's. Both fall back to the wordmark when there is no organisation
+    // name to show, which is the state this test is about.
+    expect(screen.getAllByRole('link', { name: /kindlast/i })).toHaveLength(2)
     expect(screen.queryByTestId('chrome-org')).toBeNull()
+    expect(screen.queryByTestId('mobile-org')).toBeNull()
   })
 
   it('renders a sign-out button that posts to /auth/logout', () => {
@@ -108,14 +112,18 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
         <div>child</div>
       </ConsoleShell>,
     )
-    const signOutButton = screen.getByRole('button', { name: /sign out/i })
-    expect(signOutButton).toBeInTheDocument()
-    expect(signOutButton).toHaveAttribute('type', 'submit')
+    // One per layout. Both must be real submits inside a POST form, because a
+    // sign-out that silently does nothing on a phone is worse than no button:
+    // the person believes they have signed out on a shared device.
+    const signOutButtons = screen.getAllByRole('button', { name: /sign out/i })
+    expect(signOutButtons).toHaveLength(2)
 
-    // The button must sit inside a POST form to /auth/logout, otherwise it'd
-    // POST to the current page on click.
-    const form = signOutButton.closest('form')
-    expect(form).not.toBeNull()
+    for (const button of signOutButtons) {
+      expect(button).toHaveAttribute('type', 'submit')
+      // The button must sit inside a POST form to /auth/logout, otherwise it'd
+      // POST to the current page on click.
+      expect(button.closest('form')).not.toBeNull()
+    }
   })
 
   it('renders the children', () => {
@@ -139,13 +147,14 @@ describe('the sidebar (ENT-222)', () => {
         <div>child</div>
       </ConsoleShell>,
     )
-    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
-    expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute(
-      'aria-current',
-    )
+    // Marked in both navigations: the sidebar link and the phone tab, the
+    // latter named by aria-label since it renders an icon alone.
+    for (const link of screen.getAllByRole('link', { name: 'Overview' })) {
+      expect(link).toHaveAttribute('aria-current', 'page')
+    }
+    for (const link of screen.getAllByRole('link', { name: 'Settings' })) {
+      expect(link).not.toHaveAttribute('aria-current')
+    }
   })
 
   // The rule from ENT-202, applied to navigation: a control that silently does
@@ -166,7 +175,10 @@ describe('the sidebar (ENT-222)', () => {
 })
 
 describe('the agent rail (ENT-222)', () => {
-  it('names the four agents as the product names them', () => {
+  // Two instances render, one per layout, and jsdom applies no media queries
+  // so both are in the tree. Asserting "two of each" is the honest form: it
+  // also fails if a future change drops one layout's rail entirely.
+  it('names the four agents as the product names them, in both layouts', () => {
     render(
       <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
         <div>child</div>
@@ -178,7 +190,7 @@ describe('the agent rail (ENT-222)', () => {
       'The Messenger',
       'The Hands',
     ]) {
-      expect(screen.getByText(agent)).toBeInTheDocument()
+      expect(screen.getAllByText(agent)).toHaveLength(2)
     }
   })
 
@@ -192,7 +204,8 @@ describe('the agent rail (ENT-222)', () => {
         <div>child</div>
       </ConsoleShell>,
     )
-    expect(screen.getAllByText('Not scheduled yet')).toHaveLength(4)
+    // Four agents, two layouts.
+    expect(screen.getAllByText('Not scheduled yet')).toHaveLength(8)
   })
 
   it('does not render call, chat or video as controls', () => {
@@ -205,9 +218,56 @@ describe('the agent rail (ENT-222)', () => {
     // them yet, and a person who pressed one would wait for an answer that is
     // not coming.
     for (const label of ['Chat', 'Call', 'Walkthrough']) {
-      expect(screen.getByText(label)).toBeInTheDocument()
+      expect(screen.getAllByText(label)).toHaveLength(2)
       expect(screen.queryByRole('button', { name: label })).toBeNull()
       expect(screen.queryByRole('link', { name: label })).toBeNull()
     }
+  })
+})
+
+describe('the phone layout (ENT-222)', () => {
+  // Icons alone, so the accessible name is the only name there is. A tab bar
+  // announcing "link, link, link" is unusable without sight, and the labels
+  // cost nothing to carry.
+  it('gives every icon-only tab an accessible name', () => {
+    render(
+      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+        <div>child</div>
+      </ConsoleShell>,
+    )
+    const tabBar = screen.getAllByRole('navigation', { name: 'Console' })[1]
+    for (const label of ['Overview', 'Settings', 'Your agents']) {
+      expect(
+        within(tabBar).getByRole('link', { name: label }),
+      ).toBeInTheDocument()
+    }
+  })
+
+  // Same rule as the sidebar, and tighter: a tab bar has no room for a
+  // "Coming next" heading, so an unbuilt surface would have to appear as a
+  // dead tab, which is exactly the inert control ENT-202 argues against.
+  it('offers no tab for a surface that does not exist', () => {
+    render(
+      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+        <div>child</div>
+      </ConsoleShell>,
+    )
+    const tabBar = screen.getAllByRole('navigation', { name: 'Console' })[1]
+    expect(within(tabBar).queryByRole('link', { name: 'Feed' })).toBeNull()
+    expect(within(tabBar).queryByRole('link', { name: 'Records' })).toBeNull()
+  })
+
+  // The rail has no column on a phone, so the tab points at it in the page.
+  // Without the anchor the tab is decoration.
+  it('points the agents tab at the rail it renders below the content', () => {
+    render(
+      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+        <div>child</div>
+      </ConsoleShell>,
+    )
+    const tabBar = screen.getAllByRole('navigation', { name: 'Console' })[1]
+    expect(
+      within(tabBar).getByRole('link', { name: 'Your agents' }),
+    ).toHaveAttribute('href', '#agents')
   })
 })

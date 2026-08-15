@@ -51,15 +51,35 @@ const AGENTS = [
   },
 ] as const
 
-export function AgentRail() {
+/**
+ * Rendered twice, once per layout, because the rail is a column on a wide
+ * screen and a section beneath the content on a phone, and those are different
+ * places in the DOM rather than the same place styled differently.
+ *
+ * The `variant` is what keeps that legal: two elements carrying the same `id`
+ * is invalid HTML and gives a screen reader two things to land on, so the ids
+ * are derived from it. It also gives the phone's tab bar something to link to.
+ */
+export function AgentRail({
+  variant = 'desktop',
+}: {
+  variant?: 'desktop' | 'mobile'
+}) {
+  const headingId = `agent-rail-heading-${variant}`
+
   return (
     <aside
-      aria-labelledby="agent-rail-heading"
-      className="flex h-full flex-col gap-6 overflow-y-auto border-l border-border/60 bg-background px-5 py-6"
+      id={variant === 'mobile' ? 'agents' : undefined}
+      aria-labelledby={headingId}
+      className={
+        variant === 'mobile'
+          ? 'flex flex-col gap-6 border-t border-border/60 bg-background px-5 py-6'
+          : 'flex h-full flex-col gap-6 overflow-y-auto border-l border-border/60 bg-background px-5 py-6'
+      }
     >
       <div>
         <h2
-          id="agent-rail-heading"
+          id={headingId}
           className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase"
         >
           Your agents
