@@ -54,6 +54,7 @@ services:
       POSTGRES_PASSWORD: ${KINDLAST_PG_SUPER_PASSWORD:-postgres-dev-password}
       KINDLAST_MIGRATOR_PASSWORD: ${KINDLAST_MIGRATOR_PASSWORD:-migrator-dev-password}
       KINDLAST_APP_PASSWORD: ${KINDLAST_APP_PASSWORD:-app-dev-password}
+      KINDLAST_AGENT_PASSWORD: ${KINDLAST_AGENT_PASSWORD:-agent-dev-password}
       KINDLAST_VECTOR_RO_PASSWORD: ${KINDLAST_VECTOR_RO_PASSWORD:-vector-ro-dev-password}
     volumes:
       - postgres-app-data:/var/lib/postgresql/data

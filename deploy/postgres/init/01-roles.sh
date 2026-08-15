@@ -20,6 +20,16 @@
 #                       table-level DML grants only (granted by the baseline
 #                       migration). Row level security is its whole world.
 #
+#   kindlast_agent      the producer role: the Watcher and the Analyst. It is
+#                       the "future system role" 00002's header anticipated,
+#                       and it exists because kindlast_app deliberately cannot
+#                       create findings. NOSUPERUSER, NOBYPASSRLS, owns
+#                       nothing. Its policies are org-scoped like everything
+#                       else but carry no membership check, because a sweep is
+#                       started by the system rather than by a person and there
+#                       is no member to check. Tenancy still binds it: it can
+#                       only write into the organisation its GUC names.
+#
 #   kindlast_vector_ro  read-only role for Intelligence's vector search,
 #                       scoped to the chunk/embedding tables once those land
 #                       (ENT-51). Created now so the connection string exists
@@ -31,6 +41,7 @@ set -euo pipefail
 
 : "${KINDLAST_MIGRATOR_PASSWORD:?KINDLAST_MIGRATOR_PASSWORD must be set}"
 : "${KINDLAST_APP_PASSWORD:?KINDLAST_APP_PASSWORD must be set}"
+: "${KINDLAST_AGENT_PASSWORD:?KINDLAST_AGENT_PASSWORD must be set}"
 : "${KINDLAST_VECTOR_RO_PASSWORD:?KINDLAST_VECTOR_RO_PASSWORD must be set}"
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
@@ -40,6 +51,10 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
 
 	create role kindlast_app
 	  login password '${KINDLAST_APP_PASSWORD}'
+	  nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+
+	create role kindlast_agent
+	  login password '${KINDLAST_AGENT_PASSWORD}'
 	  nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
 
 	create role kindlast_vector_ro
@@ -61,7 +76,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
 	create database kindlast owner kindlast_migrator;
 	revoke all on database kindlast from public;
 	grant connect on database kindlast
-	  to kindlast_migrator, kindlast_app, kindlast_vector_ro;
+	  to kindlast_migrator, kindlast_app, kindlast_agent, kindlast_vector_ro;
 EOSQL
 
 # Schema ownership and the CREATE fence. The migrator owns public; the app
@@ -70,5 +85,5 @@ EOSQL
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname kindlast <<-EOSQL
 	alter schema public owner to kindlast_migrator;
 	revoke create on schema public from public;
-	grant usage on schema public to kindlast_app, kindlast_vector_ro;
+	grant usage on schema public to kindlast_app, kindlast_agent, kindlast_vector_ro;
 EOSQL
