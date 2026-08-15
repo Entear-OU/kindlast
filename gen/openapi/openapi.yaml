@@ -6,6 +6,36 @@ info:
     title: Kindlast Core API
     version: 1.0.0
 paths:
+    /api/v1/invitations:
+        post:
+            tags:
+                - OrgService
+            description: |-
+                Invites someone to the active organisation by email address.
+
+                 The token is generated here, delivered by email, and stored only as a
+                 hash: an invitation token is a bearer capability, so a database dump must
+                 not contain anything that can be redeemed (00003).
+            operationId: OrgService_InviteMember
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/InviteMemberRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/InviteMemberResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/invitations/{token}:accept:
         post:
             tags:
@@ -63,6 +93,156 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /api/v1/members:
+        get:
+            tags:
+                - OrgService
+            description: |-
+                Lists the members of the active organisation.
+
+                 `org:read` rather than `org:manage`: seeing who your colleagues are is not
+                 an administrative act, and requiring the management scope would mean a
+                 viewer could not render the page they are entitled to see.
+            operationId: OrgService_ListMembers
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListMembersResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/members/{userId}:
+        delete:
+            tags:
+                - OrgService
+            description: |-
+                Removes a member from the active organisation.
+
+                 Removing the last owner is refused. An organisation with no owner has no
+                 one who can invite, change roles or manage billing, and no path back short
+                 of operator intervention.
+            operationId: OrgService_RemoveMember
+            parameters:
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RemoveMemberResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        patch:
+            tags:
+                - OrgService
+            description: |-
+                Changes a member's role.
+
+                 Owner-only, enforced in the database as well as here: memberships_update_owner
+                 requires app_org_role(org_id) = 'owner'. The handler check exists so the
+                 caller gets a 403 that says what happened rather than an empty result set.
+            operationId: OrgService_UpdateMemberRole
+            parameters:
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateMemberRoleRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UpdateMemberRoleResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/organisation:
+        patch:
+            tags:
+                - OrgService
+            description: |-
+                Renames the active organisation.
+
+                 Singular `/organisation`, because it addresses the one the header names
+                 rather than a collection member. The slug does NOT follow the rename, and
+                 that is a product decision rather than an oversight: slugs live in
+                 bookmarks and in emailed capability-token links, which are exactly the
+                 links a compliance product has to keep working (§20.1, ENT-198).
+            operationId: OrgService_UpdateOrganisation
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateOrganisationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UpdateOrganisationResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/organisations:
+        post:
+            tags:
+                - OrgService
+            description: |-
+                Creates an organisation and makes the caller its owner.
+
+                 No active organisation, so no header (see above). The slug is derived from
+                 the name by org_slug() at insert time and is immutable afterwards.
+            operationId: OrgService_CreateOrganisation
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateOrganisationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateOrganisationResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
 components:
     schemas:
         AcceptInvitationResponse:
@@ -84,6 +264,29 @@ components:
                         The URL segment to redirect into, so an accepted invitation lands the
                          person inside the organisation they just joined rather than at a page
                          that has to look it up again (§20.1, ENT-198).
+        CreateOrganisationRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+                    description: |-
+                        Free text as the customer writes it, including punctuation and non-ASCII.
+                         The slug derived from it is the constrained value, not this.
+        CreateOrganisationResponse:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                name:
+                    type: string
+                slug:
+                    type: string
+                    description: Derived from the name at insert time and immutable from then on.
+                role:
+                    type: string
+                    description: |-
+                        Always `owner`: whoever creates an organisation owns it. Returned rather
+                         than assumed so a client never has to encode that rule.
         GetCurrentUserResponse:
             type: object
             properties:
@@ -119,6 +322,58 @@ components:
                     description: The type of the serialized message.
             additionalProperties: true
             description: Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.
+        InviteMemberRequest:
+            type: object
+            properties:
+                email:
+                    type: string
+                role:
+                    type: string
+                    description: The role the invitation grants on acceptance.
+        InviteMemberResponse:
+            type: object
+            properties:
+                invitationId:
+                    type: string
+                expiresAt:
+                    type: string
+                    description: |-
+                        When the capability stops working. Returned so the console can tell the
+                         inviter what they just created rather than describing it vaguely.
+                    format: date-time
+        ListMembersResponse:
+            type: object
+            properties:
+                members:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Member'
+        Member:
+            type: object
+            properties:
+                userId:
+                    type: string
+                    description: |-
+                        The derived uuid, not the IdP subject. This is what UpdateMemberRole and
+                         RemoveMember take.
+                role:
+                    type: string
+                    description: One of owner, member, viewer.
+                displayName:
+                    type: string
+                    description: |-
+                        Both may be empty, and a client must cope. display_name is absent when the
+                         authorization server returned no name claim, and both are absent for a
+                         member who has never signed in since user_identities gained a row.
+
+                         Visible to every member of the organisation regardless of role, which is a
+                         decision the product owner took explicitly on 2026-08-15 rather than a
+                         default nobody examined. See 00005_co_member_identity.sql.
+                email:
+                    type: string
+                joinedAt:
+                    type: string
+                    format: date-time
         Membership:
             type: object
             properties:
@@ -142,6 +397,9 @@ components:
                          emailed capability-token links, which are exactly the links a compliance
                          product has to keep working. A client that wants a label shows org_name; a
                          client that wants a link uses this.
+        RemoveMemberResponse:
+            type: object
+            properties: {}
         Status:
             type: object
             properties:
@@ -158,6 +416,39 @@ components:
                         $ref: '#/components/schemas/GoogleProtobufAny'
                     description: A list of messages that carry the error details.  There is a common set of message types for APIs to use.
             description: 'The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).'
+        UpdateMemberRoleRequest:
+            type: object
+            properties:
+                userId:
+                    type: string
+                role:
+                    type: string
+                    description: |-
+                        owner, member or viewer. Rejected with InvalidArgument otherwise rather
+                         than left to the database's check constraint, so the caller gets a message
+                         naming the valid values.
+        UpdateMemberRoleResponse:
+            type: object
+            properties:
+                member:
+                    $ref: '#/components/schemas/Member'
+        UpdateOrganisationRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+        UpdateOrganisationResponse:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                name:
+                    type: string
+                slug:
+                    type: string
+                    description: |-
+                        Returned deliberately, and unchanged by the rename. A client that assumed
+                         otherwise finds out here rather than by building a broken link.
         User:
             type: object
             properties:
@@ -180,16 +471,44 @@ tags:
       description: |-
         Organisations and membership (core-api-surface §20.1).
 
-         Only AcceptInvitation is defined here. The rest of the organisation surface
-         (list, create, update, members, roles, invite) is build-order step 2, and
-         defining it now would mean a contract nobody has verified against a handler.
+         THE ORGANISATION IS NEVER IN THE PATH.
 
-         Accept is here rather than there because of an ordering constraint in the
-         signup slice that is easy to get wrong and expensive to discover later: an
-         invited user must accept BEFORE their first GetCurrentUser call, or
-         just-in-time provisioning sees a subject with no membership and gives them a
-         personal organisation they never asked for, alongside the one they were
-         invited to (§1.8).
+         Every method below acts on the organisation named by the `Kindlast-Org-Id`
+         request header, which the interceptor resolves and verifies once per request
+         before any handler runs. No RPC takes an org_id, and the REST aliases carry
+         no `{org_id}` segment.
+
+         This is worth stating loudly because conventional REST would write
+         `/organisations/{org_id}/members/{user_id}` and it would be wrong here. The
+         header exists so that membership has exactly one source of truth and so a
+         consultant can switch active organisation without re-minting a token
+         (interceptor/tenancy.go). A path parameter would give the same fact a second
+         source, and a caller sending one organisation in the header and another in
+         the path would have to be either an error nobody remembered to write or a
+         silent winner. Neither is a good answer to a question that should not exist.
+
+         The pattern is precedented rather than eccentric: Stripe scopes with the
+         `Stripe-Account` header, and Slack with workspace-scoped tokens.
+
+         `{user_id}` in a path is a different matter and is fine. It names the person
+         being acted on, not the tenant, and it is meaningless without the header.
+
+         TWO CALLS DELIBERATELY CARRY NO ORGANISATION
+
+         CreateOrganisation and AcceptInvitation. In both the caller is establishing
+         membership rather than exercising it, so there is no active organisation to
+         name. Per §1.8 the header is OMITTED on these, not sent empty: an empty
+         value is a client bug that should be refused, while its absence is a
+         statement.
+
+         THERE IS NO ListMyOrganisations, ON PURPOSE
+
+         GetCurrentUser already returns every membership with its org id, name, slug
+         and role, and it is the call the console bootstraps on. A second endpoint
+         answering the same question would be a second thing to keep correct, and the
+         two would drift the first time one grew a field. Revisit if a single user
+         ever belongs to enough organisations to need pagination, which the sizing in
+         §19.1 puts a long way off.
     - name: SessionService
       description: |-
         The console bootstrap call, and the first authenticated endpoint in the

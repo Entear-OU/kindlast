@@ -59,6 +59,40 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.OrgService.AcceptInvitation": {
 			Method: "POST", Path: "/api/v1/invitations/{token}:accept",
 		},
+
+		// ENT-202. Read these as a group, because the thing worth reviewing is
+		// what they all lack: not one carries an `{org_id}` segment.
+		//
+		// Conventional REST would write /organisations/{org_id}/members/{user_id}
+		// and it would be wrong here. The organisation travels in the
+		// Kindlast-Org-Id header so that membership has exactly one source of
+		// truth; a path parameter would give the same fact a second source, and
+		// a request naming one organisation in the header and another in the
+		// path would have to be either an error nobody wrote or a silent
+		// winner. Stripe and Slack scope the same way.
+		//
+		// `{user_id}` is fine and is a different thing: it names the person
+		// being acted on, and it is meaningless without the header.
+		"kindlast.core.v1.OrgService.CreateOrganisation": {
+			Method: "POST", Path: "/api/v1/organisations",
+		},
+		// Singular, because it addresses the organisation the header names
+		// rather than a member of a collection.
+		"kindlast.core.v1.OrgService.UpdateOrganisation": {
+			Method: "PATCH", Path: "/api/v1/organisation",
+		},
+		"kindlast.core.v1.OrgService.ListMembers": {
+			Method: "GET", Path: "/api/v1/members",
+		},
+		"kindlast.core.v1.OrgService.UpdateMemberRole": {
+			Method: "PATCH", Path: "/api/v1/members/{user_id}",
+		},
+		"kindlast.core.v1.OrgService.RemoveMember": {
+			Method: "DELETE", Path: "/api/v1/members/{user_id}",
+		},
+		"kindlast.core.v1.OrgService.InviteMember": {
+			Method: "POST", Path: "/api/v1/invitations",
+		},
 	}
 
 	got := map[string]httprule.Binding{}

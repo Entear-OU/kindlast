@@ -3,21 +3,123 @@ syntax = "proto3";
 package kindlast.core.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 import "kindlast/options/v1/scope.proto";
 
 // Organisations and membership (core-api-surface §20.1).
 //
-// Only AcceptInvitation is defined here. The rest of the organisation surface
-// (list, create, update, members, roles, invite) is build-order step 2, and
-// defining it now would mean a contract nobody has verified against a handler.
+// THE ORGANISATION IS NEVER IN THE PATH.
 //
-// Accept is here rather than there because of an ordering constraint in the
-// signup slice that is easy to get wrong and expensive to discover later: an
-// invited user must accept BEFORE their first GetCurrentUser call, or
-// just-in-time provisioning sees a subject with no membership and gives them a
-// personal organisation they never asked for, alongside the one they were
-// invited to (§1.8).
+// Every method below acts on the organisation named by the `Kindlast-Org-Id`
+// request header, which the interceptor resolves and verifies once per request
+// before any handler runs. No RPC takes an org_id, and the REST aliases carry
+// no `{org_id}` segment.
+//
+// This is worth stating loudly because conventional REST would write
+// `/organisations/{org_id}/members/{user_id}` and it would be wrong here. The
+// header exists so that membership has exactly one source of truth and so a
+// consultant can switch active organisation without re-minting a token
+// (interceptor/tenancy.go). A path parameter would give the same fact a second
+// source, and a caller sending one organisation in the header and another in
+// the path would have to be either an error nobody remembered to write or a
+// silent winner. Neither is a good answer to a question that should not exist.
+//
+// The pattern is precedented rather than eccentric: Stripe scopes with the
+// `Stripe-Account` header, and Slack with workspace-scoped tokens.
+//
+// `{user_id}` in a path is a different matter and is fine. It names the person
+// being acted on, not the tenant, and it is meaningless without the header.
+//
+// TWO CALLS DELIBERATELY CARRY NO ORGANISATION
+//
+// CreateOrganisation and AcceptInvitation. In both the caller is establishing
+// membership rather than exercising it, so there is no active organisation to
+// name. Per §1.8 the header is OMITTED on these, not sent empty: an empty
+// value is a client bug that should be refused, while its absence is a
+// statement.
+//
+// THERE IS NO ListMyOrganisations, ON PURPOSE
+//
+// GetCurrentUser already returns every membership with its org id, name, slug
+// and role, and it is the call the console bootstraps on. A second endpoint
+// answering the same question would be a second thing to keep correct, and the
+// two would drift the first time one grew a field. Revisit if a single user
+// ever belongs to enough organisations to need pagination, which the sizing in
+// §19.1 puts a long way off.
 service OrgService {
+  // Creates an organisation and makes the caller its owner.
+  //
+  // No active organisation, so no header (see above). The slug is derived from
+  // the name by org_slug() at insert time and is immutable afterwards.
+  rpc CreateOrganisation(CreateOrganisationRequest) returns (CreateOrganisationResponse) {
+    option (kindlast.options.v1.required_scope) = "org:manage";
+    option (google.api.http) = {
+      post: "/api/v1/organisations"
+      body: "*"
+    };
+  }
+
+  // Renames the active organisation.
+  //
+  // Singular `/organisation`, because it addresses the one the header names
+  // rather than a collection member. The slug does NOT follow the rename, and
+  // that is a product decision rather than an oversight: slugs live in
+  // bookmarks and in emailed capability-token links, which are exactly the
+  // links a compliance product has to keep working (§20.1, ENT-198).
+  rpc UpdateOrganisation(UpdateOrganisationRequest) returns (UpdateOrganisationResponse) {
+    option (kindlast.options.v1.required_scope) = "org:manage";
+    option (google.api.http) = {
+      patch: "/api/v1/organisation"
+      body: "*"
+    };
+  }
+
+  // Lists the members of the active organisation.
+  //
+  // `org:read` rather than `org:manage`: seeing who your colleagues are is not
+  // an administrative act, and requiring the management scope would mean a
+  // viewer could not render the page they are entitled to see.
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse) {
+    option (kindlast.options.v1.required_scope) = "org:read";
+    option (google.api.http) = {get: "/api/v1/members"};
+  }
+
+  // Changes a member's role.
+  //
+  // Owner-only, enforced in the database as well as here: memberships_update_owner
+  // requires app_org_role(org_id) = 'owner'. The handler check exists so the
+  // caller gets a 403 that says what happened rather than an empty result set.
+  rpc UpdateMemberRole(UpdateMemberRoleRequest) returns (UpdateMemberRoleResponse) {
+    option (kindlast.options.v1.required_scope) = "org:manage";
+    option (google.api.http) = {
+      patch: "/api/v1/members/{user_id}"
+      body: "*"
+    };
+  }
+
+  // Removes a member from the active organisation.
+  //
+  // Removing the last owner is refused. An organisation with no owner has no
+  // one who can invite, change roles or manage billing, and no path back short
+  // of operator intervention.
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse) {
+    option (kindlast.options.v1.required_scope) = "org:manage";
+    option (google.api.http) = {delete: "/api/v1/members/{user_id}"};
+  }
+
+  // Invites someone to the active organisation by email address.
+  //
+  // The token is generated here, delivered by email, and stored only as a
+  // hash: an invitation token is a bearer capability, so a database dump must
+  // not contain anything that can be redeemed (00003).
+  rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse) {
+    option (kindlast.options.v1.required_scope) = "org:manage";
+    option (google.api.http) = {
+      post: "/api/v1/invitations"
+      body: "*"
+    };
+  }
+
   // Joins the organisation named by an invitation token.
   //
   // Scope is `openid` rather than `org:manage`: the caller is not managing an
@@ -31,6 +133,93 @@ service OrgService {
     // the path because that is the shape of the link a person is emailed.
     option (google.api.http) = {post: "/api/v1/invitations/{token}:accept"};
   }
+}
+
+message CreateOrganisationRequest {
+  // Free text as the customer writes it, including punctuation and non-ASCII.
+  // The slug derived from it is the constrained value, not this.
+  string name = 1;
+}
+
+message CreateOrganisationResponse {
+  string org_id = 1;
+  string name = 2;
+  // Derived from the name at insert time and immutable from then on.
+  string slug = 3;
+  // Always `owner`: whoever creates an organisation owns it. Returned rather
+  // than assumed so a client never has to encode that rule.
+  string role = 4;
+}
+
+message UpdateOrganisationRequest {
+  string name = 1;
+}
+
+message UpdateOrganisationResponse {
+  string org_id = 1;
+  string name = 2;
+  // Returned deliberately, and unchanged by the rename. A client that assumed
+  // otherwise finds out here rather than by building a broken link.
+  string slug = 3;
+}
+
+message ListMembersRequest {}
+
+message ListMembersResponse {
+  repeated Member members = 1;
+}
+
+message Member {
+  // The derived uuid, not the IdP subject. This is what UpdateMemberRole and
+  // RemoveMember take.
+  string user_id = 1;
+  // One of owner, member, viewer.
+  string role = 2;
+  // Both may be empty, and a client must cope. display_name is absent when the
+  // authorization server returned no name claim, and both are absent for a
+  // member who has never signed in since user_identities gained a row.
+  //
+  // Visible to every member of the organisation regardless of role, which is a
+  // decision the product owner took explicitly on 2026-08-15 rather than a
+  // default nobody examined. See 00005_co_member_identity.sql.
+  string display_name = 3;
+  string email = 4;
+  google.protobuf.Timestamp joined_at = 5;
+}
+
+message UpdateMemberRoleRequest {
+  string user_id = 1;
+  // owner, member or viewer. Rejected with InvalidArgument otherwise rather
+  // than left to the database's check constraint, so the caller gets a message
+  // naming the valid values.
+  string role = 2;
+}
+
+message UpdateMemberRoleResponse {
+  Member member = 1;
+}
+
+message RemoveMemberRequest {
+  string user_id = 1;
+}
+
+message RemoveMemberResponse {}
+
+message InviteMemberRequest {
+  string email = 1;
+  // The role the invitation grants on acceptance.
+  string role = 2;
+}
+
+message InviteMemberResponse {
+  string invitation_id = 1;
+  // When the capability stops working. Returned so the console can tell the
+  // inviter what they just created rather than describing it vaguely.
+  google.protobuf.Timestamp expires_at = 2;
+  // Deliberately absent: the token itself. It goes to the invitee's mailbox
+  // and nowhere else, so that possession of it means what it is supposed to
+  // mean. Returning it here would let anyone who can invite also impersonate
+  // the acceptance.
 }
 
 message AcceptInvitationRequest {

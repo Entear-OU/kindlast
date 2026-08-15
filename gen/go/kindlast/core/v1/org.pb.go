@@ -11,6 +11,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -23,6 +24,681 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type CreateOrganisationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Free text as the customer writes it, including punctuation and non-ASCII.
+	// The slug derived from it is the constrained value, not this.
+	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateOrganisationRequest) Reset() {
+	*x = CreateOrganisationRequest{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOrganisationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOrganisationRequest) ProtoMessage() {}
+
+func (x *CreateOrganisationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOrganisationRequest.ProtoReflect.Descriptor instead.
+func (*CreateOrganisationRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *CreateOrganisationRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type CreateOrganisationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	OrgId string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Derived from the name at insert time and immutable from then on.
+	Slug string `protobuf:"bytes,3,opt,name=slug,proto3" json:"slug,omitempty"`
+	// Always `owner`: whoever creates an organisation owns it. Returned rather
+	// than assumed so a client never has to encode that rule.
+	Role          string `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateOrganisationResponse) Reset() {
+	*x = CreateOrganisationResponse{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOrganisationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOrganisationResponse) ProtoMessage() {}
+
+func (x *CreateOrganisationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOrganisationResponse.ProtoReflect.Descriptor instead.
+func (*CreateOrganisationResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *CreateOrganisationResponse) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *CreateOrganisationResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateOrganisationResponse) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *CreateOrganisationResponse) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+type UpdateOrganisationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateOrganisationRequest) Reset() {
+	*x = UpdateOrganisationRequest{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateOrganisationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateOrganisationRequest) ProtoMessage() {}
+
+func (x *UpdateOrganisationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateOrganisationRequest.ProtoReflect.Descriptor instead.
+func (*UpdateOrganisationRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *UpdateOrganisationRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type UpdateOrganisationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	OrgId string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Returned deliberately, and unchanged by the rename. A client that assumed
+	// otherwise finds out here rather than by building a broken link.
+	Slug          string `protobuf:"bytes,3,opt,name=slug,proto3" json:"slug,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateOrganisationResponse) Reset() {
+	*x = UpdateOrganisationResponse{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateOrganisationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateOrganisationResponse) ProtoMessage() {}
+
+func (x *UpdateOrganisationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateOrganisationResponse.ProtoReflect.Descriptor instead.
+func (*UpdateOrganisationResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *UpdateOrganisationResponse) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *UpdateOrganisationResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateOrganisationResponse) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+type ListMembersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMembersRequest) Reset() {
+	*x = ListMembersRequest{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMembersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMembersRequest) ProtoMessage() {}
+
+func (x *ListMembersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMembersRequest.ProtoReflect.Descriptor instead.
+func (*ListMembersRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{4}
+}
+
+type ListMembersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Members       []*Member              `protobuf:"bytes,1,rep,name=members,proto3" json:"members,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMembersResponse) Reset() {
+	*x = ListMembersResponse{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMembersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMembersResponse) ProtoMessage() {}
+
+func (x *ListMembersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMembersResponse.ProtoReflect.Descriptor instead.
+func (*ListMembersResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ListMembersResponse) GetMembers() []*Member {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
+type Member struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The derived uuid, not the IdP subject. This is what UpdateMemberRole and
+	// RemoveMember take.
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// One of owner, member, viewer.
+	Role string `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	// Both may be empty, and a client must cope. display_name is absent when the
+	// authorization server returned no name claim, and both are absent for a
+	// member who has never signed in since user_identities gained a row.
+	//
+	// Visible to every member of the organisation regardless of role, which is a
+	// decision the product owner took explicitly on 2026-08-15 rather than a
+	// default nobody examined. See 00005_co_member_identity.sql.
+	DisplayName   string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Email         string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
+	JoinedAt      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=joined_at,json=joinedAt,proto3" json:"joined_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Member) Reset() {
+	*x = Member{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Member) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Member) ProtoMessage() {}
+
+func (x *Member) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Member.ProtoReflect.Descriptor instead.
+func (*Member) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *Member) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *Member) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *Member) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *Member) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *Member) GetJoinedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.JoinedAt
+	}
+	return nil
+}
+
+type UpdateMemberRoleRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// owner, member or viewer. Rejected with InvalidArgument otherwise rather
+	// than left to the database's check constraint, so the caller gets a message
+	// naming the valid values.
+	Role          string `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateMemberRoleRequest) Reset() {
+	*x = UpdateMemberRoleRequest{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateMemberRoleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateMemberRoleRequest) ProtoMessage() {}
+
+func (x *UpdateMemberRoleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateMemberRoleRequest.ProtoReflect.Descriptor instead.
+func (*UpdateMemberRoleRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *UpdateMemberRoleRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *UpdateMemberRoleRequest) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+type UpdateMemberRoleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Member        *Member                `protobuf:"bytes,1,opt,name=member,proto3" json:"member,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateMemberRoleResponse) Reset() {
+	*x = UpdateMemberRoleResponse{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateMemberRoleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateMemberRoleResponse) ProtoMessage() {}
+
+func (x *UpdateMemberRoleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateMemberRoleResponse.ProtoReflect.Descriptor instead.
+func (*UpdateMemberRoleResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *UpdateMemberRoleResponse) GetMember() *Member {
+	if x != nil {
+		return x.Member
+	}
+	return nil
+}
+
+type RemoveMemberRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveMemberRequest) Reset() {
+	*x = RemoveMemberRequest{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveMemberRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveMemberRequest) ProtoMessage() {}
+
+func (x *RemoveMemberRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveMemberRequest.ProtoReflect.Descriptor instead.
+func (*RemoveMemberRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RemoveMemberRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+type RemoveMemberResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveMemberResponse) Reset() {
+	*x = RemoveMemberResponse{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveMemberResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveMemberResponse) ProtoMessage() {}
+
+func (x *RemoveMemberResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveMemberResponse.ProtoReflect.Descriptor instead.
+func (*RemoveMemberResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{10}
+}
+
+type InviteMemberRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Email string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	// The role the invitation grants on acceptance.
+	Role          string `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InviteMemberRequest) Reset() {
+	*x = InviteMemberRequest{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InviteMemberRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InviteMemberRequest) ProtoMessage() {}
+
+func (x *InviteMemberRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InviteMemberRequest.ProtoReflect.Descriptor instead.
+func (*InviteMemberRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *InviteMemberRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *InviteMemberRequest) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+type InviteMemberResponse struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	InvitationId string                 `protobuf:"bytes,1,opt,name=invitation_id,json=invitationId,proto3" json:"invitation_id,omitempty"`
+	// When the capability stops working. Returned so the console can tell the
+	// inviter what they just created rather than describing it vaguely.
+	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InviteMemberResponse) Reset() {
+	*x = InviteMemberResponse{}
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InviteMemberResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InviteMemberResponse) ProtoMessage() {}
+
+func (x *InviteMemberResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InviteMemberResponse.ProtoReflect.Descriptor instead.
+func (*InviteMemberResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *InviteMemberResponse) GetInvitationId() string {
+	if x != nil {
+		return x.InvitationId
+	}
+	return ""
+}
+
+func (x *InviteMemberResponse) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
 type AcceptInvitationRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The raw token from the invitation link. Stored hashed, never in the
@@ -34,7 +710,7 @@ type AcceptInvitationRequest struct {
 
 func (x *AcceptInvitationRequest) Reset() {
 	*x = AcceptInvitationRequest{}
-	mi := &file_kindlast_core_v1_org_proto_msgTypes[0]
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -46,7 +722,7 @@ func (x *AcceptInvitationRequest) String() string {
 func (*AcceptInvitationRequest) ProtoMessage() {}
 
 func (x *AcceptInvitationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_org_proto_msgTypes[0]
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59,7 +735,7 @@ func (x *AcceptInvitationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptInvitationRequest.ProtoReflect.Descriptor instead.
 func (*AcceptInvitationRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{0}
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AcceptInvitationRequest) GetToken() string {
@@ -87,7 +763,7 @@ type AcceptInvitationResponse struct {
 
 func (x *AcceptInvitationResponse) Reset() {
 	*x = AcceptInvitationResponse{}
-	mi := &file_kindlast_core_v1_org_proto_msgTypes[1]
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -99,7 +775,7 @@ func (x *AcceptInvitationResponse) String() string {
 func (*AcceptInvitationResponse) ProtoMessage() {}
 
 func (x *AcceptInvitationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_org_proto_msgTypes[1]
+	mi := &file_kindlast_core_v1_org_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -112,7 +788,7 @@ func (x *AcceptInvitationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptInvitationResponse.ProtoReflect.Descriptor instead.
 func (*AcceptInvitationResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{1}
+	return file_kindlast_core_v1_org_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AcceptInvitationResponse) GetOrgId() string {
@@ -147,16 +823,64 @@ var File_kindlast_core_v1_org_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_org_proto_rawDesc = "" +
 	"\n" +
-	"\x1akindlast/core/v1/org.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"/\n" +
+	"\x1akindlast/core/v1/org.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"/\n" +
+	"\x19CreateOrganisationRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"o\n" +
+	"\x1aCreateOrganisationResponse\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04slug\x18\x03 \x01(\tR\x04slug\x12\x12\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\"/\n" +
+	"\x19UpdateOrganisationRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"[\n" +
+	"\x1aUpdateOrganisationResponse\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04slug\x18\x03 \x01(\tR\x04slug\"\x14\n" +
+	"\x12ListMembersRequest\"I\n" +
+	"\x13ListMembersResponse\x122\n" +
+	"\amembers\x18\x01 \x03(\v2\x18.kindlast.core.v1.MemberR\amembers\"\xa7\x01\n" +
+	"\x06Member\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
+	"\x04role\x18\x02 \x01(\tR\x04role\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05email\x18\x04 \x01(\tR\x05email\x127\n" +
+	"\tjoined_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bjoinedAt\"F\n" +
+	"\x17UpdateMemberRoleRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
+	"\x04role\x18\x02 \x01(\tR\x04role\"L\n" +
+	"\x18UpdateMemberRoleResponse\x120\n" +
+	"\x06member\x18\x01 \x01(\v2\x18.kindlast.core.v1.MemberR\x06member\".\n" +
+	"\x13RemoveMemberRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x16\n" +
+	"\x14RemoveMemberResponse\"?\n" +
+	"\x13InviteMemberRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\x12\x12\n" +
+	"\x04role\x18\x02 \x01(\tR\x04role\"v\n" +
+	"\x14InviteMemberResponse\x12#\n" +
+	"\rinvitation_id\x18\x01 \x01(\tR\finvitationId\x129\n" +
+	"\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"/\n" +
 	"\x17AcceptInvitationRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"{\n" +
 	"\x18AcceptInvitationResponse\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x19\n" +
 	"\borg_name\x18\x02 \x01(\tR\aorgName\x12\x12\n" +
 	"\x04role\x18\x03 \x01(\tR\x04role\x12\x19\n" +
-	"\borg_slug\x18\x04 \x01(\tR\aorgSlug2\xae\x01\n" +
+	"\borg_slug\x18\x04 \x01(\tR\aorgSlug2\xb1\b\n" +
 	"\n" +
 	"OrgService\x12\x9f\x01\n" +
+	"\x12CreateOrganisation\x12+.kindlast.core.v1.CreateOrganisationRequest\x1a,.kindlast.core.v1.CreateOrganisationResponse\".\x8a\xb5\x18\n" +
+	"org:manage\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/v1/organisations\x12\x9e\x01\n" +
+	"\x12UpdateOrganisation\x12+.kindlast.core.v1.UpdateOrganisationRequest\x1a,.kindlast.core.v1.UpdateOrganisationResponse\"-\x8a\xb5\x18\n" +
+	"org:manage\x82\xd3\xe4\x93\x02\x19:\x01*2\x14/api/v1/organisation\x12\x7f\n" +
+	"\vListMembers\x12$.kindlast.core.v1.ListMembersRequest\x1a%.kindlast.core.v1.ListMembersResponse\"#\x8a\xb5\x18\borg:read\x82\xd3\xe4\x93\x02\x11\x12\x0f/api/v1/members\x12\x9d\x01\n" +
+	"\x10UpdateMemberRole\x12).kindlast.core.v1.UpdateMemberRoleRequest\x1a*.kindlast.core.v1.UpdateMemberRoleResponse\"2\x8a\xb5\x18\n" +
+	"org:manage\x82\xd3\xe4\x93\x02\x1e:\x01*2\x19/api/v1/members/{user_id}\x12\x8e\x01\n" +
+	"\fRemoveMember\x12%.kindlast.core.v1.RemoveMemberRequest\x1a&.kindlast.core.v1.RemoveMemberResponse\"/\x8a\xb5\x18\n" +
+	"org:manage\x82\xd3\xe4\x93\x02\x1b*\x19/api/v1/members/{user_id}\x12\x8b\x01\n" +
+	"\fInviteMember\x12%.kindlast.core.v1.InviteMemberRequest\x1a&.kindlast.core.v1.InviteMemberResponse\",\x8a\xb5\x18\n" +
+	"org:manage\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api/v1/invitations\x12\x9f\x01\n" +
 	"\x10AcceptInvitation\x12).kindlast.core.v1.AcceptInvitationRequest\x1a*.kindlast.core.v1.AcceptInvitationResponse\"4\x8a\xb5\x18\x06openid\x82\xd3\xe4\x93\x02$\"\"/api/v1/invitations/{token}:acceptB\xc0\x01\n" +
 	"\x14com.kindlast.core.v1B\bOrgProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3"
 
@@ -172,19 +896,49 @@ func file_kindlast_core_v1_org_proto_rawDescGZIP() []byte {
 	return file_kindlast_core_v1_org_proto_rawDescData
 }
 
-var file_kindlast_core_v1_org_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_kindlast_core_v1_org_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_kindlast_core_v1_org_proto_goTypes = []any{
-	(*AcceptInvitationRequest)(nil),  // 0: kindlast.core.v1.AcceptInvitationRequest
-	(*AcceptInvitationResponse)(nil), // 1: kindlast.core.v1.AcceptInvitationResponse
+	(*CreateOrganisationRequest)(nil),  // 0: kindlast.core.v1.CreateOrganisationRequest
+	(*CreateOrganisationResponse)(nil), // 1: kindlast.core.v1.CreateOrganisationResponse
+	(*UpdateOrganisationRequest)(nil),  // 2: kindlast.core.v1.UpdateOrganisationRequest
+	(*UpdateOrganisationResponse)(nil), // 3: kindlast.core.v1.UpdateOrganisationResponse
+	(*ListMembersRequest)(nil),         // 4: kindlast.core.v1.ListMembersRequest
+	(*ListMembersResponse)(nil),        // 5: kindlast.core.v1.ListMembersResponse
+	(*Member)(nil),                     // 6: kindlast.core.v1.Member
+	(*UpdateMemberRoleRequest)(nil),    // 7: kindlast.core.v1.UpdateMemberRoleRequest
+	(*UpdateMemberRoleResponse)(nil),   // 8: kindlast.core.v1.UpdateMemberRoleResponse
+	(*RemoveMemberRequest)(nil),        // 9: kindlast.core.v1.RemoveMemberRequest
+	(*RemoveMemberResponse)(nil),       // 10: kindlast.core.v1.RemoveMemberResponse
+	(*InviteMemberRequest)(nil),        // 11: kindlast.core.v1.InviteMemberRequest
+	(*InviteMemberResponse)(nil),       // 12: kindlast.core.v1.InviteMemberResponse
+	(*AcceptInvitationRequest)(nil),    // 13: kindlast.core.v1.AcceptInvitationRequest
+	(*AcceptInvitationResponse)(nil),   // 14: kindlast.core.v1.AcceptInvitationResponse
+	(*timestamppb.Timestamp)(nil),      // 15: google.protobuf.Timestamp
 }
 var file_kindlast_core_v1_org_proto_depIdxs = []int32{
-	0, // 0: kindlast.core.v1.OrgService.AcceptInvitation:input_type -> kindlast.core.v1.AcceptInvitationRequest
-	1, // 1: kindlast.core.v1.OrgService.AcceptInvitation:output_type -> kindlast.core.v1.AcceptInvitationResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	6,  // 0: kindlast.core.v1.ListMembersResponse.members:type_name -> kindlast.core.v1.Member
+	15, // 1: kindlast.core.v1.Member.joined_at:type_name -> google.protobuf.Timestamp
+	6,  // 2: kindlast.core.v1.UpdateMemberRoleResponse.member:type_name -> kindlast.core.v1.Member
+	15, // 3: kindlast.core.v1.InviteMemberResponse.expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 4: kindlast.core.v1.OrgService.CreateOrganisation:input_type -> kindlast.core.v1.CreateOrganisationRequest
+	2,  // 5: kindlast.core.v1.OrgService.UpdateOrganisation:input_type -> kindlast.core.v1.UpdateOrganisationRequest
+	4,  // 6: kindlast.core.v1.OrgService.ListMembers:input_type -> kindlast.core.v1.ListMembersRequest
+	7,  // 7: kindlast.core.v1.OrgService.UpdateMemberRole:input_type -> kindlast.core.v1.UpdateMemberRoleRequest
+	9,  // 8: kindlast.core.v1.OrgService.RemoveMember:input_type -> kindlast.core.v1.RemoveMemberRequest
+	11, // 9: kindlast.core.v1.OrgService.InviteMember:input_type -> kindlast.core.v1.InviteMemberRequest
+	13, // 10: kindlast.core.v1.OrgService.AcceptInvitation:input_type -> kindlast.core.v1.AcceptInvitationRequest
+	1,  // 11: kindlast.core.v1.OrgService.CreateOrganisation:output_type -> kindlast.core.v1.CreateOrganisationResponse
+	3,  // 12: kindlast.core.v1.OrgService.UpdateOrganisation:output_type -> kindlast.core.v1.UpdateOrganisationResponse
+	5,  // 13: kindlast.core.v1.OrgService.ListMembers:output_type -> kindlast.core.v1.ListMembersResponse
+	8,  // 14: kindlast.core.v1.OrgService.UpdateMemberRole:output_type -> kindlast.core.v1.UpdateMemberRoleResponse
+	10, // 15: kindlast.core.v1.OrgService.RemoveMember:output_type -> kindlast.core.v1.RemoveMemberResponse
+	12, // 16: kindlast.core.v1.OrgService.InviteMember:output_type -> kindlast.core.v1.InviteMemberResponse
+	14, // 17: kindlast.core.v1.OrgService.AcceptInvitation:output_type -> kindlast.core.v1.AcceptInvitationResponse
+	11, // [11:18] is the sub-list for method output_type
+	4,  // [4:11] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_core_v1_org_proto_init() }
@@ -198,7 +952,7 @@ func file_kindlast_core_v1_org_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_core_v1_org_proto_rawDesc), len(file_kindlast_core_v1_org_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
