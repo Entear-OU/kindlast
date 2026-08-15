@@ -33,6 +33,21 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// OrgServiceCreateOrganisationProcedure is the fully-qualified name of the OrgService's
+	// CreateOrganisation RPC.
+	OrgServiceCreateOrganisationProcedure = "/kindlast.core.v1.OrgService/CreateOrganisation"
+	// OrgServiceUpdateOrganisationProcedure is the fully-qualified name of the OrgService's
+	// UpdateOrganisation RPC.
+	OrgServiceUpdateOrganisationProcedure = "/kindlast.core.v1.OrgService/UpdateOrganisation"
+	// OrgServiceListMembersProcedure is the fully-qualified name of the OrgService's ListMembers RPC.
+	OrgServiceListMembersProcedure = "/kindlast.core.v1.OrgService/ListMembers"
+	// OrgServiceUpdateMemberRoleProcedure is the fully-qualified name of the OrgService's
+	// UpdateMemberRole RPC.
+	OrgServiceUpdateMemberRoleProcedure = "/kindlast.core.v1.OrgService/UpdateMemberRole"
+	// OrgServiceRemoveMemberProcedure is the fully-qualified name of the OrgService's RemoveMember RPC.
+	OrgServiceRemoveMemberProcedure = "/kindlast.core.v1.OrgService/RemoveMember"
+	// OrgServiceInviteMemberProcedure is the fully-qualified name of the OrgService's InviteMember RPC.
+	OrgServiceInviteMemberProcedure = "/kindlast.core.v1.OrgService/InviteMember"
 	// OrgServiceAcceptInvitationProcedure is the fully-qualified name of the OrgService's
 	// AcceptInvitation RPC.
 	OrgServiceAcceptInvitationProcedure = "/kindlast.core.v1.OrgService/AcceptInvitation"
@@ -40,6 +55,43 @@ const (
 
 // OrgServiceClient is a client for the kindlast.core.v1.OrgService service.
 type OrgServiceClient interface {
+	// Creates an organisation and makes the caller its owner.
+	//
+	// No active organisation, so no header (see above). The slug is derived from
+	// the name by org_slug() at insert time and is immutable afterwards.
+	CreateOrganisation(context.Context, *connect.Request[v1.CreateOrganisationRequest]) (*connect.Response[v1.CreateOrganisationResponse], error)
+	// Renames the active organisation.
+	//
+	// Singular `/organisation`, because it addresses the one the header names
+	// rather than a collection member. The slug does NOT follow the rename, and
+	// that is a product decision rather than an oversight: slugs live in
+	// bookmarks and in emailed capability-token links, which are exactly the
+	// links a compliance product has to keep working (§20.1, ENT-198).
+	UpdateOrganisation(context.Context, *connect.Request[v1.UpdateOrganisationRequest]) (*connect.Response[v1.UpdateOrganisationResponse], error)
+	// Lists the members of the active organisation.
+	//
+	// `org:read` rather than `org:manage`: seeing who your colleagues are is not
+	// an administrative act, and requiring the management scope would mean a
+	// viewer could not render the page they are entitled to see.
+	ListMembers(context.Context, *connect.Request[v1.ListMembersRequest]) (*connect.Response[v1.ListMembersResponse], error)
+	// Changes a member's role.
+	//
+	// Owner-only, enforced in the database as well as here: memberships_update_owner
+	// requires app_org_role(org_id) = 'owner'. The handler check exists so the
+	// caller gets a 403 that says what happened rather than an empty result set.
+	UpdateMemberRole(context.Context, *connect.Request[v1.UpdateMemberRoleRequest]) (*connect.Response[v1.UpdateMemberRoleResponse], error)
+	// Removes a member from the active organisation.
+	//
+	// Removing the last owner is refused. An organisation with no owner has no
+	// one who can invite, change roles or manage billing, and no path back short
+	// of operator intervention.
+	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
+	// Invites someone to the active organisation by email address.
+	//
+	// The token is generated here, delivered by email, and stored only as a
+	// hash: an invitation token is a bearer capability, so a database dump must
+	// not contain anything that can be redeemed (00003).
+	InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error)
 	// Joins the organisation named by an invitation token.
 	//
 	// Scope is `openid` rather than `org:manage`: the caller is not managing an
@@ -60,6 +112,42 @@ func NewOrgServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 	baseURL = strings.TrimRight(baseURL, "/")
 	orgServiceMethods := v1.File_kindlast_core_v1_org_proto.Services().ByName("OrgService").Methods()
 	return &orgServiceClient{
+		createOrganisation: connect.NewClient[v1.CreateOrganisationRequest, v1.CreateOrganisationResponse](
+			httpClient,
+			baseURL+OrgServiceCreateOrganisationProcedure,
+			connect.WithSchema(orgServiceMethods.ByName("CreateOrganisation")),
+			connect.WithClientOptions(opts...),
+		),
+		updateOrganisation: connect.NewClient[v1.UpdateOrganisationRequest, v1.UpdateOrganisationResponse](
+			httpClient,
+			baseURL+OrgServiceUpdateOrganisationProcedure,
+			connect.WithSchema(orgServiceMethods.ByName("UpdateOrganisation")),
+			connect.WithClientOptions(opts...),
+		),
+		listMembers: connect.NewClient[v1.ListMembersRequest, v1.ListMembersResponse](
+			httpClient,
+			baseURL+OrgServiceListMembersProcedure,
+			connect.WithSchema(orgServiceMethods.ByName("ListMembers")),
+			connect.WithClientOptions(opts...),
+		),
+		updateMemberRole: connect.NewClient[v1.UpdateMemberRoleRequest, v1.UpdateMemberRoleResponse](
+			httpClient,
+			baseURL+OrgServiceUpdateMemberRoleProcedure,
+			connect.WithSchema(orgServiceMethods.ByName("UpdateMemberRole")),
+			connect.WithClientOptions(opts...),
+		),
+		removeMember: connect.NewClient[v1.RemoveMemberRequest, v1.RemoveMemberResponse](
+			httpClient,
+			baseURL+OrgServiceRemoveMemberProcedure,
+			connect.WithSchema(orgServiceMethods.ByName("RemoveMember")),
+			connect.WithClientOptions(opts...),
+		),
+		inviteMember: connect.NewClient[v1.InviteMemberRequest, v1.InviteMemberResponse](
+			httpClient,
+			baseURL+OrgServiceInviteMemberProcedure,
+			connect.WithSchema(orgServiceMethods.ByName("InviteMember")),
+			connect.WithClientOptions(opts...),
+		),
 		acceptInvitation: connect.NewClient[v1.AcceptInvitationRequest, v1.AcceptInvitationResponse](
 			httpClient,
 			baseURL+OrgServiceAcceptInvitationProcedure,
@@ -71,7 +159,43 @@ func NewOrgServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 
 // orgServiceClient implements OrgServiceClient.
 type orgServiceClient struct {
-	acceptInvitation *connect.Client[v1.AcceptInvitationRequest, v1.AcceptInvitationResponse]
+	createOrganisation *connect.Client[v1.CreateOrganisationRequest, v1.CreateOrganisationResponse]
+	updateOrganisation *connect.Client[v1.UpdateOrganisationRequest, v1.UpdateOrganisationResponse]
+	listMembers        *connect.Client[v1.ListMembersRequest, v1.ListMembersResponse]
+	updateMemberRole   *connect.Client[v1.UpdateMemberRoleRequest, v1.UpdateMemberRoleResponse]
+	removeMember       *connect.Client[v1.RemoveMemberRequest, v1.RemoveMemberResponse]
+	inviteMember       *connect.Client[v1.InviteMemberRequest, v1.InviteMemberResponse]
+	acceptInvitation   *connect.Client[v1.AcceptInvitationRequest, v1.AcceptInvitationResponse]
+}
+
+// CreateOrganisation calls kindlast.core.v1.OrgService.CreateOrganisation.
+func (c *orgServiceClient) CreateOrganisation(ctx context.Context, req *connect.Request[v1.CreateOrganisationRequest]) (*connect.Response[v1.CreateOrganisationResponse], error) {
+	return c.createOrganisation.CallUnary(ctx, req)
+}
+
+// UpdateOrganisation calls kindlast.core.v1.OrgService.UpdateOrganisation.
+func (c *orgServiceClient) UpdateOrganisation(ctx context.Context, req *connect.Request[v1.UpdateOrganisationRequest]) (*connect.Response[v1.UpdateOrganisationResponse], error) {
+	return c.updateOrganisation.CallUnary(ctx, req)
+}
+
+// ListMembers calls kindlast.core.v1.OrgService.ListMembers.
+func (c *orgServiceClient) ListMembers(ctx context.Context, req *connect.Request[v1.ListMembersRequest]) (*connect.Response[v1.ListMembersResponse], error) {
+	return c.listMembers.CallUnary(ctx, req)
+}
+
+// UpdateMemberRole calls kindlast.core.v1.OrgService.UpdateMemberRole.
+func (c *orgServiceClient) UpdateMemberRole(ctx context.Context, req *connect.Request[v1.UpdateMemberRoleRequest]) (*connect.Response[v1.UpdateMemberRoleResponse], error) {
+	return c.updateMemberRole.CallUnary(ctx, req)
+}
+
+// RemoveMember calls kindlast.core.v1.OrgService.RemoveMember.
+func (c *orgServiceClient) RemoveMember(ctx context.Context, req *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error) {
+	return c.removeMember.CallUnary(ctx, req)
+}
+
+// InviteMember calls kindlast.core.v1.OrgService.InviteMember.
+func (c *orgServiceClient) InviteMember(ctx context.Context, req *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error) {
+	return c.inviteMember.CallUnary(ctx, req)
 }
 
 // AcceptInvitation calls kindlast.core.v1.OrgService.AcceptInvitation.
@@ -81,6 +205,43 @@ func (c *orgServiceClient) AcceptInvitation(ctx context.Context, req *connect.Re
 
 // OrgServiceHandler is an implementation of the kindlast.core.v1.OrgService service.
 type OrgServiceHandler interface {
+	// Creates an organisation and makes the caller its owner.
+	//
+	// No active organisation, so no header (see above). The slug is derived from
+	// the name by org_slug() at insert time and is immutable afterwards.
+	CreateOrganisation(context.Context, *connect.Request[v1.CreateOrganisationRequest]) (*connect.Response[v1.CreateOrganisationResponse], error)
+	// Renames the active organisation.
+	//
+	// Singular `/organisation`, because it addresses the one the header names
+	// rather than a collection member. The slug does NOT follow the rename, and
+	// that is a product decision rather than an oversight: slugs live in
+	// bookmarks and in emailed capability-token links, which are exactly the
+	// links a compliance product has to keep working (§20.1, ENT-198).
+	UpdateOrganisation(context.Context, *connect.Request[v1.UpdateOrganisationRequest]) (*connect.Response[v1.UpdateOrganisationResponse], error)
+	// Lists the members of the active organisation.
+	//
+	// `org:read` rather than `org:manage`: seeing who your colleagues are is not
+	// an administrative act, and requiring the management scope would mean a
+	// viewer could not render the page they are entitled to see.
+	ListMembers(context.Context, *connect.Request[v1.ListMembersRequest]) (*connect.Response[v1.ListMembersResponse], error)
+	// Changes a member's role.
+	//
+	// Owner-only, enforced in the database as well as here: memberships_update_owner
+	// requires app_org_role(org_id) = 'owner'. The handler check exists so the
+	// caller gets a 403 that says what happened rather than an empty result set.
+	UpdateMemberRole(context.Context, *connect.Request[v1.UpdateMemberRoleRequest]) (*connect.Response[v1.UpdateMemberRoleResponse], error)
+	// Removes a member from the active organisation.
+	//
+	// Removing the last owner is refused. An organisation with no owner has no
+	// one who can invite, change roles or manage billing, and no path back short
+	// of operator intervention.
+	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
+	// Invites someone to the active organisation by email address.
+	//
+	// The token is generated here, delivered by email, and stored only as a
+	// hash: an invitation token is a bearer capability, so a database dump must
+	// not contain anything that can be redeemed (00003).
+	InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error)
 	// Joins the organisation named by an invitation token.
 	//
 	// Scope is `openid` rather than `org:manage`: the caller is not managing an
@@ -97,6 +258,42 @@ type OrgServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewOrgServiceHandler(svc OrgServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	orgServiceMethods := v1.File_kindlast_core_v1_org_proto.Services().ByName("OrgService").Methods()
+	orgServiceCreateOrganisationHandler := connect.NewUnaryHandler(
+		OrgServiceCreateOrganisationProcedure,
+		svc.CreateOrganisation,
+		connect.WithSchema(orgServiceMethods.ByName("CreateOrganisation")),
+		connect.WithHandlerOptions(opts...),
+	)
+	orgServiceUpdateOrganisationHandler := connect.NewUnaryHandler(
+		OrgServiceUpdateOrganisationProcedure,
+		svc.UpdateOrganisation,
+		connect.WithSchema(orgServiceMethods.ByName("UpdateOrganisation")),
+		connect.WithHandlerOptions(opts...),
+	)
+	orgServiceListMembersHandler := connect.NewUnaryHandler(
+		OrgServiceListMembersProcedure,
+		svc.ListMembers,
+		connect.WithSchema(orgServiceMethods.ByName("ListMembers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	orgServiceUpdateMemberRoleHandler := connect.NewUnaryHandler(
+		OrgServiceUpdateMemberRoleProcedure,
+		svc.UpdateMemberRole,
+		connect.WithSchema(orgServiceMethods.ByName("UpdateMemberRole")),
+		connect.WithHandlerOptions(opts...),
+	)
+	orgServiceRemoveMemberHandler := connect.NewUnaryHandler(
+		OrgServiceRemoveMemberProcedure,
+		svc.RemoveMember,
+		connect.WithSchema(orgServiceMethods.ByName("RemoveMember")),
+		connect.WithHandlerOptions(opts...),
+	)
+	orgServiceInviteMemberHandler := connect.NewUnaryHandler(
+		OrgServiceInviteMemberProcedure,
+		svc.InviteMember,
+		connect.WithSchema(orgServiceMethods.ByName("InviteMember")),
+		connect.WithHandlerOptions(opts...),
+	)
 	orgServiceAcceptInvitationHandler := connect.NewUnaryHandler(
 		OrgServiceAcceptInvitationProcedure,
 		svc.AcceptInvitation,
@@ -105,6 +302,18 @@ func NewOrgServiceHandler(svc OrgServiceHandler, opts ...connect.HandlerOption) 
 	)
 	return "/kindlast.core.v1.OrgService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case OrgServiceCreateOrganisationProcedure:
+			orgServiceCreateOrganisationHandler.ServeHTTP(w, r)
+		case OrgServiceUpdateOrganisationProcedure:
+			orgServiceUpdateOrganisationHandler.ServeHTTP(w, r)
+		case OrgServiceListMembersProcedure:
+			orgServiceListMembersHandler.ServeHTTP(w, r)
+		case OrgServiceUpdateMemberRoleProcedure:
+			orgServiceUpdateMemberRoleHandler.ServeHTTP(w, r)
+		case OrgServiceRemoveMemberProcedure:
+			orgServiceRemoveMemberHandler.ServeHTTP(w, r)
+		case OrgServiceInviteMemberProcedure:
+			orgServiceInviteMemberHandler.ServeHTTP(w, r)
 		case OrgServiceAcceptInvitationProcedure:
 			orgServiceAcceptInvitationHandler.ServeHTTP(w, r)
 		default:
@@ -115,6 +324,30 @@ func NewOrgServiceHandler(svc OrgServiceHandler, opts ...connect.HandlerOption) 
 
 // UnimplementedOrgServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedOrgServiceHandler struct{}
+
+func (UnimplementedOrgServiceHandler) CreateOrganisation(context.Context, *connect.Request[v1.CreateOrganisationRequest]) (*connect.Response[v1.CreateOrganisationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.OrgService.CreateOrganisation is not implemented"))
+}
+
+func (UnimplementedOrgServiceHandler) UpdateOrganisation(context.Context, *connect.Request[v1.UpdateOrganisationRequest]) (*connect.Response[v1.UpdateOrganisationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.OrgService.UpdateOrganisation is not implemented"))
+}
+
+func (UnimplementedOrgServiceHandler) ListMembers(context.Context, *connect.Request[v1.ListMembersRequest]) (*connect.Response[v1.ListMembersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.OrgService.ListMembers is not implemented"))
+}
+
+func (UnimplementedOrgServiceHandler) UpdateMemberRole(context.Context, *connect.Request[v1.UpdateMemberRoleRequest]) (*connect.Response[v1.UpdateMemberRoleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.OrgService.UpdateMemberRole is not implemented"))
+}
+
+func (UnimplementedOrgServiceHandler) RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.OrgService.RemoveMember is not implemented"))
+}
+
+func (UnimplementedOrgServiceHandler) InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.OrgService.InviteMember is not implemented"))
+}
 
 func (UnimplementedOrgServiceHandler) AcceptInvitation(context.Context, *connect.Request[v1.AcceptInvitationRequest]) (*connect.Response[v1.AcceptInvitationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.OrgService.AcceptInvitation is not implemented"))

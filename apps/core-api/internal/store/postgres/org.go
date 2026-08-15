@@ -69,13 +69,22 @@ func (t *Tenant) Memberships(ctx context.Context) ([]org.Membership, error) {
 // user_identities row that answers nobody, which is the one thing this table
 // exists to prevent.
 func (t *Tenant) RecordIdentity(ctx context.Context, subject org.Subject) error {
+	// display_name joins email here as of ENT-202. Until then the name arrived
+	// from userinfo on every sign-in and was discarded on every sign-in, so the
+	// product knew it and forgot it, and the members list had nothing but uuids
+	// to render.
+	//
+	// Both are coalesced on conflict rather than overwritten, so a later
+	// sign-in whose token or userinfo carries no name does not erase one we
+	// already had. Absence is not a correction.
 	_, err := t.tx.Exec(ctx, `
-		insert into user_identities (user_id, issuer, subject, email)
-		values ($1, $2, $3, nullif($4, ''))
+		insert into user_identities (user_id, issuer, subject, email, display_name)
+		values ($1, $2, $3, nullif($4, ''), nullif($5, ''))
 		on conflict (user_id) do update
 		set email = coalesce(excluded.email, user_identities.email),
+		    display_name = coalesce(excluded.display_name, user_identities.display_name),
 		    updated_at = now()
-	`, t.userID, subject.Issuer, subject.Subject, subject.Email)
+	`, t.userID, subject.Issuer, subject.Subject, subject.Email, subject.DisplayName)
 	if err != nil {
 		return fmt.Errorf("postgres: recording identity: %w", err)
 	}
