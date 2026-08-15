@@ -2,11 +2,43 @@ package postgres
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 	"github.com/Entear-OU/kindlast/libs/chassis/subject"
 )
+
+// Every organisation name in this file carries this token (ENT-217).
+//
+// `organisations.slug` is globally unique rather than tenant-scoped, and
+// `go test ./...` runs packages concurrently against one database. A fixture
+// that hardcodes a plain name is therefore competing for a single row in a
+// single namespace with every other package that hardcodes the same one, and
+// whichever loses is handed `name-2` by the collision retry. The retry is
+// behaving correctly; the defect is asserting on a value you do not own.
+//
+// This is not hypothetical. This package and internal/server/interceptor both
+// provisioned a "Grace Hopper", and the module suite failed five runs out of
+// six before this token existed.
+//
+// A new test that asserts an exact slug needs the same treatment, and a
+// different package needs a different token.
+const slugToken = "storepg"
+
+// fixtureName returns a display name no other package is competing for, and
+// the slug org_slug() will derive from it.
+//
+// It deliberately does not reimplement org_slug(). That rule lives in SQL
+// exactly once (ENT-198), and a second copy in Go is precisely how the two
+// drift into minting different permanent URLs. The inputs are chosen instead
+// so the expected output needs no derivation: `base` is plain ASCII words and
+// the token is already lowercase alphanumeric, so the slug is the lowercased
+// base with its spaces hyphenated, plus the token.
+func fixtureName(base string) (name, slug string) {
+	return base + " " + slugToken,
+		strings.ToLower(strings.ReplaceAll(base, " ", "-")) + "-" + slugToken
+}
 
 // Slug minting at provisioning time (ENT-198).
 //
@@ -42,17 +74,18 @@ func TestAPersonalOrganisationGetsASlugDerivedFromItsName(t *testing.T) {
 	cleanup(t, claim)
 	t.Cleanup(func() { cleanup(t, claim) })
 
+	name, wantSlug := fixtureName("Ada Lovelace")
 	err := provision(context.Background(), store, org.Subject{
 		Issuer:      testIssuer,
 		Subject:     claim,
-		DisplayName: "Ada Lovelace",
+		DisplayName: name,
 	})
 	if err != nil {
 		t.Fatalf("provisioning: %v", err)
 	}
 
-	if got := slugFor(t, claim); got != "ada-lovelace" {
-		t.Fatalf("slug = %q, want %q", got, "ada-lovelace")
+	if got := slugFor(t, claim); got != wantSlug {
+		t.Fatalf("slug = %q, want %q", got, wantSlug)
 	}
 }
 
@@ -73,22 +106,23 @@ func TestTwoPeopleWithTheSameNameBothGetAWorkingSlug(t *testing.T) {
 	cleanup(t, first, second)
 	t.Cleanup(func() { cleanup(t, first, second) })
 
+	name, wantSlug := fixtureName("Grace Hopper")
 	for _, claim := range []string{first, second} {
 		err := provision(context.Background(), store, org.Subject{
 			Issuer:      testIssuer,
 			Subject:     claim,
-			DisplayName: "Grace Hopper",
+			DisplayName: name,
 		})
 		if err != nil {
 			t.Fatalf("provisioning %s: %v", claim, err)
 		}
 	}
 
-	if got := slugFor(t, first); got != "grace-hopper" {
-		t.Fatalf("first slug = %q, want %q", got, "grace-hopper")
+	if got := slugFor(t, first); got != wantSlug {
+		t.Fatalf("first slug = %q, want %q", got, wantSlug)
 	}
-	if got := slugFor(t, second); got != "grace-hopper-2" {
-		t.Fatalf("second slug = %q, want %q", got, "grace-hopper-2")
+	if got, want := slugFor(t, second), wantSlug+"-2"; got != want {
+		t.Fatalf("second slug = %q, want %q", got, want)
 	}
 }
 
@@ -101,11 +135,12 @@ func TestMembershipsCarryTheSlug(t *testing.T) {
 	cleanup(t, claim)
 	t.Cleanup(func() { cleanup(t, claim) })
 
+	name, wantSlug := fixtureName("Katherine Johnson")
 	ctx := context.Background()
 	if err := provision(ctx, store, org.Subject{
 		Issuer:      testIssuer,
 		Subject:     claim,
-		DisplayName: "Katherine Johnson",
+		DisplayName: name,
 	}); err != nil {
 		t.Fatalf("provisioning: %v", err)
 	}
@@ -123,7 +158,7 @@ func TestMembershipsCarryTheSlug(t *testing.T) {
 	if len(memberships) != 1 {
 		t.Fatalf("memberships = %d, want 1", len(memberships))
 	}
-	if memberships[0].OrgSlug != "katherine-johnson" {
-		t.Fatalf("slug = %q, want %q", memberships[0].OrgSlug, "katherine-johnson")
+	if memberships[0].OrgSlug != wantSlug {
+		t.Fatalf("slug = %q, want %q", memberships[0].OrgSlug, wantSlug)
 	}
 }
