@@ -129,15 +129,38 @@ export async function getCurrentUser(
   return { ...me, memberships: me.memberships ?? [] }
 }
 
+/** What redeeming an invitation tells the client about where to go next. */
+export interface AcceptedInvitation {
+  orgId?: string
+  orgName?: string
+  orgSlug?: string
+  role?: string
+}
+
+/**
+ * Redeems an invitation.
+ *
+ * Returns the joined organisation rather than a boolean, because the caller's
+ * next move is a redirect and the URL is built from `orgSlug`. ENT-198 put the
+ * slug on this response for exactly that reason: without it, a client that has
+ * just joined an organisation has to make a second call to discover where it
+ * lives.
+ *
+ * Null on any failure, including a token that was expired, already redeemed or
+ * never real. core-api answers all three alike on purpose, so this cannot be
+ * used to discover which tokens exist.
+ */
 export async function acceptInvitation(
   accessToken: string,
   token: string,
-): Promise<boolean> {
-  const result = await call('kindlast.core.v1.OrgService/AcceptInvitation', {
-    accessToken,
-    body: { token },
-  })
-  return result !== null
+): Promise<AcceptedInvitation | null> {
+  return call<AcceptedInvitation>(
+    'kindlast.core.v1.OrgService/AcceptInvitation',
+    {
+      accessToken,
+      body: { token },
+    },
+  )
 }
 
 /**
