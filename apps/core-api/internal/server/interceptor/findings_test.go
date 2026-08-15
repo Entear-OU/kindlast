@@ -176,9 +176,30 @@ func seedFinding(t *testing.T, conn *pgx.Conn, orgID string) string {
 	).Scan(&obligation); err != nil {
 		t.Fatalf("seeding an obligation: %v", err)
 	}
+	// Cleans up the organisation as well as the obligation, and reports rather
+	// than swallows.
+	//
+	// The first version deleted only the obligation and discarded the error
+	// with `_, _ =`. Forty-two fixture obligations were found accumulated in a
+	// development database because of it. The cause was never established,
+	// which is exactly the problem: a cleanup that cannot fail visibly gives
+	// you no way to find out why it did not work.
+	//
+	// So this does two things differently. It removes the organisation first,
+	// which cascades through profiles, signals and findings and leaves nothing
+	// referencing the obligation (findings.obligation_id is ON DELETE RESTRICT,
+	// so an ordering mistake there would refuse rather than cascade). And it
+	// logs both failures, so the next leak comes with a reason attached.
 	t.Cleanup(func() {
-		_, _ = conn.Exec(context.Background(),
-			`delete from obligations where id = $1`, obligation)
+		ctx := context.Background()
+		if _, err := conn.Exec(ctx,
+			`delete from organisations where id = $1`, orgID); err != nil {
+			t.Logf("cleanup: removing the fixture organisation: %v", err)
+		}
+		if _, err := conn.Exec(ctx,
+			`delete from obligations where id = $1`, obligation); err != nil {
+			t.Logf("cleanup: removing the fixture obligation: %v", err)
+		}
 	})
 
 	var session, profile, signal, finding string
