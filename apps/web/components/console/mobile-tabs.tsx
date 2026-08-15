@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Gauge, Settings, Bot } from 'lucide-react'
+import { Gauge, ListChecks, Settings, Bot } from 'lucide-react'
 
 import { orgPath } from '@/lib/auth/org'
 import { cn } from '@/lib/utils'
@@ -25,9 +25,10 @@ import { cn } from '@/lib/utils'
  *
  * ONLY WHAT EXISTS, SAME AS THE SIDEBAR
  *
- * Feed and Records are absent rather than present-and-dead. The sidebar lists
- * them under "Coming next" because it has the room to say so; a tab bar does
- * not, and a greyed tab is exactly the inert control ENT-202 argues against.
+ * Records is absent rather than present-and-dead. The sidebar lists it under
+ * "Coming next" because it has the room to say so; a tab bar does not, and a
+ * greyed tab is exactly the inert control ENT-202 argues against. Feed joined
+ * the bar when ENT-203 built it, which is how a surface graduates.
  *
  * The third tab is the agent rail, which has nowhere else to go on a phone.
  * That is the point rather than a consolation: "has anything looked at my
@@ -48,6 +49,7 @@ export function MobileTabs({ orgSlug }: { orgSlug: string }) {
 
   const tabs: Tab[] = [
     { href: orgPath(orgSlug), label: 'Overview', icon: Gauge, exact: true },
+    { href: orgPath(orgSlug, '/feed'), label: 'Feed', icon: ListChecks },
     { href: orgPath(orgSlug, '/settings'), label: 'Settings', icon: Settings },
     { href: '#agents', label: 'Your agents', icon: Bot },
   ]
