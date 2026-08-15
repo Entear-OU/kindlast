@@ -117,6 +117,41 @@ else
   echo "seed: service user core-api-client exists (${MACHINE_ID})"
 fi
 
+# The service user's authorization (ENT-221).
+#
+# Creating the roles is not granting them. Until this ran, core-api-client held
+# a valid token carrying no roles at all, so every endpoint declaring a real
+# scope answered permission_denied, and the sweep trigger the Postman
+# collection documents could not be called by the credential that collection
+# ships with.
+#
+# Machine grants are explicit and per-client on purpose. There are few of them,
+# they are known at seed time, and least privilege is cheap to apply when the
+# list is short: this client gets the internal set and nothing a human surface
+# uses. Humans are the case that cannot be enumerated here, and they are what
+# the rest of ENT-221 is about.
+#
+# Note for anyone testing this by hand: a grant alone is not enough. The caller
+# must also request the reserved scope urn:zitadel:iam:org:projects:roles, or
+# the roles never reach the token. Measured, and the plural is not a typo.
+#
+# Idempotent by search-then-create, like everything else here: a second `up` on
+# an existing volume must not fail.
+echo "seed: ensuring core-api-client holds the internal scopes"
+MACHINE_GRANT="$(api POST "/management/v1/users/grants/_search" \
+  "{\"queries\":[{\"userIdQuery\":{\"userId\":\"${MACHINE_ID}\"}}]}" \
+  | jq -r '.result[0].id // empty')"
+
+if [ -z "$MACHINE_GRANT" ]; then
+  api POST "/management/v1/users/${MACHINE_ID}/grants" \
+    "{\"projectId\":\"${PROJECT_ID}\",\"roleKeys\":[\"internal:ingest\",\"internal:intelligence\",\"internal:act-on-behalf\"]}" \
+    > /dev/null 2>&1 \
+    && echo "seed: granted internal:* to core-api-client" \
+    || echo "seed: WARNING could not grant internal:* to core-api-client"
+else
+  echo "seed: core-api-client already holds a grant (${MACHINE_GRANT})"
+fi
+
 echo "seed: ensuring 'web' OIDC client"
 APP_ID="$(api POST "/management/v1/projects/${PROJECT_ID}/apps/_search" \
   '{"queries":[{"nameQuery":{"name":"web","method":"TEXT_QUERY_METHOD_EQUALS"}}]}' \

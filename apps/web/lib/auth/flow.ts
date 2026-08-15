@@ -18,11 +18,38 @@ import { stashState } from './state'
  *
  * `openid` is what SessionService.GetCurrentUser declares, so without it the
  * very first call a signed-in page makes is refused at the scope interceptor.
- * The rest of the vocabulary arrives as the endpoints that need it ship; a
- * scope requested here that the client never uses is authority granted for no
- * reason.
+ *
+ * THE LAST ONE IS NOT LIKE THE OTHERS, AND IT IS THE REASON THE CONSOLE WORKS
+ *
+ * `urn:zitadel:iam:org:projects:roles` is a reserved Zitadel scope, not a
+ * permission. It asks the authorization server to put the roles this person has
+ * been granted into the token, as
+ * `urn:zitadel:iam:org:project:{projectId}:roles`, which is the claim core-api
+ * reads its scopes from.
+ *
+ * Without it a token carries no roles at all, however many the person has been
+ * granted, and every endpoint declaring a real scope answers 403 (ENT-221).
+ * Measured rather than assumed: minting tokens with and without it is the only
+ * difference between a roles claim and no roles claim, and the project's
+ * `projectRoleAssertion` setting being on is necessary but not sufficient.
+ *
+ * Note what this file therefore does NOT list. `findings:read`, `org:manage`
+ * and the rest are never requested here. They are not OIDC scopes in this
+ * architecture; they are project roles a person holds, and asking for them by
+ * name achieves nothing. An earlier comment here said the vocabulary "arrives
+ * as the endpoints that need it ship", which described a mechanism that does
+ * not exist and sent two people looking in the wrong place.
+ *
+ * The plural in `projects` is not a typo. `urn:zitadel:iam:org:project:{id}:roles`
+ * as a requested scope produces no claim; only the plural form does.
  */
-const SCOPES = ['openid', 'profile', 'email', 'offline_access']
+const SCOPES = [
+  'openid',
+  'profile',
+  'email',
+  'offline_access',
+  'urn:zitadel:iam:org:projects:roles',
+]
 
 export interface StartOptions {
   /** Where to send the person once they are signed in. */

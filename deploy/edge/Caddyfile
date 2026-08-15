@@ -19,6 +19,26 @@
 		reverse_proxy core-api:8080
 	}
 
+	# The platform surface (ENT-203). Routed, and the reasoning is worth stating
+	# because "internal" invites the opposite conclusion.
+	#
+	# core-api publishes no ports, so a route it does not have here is a route
+	# that exists nowhere: not for Temporal at build-order step 8, not for an
+	# operator triggering a sweep, not for the Postman collection. Leaving it
+	# out would be security by topology, and it breaks the first time anything
+	# legitimately needs it.
+	#
+	# What actually gates it is the `internal:*` scope set, which is issued to
+	# service clients through client credentials and never to the browser
+	# client. Measured: a token without it is refused with permission_denied
+	# before any handler runs.
+	#
+	# A production edge may still choose to restrict this block by source, and
+	# that is a deployment decision rather than something to bake in here.
+	handle /kindlast.platform.v1.* {
+		reverse_proxy core-api:8080
+	}
+
 	handle {
 		respond "kindlast edge: no routes yet (web and core-api arrive at build-order step 1)" 404
 	}
