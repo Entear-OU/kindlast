@@ -21,6 +21,12 @@ func Services() []protoreflect.ServiceDescriptor {
 	files := []protoreflect.FileDescriptor{
 		corev1.File_kindlast_core_v1_session_proto,
 		corev1.File_kindlast_core_v1_org_proto,
+		// Listed from the moment the contract exists rather than when its
+		// handlers do. The scope-declaration test then covers FindingsService
+		// and DashboardService immediately, so an RPC cannot reach main
+		// undeclared during the window where the proto has landed and the
+		// service has not.
+		corev1.File_kindlast_core_v1_findings_proto,
 	}
 
 	var services []protoreflect.ServiceDescriptor
