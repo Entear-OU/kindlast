@@ -159,7 +159,7 @@ func (t *Tenant) insertNamedOrganisation(ctx context.Context, orgID, name string
 func (t *Tenant) RenameOrganisation(ctx context.Context, name string) (org.Joined, error) {
 	var joined org.Joined
 	err := t.tx.QueryRow(ctx, `
-		update organisations set name = $1, updated_at = now()
+		update organisations set name = $1
 		where id = $2
 		returning id::text, name, slug
 	`, name, t.orgID).Scan(&joined.OrgID, &joined.OrgName, &joined.OrgSlug)

@@ -308,6 +308,131 @@
           }
         },
         {
+          "name": "Create organisation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Compliance GmbH\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.OrgService/CreateOrganisation",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.OrgService", "CreateOrganisation"]
+            },
+            "description": "Creates an organisation and makes you its owner. **Implemented as of ENT-202.** Required scope: `org:manage`.\n\n**No organisation header, deliberately.** This is one of two calls that carry none, the other being Accept invitation: in both you are establishing membership rather than exercising it, so there is no active organisation to name. Omit the header rather than sending it empty (§1.8) — an empty value is a client bug and should be refused, while its absence is a statement.\n\nThe slug is derived from the name by `org_slug()` at insert time and is immutable from then on. Send a name with umlauts to watch the transliteration: `Müller GmbH` becomes `mueller-gmbh`, not `m-ller-gmbh`. If the slug is already taken, the collision retry appends an ordinal and you get `acme-compliance-gmbh-2`, which is the correct answer rather than an error.\n\nCopy the `orgId` from the response into the `org_id` environment variable to act inside the new organisation with the requests below."
+          }
+        },
+        {
+          "name": "Rename organisation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Holdings GmbH\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.OrgService/UpdateOrganisation",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.OrgService", "UpdateOrganisation"]
+            },
+            "description": "Renames the organisation the header names. **Implemented as of ENT-202.** Required scope: `org:manage`, and owner-only on top of that.\n\n**The slug does not follow the rename**, and the response returns it so you can see that rather than assume it. This is a product decision, not an oversight: slugs live in bookmarks and in emailed capability-token links, which are exactly the links a compliance product has to keep working. Rename a customer after an acquisition and every existing link still resolves.\n\nUse `name` for a label and `slug` for a link. They drift apart the moment anyone renames, by design.\n\nA member or viewer gets `permission_denied` rather than a call that appears to succeed and changes nothing."
+          }
+        },
+        {
+          "name": "List members",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.OrgService/ListMembers",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.OrgService", "ListMembers"]
+            },
+            "description": "Everyone in the organisation the header names. **Implemented as of ENT-202.** Required scope: `org:read`, not `org:manage` — seeing who your colleagues are is not an administrative act, and requiring the management scope would mean a viewer could not render a page they are entitled to see.\n\n`displayName` and `email` are readable by every member regardless of role, which is a decision the product owner took explicitly on 2026-08-15 rather than a default nobody examined. Before that, `user_identities` was self-only and this endpoint could only have returned uuids. The reversal is narrow: it grants nothing outside a shared membership, and nothing outside the organisation the header names. See `db/migrations/00005_co_member_identity.sql`.\n\nBoth fields can be empty and a client must cope. `displayName` is absent when the authorization server returned no name claim, and both are absent for someone invited who has not yet signed in.\n\nCopy a `userId` from the response into the `member_user_id` environment variable for the two requests below."
+          }
+        },
+        {
+          "name": "Update member role",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{member_user_id}}\",\n  \"role\": \"member\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.OrgService/UpdateMemberRole",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.OrgService", "UpdateMemberRole"]
+            },
+            "description": "Changes one member's role. **Implemented as of ENT-202.** Required scope: `org:manage`, owner-only.\n\nThree roles exist and no more: `owner`, `member`, `viewer`. Anything else answers `invalid_argument` naming the three, rather than letting the database's check constraint reply with `memberships_role_check`, which is a correct answer to the wrong audience.\n\n**Demoting the last owner is refused** with `failed_precondition`, not only removing them. Guarding removal alone would be theatre: a last owner who cannot be removed could be demoted to viewer and then removed, reaching the same ownerless organisation in two steps. An organisation with no owner has nobody who can invite, change roles or manage billing, and no way back short of an operator opening a database session.\n\nThe response re-reads the member rather than echoing what was sent, so it describes what the database holds."
+          }
+        },
+        {
+          "name": "Remove member",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{member_user_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.OrgService/RemoveMember",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.OrgService", "RemoveMember"]
+            },
+            "description": "Removes someone from the organisation the header names. **Implemented as of ENT-202.** Required scope: `org:manage`, owner-only.\n\nRemoving the last owner answers `failed_precondition`; see Update member role for why that rule covers demotion too.\n\nA user id that is not a member of this organisation answers `not_found`, and so does one that does not exist at all. That ambiguity is deliberate: distinguishing them would turn this endpoint into a way of asking whether a given person belongs to a given organisation."
+          }
+        },
+        {
+          "name": "Invite member",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"colleague@example.com\",\n  \"role\": \"member\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.OrgService/InviteMember",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.OrgService", "InviteMember"]
+            },
+            "description": "Creates an invitation to the organisation the header names. **Implemented as of ENT-202.** Required scope: `org:manage`, owner-only. Invitations expire after seven days.\n\n**The response does not contain the token, and never will.** It carries `invitationId` and `expiresAt` only. The raw token exists in exactly two places: the email sent to the invitee, and a SHA-256 hash stored against the row. Returning it here would let anyone who can invite also redeem on the invitee's behalf, which defeats the point of a capability sent to an address.\n\nA practical consequence for anyone testing from here: you cannot chain this into Accept invitation. To exercise acceptance, write a fixture invitation with a token you already know, which is what the Go tests do via the store's `CreateInvitation`.\n\n**Email delivery is ENT-202 PR 2.** As of PR 1 the invitation is created, hashed and stored, and nothing is sent. Until then the invitee learns of it out of band.\n\nEmail validation is deliberately shallow — non-empty and containing an `@`. Anything stricter rejects addresses that are valid under RFC 5321, and the authoritative test of an address is whether mail to it arrives."
+          }
+        },
+        {
           "name": "Accept invitation",
           "request": {
             "method": "POST",
@@ -324,7 +449,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.OrgService", "AcceptInvitation"]
             },
-            "description": "Ordering matters and is easy to get wrong: this must run **before** the first GetCurrentUser. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to. `web`'s callback enforces that ordering (ENT-197); a direct caller has to keep it themselves.\n\n**Implemented as of ENT-196**, and reachable from here as of ENT-197. Required scope is `openid`, not `org:manage`: the caller is redeeming a capability they were sent and holds no role anywhere until it succeeds, so an organisation scope would make a first invitation impossible to accept.\n\nThe token is sent in the clear here and stored hashed, so the value in the database never matches this one. Issuing invitations is not built yet (build-order step 2); until then a fixture is written directly, which is what the tests do.\n\nExpired, already accepted and never existed all answer `not_found` alike, deliberately, so this cannot be used to discover which tokens are real.\n\nThe response carries `orgSlug` as of ENT-198, so a client can redirect straight into `/o/{orgSlug}/` rather than making a second call to find out where the organisation it just joined actually lives."
+            "description": "Ordering matters and is easy to get wrong: this must run **before** the first GetCurrentUser. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to. `web`'s callback enforces that ordering (ENT-197); a direct caller has to keep it themselves.\n\n**Implemented as of ENT-196**, and reachable from here as of ENT-197. Required scope is `openid`, not `org:manage`: the caller is redeeming a capability they were sent and holds no role anywhere until it succeeds, so an organisation scope would make a first invitation impossible to accept.\n\nThe token is sent in the clear here and stored hashed, so the value in the database never matches this one. **Issuing invitations exists as of ENT-202** (see Invite member above), but you still cannot chain the two from here: that endpoint deliberately never returns the token, so a fixture written with a token you already know remains the only way to exercise acceptance, which is what the Go tests do.\n\nExpired, already accepted and never existed all answer `not_found` alike, deliberately, so this cannot be used to discover which tokens are real.\n\nThe response carries `orgSlug` as of ENT-198, so a client can redirect straight into `/o/{orgSlug}/` rather than making a second call to find out where the organisation it just joined actually lives."
           }
         }
       ]
