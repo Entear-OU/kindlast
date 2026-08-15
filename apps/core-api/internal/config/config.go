@@ -70,6 +70,24 @@ type Config struct {
 
 	// RedisAddr is the shared instance holding the revocation deny-list.
 	RedisAddr string
+
+	// BillingEnabled turns plan gating on. Off by default, and the default is
+	// the important half (§18.1).
+	//
+	// A self-hoster runs the whole product on their own hardware and has no
+	// subscription, no provider and no intention of acquiring either. Gating
+	// them out of the Executor because they are "on the free plan" would make
+	// the self-hosted build a demo, which is not what it is. So gating is
+	// something a deployment opts into rather than something it must remember
+	// to switch off.
+	//
+	// An explicit flag rather than inferring it from data. The obvious
+	// inference, "no subscription row means self-hosted", is wrong in the
+	// direction that costs money: a hosted customer between provisioning and
+	// their first subscription row would be indistinguishable from a
+	// self-hoster and would get the paid feature free. Deployment shape is
+	// deployment configuration, not something to reconstruct from a table.
+	BillingEnabled bool
 }
 
 // Load reads the environment.
@@ -83,6 +101,7 @@ func Load() (*Config, error) {
 		OIDCScopeClaims:  splitList(os.Getenv("KINDLAST_OIDC_SCOPE_CLAIMS")),
 		DatabaseURL:      os.Getenv("KINDLAST_DATABASE_URL"),
 		RedisAddr:        os.Getenv("KINDLAST_REDIS_ADDR"),
+		BillingEnabled:   truthy(os.Getenv("KINDLAST_BILLING_ENABLED")),
 	}
 
 	var missing []string
@@ -166,6 +185,21 @@ func splitList(value string) []string {
 		}
 	}
 	return list
+}
+
+// truthy reads a boolean environment variable.
+//
+// Only the four affirmative spellings count, and anything else including an
+// unset variable is false. A typo therefore leaves plan gating OFF rather than
+// on, which is the safe direction for a flag whose failure mode is refusing a
+// paying customer their feature.
+func truthy(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func sorted(values []string) []string {

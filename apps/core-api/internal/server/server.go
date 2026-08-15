@@ -8,6 +8,8 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
@@ -32,6 +34,12 @@ type Dependencies struct {
 	// Ready reports whether the service's dependencies are reachable. Nil
 	// means always ready.
 	Ready func(context.Context) error
+
+	// BillingEnabled turns plan gating on for the act path. False, the zero
+	// value, is the self-hosted default and leaves the Executor ungated
+	// (§18.1). See config.Config.BillingEnabled for why this is configuration
+	// rather than something inferred from the subscriptions table.
+	BillingEnabled bool
 }
 
 // New builds the HTTP handler core-api serves.
@@ -59,6 +67,8 @@ func New(deps Dependencies) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(deps.Profiles), chain))
 	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(), chain))
+	mux.Handle(corev1connect.NewFindingsServiceHandler(findings.New(deps.BillingEnabled), chain))
+	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboard.New(), chain))
 
 	// Unauthenticated by design, and bound to the internal listener only.
 	// Requiring a credential here is a common reflex that breaks orchestrator

@@ -176,6 +176,7 @@ func run(logger *slog.Logger) error {
 		Ready: func(ctx context.Context) error {
 			return store.Ping(ctx)
 		},
+		BillingEnabled: cfg.BillingEnabled,
 	})
 	if err != nil {
 		return err

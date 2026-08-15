@@ -277,11 +277,17 @@ func (t *Tenant) UseOrganisation(ctx context.Context, orgID string) error {
 // Free when there is no row: a newly provisioned organisation has no
 // subscription, and billing keys on the organisation rather than the user
 // (§20.1).
+//
+// Free also when the row is not active. Reading the plan column alone would
+// keep a paid feature working indefinitely after a customer stopped paying,
+// because `status` moving to `canceled` or `past_due` leaves `plan` saying
+// `pro`. The status filter was added when ENT-203 made this the act path's
+// gate; before that nothing consulted it in a way that could be wrong.
 func (t *Tenant) Plan(ctx context.Context) (string, error) {
 	var plan string
 
 	err := t.tx.QueryRow(ctx, `
-		select plan from subscriptions where org_id = $1
+		select plan from subscriptions where org_id = $1 and status = 'active'
 	`, t.orgID).Scan(&plan)
 
 	if errors.Is(err, pgx.ErrNoRows) {
