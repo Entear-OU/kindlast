@@ -43,6 +43,11 @@ type Dependencies struct {
 	// better than serving an endpoint that fails on every call.
 	Producer sweepservice.Producer
 
+	// HumanClientID is the OAuth client whose tokens carry the human scope set
+	// (ENT-221). Empty leaves the scope interceptor reading granted scopes for
+	// every caller, which is the pre-ENT-221 behaviour.
+	HumanClientID string
+
 	// BillingEnabled turns plan gating on for the act path. False, the zero
 	// value, is the self-hosted default and leaves the Executor ungated
 	// (§18.1). See config.Config.BillingEnabled for why this is configuration
@@ -56,7 +61,8 @@ type Dependencies struct {
 // to read it and one place it can be got wrong. See the package comment on
 // `interceptor` for why it is this order.
 func New(deps Dependencies) (http.Handler, error) {
-	scopes, err := interceptor.NewScope(Services())
+	scopes, err := interceptor.NewScope(Services(),
+		interceptor.WithHumanClient(deps.HumanClientID))
 	if err != nil {
 		// The binary does not start. An RPC with no declared scope would
 		// otherwise be reachable with any valid token, and a process that

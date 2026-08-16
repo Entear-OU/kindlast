@@ -66,6 +66,23 @@ type Claims struct {
 	// many providers and changes freely.
 	Name   string
 	Scopes []string
+
+	// ClientID is the OAuth client the token was minted for, from `client_id`.
+	//
+	// It names the CLIENT, never the user, and that distinction is the whole of
+	// its usefulness: it answers "what kind of caller is this" where Subject
+	// answers "who".
+	//
+	// `client_id` and not `azp`, which is measured rather than chosen. On this
+	// stack Zitadel emits `client_id` on both authorization-code and
+	// client-credentials tokens and emits no `azp` at all, so a reader written
+	// against azp would match nothing and look like it worked (ENT-221).
+	//
+	// Empty is normal: a provider may omit it. Anything deciding authority from
+	// this must treat empty as "unknown client" and grant nothing, never as a
+	// match against an unset configuration value.
+	ClientID string
+
 	// TokenID is the `jti`, and it is what the Redis deny-list keys on to
 	// close the revocation window local verification opens (§1.4, §15.1).
 	TokenID   string
@@ -187,6 +204,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 		Email:         claims.Email,
 		EmailVerified: bool(claims.EmailVerified),
 		Name:          claims.Name,
+		ClientID:      claims.ClientID,
 		Scopes:        withOpenID(claims.scopes(v.scopeClaims)),
 		TokenID:       claims.ID,
 		ExpiresAt:     expires.Time,
@@ -253,6 +271,11 @@ type tokenClaims struct {
 	// meets whichever IdP a self-hoster already runs.
 	Scope string          `json:"scope,omitempty"`
 	SCP   json.RawMessage `json:"scp,omitempty"`
+
+	// The OAuth client the token was minted for, per RFC 9068. Read for
+	// client-class scope resolution; see Claims.ClientID for why it is
+	// `client_id` and not `azp`.
+	ClientID string `json:"client_id,omitempty"`
 
 	Email         string       `json:"email,omitempty"`
 	EmailVerified flexibleBool `json:"email_verified,omitempty"`

@@ -42,6 +42,19 @@ import { stashState } from './state'
  *
  * The plural in `projects` is not a typo. `urn:zitadel:iam:org:project:{id}:roles`
  * as a requested scope produces no claim; only the plural form does.
+ *
+ * STILL REQUESTED AFTER CLIENT-CLASS RESOLUTION, AND NOT REDUNDANTLY
+ *
+ * core-api now derives the human scope set from the token's client rather than
+ * from granted roles (ENT-221), which makes the roles claim unread on the human
+ * path. It is kept because that resolution is configuration: with
+ * KINDLAST_HUMAN_CLIENT_ID unset, core-api falls back to reading granted
+ * scopes, and a deployment in that state needs this scope for a human to reach
+ * anything at all.
+ *
+ * So this is the fallback path rather than dead weight. Removing it would make
+ * the fallback silently non-functional, which is the same class of bug as the
+ * one that made this line necessary in the first place.
  */
 const SCOPES = [
   'openid',
