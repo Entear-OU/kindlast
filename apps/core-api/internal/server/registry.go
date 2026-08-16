@@ -28,6 +28,12 @@ func Services() []protoreflect.ServiceDescriptor {
 		// undeclared during the window where the proto has landed and the
 		// service has not.
 		corev1.File_kindlast_core_v1_findings_proto,
+		// RecordsService, listed under the same rule while it is contract only
+		// (ENT-200). Its handlers are not registered on the mux yet, so nothing
+		// here is reachable; what this buys is that the six RPCs are scope
+		// checked now, and the day a handler is added it cannot arrive
+		// undeclared.
+		corev1.File_kindlast_core_v1_records_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the

@@ -124,6 +124,44 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "GET", Path: "/api/v1/dashboard",
 		},
 
+		// ENT-200, the records read surface. Pinned while the service is
+		// contract only and no handler is registered, which is the window this
+		// test exists to cover: the paths are reviewed now rather than
+		// inherited unexamined by whoever writes the handlers.
+		//
+		// The reviewable choice is the `/records/` prefix. Three registers sit
+		// under one collection because they are one answer to one question,
+		// what is on file for this organisation, and they share `records:read`.
+		// Flat paths (`/api/v1/processing-activities`) would read as three
+		// unrelated collections and would leave no room for a records-wide
+		// endpoint later.
+		//
+		// Same absence to review as every group above: no `{org_id}` anywhere.
+		// Each `{..._id}` names the record being read and is meaningless
+		// without the header.
+		//
+		// Kebab-case in the path (`ai-systems`, `processing-activities`) where
+		// the proto field is snake_case, which is the convention the rest of
+		// this API already follows for multi-word segments.
+		"kindlast.core.v1.RecordsService.ListProcessingActivities": {
+			Method: "GET", Path: "/api/v1/records/processing-activities",
+		},
+		"kindlast.core.v1.RecordsService.GetProcessingActivity": {
+			Method: "GET", Path: "/api/v1/records/processing-activities/{processing_activity_id}",
+		},
+		"kindlast.core.v1.RecordsService.ListAiSystems": {
+			Method: "GET", Path: "/api/v1/records/ai-systems",
+		},
+		"kindlast.core.v1.RecordsService.GetAiSystem": {
+			Method: "GET", Path: "/api/v1/records/ai-systems/{ai_system_id}",
+		},
+		"kindlast.core.v1.RecordsService.ListDsars": {
+			Method: "GET", Path: "/api/v1/records/dsars",
+		},
+		"kindlast.core.v1.RecordsService.GetDsar": {
+			Method: "GET", Path: "/api/v1/records/dsars/{dsar_id}",
+		},
+
 		// ENT-203. The only binding outside /api/v1, and the prefix is the
 		// reviewable part: /internal/v1 is not reachable through the edge's
 		// public routes and is not served to a browser client. The proto

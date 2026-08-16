@@ -1,0 +1,342 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kindlast/options/v1/scope.proto";
+
+// The compliance record: what the organisation actually holds (§4).
+//
+// THE ORGANISATION IS NEVER IN THE PATH
+//
+// Same rule as FindingsService and OrgService. Every method acts on the
+// organisation named by the `Kindlast-Org-Id` header, resolved once per request
+// before any handler runs. A `{..._id}` in a path names the record being read,
+// not the tenant, and is meaningless without the header.
+//
+// WHY THIS SURFACE EXISTS NOW, AND WHY IT IS READ-ONLY
+//
+// Approving a finding already creates a record. `approve_finding` dispatches on
+// `findings.action_type` and writes a `processing_activities` or `ai_systems`
+// row, with an audit row naming the human who approved it (00006, 00007, 00009).
+// That is not a plan: it was exercised through the console before this contract
+// was written, and both record types were observed being created by a founder
+// clicking Approve.
+//
+// So the gap this closes is not "records would be nice". The act path writes
+// into a space the customer cannot look at, which for a compliance product is
+// the wrong half to have working. Reads come first for that reason, and because
+// they are the half an auditor needs.
+//
+// Editing comes next and is deliberately not in this contract. The write scopes
+// already exist (`records:ropa:write`, `records:ai-systems:write`,
+// `records:dsar:write`) and so do all six database functions behind them, in
+// 00002. Declaring the RPCs now with no handler would put three entries in the
+// scope table that answer permission-denied for a reason unrelated to
+// permission, which is the failure mode §1.3 exists to stop.
+//
+// ONE SERVICE, THREE RECORD TYPES
+//
+// They share `records:read` because they are one answer to one question: what is
+// on file for this organisation. Splitting them into three services would imply
+// a customer might hold the ROPA without the AI systems register, which is not a
+// distinction the product draws and not one the scope vocabulary encodes.
+//
+// The write scopes ARE per type, which is the asymmetry that matters: reading
+// the record is one entitlement, and changing a specific part of it is three.
+// Per-method scopes on one service express that exactly, the way FindingsService
+// already mixes `findings:read` and `findings:act`. Matching is exact and never
+// by prefix, so `records:read` does not satisfy `records:ropa:write`.
+//
+// PROVENANCE IS A FIELD, NOT A JOIN
+//
+// Every record carries `source_finding_id`, set when the Executor created it and
+// empty when a human did. "Why is this here" is the first question an auditor
+// asks of a compliance record, and one that cannot answer it is one somebody has
+// to defend from memory.
+//
+// COMPLETENESS IS COMPUTED HERE, NOT IN EACH CLIENT
+//
+// `ProcessingActivity.completeness` and `Dsar.urgency` are derived server-side
+// and carried, rather than left for a renderer to work out. The legacy console
+// derived both in TypeScript, which was fine while there was one client; the
+// Article 12(3) escalation window in particular is a regulatory threshold, and a
+// second implementation of it is a second thing that can drift from the law.
+service RecordsService {
+  // The Article 30 record of processing activities.
+  //
+  // Ordered and paginated over the `(org_id, created_at desc)` index that 00001
+  // created. Keyset rather than offset, for the reason ListFindings gives: the
+  // list is written to while it is read, and an offset page 2 silently skips a
+  // row whenever one arrives between requests.
+  //
+  // Note this orders by creation, where the legacy register ordered by
+  // `updated_at desc`. That was the better ordering for a register someone is
+  // actively editing and it is the wrong one to paginate: a row edited between
+  // two page requests moves position, so a keyset over `updated_at` can both
+  // skip rows and return them twice. Creation order is stable, and "what did I
+  // touch last" is a sort a client can offer within a page.
+  rpc ListProcessingActivities(ListProcessingActivitiesRequest) returns (ListProcessingActivitiesResponse) {
+    option (kindlast.options.v1.required_scope) = "records:read";
+    option (google.api.http) = {get: "/api/v1/records/processing-activities"};
+  }
+
+  rpc GetProcessingActivity(GetProcessingActivityRequest) returns (GetProcessingActivityResponse) {
+    option (kindlast.options.v1.required_scope) = "records:read";
+    option (google.api.http) = {get: "/api/v1/records/processing-activities/{processing_activity_id}"};
+  }
+
+  // The AI system register, which the AI Act calls for and the GDPR does not.
+  //
+  // Paginated the same way, but note that `ai_systems` is indexed on `(org_id)`
+  // alone rather than `(org_id, created_at desc)` like the other two. The
+  // migration accompanying this surface adds the composite, because a keyset
+  // page over an unsupported ordering sorts the whole tenant's rows on every
+  // request: correct, and quietly quadratic.
+  rpc ListAiSystems(ListAiSystemsRequest) returns (ListAiSystemsResponse) {
+    option (kindlast.options.v1.required_scope) = "records:read";
+    option (google.api.http) = {get: "/api/v1/records/ai-systems"};
+  }
+
+  rpc GetAiSystem(GetAiSystemRequest) returns (GetAiSystemResponse) {
+    option (kindlast.options.v1.required_scope) = "records:read";
+    option (google.api.http) = {get: "/api/v1/records/ai-systems/{ai_system_id}"};
+  }
+
+  // Data-subject access requests, and the statutory clock on each.
+  //
+  // Ordered by `response_due_at` ascending rather than by creation, because the
+  // only question anyone asks of this list is which one runs out first. That is
+  // a different ordering from the other two lists on purpose, and it means a
+  // page token from this list is not interchangeable with theirs.
+  //
+  // Unlike the other two registers, nothing in this one arrives from an
+  // approval. 00009 classified three obligations and deliberately mapped none of
+  // them to `create_dsar`, and 00010 asserts that, so every row here was logged
+  // by a human. `source_finding_id` is therefore always empty today; it is
+  // carried rather than omitted because the executor path exists and the field
+  // going from always-empty to sometimes-set must not be a contract change.
+  rpc ListDsars(ListDsarsRequest) returns (ListDsarsResponse) {
+    option (kindlast.options.v1.required_scope) = "records:read";
+    option (google.api.http) = {get: "/api/v1/records/dsars"};
+  }
+
+  rpc GetDsar(GetDsarRequest) returns (GetDsarResponse) {
+    option (kindlast.options.v1.required_scope) = "records:read";
+    option (google.api.http) = {get: "/api/v1/records/dsars/{dsar_id}"};
+  }
+}
+
+message ListProcessingActivitiesRequest {
+  // Opaque. Clients must treat it as a token and never parse or construct one.
+  string page_token = 1;
+  // Server-clamped. Zero means "the server decides".
+  int32 page_size = 2;
+}
+
+message ListProcessingActivitiesResponse {
+  repeated ProcessingActivity processing_activities = 1;
+  // Empty when this is the last page. Key "there is more" off this being
+  // non-empty, never off the page being full.
+  string next_page_token = 2;
+  // How many manually-created activities the plan allows, and how many are used.
+  //
+  // Carried on the list because that is where a client has to decide whether
+  // "Add activity" is available, and computing it needs a count the client does
+  // not otherwise have. The limit counts only rows with no `source_finding_id`:
+  // a record the Executor created on an approved finding is part of the
+  // compliance record and is never withheld behind a plan (ENT-84).
+  ManualQuota manual_quota = 3;
+}
+
+// A plan limit on manually-created records, and current usage against it.
+message ManualQuota {
+  int32 used = 1;
+  // Zero means unlimited, which is what a paid plan and a self-hosted
+  // deployment with billing disabled both report. A client must check for zero
+  // rather than rendering "3 of 0 used".
+  int32 limit = 2;
+}
+
+// One entry in the Article 30 record.
+//
+// The nullable columns are nullable because `approve_finding` creates the row
+// from a finding that knows the activity exists and not what is in it. A record
+// created by the Executor is therefore a stub a human completes, and the fields
+// below are empty rather than invented. Article 30 is a record of fact, so a
+// plausible guess in `legal_basis` is the single worst thing this product could
+// write.
+message ProcessingActivity {
+  string processing_activity_id = 1;
+  // Required in the database. Taken from the finding's `detected` text when the
+  // Executor created it, which is a description of the gap rather than a name,
+  // and is the first thing a human renames.
+  string name = 2;
+  // Article 30(1)(b). Empty on an Executor-created stub.
+  string purpose = 3;
+  // Article 6. Empty on a stub, and empty is honest: the lawful basis is a legal
+  // determination, not something derivable from the profile.
+  string legal_basis = 4;
+  repeated string data_categories = 5;
+  repeated string recipients = 6;
+  // Article 30(1)(f), free text because retention is stated in the customer's
+  // own terms ("7 years after the contract ends") far more often than in days.
+  string retention_period = 7;
+  // Set when the Executor created this from an approved finding, empty when a
+  // human created it directly. See the service comment on provenance.
+  string source_finding_id = 8;
+  // complete, incomplete, or review_needed.
+  //
+  // `review_needed` means the Executor pre-filled this and no human has edited
+  // it since, which is a different state from incomplete and needs a different
+  // prompt: the entry exists because an approval said it must, and it is
+  // nobody's work-in-progress until someone opens it.
+  //
+  // `complete` requires every Article 30 field to be present AND the row to have
+  // been updated after it was created. That second condition is what stops an
+  // Executor stub with plausible defaults from ever reading as complete without
+  // a human having looked.
+  string completeness = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message GetProcessingActivityRequest {
+  string processing_activity_id = 1;
+}
+
+message GetProcessingActivityResponse {
+  ProcessingActivity processing_activity = 1;
+}
+
+message ListAiSystemsRequest {
+  string page_token = 1;
+  int32 page_size = 2;
+}
+
+message ListAiSystemsResponse {
+  repeated AiSystem ai_systems = 1;
+  string next_page_token = 2;
+}
+
+// One system in the AI Act register.
+message AiSystem {
+  string ai_system_id = 1;
+  string name = 2;
+  // Who supplies it. Empty for something built in house, which is a meaningful
+  // empty rather than a missing one: the AI Act's provider and deployer duties
+  // differ, and an organisation that built the system is generally both.
+  string vendor = 3;
+  string purpose = 4;
+  // unacceptable, high, limited, minimal, or unclassified.
+  //
+  // `unclassified` is the default and is deliberately not `minimal`. Article 6
+  // classification is a judgement with consequences, and a register that
+  // defaults to the lowest tier tells a customer they are fine about a system
+  // nobody has assessed. Same reasoning as `not_assessed` on the dashboard
+  // posture (ENT-161), applied to a record instead of a summary.
+  string risk_classification = 5;
+  // missing, in_progress, or complete: how far the Article 11 technical
+  // documentation has got.
+  string documentation_status = 6;
+  // When a human last looked at this entry. Absent means never, which for a
+  // register that drives high-risk obligations is worth showing rather than
+  // hiding behind a created date.
+  google.protobuf.Timestamp last_reviewed_at = 7;
+  string source_finding_id = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message GetAiSystemRequest {
+  string ai_system_id = 1;
+}
+
+message GetAiSystemResponse {
+  AiSystem ai_system = 1;
+}
+
+message ListDsarsRequest {
+  string page_token = 1;
+  int32 page_size = 2;
+  // Optional filter: open, in_progress, responded, closed. Empty means every
+  // status, including the answered ones, because a closed request is still part
+  // of the record an auditor asks to see.
+  string status = 3;
+}
+
+message ListDsarsResponse {
+  // Soonest deadline first. See ListDsars.
+  repeated Dsar dsars = 1;
+  string next_page_token = 2;
+}
+
+// A data-subject access request, and the clock on it.
+message Dsar {
+  string dsar_id = 1;
+  // Who asked. Optional in the database because a request can arrive
+  // pseudonymously, through a form or an inbox, before anyone has identified the
+  // person behind it.
+  string subject_name = 2;
+  // access, erasure, rectification, portability, objection, restriction.
+  //
+  // Free text rather than an enum, because Article 15-22 requests arrive worded
+  // by the person making them, and forcing them into a closed list at intake
+  // loses what was actually asked for.
+  string request_type = 3;
+  // open, in_progress, responded, or closed. The recorded workflow state, as
+  // distinct from `urgency`, which is derived from the clock.
+  string status = 4;
+  // When the request was RECEIVED, which is when the statutory clock starts.
+  //
+  // ENT-224. This is not the row's creation timestamp and the two routinely
+  // differ: a request that arrived by post on the 1st and was logged on the 8th
+  // is due one month from the 1st. Article 12(3) runs from receipt, so a clock
+  // started at data entry silently grants the organisation the days it took them
+  // to notice, which is exactly backwards.
+  google.protobuf.Timestamp received_at = 5;
+  // Article 12(3): one month from receipt, extendable by two further months for
+  // complex requests. Stored rather than computed here, so an extension is
+  // recorded as a fact about this request instead of being re-derived from a
+  // rule that may since have changed. The extension itself is not yet modelled;
+  // 00010 left it open as a schema question.
+  google.protobuf.Timestamp response_due_at = 6;
+  // Set once a response has gone out.
+  google.protobuf.Timestamp responded_at = 7;
+  // Who inside the organisation is dealing with it. Free text: this is often a
+  // role or an external DPO rather than a member of the workspace.
+  string handler = 8;
+  // overdue, due_soon, on_track, or answered.
+  //
+  // Derived from `response_due_at` against the clock, with `due_soon` meaning
+  // ten days or fewer remaining. That window is the legacy console's escalation
+  // threshold, preserved deliberately: it is late enough to be urgent and early
+  // enough that a month-long response can still be assembled.
+  //
+  // Computed server-side so the threshold has one definition. A client that
+  // re-derived it from `response_due_at` would be a second implementation of a
+  // regulatory deadline, and the two would eventually disagree.
+  //
+  // `answered` rather than a date comparison once `responded_at` is set: a
+  // request answered on time and one answered late are both answered, and the
+  // list should stop shouting about either.
+  string urgency = 9;
+  // Whole days until `response_due_at`, negative once it has passed. Carried
+  // alongside `urgency` because "4 days left" and "11 days overdue" are the
+  // words a handler acts on, and rounding a timestamp difference is another
+  // thing two clients would do differently.
+  int32 days_until_due = 10;
+  // Always empty today. See ListDsars.
+  string source_finding_id = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message GetDsarRequest {
+  string dsar_id = 1;
+}
+
+message GetDsarResponse {
+  Dsar dsar = 1;
+}
