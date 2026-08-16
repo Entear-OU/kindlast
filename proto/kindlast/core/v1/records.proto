@@ -29,12 +29,20 @@ import "kindlast/options/v1/scope.proto";
 // the wrong half to have working. Reads come first for that reason, and because
 // they are the half an auditor needs.
 //
-// Editing comes next and is deliberately not in this contract. The write scopes
-// already exist (`records:ropa:write`, `records:ai-systems:write`,
-// `records:dsar:write`) and so do all six database functions behind them, in
-// 00002. Declaring the RPCs now with no handler would put three entries in the
-// scope table that answer permission-denied for a reason unrelated to
-// permission, which is the failure mode §1.3 exists to stop.
+// Editing arrived after the read surface, in that order deliberately: the act
+// path was already writing records nobody could see, so reading was the half
+// that was missing. The write RPCs are additive and changed no read shape.
+//
+// EVERY WRITE GOES THROUGH A DATABASE FUNCTION, NEVER A TABLE
+//
+// The six functions in 00002 own these writes. Each one resolves the acting
+// human from the session GUC, enforces its own gate, and writes the audit row in
+// the same transaction as the change. A handler that wrote the table directly
+// would have to reimplement all three, and the audit row would be a second
+// statement that can fail on its own.
+//
+// So there is no actor field on any request here, and there will not be one. A
+// caller cannot name someone else as the person who made a change.
 //
 // ONE SERVICE, THREE RECORD TYPES
 //
@@ -126,6 +134,203 @@ service RecordsService {
     option (kindlast.options.v1.required_scope) = "records:read";
     option (google.api.http) = {get: "/api/v1/records/dsars/{dsar_id}"};
   }
+
+  // Adds an activity the Executor has not seen.
+  //
+  // Capped on the free plan, and the cap counts only manually-created rows: a
+  // record created from an approved finding is part of the compliance record and
+  // is never withheld behind a plan. Over the cap answers `resource_exhausted`
+  // rather than `permission_denied`, because the caller is entitled to do this
+  // and simply cannot right now, which is a distinction with a button under it.
+  rpc CreateProcessingActivity(CreateProcessingActivityRequest) returns (CreateProcessingActivityResponse) {
+    option (kindlast.options.v1.required_scope) = "records:ropa:write";
+    option (google.api.http) = {
+      post: "/api/v1/records/processing-activities"
+      body: "*"
+    };
+  }
+
+  // Replaces an activity's fields.
+  //
+  // A full replacement rather than a patch, and the field mask that would make
+  // it a patch is deliberately absent. Article 30 is a record of fact whose gaps
+  // are meaningful: clearing a legal basis is a real edit somebody makes when
+  // they realise the one recorded was wrong, and a partial update in which an
+  // omitted field means "leave it alone" gives a client no way to express that.
+  rpc UpdateProcessingActivity(UpdateProcessingActivityRequest) returns (UpdateProcessingActivityResponse) {
+    option (kindlast.options.v1.required_scope) = "records:ropa:write";
+    option (google.api.http) = {
+      patch: "/api/v1/records/processing-activities/{processing_activity_id}"
+      body: "*"
+    };
+  }
+
+  // Registers a system nobody has approved a finding about.
+  //
+  // Useful mostly for shadow AI: the system somebody adopted without telling
+  // anyone is exactly the one no finding will ever raise.
+  //
+  // Classifying a new system as `high` requires `reviewed`. See UpdateAiSystem.
+  rpc CreateAiSystem(CreateAiSystemRequest) returns (CreateAiSystemResponse) {
+    option (kindlast.options.v1.required_scope) = "records:ai-systems:write";
+    option (google.api.http) = {
+      post: "/api/v1/records/ai-systems"
+      body: "*"
+    };
+  }
+
+  // Replaces a system's fields.
+  //
+  // CHANGING A CLASSIFICATION REQUIRES `reviewed`, AND THAT IS THE POINT
+  //
+  // Any change to `risk_classification` is refused unless the request carries
+  // `reviewed: true`, and so is classifying a new system as `high`. The database
+  // enforces it, not this layer.
+  //
+  // The reason is that an Article 6 classification is the determination the
+  // whole high-risk obligation stack hangs off. Moving a system out of `high` in
+  // a form somebody was tabbing through would quietly retire Articles 9 to 17
+  // for it, and the record would show a change with nobody's deliberate decision
+  // behind it. A caller sends `reviewed` to say a human meant it, and the audit
+  // row records that they did.
+  //
+  // Refused answers `failed_precondition`: the caller may do this, and must
+  // confirm first. That is not `permission_denied` and not `resource_exhausted`,
+  // and a client shows a confirm step rather than an upgrade prompt.
+  rpc UpdateAiSystem(UpdateAiSystemRequest) returns (UpdateAiSystemResponse) {
+    option (kindlast.options.v1.required_scope) = "records:ai-systems:write";
+    option (google.api.http) = {
+      patch: "/api/v1/records/ai-systems/{ai_system_id}"
+      body: "*"
+    };
+  }
+
+  // Logs a request that arrived.
+  //
+  // The only way a DSAR enters the register: nothing creates one from an
+  // approval, because a request comes from a person and an obligation that
+  // manufactured one would be inventing the requester.
+  rpc LogDsar(LogDsarRequest) returns (LogDsarResponse) {
+    option (kindlast.options.v1.required_scope) = "records:dsar:write";
+    option (google.api.http) = {
+      post: "/api/v1/records/dsars"
+      body: "*"
+    };
+  }
+
+  // Records that a response went out, which stops the statutory clock.
+  //
+  // Requires `reviewed`, for the same class of reason UpdateAiSystem does: this
+  // is the assertion that the organisation met an Article 12(3) deadline, and it
+  // is the single most consequential row in this register to get wrong. A
+  // regulator reading the log later is reading this field.
+  //
+  // Idempotent. Marking an already-answered request returns `applied: false` and
+  // writes nothing, rather than overwriting the date a response actually went
+  // out with the date somebody clicked the button twice.
+  //
+  // `:respond` rather than a status field on an update, per AIP-136: it is one
+  // transition with a gate, not an arbitrary field change.
+  rpc MarkDsarResponded(MarkDsarRespondedRequest) returns (MarkDsarRespondedResponse) {
+    option (kindlast.options.v1.required_scope) = "records:dsar:write";
+    option (google.api.http) = {
+      post: "/api/v1/records/dsars/{dsar_id}:respond"
+      body: "*"
+    };
+  }
+}
+
+// The fields of an Article 30 entry a human supplies.
+//
+// Shared by create and update so the two cannot drift into accepting different
+// things about the same record.
+message ProcessingActivityFields {
+  string name = 1;
+  string purpose = 2;
+  string legal_basis = 3;
+  repeated string data_categories = 4;
+  repeated string recipients = 5;
+  string retention_period = 6;
+}
+
+message CreateProcessingActivityRequest {
+  ProcessingActivityFields fields = 1;
+}
+
+message CreateProcessingActivityResponse {
+  // The created record, so a client renders it without a second call.
+  ProcessingActivity processing_activity = 1;
+}
+
+message UpdateProcessingActivityRequest {
+  string processing_activity_id = 1;
+  ProcessingActivityFields fields = 2;
+}
+
+message UpdateProcessingActivityResponse {
+  ProcessingActivity processing_activity = 1;
+}
+
+// The fields of an AI system entry a human supplies.
+message AiSystemFields {
+  string name = 1;
+  string vendor = 2;
+  string purpose = 3;
+  // unacceptable, high, limited, minimal, or unclassified. Empty means
+  // `unclassified`, which is the honest default: see AiSystem.
+  string risk_classification = 4;
+  // missing, in_progress, or complete. Empty means `missing`.
+  string documentation_status = 5;
+}
+
+message CreateAiSystemRequest {
+  AiSystemFields fields = 1;
+  // Required when `risk_classification` is `high`. See UpdateAiSystem.
+  bool reviewed = 2;
+}
+
+message CreateAiSystemResponse {
+  AiSystem ai_system = 1;
+}
+
+message UpdateAiSystemRequest {
+  string ai_system_id = 1;
+  AiSystemFields fields = 2;
+  // Required when this changes `risk_classification`. See UpdateAiSystem.
+  bool reviewed = 3;
+}
+
+message UpdateAiSystemResponse {
+  AiSystem ai_system = 1;
+}
+
+message LogDsarRequest {
+  // Optional: a request can arrive pseudonymously, before anyone has identified
+  // the person behind it.
+  string subject_name = 1;
+  // access, erasure, rectification, portability, objection, restriction. Free
+  // text, for the reason Dsar.request_type gives.
+  string request_type = 2;
+  // Optional. Often a role or an external DPO rather than a member.
+  string handler = 3;
+}
+
+message LogDsarResponse {
+  // Carries the computed `response_due_at`, which is the field the person who
+  // logged it actually needs to know.
+  Dsar dsar = 1;
+}
+
+message MarkDsarRespondedRequest {
+  string dsar_id = 1;
+  // Must be true. See MarkDsarResponded.
+  bool reviewed = 2;
+}
+
+message MarkDsarRespondedResponse {
+  // False when the request was already answered. See MarkDsarResponded.
+  bool applied = 1;
+  Dsar dsar = 2;
 }
 
 message ListProcessingActivitiesRequest {

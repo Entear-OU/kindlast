@@ -617,7 +617,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "ListProcessingActivities"]
             },
-            "description": "The Article 30 record of processing activities. Required scope: `records:read`.\n\n**CONTRACT ONLY, NOT YET SERVED (ENT-200).** The proto and generated code exist; no handler is registered, so this answers `unimplemented` rather than data. It is in the collection deliberately, per the repo rule that requests documenting the plan track where the build order is going. The row it will return already exists in the database: approving a `create_ropa` finding writes one today.\n\nPagination is keyset over `(org_id, created_at desc)`, not offset, for the reason List findings gives. `pageToken` is opaque: do not parse or construct one. Treat a non-empty `nextPageToken` as the only signal that more exist.\n\n**Ordered by creation, not by `updated_at`**, which is a deliberate change from the legacy console. Ordering a paginated list by a column that changes under it lets a row edited between two page requests be skipped or returned twice. \"What did I touch last\" is a sort a client can offer within a page.\n\n**`completeness` is computed server-side**, one of `complete`, `incomplete`, `review_needed`. `review_needed` means the Executor pre-filled the entry and no human has edited it since, which is a different state from incomplete and wants a different prompt. `complete` additionally requires the row to have been updated after it was created, which is what stops a stub from ever reading as complete without a human having looked.\n\n**`manualQuota`** carries the Free-tier cap on manually-created activities (ENT-84). `limit: 0` means unlimited, which is what a paid plan and a billing-disabled self-hosted deployment both report — check for zero rather than rendering \"3 of 0 used\". Executor-created rows never count against it: a record created from an approved finding is part of the compliance record and is not withheld behind a plan."
+            "description": "The Article 30 record of processing activities. Required scope: `records:read`.\n\n**Served as of ENT-200.** Approving a `create_ropa` finding already writes a row here, and the console renders this register at /o/{slug}/records.\n\nPagination is keyset over `(org_id, created_at desc)`, not offset, for the reason List findings gives. `pageToken` is opaque: do not parse or construct one. Treat a non-empty `nextPageToken` as the only signal that more exist.\n\n**Ordered by creation, not by `updated_at`**, which is a deliberate change from the legacy console. Ordering a paginated list by a column that changes under it lets a row edited between two page requests be skipped or returned twice. \"What did I touch last\" is a sort a client can offer within a page.\n\n**`completeness` is computed server-side**, one of `complete`, `incomplete`, `review_needed`. `review_needed` means the Executor pre-filled the entry and no human has edited it since, which is a different state from incomplete and wants a different prompt. `complete` additionally requires the row to have been updated after it was created, which is what stops a stub from ever reading as complete without a human having looked.\n\n**`manualQuota`** carries the Free-tier cap on manually-created activities (ENT-84). `limit: 0` means unlimited, which is what a paid plan and a billing-disabled self-hosted deployment both report — check for zero rather than rendering \"3 of 0 used\". Executor-created rows never count against it: a record created from an approved finding is part of the compliance record and is not withheld behind a plan."
           }
         },
         {
@@ -638,7 +638,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "GetProcessingActivity"]
             },
-            "description": "One entry in the Article 30 record. Required scope: `records:read`. **Contract only, not yet served (ENT-200)** — see List processing activities.\n\n**The empty fields are the point, not a gap.** `approve_finding` creates the row from a finding that knows the activity exists and not what is in it, so `purpose`, `legalBasis` and `retentionPeriod` come back empty on an Executor-created stub. Article 30 is a record of fact, and a plausible guess in `legalBasis` is the single worst thing this product could write.\n\n`sourceFindingId` is set when the Executor created this and empty when a human did. \"Why is this here\" is the first question an auditor asks of a compliance record."
+            "description": "One entry in the Article 30 record. Required scope: `records:read`. **Served as of ENT-200.**\n\n**The empty fields are the point, not a gap.** `approve_finding` creates the row from a finding that knows the activity exists and not what is in it, so `purpose`, `legalBasis` and `retentionPeriod` come back empty on an Executor-created stub. Article 30 is a record of fact, and a plausible guess in `legalBasis` is the single worst thing this product could write.\n\n`sourceFindingId` is set when the Executor created this and empty when a human did. \"Why is this here\" is the first question an auditor asks of a compliance record."
           }
         },
         {
@@ -659,7 +659,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "ListAiSystems"]
             },
-            "description": "The AI Act system register. Required scope: `records:read`. **Contract only, not yet served (ENT-200)** — see List processing activities. Approving an `ai-act-annex-iii-high-risk-systems` or `ai-act-art-26-deployer-obligations` finding already writes a row here (00009).\n\n**`riskClassification` defaults to `unclassified`, deliberately not `minimal`.** Article 6 classification is a judgement with consequences, and a register defaulting to the lowest tier tells a customer they are fine about a system nobody has assessed. Same reasoning as `not_assessed` on the dashboard posture, applied to a record instead of a summary. Values: `unacceptable`, `high`, `limited`, `minimal`, `unclassified`.\n\n`documentationStatus` is `missing`, `in_progress` or `complete`: how far the Article 11 technical documentation has got.\n\n`lastReviewedAt` absent means never reviewed, which for a register driving high-risk obligations is worth showing rather than hiding behind a created date.\n\n**Measured, and worth knowing before you profile this:** `ai_systems` carried only an `(org_id)` index from 00002 while its two sibling registers had the composite. Migration 00011 adds `(org_id, created_at desc)` and drops the redundant single-column index, because a keyset page over an unsupported ordering sorts the whole tenant's rows on every request."
+            "description": "The AI Act system register. Required scope: `records:read`. **Served as of ENT-200.** Approving an `ai-act-annex-iii-high-risk-systems` or `ai-act-art-26-deployer-obligations` finding already writes a row here (00009).\n\n**`riskClassification` defaults to `unclassified`, deliberately not `minimal`.** Article 6 classification is a judgement with consequences, and a register defaulting to the lowest tier tells a customer they are fine about a system nobody has assessed. Same reasoning as `not_assessed` on the dashboard posture, applied to a record instead of a summary. Values: `unacceptable`, `high`, `limited`, `minimal`, `unclassified`.\n\n`documentationStatus` is `missing`, `in_progress` or `complete`: how far the Article 11 technical documentation has got.\n\n`lastReviewedAt` absent means never reviewed, which for a register driving high-risk obligations is worth showing rather than hiding behind a created date.\n\n**Measured, and worth knowing before you profile this:** `ai_systems` carried only an `(org_id)` index from 00002 while its two sibling registers had the composite. Migration 00011 adds `(org_id, created_at desc)` and drops the redundant single-column index, because a keyset page over an unsupported ordering sorts the whole tenant's rows on every request."
           }
         },
         {
@@ -680,7 +680,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "GetAiSystem"]
             },
-            "description": "One system in the AI Act register. Required scope: `records:read`. **Contract only, not yet served (ENT-200)** — see List processing activities.\n\n`vendor` empty means built in house, which is a meaningful empty rather than a missing one: the AI Act's provider and deployer duties differ, and an organisation that built the system is generally both."
+            "description": "One system in the AI Act register. Required scope: `records:read`. **Served as of ENT-200.**\n\n`vendor` empty means built in house, which is a meaningful empty rather than a missing one: the AI Act's provider and deployer duties differ, and an organisation that built the system is generally both."
           }
         },
         {
@@ -701,7 +701,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "ListDsars"]
             },
-            "description": "Data-subject access requests and the statutory clock on each. Required scope: `records:read`. **Contract only, not yet served (ENT-200)** — see List processing activities.\n\n**Ordered by `responseDueAt` ascending, soonest first**, not by creation, because the only question anyone asks of a DSAR log is which one runs out next. That means a `pageToken` from this list is **not** interchangeable with the ones from the other two registers. Migration 00011 adds the `(org_id, response_due_at)` index this needs; the pre-existing `dsars_due_idx` looks like the right index and is not, because it does not lead with `org_id` and is partial on the two unfinished statuses.\n\n**Nothing in this register arrives from an approval, unlike the other two.** 00009 classified three obligations and deliberately mapped none to `create_dsar`, and 00010 asserts that: a data-subject request arrives from a person, so an obligation that manufactured one would be inventing the requester. Every row here was logged by a human, and `sourceFindingId` is therefore always empty today. It is carried rather than omitted so that going from always-empty to sometimes-set is not a contract change.\n\n**`urgency` is computed server-side**, one of `overdue`, `due_soon`, `on_track`, `answered`, with `due_soon` meaning ten days or fewer remaining. That window is a regulatory escalation threshold, and a client re-deriving it from `responseDueAt` would be a second implementation of a deadline that would eventually disagree with this one. `daysUntilDue` is carried alongside it because \"4 days left\" and \"11 days overdue\" are the words a handler acts on.\n\n`status` filters to `open`, `in_progress`, `responded` or `closed`. Omit it for every status: a closed request is still part of the record an auditor asks to see."
+            "description": "Data-subject access requests and the statutory clock on each. Required scope: `records:read`. **Served as of ENT-200.**\n\n**Ordered by `responseDueAt` ascending, soonest first**, not by creation, because the only question anyone asks of a DSAR log is which one runs out next. That means a `pageToken` from this list is **not** interchangeable with the ones from the other two registers. Migration 00011 adds the `(org_id, response_due_at)` index this needs; the pre-existing `dsars_due_idx` looks like the right index and is not, because it does not lead with `org_id` and is partial on the two unfinished statuses.\n\n**Nothing in this register arrives from an approval, unlike the other two.** 00009 classified three obligations and deliberately mapped none to `create_dsar`, and 00010 asserts that: a data-subject request arrives from a person, so an obligation that manufactured one would be inventing the requester. Every row here was logged by a human, and `sourceFindingId` is therefore always empty today. It is carried rather than omitted so that going from always-empty to sometimes-set is not a contract change.\n\n**`urgency` is computed server-side**, one of `overdue`, `due_soon`, `on_track`, `answered`, with `due_soon` meaning ten days or fewer remaining. That window is a regulatory escalation threshold, and a client re-deriving it from `responseDueAt` would be a second implementation of a deadline that would eventually disagree with this one. `daysUntilDue` is carried alongside it because \"4 days left\" and \"11 days overdue\" are the words a handler acts on.\n\n`status` filters to `open`, `in_progress`, `responded` or `closed`. Omit it for every status: a closed request is still part of the record an auditor asks to see."
           }
         },
         {
@@ -722,7 +722,133 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "GetDsar"]
             },
-            "description": "One data-subject request. Required scope: `records:read`. **Contract only, not yet served (ENT-200)** — see List processing activities.\n\n**`receivedAt` is not the row's creation timestamp and the two routinely differ (ENT-224).** A request that arrived by post on the 1st and was logged on the 8th is due one month from the 1st. Article 12(3) runs from receipt, so a clock started at data entry silently grants the organisation the days it took them to notice, which is exactly backwards. `00010_dsar_clock_from_receipt.sql` made the executor path refuse a missing, non-timestamp or future `received_at` rather than defaulting to `now()`.\n\n`responseDueAt` is stored rather than computed on read, so an extension is recorded as a fact about this request instead of being re-derived from a rule that may since have changed. The Article 12(3) two-month extension for complex requests is **not yet modelled**; 00010 left it open as a schema question.\n\n`requestType` is free text rather than an enum on purpose: Article 15-22 requests arrive worded by the person making them, and forcing them into a closed list at intake loses what was actually asked for."
+            "description": "One data-subject request. Required scope: `records:read`. **Served as of ENT-200.**\n\n**`receivedAt` is not the row's creation timestamp and the two routinely differ (ENT-224).** A request that arrived by post on the 1st and was logged on the 8th is due one month from the 1st. Article 12(3) runs from receipt, so a clock started at data entry silently grants the organisation the days it took them to notice, which is exactly backwards. `00010_dsar_clock_from_receipt.sql` made the executor path refuse a missing, non-timestamp or future `received_at` rather than defaulting to `now()`.\n\n`responseDueAt` is stored rather than computed on read, so an extension is recorded as a fact about this request instead of being re-derived from a rule that may since have changed. The Article 12(3) two-month extension for complex requests is **not yet modelled**; 00010 left it open as a schema question.\n\n`requestType` is free text rather than an enum on purpose: Article 15-22 requests arrive worded by the person making them, and forcing them into a closed list at intake loses what was actually asked for."
+          }
+        },
+        {
+          "name": "Create processing activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fields\": {\n    \"name\": \"Payroll\",\n    \"purpose\": \"Paying staff and meeting tax obligations\",\n    \"legalBasis\": \"Article 6(1)(b), performance of a contract\",\n    \"dataCategories\": [\"name\", \"bank details\"],\n    \"recipients\": [\"our accountant\"],\n    \"retentionPeriod\": \"7 years after employment ends\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.RecordsService/CreateProcessingActivity",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.RecordsService", "CreateProcessingActivity"]
+            },
+            "description": "Adds an Article 30 entry the Executor has not seen. Required scope: `records:ropa:write`, which is deliberately not `records:read`. **Served as of ENT-200.**\n\n**Capped on the free plan, and over the cap answers `resource_exhausted`, not `permission_denied`.** The caller is entitled to do this and has run out of allowance, which is a distinction with a button under it: one has an upgrade, the other sends somebody to an owner who cannot help. The cap counts only manually created rows, because a record created from an approved finding is part of the compliance record and is never withheld behind a plan.\n\n**`failed_precondition` here means the organisation has no compliance profile**, so there is nothing for a record to hang off. Finish onboarding first.\n\nThere is no actor field and there will not be one. `create_processing_activity` reads the acting human from the session GUC, enforces the cap, and writes the audit row in the same transaction as the insert. A handler writing the table directly would have to reimplement all three."
+          }
+        },
+        {
+          "name": "Update processing activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"processingActivityId\": \"{{processing_activity_id}}\",\n  \"fields\": {\n    \"name\": \"Payroll\",\n    \"purpose\": \"Paying staff\",\n    \"legalBasis\": \"Article 6(1)(b)\",\n    \"dataCategories\": [\"name\", \"bank details\"],\n    \"recipients\": [\"our accountant\"],\n    \"retentionPeriod\": \"7 years\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.RecordsService/UpdateProcessingActivity",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.RecordsService", "UpdateProcessingActivity"]
+            },
+            "description": "Replaces an entry's fields. Required scope: `records:ropa:write`. **Served as of ENT-200.**\n\n**A full replacement, not a patch, and the field mask that would make it a patch is deliberately absent.** Article 30 is a record of fact whose gaps are meaningful: clearing a legal basis is a real edit somebody makes when they realise the one recorded was wrong, and a partial update in which an omitted field means \"leave it alone\" gives a client no way to express that. Send every field you want the record to have.\n\nAn unknown id and one belonging to another organisation both answer `not_found`, because the database function's lookup is org-scoped and cannot tell them apart either."
+          }
+        },
+        {
+          "name": "Create AI system",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fields\": {\n    \"name\": \"CV ranking model\",\n    \"vendor\": \"\",\n    \"purpose\": \"Ranks applicants for shortlisting\",\n    \"riskClassification\": \"high\",\n    \"documentationStatus\": \"missing\"\n  },\n  \"reviewed\": true\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.RecordsService/CreateAiSystem",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.RecordsService", "CreateAiSystem"]
+            },
+            "description": "Registers a system nobody has approved a finding about. Required scope: `records:ai-systems:write`. **Served as of ENT-200.**\n\nUseful mostly for shadow AI: the system somebody adopted without telling anyone is exactly the one no finding will ever raise.\n\n**`reviewed` is required when `riskClassification` is `high`**, and the body above will answer `failed_precondition` if you set it to false. See Update AI system for why.\n\nAn empty `riskClassification` means `unclassified`, which is the honest default and deliberately not `minimal`: a register that defaulted to the lowest tier would tell a customer they are fine about a system nobody has assessed."
+          }
+        },
+        {
+          "name": "Update AI system",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"aiSystemId\": \"{{ai_system_id}}\",\n  \"fields\": {\n    \"name\": \"CV ranking model\",\n    \"vendor\": \"\",\n    \"purpose\": \"Ranks applicants for shortlisting\",\n    \"riskClassification\": \"limited\",\n    \"documentationStatus\": \"in_progress\"\n  },\n  \"reviewed\": true\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.RecordsService/UpdateAiSystem",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.RecordsService", "UpdateAiSystem"]
+            },
+            "description": "Replaces a system's fields. Required scope: `records:ai-systems:write`. **Served as of ENT-200.**\n\n**ANY change to `riskClassification` is refused unless `reviewed` is true**, and the refusal is `failed_precondition` rather than `permission_denied`: the caller may do this and must confirm first, so a console shows a confirm step rather than an upgrade prompt or an owner's name.\n\nThe reason is that an Article 6 classification is the determination the whole high-risk obligation stack hangs off. Moving a system out of `high` in a form somebody was tabbing through would quietly retire Articles 9 to 17 for it, and the record would show a change with nobody's deliberate decision behind it. `reviewed` says a human meant it, and the audit row records that they did.\n\n**An edit that leaves the classification alone needs no confirmation**, which is what keeps the gate from being a nuisance on every save. The gate lives in `update_ai_system`, not in the handler: a check in Go would be a second implementation, and the copy furthest from the data is the one that drifts."
+          }
+        },
+        {
+          "name": "Log DSAR",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subjectName\": \"M. Laurent\",\n  \"requestType\": \"erasure\",\n  \"handler\": \"Privacy team\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.RecordsService/LogDsar",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.RecordsService", "LogDsar"]
+            },
+            "description": "Records a request that arrived. Required scope: `records:dsar:write`. **Served as of ENT-200.**\n\n**This is the only way a DSAR enters the register.** Nothing creates one from an approval: 00009 classified three obligations and mapped none to `create_dsar`, because a request comes from a person and an obligation that manufactured one would be inventing the requester.\n\nThe response carries the computed `responseDueAt`, which is the field the person who logged it actually needs to know.\n\n`subjectName` is optional: a request can arrive pseudonymously, through a form or an inbox, before anyone has identified the person behind it. `handler` is optional and free text, because it is often a role or an external DPO rather than a member of the workspace."
+          }
+        },
+        {
+          "name": "Mark DSAR responded",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dsarId\": \"{{dsar_id}}\",\n  \"reviewed\": true\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.RecordsService/MarkDsarResponded",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.RecordsService", "MarkDsarResponded"]
+            },
+            "description": "Records that a response went out, which stops the statutory clock. Required scope: `records:dsar:write`. **Served as of ENT-200.**\n\n**`reviewed` must be true**, for the same class of reason Update AI system needs it: this is the assertion that the organisation met an Article 12(3) deadline, and it is the single most consequential row in this register to get wrong. A regulator reading the log later is reading this field. Without it, `failed_precondition`.\n\n**Idempotent.** Marking an already-answered request returns `applied: false` and writes nothing, rather than overwriting the date a response actually went out with the date somebody clicked the button twice. The status is read BEFORE the call rather than after, which matters: reading it afterwards reports `applied` on every repeat, and that is a bug the findings act path shipped with and had to fix.\n\n**Worth knowing if you script against this:** every gate here is a `raise exception`, and a raise aborts the whole Postgres transaction. Each request gets its own transaction so a refusal costs nothing, but two writes in one request will see the second fail with `25P02` for a reason unrelated to it."
           }
         }
       ]

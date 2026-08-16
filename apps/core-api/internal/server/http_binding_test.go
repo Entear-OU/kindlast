@@ -162,6 +162,38 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "GET", Path: "/api/v1/records/dsars/{dsar_id}",
 		},
 
+		// The write half. Read these as a group: POST creates on the collection,
+		// PATCH replaces on the member, and the one transition that is not a
+		// field change gets a custom verb.
+		//
+		// PATCH rather than PUT even though both replace every field, because
+		// the resource has server-owned columns a caller never sends
+		// (`source_finding_id`, the timestamps, the computed bands). PUT would
+		// promise that the body IS the resource, and it is not.
+		//
+		// `:respond` is the AIP-136 form, and it is a verb rather than
+		// `status: "responded"` on the update because it is one gated
+		// transition rather than an arbitrary field change: it asserts the
+		// organisation met an Article 12(3) deadline, and it stops a clock.
+		"kindlast.core.v1.RecordsService.CreateProcessingActivity": {
+			Method: "POST", Path: "/api/v1/records/processing-activities",
+		},
+		"kindlast.core.v1.RecordsService.UpdateProcessingActivity": {
+			Method: "PATCH", Path: "/api/v1/records/processing-activities/{processing_activity_id}",
+		},
+		"kindlast.core.v1.RecordsService.CreateAiSystem": {
+			Method: "POST", Path: "/api/v1/records/ai-systems",
+		},
+		"kindlast.core.v1.RecordsService.UpdateAiSystem": {
+			Method: "PATCH", Path: "/api/v1/records/ai-systems/{ai_system_id}",
+		},
+		"kindlast.core.v1.RecordsService.LogDsar": {
+			Method: "POST", Path: "/api/v1/records/dsars",
+		},
+		"kindlast.core.v1.RecordsService.MarkDsarResponded": {
+			Method: "POST", Path: "/api/v1/records/dsars/{dsar_id}:respond",
+		},
+
 		// ENT-203. The only binding outside /api/v1, and the prefix is the
 		// reviewable part: /internal/v1 is not reachable through the edge's
 		// public routes and is not served to a browser client. The proto

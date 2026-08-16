@@ -24,6 +24,778 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// The fields of an Article 30 entry a human supplies.
+//
+// Shared by create and update so the two cannot drift into accepting different
+// things about the same record.
+type ProcessingActivityFields struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Name            string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Purpose         string                 `protobuf:"bytes,2,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	LegalBasis      string                 `protobuf:"bytes,3,opt,name=legal_basis,json=legalBasis,proto3" json:"legal_basis,omitempty"`
+	DataCategories  []string               `protobuf:"bytes,4,rep,name=data_categories,json=dataCategories,proto3" json:"data_categories,omitempty"`
+	Recipients      []string               `protobuf:"bytes,5,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	RetentionPeriod string                 `protobuf:"bytes,6,opt,name=retention_period,json=retentionPeriod,proto3" json:"retention_period,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ProcessingActivityFields) Reset() {
+	*x = ProcessingActivityFields{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessingActivityFields) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessingActivityFields) ProtoMessage() {}
+
+func (x *ProcessingActivityFields) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessingActivityFields.ProtoReflect.Descriptor instead.
+func (*ProcessingActivityFields) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ProcessingActivityFields) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ProcessingActivityFields) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+func (x *ProcessingActivityFields) GetLegalBasis() string {
+	if x != nil {
+		return x.LegalBasis
+	}
+	return ""
+}
+
+func (x *ProcessingActivityFields) GetDataCategories() []string {
+	if x != nil {
+		return x.DataCategories
+	}
+	return nil
+}
+
+func (x *ProcessingActivityFields) GetRecipients() []string {
+	if x != nil {
+		return x.Recipients
+	}
+	return nil
+}
+
+func (x *ProcessingActivityFields) GetRetentionPeriod() string {
+	if x != nil {
+		return x.RetentionPeriod
+	}
+	return ""
+}
+
+type CreateProcessingActivityRequest struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Fields        *ProcessingActivityFields `protobuf:"bytes,1,opt,name=fields,proto3" json:"fields,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateProcessingActivityRequest) Reset() {
+	*x = CreateProcessingActivityRequest{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateProcessingActivityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateProcessingActivityRequest) ProtoMessage() {}
+
+func (x *CreateProcessingActivityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateProcessingActivityRequest.ProtoReflect.Descriptor instead.
+func (*CreateProcessingActivityRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *CreateProcessingActivityRequest) GetFields() *ProcessingActivityFields {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+type CreateProcessingActivityResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The created record, so a client renders it without a second call.
+	ProcessingActivity *ProcessingActivity `protobuf:"bytes,1,opt,name=processing_activity,json=processingActivity,proto3" json:"processing_activity,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *CreateProcessingActivityResponse) Reset() {
+	*x = CreateProcessingActivityResponse{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateProcessingActivityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateProcessingActivityResponse) ProtoMessage() {}
+
+func (x *CreateProcessingActivityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateProcessingActivityResponse.ProtoReflect.Descriptor instead.
+func (*CreateProcessingActivityResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *CreateProcessingActivityResponse) GetProcessingActivity() *ProcessingActivity {
+	if x != nil {
+		return x.ProcessingActivity
+	}
+	return nil
+}
+
+type UpdateProcessingActivityRequest struct {
+	state                protoimpl.MessageState    `protogen:"open.v1"`
+	ProcessingActivityId string                    `protobuf:"bytes,1,opt,name=processing_activity_id,json=processingActivityId,proto3" json:"processing_activity_id,omitempty"`
+	Fields               *ProcessingActivityFields `protobuf:"bytes,2,opt,name=fields,proto3" json:"fields,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *UpdateProcessingActivityRequest) Reset() {
+	*x = UpdateProcessingActivityRequest{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateProcessingActivityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateProcessingActivityRequest) ProtoMessage() {}
+
+func (x *UpdateProcessingActivityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateProcessingActivityRequest.ProtoReflect.Descriptor instead.
+func (*UpdateProcessingActivityRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *UpdateProcessingActivityRequest) GetProcessingActivityId() string {
+	if x != nil {
+		return x.ProcessingActivityId
+	}
+	return ""
+}
+
+func (x *UpdateProcessingActivityRequest) GetFields() *ProcessingActivityFields {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+type UpdateProcessingActivityResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ProcessingActivity *ProcessingActivity    `protobuf:"bytes,1,opt,name=processing_activity,json=processingActivity,proto3" json:"processing_activity,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *UpdateProcessingActivityResponse) Reset() {
+	*x = UpdateProcessingActivityResponse{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateProcessingActivityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateProcessingActivityResponse) ProtoMessage() {}
+
+func (x *UpdateProcessingActivityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateProcessingActivityResponse.ProtoReflect.Descriptor instead.
+func (*UpdateProcessingActivityResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *UpdateProcessingActivityResponse) GetProcessingActivity() *ProcessingActivity {
+	if x != nil {
+		return x.ProcessingActivity
+	}
+	return nil
+}
+
+// The fields of an AI system entry a human supplies.
+type AiSystemFields struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Name    string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Vendor  string                 `protobuf:"bytes,2,opt,name=vendor,proto3" json:"vendor,omitempty"`
+	Purpose string                 `protobuf:"bytes,3,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	// unacceptable, high, limited, minimal, or unclassified. Empty means
+	// `unclassified`, which is the honest default: see AiSystem.
+	RiskClassification string `protobuf:"bytes,4,opt,name=risk_classification,json=riskClassification,proto3" json:"risk_classification,omitempty"`
+	// missing, in_progress, or complete. Empty means `missing`.
+	DocumentationStatus string `protobuf:"bytes,5,opt,name=documentation_status,json=documentationStatus,proto3" json:"documentation_status,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *AiSystemFields) Reset() {
+	*x = AiSystemFields{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AiSystemFields) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AiSystemFields) ProtoMessage() {}
+
+func (x *AiSystemFields) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AiSystemFields.ProtoReflect.Descriptor instead.
+func (*AiSystemFields) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *AiSystemFields) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AiSystemFields) GetVendor() string {
+	if x != nil {
+		return x.Vendor
+	}
+	return ""
+}
+
+func (x *AiSystemFields) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+func (x *AiSystemFields) GetRiskClassification() string {
+	if x != nil {
+		return x.RiskClassification
+	}
+	return ""
+}
+
+func (x *AiSystemFields) GetDocumentationStatus() string {
+	if x != nil {
+		return x.DocumentationStatus
+	}
+	return ""
+}
+
+type CreateAiSystemRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Fields *AiSystemFields        `protobuf:"bytes,1,opt,name=fields,proto3" json:"fields,omitempty"`
+	// Required when `risk_classification` is `high`. See UpdateAiSystem.
+	Reviewed      bool `protobuf:"varint,2,opt,name=reviewed,proto3" json:"reviewed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateAiSystemRequest) Reset() {
+	*x = CreateAiSystemRequest{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAiSystemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAiSystemRequest) ProtoMessage() {}
+
+func (x *CreateAiSystemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAiSystemRequest.ProtoReflect.Descriptor instead.
+func (*CreateAiSystemRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CreateAiSystemRequest) GetFields() *AiSystemFields {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *CreateAiSystemRequest) GetReviewed() bool {
+	if x != nil {
+		return x.Reviewed
+	}
+	return false
+}
+
+type CreateAiSystemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AiSystem      *AiSystem              `protobuf:"bytes,1,opt,name=ai_system,json=aiSystem,proto3" json:"ai_system,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateAiSystemResponse) Reset() {
+	*x = CreateAiSystemResponse{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAiSystemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAiSystemResponse) ProtoMessage() {}
+
+func (x *CreateAiSystemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAiSystemResponse.ProtoReflect.Descriptor instead.
+func (*CreateAiSystemResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CreateAiSystemResponse) GetAiSystem() *AiSystem {
+	if x != nil {
+		return x.AiSystem
+	}
+	return nil
+}
+
+type UpdateAiSystemRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	AiSystemId string                 `protobuf:"bytes,1,opt,name=ai_system_id,json=aiSystemId,proto3" json:"ai_system_id,omitempty"`
+	Fields     *AiSystemFields        `protobuf:"bytes,2,opt,name=fields,proto3" json:"fields,omitempty"`
+	// Required when this changes `risk_classification`. See UpdateAiSystem.
+	Reviewed      bool `protobuf:"varint,3,opt,name=reviewed,proto3" json:"reviewed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAiSystemRequest) Reset() {
+	*x = UpdateAiSystemRequest{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAiSystemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAiSystemRequest) ProtoMessage() {}
+
+func (x *UpdateAiSystemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAiSystemRequest.ProtoReflect.Descriptor instead.
+func (*UpdateAiSystemRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *UpdateAiSystemRequest) GetAiSystemId() string {
+	if x != nil {
+		return x.AiSystemId
+	}
+	return ""
+}
+
+func (x *UpdateAiSystemRequest) GetFields() *AiSystemFields {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *UpdateAiSystemRequest) GetReviewed() bool {
+	if x != nil {
+		return x.Reviewed
+	}
+	return false
+}
+
+type UpdateAiSystemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AiSystem      *AiSystem              `protobuf:"bytes,1,opt,name=ai_system,json=aiSystem,proto3" json:"ai_system,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAiSystemResponse) Reset() {
+	*x = UpdateAiSystemResponse{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAiSystemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAiSystemResponse) ProtoMessage() {}
+
+func (x *UpdateAiSystemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAiSystemResponse.ProtoReflect.Descriptor instead.
+func (*UpdateAiSystemResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *UpdateAiSystemResponse) GetAiSystem() *AiSystem {
+	if x != nil {
+		return x.AiSystem
+	}
+	return nil
+}
+
+type LogDsarRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional: a request can arrive pseudonymously, before anyone has identified
+	// the person behind it.
+	SubjectName string `protobuf:"bytes,1,opt,name=subject_name,json=subjectName,proto3" json:"subject_name,omitempty"`
+	// access, erasure, rectification, portability, objection, restriction. Free
+	// text, for the reason Dsar.request_type gives.
+	RequestType string `protobuf:"bytes,2,opt,name=request_type,json=requestType,proto3" json:"request_type,omitempty"`
+	// Optional. Often a role or an external DPO rather than a member.
+	Handler       string `protobuf:"bytes,3,opt,name=handler,proto3" json:"handler,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogDsarRequest) Reset() {
+	*x = LogDsarRequest{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogDsarRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogDsarRequest) ProtoMessage() {}
+
+func (x *LogDsarRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogDsarRequest.ProtoReflect.Descriptor instead.
+func (*LogDsarRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LogDsarRequest) GetSubjectName() string {
+	if x != nil {
+		return x.SubjectName
+	}
+	return ""
+}
+
+func (x *LogDsarRequest) GetRequestType() string {
+	if x != nil {
+		return x.RequestType
+	}
+	return ""
+}
+
+func (x *LogDsarRequest) GetHandler() string {
+	if x != nil {
+		return x.Handler
+	}
+	return ""
+}
+
+type LogDsarResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Carries the computed `response_due_at`, which is the field the person who
+	// logged it actually needs to know.
+	Dsar          *Dsar `protobuf:"bytes,1,opt,name=dsar,proto3" json:"dsar,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogDsarResponse) Reset() {
+	*x = LogDsarResponse{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogDsarResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogDsarResponse) ProtoMessage() {}
+
+func (x *LogDsarResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogDsarResponse.ProtoReflect.Descriptor instead.
+func (*LogDsarResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *LogDsarResponse) GetDsar() *Dsar {
+	if x != nil {
+		return x.Dsar
+	}
+	return nil
+}
+
+type MarkDsarRespondedRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	DsarId string                 `protobuf:"bytes,1,opt,name=dsar_id,json=dsarId,proto3" json:"dsar_id,omitempty"`
+	// Must be true. See MarkDsarResponded.
+	Reviewed      bool `protobuf:"varint,2,opt,name=reviewed,proto3" json:"reviewed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkDsarRespondedRequest) Reset() {
+	*x = MarkDsarRespondedRequest{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkDsarRespondedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkDsarRespondedRequest) ProtoMessage() {}
+
+func (x *MarkDsarRespondedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkDsarRespondedRequest.ProtoReflect.Descriptor instead.
+func (*MarkDsarRespondedRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *MarkDsarRespondedRequest) GetDsarId() string {
+	if x != nil {
+		return x.DsarId
+	}
+	return ""
+}
+
+func (x *MarkDsarRespondedRequest) GetReviewed() bool {
+	if x != nil {
+		return x.Reviewed
+	}
+	return false
+}
+
+type MarkDsarRespondedResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// False when the request was already answered. See MarkDsarResponded.
+	Applied       bool  `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	Dsar          *Dsar `protobuf:"bytes,2,opt,name=dsar,proto3" json:"dsar,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkDsarRespondedResponse) Reset() {
+	*x = MarkDsarRespondedResponse{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkDsarRespondedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkDsarRespondedResponse) ProtoMessage() {}
+
+func (x *MarkDsarRespondedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkDsarRespondedResponse.ProtoReflect.Descriptor instead.
+func (*MarkDsarRespondedResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *MarkDsarRespondedResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+func (x *MarkDsarRespondedResponse) GetDsar() *Dsar {
+	if x != nil {
+		return x.Dsar
+	}
+	return nil
+}
+
 type ListProcessingActivitiesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Opaque. Clients must treat it as a token and never parse or construct one.
@@ -36,7 +808,7 @@ type ListProcessingActivitiesRequest struct {
 
 func (x *ListProcessingActivitiesRequest) Reset() {
 	*x = ListProcessingActivitiesRequest{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[0]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +820,7 @@ func (x *ListProcessingActivitiesRequest) String() string {
 func (*ListProcessingActivitiesRequest) ProtoMessage() {}
 
 func (x *ListProcessingActivitiesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[0]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61,7 +833,7 @@ func (x *ListProcessingActivitiesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProcessingActivitiesRequest.ProtoReflect.Descriptor instead.
 func (*ListProcessingActivitiesRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{0}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListProcessingActivitiesRequest) GetPageToken() string {
@@ -98,7 +870,7 @@ type ListProcessingActivitiesResponse struct {
 
 func (x *ListProcessingActivitiesResponse) Reset() {
 	*x = ListProcessingActivitiesResponse{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[1]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -110,7 +882,7 @@ func (x *ListProcessingActivitiesResponse) String() string {
 func (*ListProcessingActivitiesResponse) ProtoMessage() {}
 
 func (x *ListProcessingActivitiesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[1]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -123,7 +895,7 @@ func (x *ListProcessingActivitiesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProcessingActivitiesResponse.ProtoReflect.Descriptor instead.
 func (*ListProcessingActivitiesResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{1}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListProcessingActivitiesResponse) GetProcessingActivities() []*ProcessingActivity {
@@ -161,7 +933,7 @@ type ManualQuota struct {
 
 func (x *ManualQuota) Reset() {
 	*x = ManualQuota{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[2]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -173,7 +945,7 @@ func (x *ManualQuota) String() string {
 func (*ManualQuota) ProtoMessage() {}
 
 func (x *ManualQuota) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[2]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -186,7 +958,7 @@ func (x *ManualQuota) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManualQuota.ProtoReflect.Descriptor instead.
 func (*ManualQuota) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{2}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ManualQuota) GetUsed() int32 {
@@ -251,7 +1023,7 @@ type ProcessingActivity struct {
 
 func (x *ProcessingActivity) Reset() {
 	*x = ProcessingActivity{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[3]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -263,7 +1035,7 @@ func (x *ProcessingActivity) String() string {
 func (*ProcessingActivity) ProtoMessage() {}
 
 func (x *ProcessingActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[3]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -276,7 +1048,7 @@ func (x *ProcessingActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessingActivity.ProtoReflect.Descriptor instead.
 func (*ProcessingActivity) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{3}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ProcessingActivity) GetProcessingActivityId() string {
@@ -365,7 +1137,7 @@ type GetProcessingActivityRequest struct {
 
 func (x *GetProcessingActivityRequest) Reset() {
 	*x = GetProcessingActivityRequest{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[4]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -377,7 +1149,7 @@ func (x *GetProcessingActivityRequest) String() string {
 func (*GetProcessingActivityRequest) ProtoMessage() {}
 
 func (x *GetProcessingActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[4]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -390,7 +1162,7 @@ func (x *GetProcessingActivityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProcessingActivityRequest.ProtoReflect.Descriptor instead.
 func (*GetProcessingActivityRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{4}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetProcessingActivityRequest) GetProcessingActivityId() string {
@@ -409,7 +1181,7 @@ type GetProcessingActivityResponse struct {
 
 func (x *GetProcessingActivityResponse) Reset() {
 	*x = GetProcessingActivityResponse{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[5]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -421,7 +1193,7 @@ func (x *GetProcessingActivityResponse) String() string {
 func (*GetProcessingActivityResponse) ProtoMessage() {}
 
 func (x *GetProcessingActivityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[5]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -434,7 +1206,7 @@ func (x *GetProcessingActivityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProcessingActivityResponse.ProtoReflect.Descriptor instead.
 func (*GetProcessingActivityResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{5}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetProcessingActivityResponse) GetProcessingActivity() *ProcessingActivity {
@@ -454,7 +1226,7 @@ type ListAiSystemsRequest struct {
 
 func (x *ListAiSystemsRequest) Reset() {
 	*x = ListAiSystemsRequest{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[6]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -466,7 +1238,7 @@ func (x *ListAiSystemsRequest) String() string {
 func (*ListAiSystemsRequest) ProtoMessage() {}
 
 func (x *ListAiSystemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[6]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -479,7 +1251,7 @@ func (x *ListAiSystemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAiSystemsRequest.ProtoReflect.Descriptor instead.
 func (*ListAiSystemsRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{6}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListAiSystemsRequest) GetPageToken() string {
@@ -506,7 +1278,7 @@ type ListAiSystemsResponse struct {
 
 func (x *ListAiSystemsResponse) Reset() {
 	*x = ListAiSystemsResponse{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[7]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -518,7 +1290,7 @@ func (x *ListAiSystemsResponse) String() string {
 func (*ListAiSystemsResponse) ProtoMessage() {}
 
 func (x *ListAiSystemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[7]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -531,7 +1303,7 @@ func (x *ListAiSystemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAiSystemsResponse.ProtoReflect.Descriptor instead.
 func (*ListAiSystemsResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{7}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListAiSystemsResponse) GetAiSystems() []*AiSystem {
@@ -582,7 +1354,7 @@ type AiSystem struct {
 
 func (x *AiSystem) Reset() {
 	*x = AiSystem{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[8]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -594,7 +1366,7 @@ func (x *AiSystem) String() string {
 func (*AiSystem) ProtoMessage() {}
 
 func (x *AiSystem) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[8]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -607,7 +1379,7 @@ func (x *AiSystem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AiSystem.ProtoReflect.Descriptor instead.
 func (*AiSystem) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{8}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *AiSystem) GetAiSystemId() string {
@@ -689,7 +1461,7 @@ type GetAiSystemRequest struct {
 
 func (x *GetAiSystemRequest) Reset() {
 	*x = GetAiSystemRequest{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[9]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -701,7 +1473,7 @@ func (x *GetAiSystemRequest) String() string {
 func (*GetAiSystemRequest) ProtoMessage() {}
 
 func (x *GetAiSystemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[9]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -714,7 +1486,7 @@ func (x *GetAiSystemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAiSystemRequest.ProtoReflect.Descriptor instead.
 func (*GetAiSystemRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{9}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetAiSystemRequest) GetAiSystemId() string {
@@ -733,7 +1505,7 @@ type GetAiSystemResponse struct {
 
 func (x *GetAiSystemResponse) Reset() {
 	*x = GetAiSystemResponse{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[10]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -745,7 +1517,7 @@ func (x *GetAiSystemResponse) String() string {
 func (*GetAiSystemResponse) ProtoMessage() {}
 
 func (x *GetAiSystemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[10]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -758,7 +1530,7 @@ func (x *GetAiSystemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAiSystemResponse.ProtoReflect.Descriptor instead.
 func (*GetAiSystemResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{10}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetAiSystemResponse) GetAiSystem() *AiSystem {
@@ -782,7 +1554,7 @@ type ListDsarsRequest struct {
 
 func (x *ListDsarsRequest) Reset() {
 	*x = ListDsarsRequest{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[11]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -794,7 +1566,7 @@ func (x *ListDsarsRequest) String() string {
 func (*ListDsarsRequest) ProtoMessage() {}
 
 func (x *ListDsarsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[11]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -807,7 +1579,7 @@ func (x *ListDsarsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDsarsRequest.ProtoReflect.Descriptor instead.
 func (*ListDsarsRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{11}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListDsarsRequest) GetPageToken() string {
@@ -842,7 +1614,7 @@ type ListDsarsResponse struct {
 
 func (x *ListDsarsResponse) Reset() {
 	*x = ListDsarsResponse{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[12]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -854,7 +1626,7 @@ func (x *ListDsarsResponse) String() string {
 func (*ListDsarsResponse) ProtoMessage() {}
 
 func (x *ListDsarsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[12]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -867,7 +1639,7 @@ func (x *ListDsarsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDsarsResponse.ProtoReflect.Descriptor instead.
 func (*ListDsarsResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{12}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListDsarsResponse) GetDsars() []*Dsar {
@@ -950,7 +1722,7 @@ type Dsar struct {
 
 func (x *Dsar) Reset() {
 	*x = Dsar{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[13]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -962,7 +1734,7 @@ func (x *Dsar) String() string {
 func (*Dsar) ProtoMessage() {}
 
 func (x *Dsar) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[13]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -975,7 +1747,7 @@ func (x *Dsar) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Dsar.ProtoReflect.Descriptor instead.
 func (*Dsar) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{13}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Dsar) GetDsarId() string {
@@ -1078,7 +1850,7 @@ type GetDsarRequest struct {
 
 func (x *GetDsarRequest) Reset() {
 	*x = GetDsarRequest{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[14]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1090,7 +1862,7 @@ func (x *GetDsarRequest) String() string {
 func (*GetDsarRequest) ProtoMessage() {}
 
 func (x *GetDsarRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[14]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1103,7 +1875,7 @@ func (x *GetDsarRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDsarRequest.ProtoReflect.Descriptor instead.
 func (*GetDsarRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{14}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *GetDsarRequest) GetDsarId() string {
@@ -1122,7 +1894,7 @@ type GetDsarResponse struct {
 
 func (x *GetDsarResponse) Reset() {
 	*x = GetDsarResponse{}
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[15]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1134,7 +1906,7 @@ func (x *GetDsarResponse) String() string {
 func (*GetDsarResponse) ProtoMessage() {}
 
 func (x *GetDsarResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_records_proto_msgTypes[15]
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1147,7 +1919,7 @@ func (x *GetDsarResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDsarResponse.ProtoReflect.Descriptor instead.
 func (*GetDsarResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{15}
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *GetDsarResponse) GetDsar() *Dsar {
@@ -1161,7 +1933,56 @@ var File_kindlast_core_v1_records_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_records_proto_rawDesc = "" +
 	"\n" +
-	"\x1ekindlast/core/v1/records.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"]\n" +
+	"\x1ekindlast/core/v1/records.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xdd\x01\n" +
+	"\x18ProcessingActivityFields\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\apurpose\x18\x02 \x01(\tR\apurpose\x12\x1f\n" +
+	"\vlegal_basis\x18\x03 \x01(\tR\n" +
+	"legalBasis\x12'\n" +
+	"\x0fdata_categories\x18\x04 \x03(\tR\x0edataCategories\x12\x1e\n" +
+	"\n" +
+	"recipients\x18\x05 \x03(\tR\n" +
+	"recipients\x12)\n" +
+	"\x10retention_period\x18\x06 \x01(\tR\x0fretentionPeriod\"e\n" +
+	"\x1fCreateProcessingActivityRequest\x12B\n" +
+	"\x06fields\x18\x01 \x01(\v2*.kindlast.core.v1.ProcessingActivityFieldsR\x06fields\"y\n" +
+	" CreateProcessingActivityResponse\x12U\n" +
+	"\x13processing_activity\x18\x01 \x01(\v2$.kindlast.core.v1.ProcessingActivityR\x12processingActivity\"\x9b\x01\n" +
+	"\x1fUpdateProcessingActivityRequest\x124\n" +
+	"\x16processing_activity_id\x18\x01 \x01(\tR\x14processingActivityId\x12B\n" +
+	"\x06fields\x18\x02 \x01(\v2*.kindlast.core.v1.ProcessingActivityFieldsR\x06fields\"y\n" +
+	" UpdateProcessingActivityResponse\x12U\n" +
+	"\x13processing_activity\x18\x01 \x01(\v2$.kindlast.core.v1.ProcessingActivityR\x12processingActivity\"\xba\x01\n" +
+	"\x0eAiSystemFields\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06vendor\x18\x02 \x01(\tR\x06vendor\x12\x18\n" +
+	"\apurpose\x18\x03 \x01(\tR\apurpose\x12/\n" +
+	"\x13risk_classification\x18\x04 \x01(\tR\x12riskClassification\x121\n" +
+	"\x14documentation_status\x18\x05 \x01(\tR\x13documentationStatus\"m\n" +
+	"\x15CreateAiSystemRequest\x128\n" +
+	"\x06fields\x18\x01 \x01(\v2 .kindlast.core.v1.AiSystemFieldsR\x06fields\x12\x1a\n" +
+	"\breviewed\x18\x02 \x01(\bR\breviewed\"Q\n" +
+	"\x16CreateAiSystemResponse\x127\n" +
+	"\tai_system\x18\x01 \x01(\v2\x1a.kindlast.core.v1.AiSystemR\baiSystem\"\x8f\x01\n" +
+	"\x15UpdateAiSystemRequest\x12 \n" +
+	"\fai_system_id\x18\x01 \x01(\tR\n" +
+	"aiSystemId\x128\n" +
+	"\x06fields\x18\x02 \x01(\v2 .kindlast.core.v1.AiSystemFieldsR\x06fields\x12\x1a\n" +
+	"\breviewed\x18\x03 \x01(\bR\breviewed\"Q\n" +
+	"\x16UpdateAiSystemResponse\x127\n" +
+	"\tai_system\x18\x01 \x01(\v2\x1a.kindlast.core.v1.AiSystemR\baiSystem\"p\n" +
+	"\x0eLogDsarRequest\x12!\n" +
+	"\fsubject_name\x18\x01 \x01(\tR\vsubjectName\x12!\n" +
+	"\frequest_type\x18\x02 \x01(\tR\vrequestType\x12\x18\n" +
+	"\ahandler\x18\x03 \x01(\tR\ahandler\"=\n" +
+	"\x0fLogDsarResponse\x12*\n" +
+	"\x04dsar\x18\x01 \x01(\v2\x16.kindlast.core.v1.DsarR\x04dsar\"O\n" +
+	"\x18MarkDsarRespondedRequest\x12\x17\n" +
+	"\adsar_id\x18\x01 \x01(\tR\x06dsarId\x12\x1a\n" +
+	"\breviewed\x18\x02 \x01(\bR\breviewed\"a\n" +
+	"\x19MarkDsarRespondedResponse\x12\x18\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\x12*\n" +
+	"\x04dsar\x18\x02 \x01(\v2\x16.kindlast.core.v1.DsarR\x04dsar\"]\n" +
 	"\x1fListProcessingActivitiesRequest\x12\x1d\n" +
 	"\n" +
 	"page_token\x18\x01 \x01(\tR\tpageToken\x12\x1b\n" +
@@ -1252,14 +2073,20 @@ const file_kindlast_core_v1_records_proto_rawDesc = "" +
 	"\x0eGetDsarRequest\x12\x17\n" +
 	"\adsar_id\x18\x01 \x01(\tR\x06dsarId\"=\n" +
 	"\x0fGetDsarResponse\x12*\n" +
-	"\x04dsar\x18\x01 \x01(\v2\x16.kindlast.core.v1.DsarR\x04dsar2\xed\a\n" +
+	"\x04dsar\x18\x01 \x01(\v2\x16.kindlast.core.v1.DsarR\x04dsar2\xc1\x10\n" +
 	"\x0eRecordsService\x12\xc0\x01\n" +
 	"\x18ListProcessingActivities\x121.kindlast.core.v1.ListProcessingActivitiesRequest\x1a2.kindlast.core.v1.ListProcessingActivitiesResponse\"=\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02'\x12%/api/v1/records/processing-activities\x12\xd0\x01\n" +
 	"\x15GetProcessingActivity\x12..kindlast.core.v1.GetProcessingActivityRequest\x1a/.kindlast.core.v1.GetProcessingActivityResponse\"V\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02@\x12>/api/v1/records/processing-activities/{processing_activity_id}\x12\x94\x01\n" +
 	"\rListAiSystems\x12&.kindlast.core.v1.ListAiSystemsRequest\x1a'.kindlast.core.v1.ListAiSystemsResponse\"2\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02\x1c\x12\x1a/api/v1/records/ai-systems\x12\x9d\x01\n" +
 	"\vGetAiSystem\x12$.kindlast.core.v1.GetAiSystemRequest\x1a%.kindlast.core.v1.GetAiSystemResponse\"A\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02+\x12)/api/v1/records/ai-systems/{ai_system_id}\x12\x83\x01\n" +
 	"\tListDsars\x12\".kindlast.core.v1.ListDsarsRequest\x1a#.kindlast.core.v1.ListDsarsResponse\"-\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02\x17\x12\x15/api/v1/records/dsars\x12\x87\x01\n" +
-	"\aGetDsar\x12 .kindlast.core.v1.GetDsarRequest\x1a!.kindlast.core.v1.GetDsarResponse\"7\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/records/dsars/{dsar_id}B\xc4\x01\n" +
+	"\aGetDsar\x12 .kindlast.core.v1.GetDsarRequest\x1a!.kindlast.core.v1.GetDsarResponse\"7\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/records/dsars/{dsar_id}\x12\xc9\x01\n" +
+	"\x18CreateProcessingActivity\x121.kindlast.core.v1.CreateProcessingActivityRequest\x1a2.kindlast.core.v1.CreateProcessingActivityResponse\"F\x8a\xb5\x18\x12records:ropa:write\x82\xd3\xe4\x93\x02*:\x01*\"%/api/v1/records/processing-activities\x12\xe2\x01\n" +
+	"\x18UpdateProcessingActivity\x121.kindlast.core.v1.UpdateProcessingActivityRequest\x1a2.kindlast.core.v1.UpdateProcessingActivityResponse\"_\x8a\xb5\x18\x12records:ropa:write\x82\xd3\xe4\x93\x02C:\x01*2>/api/v1/records/processing-activities/{processing_activity_id}\x12\xa6\x01\n" +
+	"\x0eCreateAiSystem\x12'.kindlast.core.v1.CreateAiSystemRequest\x1a(.kindlast.core.v1.CreateAiSystemResponse\"A\x8a\xb5\x18\x18records:ai-systems:write\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/api/v1/records/ai-systems\x12\xb5\x01\n" +
+	"\x0eUpdateAiSystem\x12'.kindlast.core.v1.UpdateAiSystemRequest\x1a(.kindlast.core.v1.UpdateAiSystemResponse\"P\x8a\xb5\x18\x18records:ai-systems:write\x82\xd3\xe4\x93\x02.:\x01*2)/api/v1/records/ai-systems/{ai_system_id}\x12\x86\x01\n" +
+	"\aLogDsar\x12 .kindlast.core.v1.LogDsarRequest\x1a!.kindlast.core.v1.LogDsarResponse\"6\x8a\xb5\x18\x12records:dsar:write\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/v1/records/dsars\x12\xb6\x01\n" +
+	"\x11MarkDsarResponded\x12*.kindlast.core.v1.MarkDsarRespondedRequest\x1a+.kindlast.core.v1.MarkDsarRespondedResponse\"H\x8a\xb5\x18\x12records:dsar:write\x82\xd3\xe4\x93\x02,:\x01*\"'/api/v1/records/dsars/{dsar_id}:respondB\xc4\x01\n" +
 	"\x14com.kindlast.core.v1B\fRecordsProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3"
 
 var (
@@ -1274,61 +2101,97 @@ func file_kindlast_core_v1_records_proto_rawDescGZIP() []byte {
 	return file_kindlast_core_v1_records_proto_rawDescData
 }
 
-var file_kindlast_core_v1_records_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_kindlast_core_v1_records_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_kindlast_core_v1_records_proto_goTypes = []any{
-	(*ListProcessingActivitiesRequest)(nil),  // 0: kindlast.core.v1.ListProcessingActivitiesRequest
-	(*ListProcessingActivitiesResponse)(nil), // 1: kindlast.core.v1.ListProcessingActivitiesResponse
-	(*ManualQuota)(nil),                      // 2: kindlast.core.v1.ManualQuota
-	(*ProcessingActivity)(nil),               // 3: kindlast.core.v1.ProcessingActivity
-	(*GetProcessingActivityRequest)(nil),     // 4: kindlast.core.v1.GetProcessingActivityRequest
-	(*GetProcessingActivityResponse)(nil),    // 5: kindlast.core.v1.GetProcessingActivityResponse
-	(*ListAiSystemsRequest)(nil),             // 6: kindlast.core.v1.ListAiSystemsRequest
-	(*ListAiSystemsResponse)(nil),            // 7: kindlast.core.v1.ListAiSystemsResponse
-	(*AiSystem)(nil),                         // 8: kindlast.core.v1.AiSystem
-	(*GetAiSystemRequest)(nil),               // 9: kindlast.core.v1.GetAiSystemRequest
-	(*GetAiSystemResponse)(nil),              // 10: kindlast.core.v1.GetAiSystemResponse
-	(*ListDsarsRequest)(nil),                 // 11: kindlast.core.v1.ListDsarsRequest
-	(*ListDsarsResponse)(nil),                // 12: kindlast.core.v1.ListDsarsResponse
-	(*Dsar)(nil),                             // 13: kindlast.core.v1.Dsar
-	(*GetDsarRequest)(nil),                   // 14: kindlast.core.v1.GetDsarRequest
-	(*GetDsarResponse)(nil),                  // 15: kindlast.core.v1.GetDsarResponse
-	(*timestamppb.Timestamp)(nil),            // 16: google.protobuf.Timestamp
+	(*ProcessingActivityFields)(nil),         // 0: kindlast.core.v1.ProcessingActivityFields
+	(*CreateProcessingActivityRequest)(nil),  // 1: kindlast.core.v1.CreateProcessingActivityRequest
+	(*CreateProcessingActivityResponse)(nil), // 2: kindlast.core.v1.CreateProcessingActivityResponse
+	(*UpdateProcessingActivityRequest)(nil),  // 3: kindlast.core.v1.UpdateProcessingActivityRequest
+	(*UpdateProcessingActivityResponse)(nil), // 4: kindlast.core.v1.UpdateProcessingActivityResponse
+	(*AiSystemFields)(nil),                   // 5: kindlast.core.v1.AiSystemFields
+	(*CreateAiSystemRequest)(nil),            // 6: kindlast.core.v1.CreateAiSystemRequest
+	(*CreateAiSystemResponse)(nil),           // 7: kindlast.core.v1.CreateAiSystemResponse
+	(*UpdateAiSystemRequest)(nil),            // 8: kindlast.core.v1.UpdateAiSystemRequest
+	(*UpdateAiSystemResponse)(nil),           // 9: kindlast.core.v1.UpdateAiSystemResponse
+	(*LogDsarRequest)(nil),                   // 10: kindlast.core.v1.LogDsarRequest
+	(*LogDsarResponse)(nil),                  // 11: kindlast.core.v1.LogDsarResponse
+	(*MarkDsarRespondedRequest)(nil),         // 12: kindlast.core.v1.MarkDsarRespondedRequest
+	(*MarkDsarRespondedResponse)(nil),        // 13: kindlast.core.v1.MarkDsarRespondedResponse
+	(*ListProcessingActivitiesRequest)(nil),  // 14: kindlast.core.v1.ListProcessingActivitiesRequest
+	(*ListProcessingActivitiesResponse)(nil), // 15: kindlast.core.v1.ListProcessingActivitiesResponse
+	(*ManualQuota)(nil),                      // 16: kindlast.core.v1.ManualQuota
+	(*ProcessingActivity)(nil),               // 17: kindlast.core.v1.ProcessingActivity
+	(*GetProcessingActivityRequest)(nil),     // 18: kindlast.core.v1.GetProcessingActivityRequest
+	(*GetProcessingActivityResponse)(nil),    // 19: kindlast.core.v1.GetProcessingActivityResponse
+	(*ListAiSystemsRequest)(nil),             // 20: kindlast.core.v1.ListAiSystemsRequest
+	(*ListAiSystemsResponse)(nil),            // 21: kindlast.core.v1.ListAiSystemsResponse
+	(*AiSystem)(nil),                         // 22: kindlast.core.v1.AiSystem
+	(*GetAiSystemRequest)(nil),               // 23: kindlast.core.v1.GetAiSystemRequest
+	(*GetAiSystemResponse)(nil),              // 24: kindlast.core.v1.GetAiSystemResponse
+	(*ListDsarsRequest)(nil),                 // 25: kindlast.core.v1.ListDsarsRequest
+	(*ListDsarsResponse)(nil),                // 26: kindlast.core.v1.ListDsarsResponse
+	(*Dsar)(nil),                             // 27: kindlast.core.v1.Dsar
+	(*GetDsarRequest)(nil),                   // 28: kindlast.core.v1.GetDsarRequest
+	(*GetDsarResponse)(nil),                  // 29: kindlast.core.v1.GetDsarResponse
+	(*timestamppb.Timestamp)(nil),            // 30: google.protobuf.Timestamp
 }
 var file_kindlast_core_v1_records_proto_depIdxs = []int32{
-	3,  // 0: kindlast.core.v1.ListProcessingActivitiesResponse.processing_activities:type_name -> kindlast.core.v1.ProcessingActivity
-	2,  // 1: kindlast.core.v1.ListProcessingActivitiesResponse.manual_quota:type_name -> kindlast.core.v1.ManualQuota
-	16, // 2: kindlast.core.v1.ProcessingActivity.created_at:type_name -> google.protobuf.Timestamp
-	16, // 3: kindlast.core.v1.ProcessingActivity.updated_at:type_name -> google.protobuf.Timestamp
-	3,  // 4: kindlast.core.v1.GetProcessingActivityResponse.processing_activity:type_name -> kindlast.core.v1.ProcessingActivity
-	8,  // 5: kindlast.core.v1.ListAiSystemsResponse.ai_systems:type_name -> kindlast.core.v1.AiSystem
-	16, // 6: kindlast.core.v1.AiSystem.last_reviewed_at:type_name -> google.protobuf.Timestamp
-	16, // 7: kindlast.core.v1.AiSystem.created_at:type_name -> google.protobuf.Timestamp
-	16, // 8: kindlast.core.v1.AiSystem.updated_at:type_name -> google.protobuf.Timestamp
-	8,  // 9: kindlast.core.v1.GetAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
-	13, // 10: kindlast.core.v1.ListDsarsResponse.dsars:type_name -> kindlast.core.v1.Dsar
-	16, // 11: kindlast.core.v1.Dsar.received_at:type_name -> google.protobuf.Timestamp
-	16, // 12: kindlast.core.v1.Dsar.response_due_at:type_name -> google.protobuf.Timestamp
-	16, // 13: kindlast.core.v1.Dsar.responded_at:type_name -> google.protobuf.Timestamp
-	16, // 14: kindlast.core.v1.Dsar.created_at:type_name -> google.protobuf.Timestamp
-	16, // 15: kindlast.core.v1.Dsar.updated_at:type_name -> google.protobuf.Timestamp
-	13, // 16: kindlast.core.v1.GetDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
-	0,  // 17: kindlast.core.v1.RecordsService.ListProcessingActivities:input_type -> kindlast.core.v1.ListProcessingActivitiesRequest
-	4,  // 18: kindlast.core.v1.RecordsService.GetProcessingActivity:input_type -> kindlast.core.v1.GetProcessingActivityRequest
-	6,  // 19: kindlast.core.v1.RecordsService.ListAiSystems:input_type -> kindlast.core.v1.ListAiSystemsRequest
-	9,  // 20: kindlast.core.v1.RecordsService.GetAiSystem:input_type -> kindlast.core.v1.GetAiSystemRequest
-	11, // 21: kindlast.core.v1.RecordsService.ListDsars:input_type -> kindlast.core.v1.ListDsarsRequest
-	14, // 22: kindlast.core.v1.RecordsService.GetDsar:input_type -> kindlast.core.v1.GetDsarRequest
-	1,  // 23: kindlast.core.v1.RecordsService.ListProcessingActivities:output_type -> kindlast.core.v1.ListProcessingActivitiesResponse
-	5,  // 24: kindlast.core.v1.RecordsService.GetProcessingActivity:output_type -> kindlast.core.v1.GetProcessingActivityResponse
-	7,  // 25: kindlast.core.v1.RecordsService.ListAiSystems:output_type -> kindlast.core.v1.ListAiSystemsResponse
-	10, // 26: kindlast.core.v1.RecordsService.GetAiSystem:output_type -> kindlast.core.v1.GetAiSystemResponse
-	12, // 27: kindlast.core.v1.RecordsService.ListDsars:output_type -> kindlast.core.v1.ListDsarsResponse
-	15, // 28: kindlast.core.v1.RecordsService.GetDsar:output_type -> kindlast.core.v1.GetDsarResponse
-	23, // [23:29] is the sub-list for method output_type
-	17, // [17:23] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	0,  // 0: kindlast.core.v1.CreateProcessingActivityRequest.fields:type_name -> kindlast.core.v1.ProcessingActivityFields
+	17, // 1: kindlast.core.v1.CreateProcessingActivityResponse.processing_activity:type_name -> kindlast.core.v1.ProcessingActivity
+	0,  // 2: kindlast.core.v1.UpdateProcessingActivityRequest.fields:type_name -> kindlast.core.v1.ProcessingActivityFields
+	17, // 3: kindlast.core.v1.UpdateProcessingActivityResponse.processing_activity:type_name -> kindlast.core.v1.ProcessingActivity
+	5,  // 4: kindlast.core.v1.CreateAiSystemRequest.fields:type_name -> kindlast.core.v1.AiSystemFields
+	22, // 5: kindlast.core.v1.CreateAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
+	5,  // 6: kindlast.core.v1.UpdateAiSystemRequest.fields:type_name -> kindlast.core.v1.AiSystemFields
+	22, // 7: kindlast.core.v1.UpdateAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
+	27, // 8: kindlast.core.v1.LogDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
+	27, // 9: kindlast.core.v1.MarkDsarRespondedResponse.dsar:type_name -> kindlast.core.v1.Dsar
+	17, // 10: kindlast.core.v1.ListProcessingActivitiesResponse.processing_activities:type_name -> kindlast.core.v1.ProcessingActivity
+	16, // 11: kindlast.core.v1.ListProcessingActivitiesResponse.manual_quota:type_name -> kindlast.core.v1.ManualQuota
+	30, // 12: kindlast.core.v1.ProcessingActivity.created_at:type_name -> google.protobuf.Timestamp
+	30, // 13: kindlast.core.v1.ProcessingActivity.updated_at:type_name -> google.protobuf.Timestamp
+	17, // 14: kindlast.core.v1.GetProcessingActivityResponse.processing_activity:type_name -> kindlast.core.v1.ProcessingActivity
+	22, // 15: kindlast.core.v1.ListAiSystemsResponse.ai_systems:type_name -> kindlast.core.v1.AiSystem
+	30, // 16: kindlast.core.v1.AiSystem.last_reviewed_at:type_name -> google.protobuf.Timestamp
+	30, // 17: kindlast.core.v1.AiSystem.created_at:type_name -> google.protobuf.Timestamp
+	30, // 18: kindlast.core.v1.AiSystem.updated_at:type_name -> google.protobuf.Timestamp
+	22, // 19: kindlast.core.v1.GetAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
+	27, // 20: kindlast.core.v1.ListDsarsResponse.dsars:type_name -> kindlast.core.v1.Dsar
+	30, // 21: kindlast.core.v1.Dsar.received_at:type_name -> google.protobuf.Timestamp
+	30, // 22: kindlast.core.v1.Dsar.response_due_at:type_name -> google.protobuf.Timestamp
+	30, // 23: kindlast.core.v1.Dsar.responded_at:type_name -> google.protobuf.Timestamp
+	30, // 24: kindlast.core.v1.Dsar.created_at:type_name -> google.protobuf.Timestamp
+	30, // 25: kindlast.core.v1.Dsar.updated_at:type_name -> google.protobuf.Timestamp
+	27, // 26: kindlast.core.v1.GetDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
+	14, // 27: kindlast.core.v1.RecordsService.ListProcessingActivities:input_type -> kindlast.core.v1.ListProcessingActivitiesRequest
+	18, // 28: kindlast.core.v1.RecordsService.GetProcessingActivity:input_type -> kindlast.core.v1.GetProcessingActivityRequest
+	20, // 29: kindlast.core.v1.RecordsService.ListAiSystems:input_type -> kindlast.core.v1.ListAiSystemsRequest
+	23, // 30: kindlast.core.v1.RecordsService.GetAiSystem:input_type -> kindlast.core.v1.GetAiSystemRequest
+	25, // 31: kindlast.core.v1.RecordsService.ListDsars:input_type -> kindlast.core.v1.ListDsarsRequest
+	28, // 32: kindlast.core.v1.RecordsService.GetDsar:input_type -> kindlast.core.v1.GetDsarRequest
+	1,  // 33: kindlast.core.v1.RecordsService.CreateProcessingActivity:input_type -> kindlast.core.v1.CreateProcessingActivityRequest
+	3,  // 34: kindlast.core.v1.RecordsService.UpdateProcessingActivity:input_type -> kindlast.core.v1.UpdateProcessingActivityRequest
+	6,  // 35: kindlast.core.v1.RecordsService.CreateAiSystem:input_type -> kindlast.core.v1.CreateAiSystemRequest
+	8,  // 36: kindlast.core.v1.RecordsService.UpdateAiSystem:input_type -> kindlast.core.v1.UpdateAiSystemRequest
+	10, // 37: kindlast.core.v1.RecordsService.LogDsar:input_type -> kindlast.core.v1.LogDsarRequest
+	12, // 38: kindlast.core.v1.RecordsService.MarkDsarResponded:input_type -> kindlast.core.v1.MarkDsarRespondedRequest
+	15, // 39: kindlast.core.v1.RecordsService.ListProcessingActivities:output_type -> kindlast.core.v1.ListProcessingActivitiesResponse
+	19, // 40: kindlast.core.v1.RecordsService.GetProcessingActivity:output_type -> kindlast.core.v1.GetProcessingActivityResponse
+	21, // 41: kindlast.core.v1.RecordsService.ListAiSystems:output_type -> kindlast.core.v1.ListAiSystemsResponse
+	24, // 42: kindlast.core.v1.RecordsService.GetAiSystem:output_type -> kindlast.core.v1.GetAiSystemResponse
+	26, // 43: kindlast.core.v1.RecordsService.ListDsars:output_type -> kindlast.core.v1.ListDsarsResponse
+	29, // 44: kindlast.core.v1.RecordsService.GetDsar:output_type -> kindlast.core.v1.GetDsarResponse
+	2,  // 45: kindlast.core.v1.RecordsService.CreateProcessingActivity:output_type -> kindlast.core.v1.CreateProcessingActivityResponse
+	4,  // 46: kindlast.core.v1.RecordsService.UpdateProcessingActivity:output_type -> kindlast.core.v1.UpdateProcessingActivityResponse
+	7,  // 47: kindlast.core.v1.RecordsService.CreateAiSystem:output_type -> kindlast.core.v1.CreateAiSystemResponse
+	9,  // 48: kindlast.core.v1.RecordsService.UpdateAiSystem:output_type -> kindlast.core.v1.UpdateAiSystemResponse
+	11, // 49: kindlast.core.v1.RecordsService.LogDsar:output_type -> kindlast.core.v1.LogDsarResponse
+	13, // 50: kindlast.core.v1.RecordsService.MarkDsarResponded:output_type -> kindlast.core.v1.MarkDsarRespondedResponse
+	39, // [39:51] is the sub-list for method output_type
+	27, // [27:39] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_core_v1_records_proto_init() }
@@ -1342,7 +2205,7 @@ func file_kindlast_core_v1_records_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_core_v1_records_proto_rawDesc), len(file_kindlast_core_v1_records_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

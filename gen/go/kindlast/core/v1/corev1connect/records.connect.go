@@ -50,6 +50,23 @@ const (
 	RecordsServiceListDsarsProcedure = "/kindlast.core.v1.RecordsService/ListDsars"
 	// RecordsServiceGetDsarProcedure is the fully-qualified name of the RecordsService's GetDsar RPC.
 	RecordsServiceGetDsarProcedure = "/kindlast.core.v1.RecordsService/GetDsar"
+	// RecordsServiceCreateProcessingActivityProcedure is the fully-qualified name of the
+	// RecordsService's CreateProcessingActivity RPC.
+	RecordsServiceCreateProcessingActivityProcedure = "/kindlast.core.v1.RecordsService/CreateProcessingActivity"
+	// RecordsServiceUpdateProcessingActivityProcedure is the fully-qualified name of the
+	// RecordsService's UpdateProcessingActivity RPC.
+	RecordsServiceUpdateProcessingActivityProcedure = "/kindlast.core.v1.RecordsService/UpdateProcessingActivity"
+	// RecordsServiceCreateAiSystemProcedure is the fully-qualified name of the RecordsService's
+	// CreateAiSystem RPC.
+	RecordsServiceCreateAiSystemProcedure = "/kindlast.core.v1.RecordsService/CreateAiSystem"
+	// RecordsServiceUpdateAiSystemProcedure is the fully-qualified name of the RecordsService's
+	// UpdateAiSystem RPC.
+	RecordsServiceUpdateAiSystemProcedure = "/kindlast.core.v1.RecordsService/UpdateAiSystem"
+	// RecordsServiceLogDsarProcedure is the fully-qualified name of the RecordsService's LogDsar RPC.
+	RecordsServiceLogDsarProcedure = "/kindlast.core.v1.RecordsService/LogDsar"
+	// RecordsServiceMarkDsarRespondedProcedure is the fully-qualified name of the RecordsService's
+	// MarkDsarResponded RPC.
+	RecordsServiceMarkDsarRespondedProcedure = "/kindlast.core.v1.RecordsService/MarkDsarResponded"
 )
 
 // RecordsServiceClient is a client for the kindlast.core.v1.RecordsService service.
@@ -93,6 +110,68 @@ type RecordsServiceClient interface {
 	// going from always-empty to sometimes-set must not be a contract change.
 	ListDsars(context.Context, *connect.Request[v1.ListDsarsRequest]) (*connect.Response[v1.ListDsarsResponse], error)
 	GetDsar(context.Context, *connect.Request[v1.GetDsarRequest]) (*connect.Response[v1.GetDsarResponse], error)
+	// Adds an activity the Executor has not seen.
+	//
+	// Capped on the free plan, and the cap counts only manually-created rows: a
+	// record created from an approved finding is part of the compliance record and
+	// is never withheld behind a plan. Over the cap answers `resource_exhausted`
+	// rather than `permission_denied`, because the caller is entitled to do this
+	// and simply cannot right now, which is a distinction with a button under it.
+	CreateProcessingActivity(context.Context, *connect.Request[v1.CreateProcessingActivityRequest]) (*connect.Response[v1.CreateProcessingActivityResponse], error)
+	// Replaces an activity's fields.
+	//
+	// A full replacement rather than a patch, and the field mask that would make
+	// it a patch is deliberately absent. Article 30 is a record of fact whose gaps
+	// are meaningful: clearing a legal basis is a real edit somebody makes when
+	// they realise the one recorded was wrong, and a partial update in which an
+	// omitted field means "leave it alone" gives a client no way to express that.
+	UpdateProcessingActivity(context.Context, *connect.Request[v1.UpdateProcessingActivityRequest]) (*connect.Response[v1.UpdateProcessingActivityResponse], error)
+	// Registers a system nobody has approved a finding about.
+	//
+	// Useful mostly for shadow AI: the system somebody adopted without telling
+	// anyone is exactly the one no finding will ever raise.
+	//
+	// Classifying a new system as `high` requires `reviewed`. See UpdateAiSystem.
+	CreateAiSystem(context.Context, *connect.Request[v1.CreateAiSystemRequest]) (*connect.Response[v1.CreateAiSystemResponse], error)
+	// Replaces a system's fields.
+	//
+	// # CHANGING A CLASSIFICATION REQUIRES `reviewed`, AND THAT IS THE POINT
+	//
+	// Any change to `risk_classification` is refused unless the request carries
+	// `reviewed: true`, and so is classifying a new system as `high`. The database
+	// enforces it, not this layer.
+	//
+	// The reason is that an Article 6 classification is the determination the
+	// whole high-risk obligation stack hangs off. Moving a system out of `high` in
+	// a form somebody was tabbing through would quietly retire Articles 9 to 17
+	// for it, and the record would show a change with nobody's deliberate decision
+	// behind it. A caller sends `reviewed` to say a human meant it, and the audit
+	// row records that they did.
+	//
+	// Refused answers `failed_precondition`: the caller may do this, and must
+	// confirm first. That is not `permission_denied` and not `resource_exhausted`,
+	// and a client shows a confirm step rather than an upgrade prompt.
+	UpdateAiSystem(context.Context, *connect.Request[v1.UpdateAiSystemRequest]) (*connect.Response[v1.UpdateAiSystemResponse], error)
+	// Logs a request that arrived.
+	//
+	// The only way a DSAR enters the register: nothing creates one from an
+	// approval, because a request comes from a person and an obligation that
+	// manufactured one would be inventing the requester.
+	LogDsar(context.Context, *connect.Request[v1.LogDsarRequest]) (*connect.Response[v1.LogDsarResponse], error)
+	// Records that a response went out, which stops the statutory clock.
+	//
+	// Requires `reviewed`, for the same class of reason UpdateAiSystem does: this
+	// is the assertion that the organisation met an Article 12(3) deadline, and it
+	// is the single most consequential row in this register to get wrong. A
+	// regulator reading the log later is reading this field.
+	//
+	// Idempotent. Marking an already-answered request returns `applied: false` and
+	// writes nothing, rather than overwriting the date a response actually went
+	// out with the date somebody clicked the button twice.
+	//
+	// `:respond` rather than a status field on an update, per AIP-136: it is one
+	// transition with a gate, not an arbitrary field change.
+	MarkDsarResponded(context.Context, *connect.Request[v1.MarkDsarRespondedRequest]) (*connect.Response[v1.MarkDsarRespondedResponse], error)
 }
 
 // NewRecordsServiceClient constructs a client for the kindlast.core.v1.RecordsService service. By
@@ -142,6 +221,42 @@ func NewRecordsServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(recordsServiceMethods.ByName("GetDsar")),
 			connect.WithClientOptions(opts...),
 		),
+		createProcessingActivity: connect.NewClient[v1.CreateProcessingActivityRequest, v1.CreateProcessingActivityResponse](
+			httpClient,
+			baseURL+RecordsServiceCreateProcessingActivityProcedure,
+			connect.WithSchema(recordsServiceMethods.ByName("CreateProcessingActivity")),
+			connect.WithClientOptions(opts...),
+		),
+		updateProcessingActivity: connect.NewClient[v1.UpdateProcessingActivityRequest, v1.UpdateProcessingActivityResponse](
+			httpClient,
+			baseURL+RecordsServiceUpdateProcessingActivityProcedure,
+			connect.WithSchema(recordsServiceMethods.ByName("UpdateProcessingActivity")),
+			connect.WithClientOptions(opts...),
+		),
+		createAiSystem: connect.NewClient[v1.CreateAiSystemRequest, v1.CreateAiSystemResponse](
+			httpClient,
+			baseURL+RecordsServiceCreateAiSystemProcedure,
+			connect.WithSchema(recordsServiceMethods.ByName("CreateAiSystem")),
+			connect.WithClientOptions(opts...),
+		),
+		updateAiSystem: connect.NewClient[v1.UpdateAiSystemRequest, v1.UpdateAiSystemResponse](
+			httpClient,
+			baseURL+RecordsServiceUpdateAiSystemProcedure,
+			connect.WithSchema(recordsServiceMethods.ByName("UpdateAiSystem")),
+			connect.WithClientOptions(opts...),
+		),
+		logDsar: connect.NewClient[v1.LogDsarRequest, v1.LogDsarResponse](
+			httpClient,
+			baseURL+RecordsServiceLogDsarProcedure,
+			connect.WithSchema(recordsServiceMethods.ByName("LogDsar")),
+			connect.WithClientOptions(opts...),
+		),
+		markDsarResponded: connect.NewClient[v1.MarkDsarRespondedRequest, v1.MarkDsarRespondedResponse](
+			httpClient,
+			baseURL+RecordsServiceMarkDsarRespondedProcedure,
+			connect.WithSchema(recordsServiceMethods.ByName("MarkDsarResponded")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -153,6 +268,12 @@ type recordsServiceClient struct {
 	getAiSystem              *connect.Client[v1.GetAiSystemRequest, v1.GetAiSystemResponse]
 	listDsars                *connect.Client[v1.ListDsarsRequest, v1.ListDsarsResponse]
 	getDsar                  *connect.Client[v1.GetDsarRequest, v1.GetDsarResponse]
+	createProcessingActivity *connect.Client[v1.CreateProcessingActivityRequest, v1.CreateProcessingActivityResponse]
+	updateProcessingActivity *connect.Client[v1.UpdateProcessingActivityRequest, v1.UpdateProcessingActivityResponse]
+	createAiSystem           *connect.Client[v1.CreateAiSystemRequest, v1.CreateAiSystemResponse]
+	updateAiSystem           *connect.Client[v1.UpdateAiSystemRequest, v1.UpdateAiSystemResponse]
+	logDsar                  *connect.Client[v1.LogDsarRequest, v1.LogDsarResponse]
+	markDsarResponded        *connect.Client[v1.MarkDsarRespondedRequest, v1.MarkDsarRespondedResponse]
 }
 
 // ListProcessingActivities calls kindlast.core.v1.RecordsService.ListProcessingActivities.
@@ -183,6 +304,36 @@ func (c *recordsServiceClient) ListDsars(ctx context.Context, req *connect.Reque
 // GetDsar calls kindlast.core.v1.RecordsService.GetDsar.
 func (c *recordsServiceClient) GetDsar(ctx context.Context, req *connect.Request[v1.GetDsarRequest]) (*connect.Response[v1.GetDsarResponse], error) {
 	return c.getDsar.CallUnary(ctx, req)
+}
+
+// CreateProcessingActivity calls kindlast.core.v1.RecordsService.CreateProcessingActivity.
+func (c *recordsServiceClient) CreateProcessingActivity(ctx context.Context, req *connect.Request[v1.CreateProcessingActivityRequest]) (*connect.Response[v1.CreateProcessingActivityResponse], error) {
+	return c.createProcessingActivity.CallUnary(ctx, req)
+}
+
+// UpdateProcessingActivity calls kindlast.core.v1.RecordsService.UpdateProcessingActivity.
+func (c *recordsServiceClient) UpdateProcessingActivity(ctx context.Context, req *connect.Request[v1.UpdateProcessingActivityRequest]) (*connect.Response[v1.UpdateProcessingActivityResponse], error) {
+	return c.updateProcessingActivity.CallUnary(ctx, req)
+}
+
+// CreateAiSystem calls kindlast.core.v1.RecordsService.CreateAiSystem.
+func (c *recordsServiceClient) CreateAiSystem(ctx context.Context, req *connect.Request[v1.CreateAiSystemRequest]) (*connect.Response[v1.CreateAiSystemResponse], error) {
+	return c.createAiSystem.CallUnary(ctx, req)
+}
+
+// UpdateAiSystem calls kindlast.core.v1.RecordsService.UpdateAiSystem.
+func (c *recordsServiceClient) UpdateAiSystem(ctx context.Context, req *connect.Request[v1.UpdateAiSystemRequest]) (*connect.Response[v1.UpdateAiSystemResponse], error) {
+	return c.updateAiSystem.CallUnary(ctx, req)
+}
+
+// LogDsar calls kindlast.core.v1.RecordsService.LogDsar.
+func (c *recordsServiceClient) LogDsar(ctx context.Context, req *connect.Request[v1.LogDsarRequest]) (*connect.Response[v1.LogDsarResponse], error) {
+	return c.logDsar.CallUnary(ctx, req)
+}
+
+// MarkDsarResponded calls kindlast.core.v1.RecordsService.MarkDsarResponded.
+func (c *recordsServiceClient) MarkDsarResponded(ctx context.Context, req *connect.Request[v1.MarkDsarRespondedRequest]) (*connect.Response[v1.MarkDsarRespondedResponse], error) {
+	return c.markDsarResponded.CallUnary(ctx, req)
 }
 
 // RecordsServiceHandler is an implementation of the kindlast.core.v1.RecordsService service.
@@ -226,6 +377,68 @@ type RecordsServiceHandler interface {
 	// going from always-empty to sometimes-set must not be a contract change.
 	ListDsars(context.Context, *connect.Request[v1.ListDsarsRequest]) (*connect.Response[v1.ListDsarsResponse], error)
 	GetDsar(context.Context, *connect.Request[v1.GetDsarRequest]) (*connect.Response[v1.GetDsarResponse], error)
+	// Adds an activity the Executor has not seen.
+	//
+	// Capped on the free plan, and the cap counts only manually-created rows: a
+	// record created from an approved finding is part of the compliance record and
+	// is never withheld behind a plan. Over the cap answers `resource_exhausted`
+	// rather than `permission_denied`, because the caller is entitled to do this
+	// and simply cannot right now, which is a distinction with a button under it.
+	CreateProcessingActivity(context.Context, *connect.Request[v1.CreateProcessingActivityRequest]) (*connect.Response[v1.CreateProcessingActivityResponse], error)
+	// Replaces an activity's fields.
+	//
+	// A full replacement rather than a patch, and the field mask that would make
+	// it a patch is deliberately absent. Article 30 is a record of fact whose gaps
+	// are meaningful: clearing a legal basis is a real edit somebody makes when
+	// they realise the one recorded was wrong, and a partial update in which an
+	// omitted field means "leave it alone" gives a client no way to express that.
+	UpdateProcessingActivity(context.Context, *connect.Request[v1.UpdateProcessingActivityRequest]) (*connect.Response[v1.UpdateProcessingActivityResponse], error)
+	// Registers a system nobody has approved a finding about.
+	//
+	// Useful mostly for shadow AI: the system somebody adopted without telling
+	// anyone is exactly the one no finding will ever raise.
+	//
+	// Classifying a new system as `high` requires `reviewed`. See UpdateAiSystem.
+	CreateAiSystem(context.Context, *connect.Request[v1.CreateAiSystemRequest]) (*connect.Response[v1.CreateAiSystemResponse], error)
+	// Replaces a system's fields.
+	//
+	// # CHANGING A CLASSIFICATION REQUIRES `reviewed`, AND THAT IS THE POINT
+	//
+	// Any change to `risk_classification` is refused unless the request carries
+	// `reviewed: true`, and so is classifying a new system as `high`. The database
+	// enforces it, not this layer.
+	//
+	// The reason is that an Article 6 classification is the determination the
+	// whole high-risk obligation stack hangs off. Moving a system out of `high` in
+	// a form somebody was tabbing through would quietly retire Articles 9 to 17
+	// for it, and the record would show a change with nobody's deliberate decision
+	// behind it. A caller sends `reviewed` to say a human meant it, and the audit
+	// row records that they did.
+	//
+	// Refused answers `failed_precondition`: the caller may do this, and must
+	// confirm first. That is not `permission_denied` and not `resource_exhausted`,
+	// and a client shows a confirm step rather than an upgrade prompt.
+	UpdateAiSystem(context.Context, *connect.Request[v1.UpdateAiSystemRequest]) (*connect.Response[v1.UpdateAiSystemResponse], error)
+	// Logs a request that arrived.
+	//
+	// The only way a DSAR enters the register: nothing creates one from an
+	// approval, because a request comes from a person and an obligation that
+	// manufactured one would be inventing the requester.
+	LogDsar(context.Context, *connect.Request[v1.LogDsarRequest]) (*connect.Response[v1.LogDsarResponse], error)
+	// Records that a response went out, which stops the statutory clock.
+	//
+	// Requires `reviewed`, for the same class of reason UpdateAiSystem does: this
+	// is the assertion that the organisation met an Article 12(3) deadline, and it
+	// is the single most consequential row in this register to get wrong. A
+	// regulator reading the log later is reading this field.
+	//
+	// Idempotent. Marking an already-answered request returns `applied: false` and
+	// writes nothing, rather than overwriting the date a response actually went
+	// out with the date somebody clicked the button twice.
+	//
+	// `:respond` rather than a status field on an update, per AIP-136: it is one
+	// transition with a gate, not an arbitrary field change.
+	MarkDsarResponded(context.Context, *connect.Request[v1.MarkDsarRespondedRequest]) (*connect.Response[v1.MarkDsarRespondedResponse], error)
 }
 
 // NewRecordsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -271,6 +484,42 @@ func NewRecordsServiceHandler(svc RecordsServiceHandler, opts ...connect.Handler
 		connect.WithSchema(recordsServiceMethods.ByName("GetDsar")),
 		connect.WithHandlerOptions(opts...),
 	)
+	recordsServiceCreateProcessingActivityHandler := connect.NewUnaryHandler(
+		RecordsServiceCreateProcessingActivityProcedure,
+		svc.CreateProcessingActivity,
+		connect.WithSchema(recordsServiceMethods.ByName("CreateProcessingActivity")),
+		connect.WithHandlerOptions(opts...),
+	)
+	recordsServiceUpdateProcessingActivityHandler := connect.NewUnaryHandler(
+		RecordsServiceUpdateProcessingActivityProcedure,
+		svc.UpdateProcessingActivity,
+		connect.WithSchema(recordsServiceMethods.ByName("UpdateProcessingActivity")),
+		connect.WithHandlerOptions(opts...),
+	)
+	recordsServiceCreateAiSystemHandler := connect.NewUnaryHandler(
+		RecordsServiceCreateAiSystemProcedure,
+		svc.CreateAiSystem,
+		connect.WithSchema(recordsServiceMethods.ByName("CreateAiSystem")),
+		connect.WithHandlerOptions(opts...),
+	)
+	recordsServiceUpdateAiSystemHandler := connect.NewUnaryHandler(
+		RecordsServiceUpdateAiSystemProcedure,
+		svc.UpdateAiSystem,
+		connect.WithSchema(recordsServiceMethods.ByName("UpdateAiSystem")),
+		connect.WithHandlerOptions(opts...),
+	)
+	recordsServiceLogDsarHandler := connect.NewUnaryHandler(
+		RecordsServiceLogDsarProcedure,
+		svc.LogDsar,
+		connect.WithSchema(recordsServiceMethods.ByName("LogDsar")),
+		connect.WithHandlerOptions(opts...),
+	)
+	recordsServiceMarkDsarRespondedHandler := connect.NewUnaryHandler(
+		RecordsServiceMarkDsarRespondedProcedure,
+		svc.MarkDsarResponded,
+		connect.WithSchema(recordsServiceMethods.ByName("MarkDsarResponded")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.core.v1.RecordsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RecordsServiceListProcessingActivitiesProcedure:
@@ -285,6 +534,18 @@ func NewRecordsServiceHandler(svc RecordsServiceHandler, opts ...connect.Handler
 			recordsServiceListDsarsHandler.ServeHTTP(w, r)
 		case RecordsServiceGetDsarProcedure:
 			recordsServiceGetDsarHandler.ServeHTTP(w, r)
+		case RecordsServiceCreateProcessingActivityProcedure:
+			recordsServiceCreateProcessingActivityHandler.ServeHTTP(w, r)
+		case RecordsServiceUpdateProcessingActivityProcedure:
+			recordsServiceUpdateProcessingActivityHandler.ServeHTTP(w, r)
+		case RecordsServiceCreateAiSystemProcedure:
+			recordsServiceCreateAiSystemHandler.ServeHTTP(w, r)
+		case RecordsServiceUpdateAiSystemProcedure:
+			recordsServiceUpdateAiSystemHandler.ServeHTTP(w, r)
+		case RecordsServiceLogDsarProcedure:
+			recordsServiceLogDsarHandler.ServeHTTP(w, r)
+		case RecordsServiceMarkDsarRespondedProcedure:
+			recordsServiceMarkDsarRespondedHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -316,4 +577,28 @@ func (UnimplementedRecordsServiceHandler) ListDsars(context.Context, *connect.Re
 
 func (UnimplementedRecordsServiceHandler) GetDsar(context.Context, *connect.Request[v1.GetDsarRequest]) (*connect.Response[v1.GetDsarResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.GetDsar is not implemented"))
+}
+
+func (UnimplementedRecordsServiceHandler) CreateProcessingActivity(context.Context, *connect.Request[v1.CreateProcessingActivityRequest]) (*connect.Response[v1.CreateProcessingActivityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.CreateProcessingActivity is not implemented"))
+}
+
+func (UnimplementedRecordsServiceHandler) UpdateProcessingActivity(context.Context, *connect.Request[v1.UpdateProcessingActivityRequest]) (*connect.Response[v1.UpdateProcessingActivityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.UpdateProcessingActivity is not implemented"))
+}
+
+func (UnimplementedRecordsServiceHandler) CreateAiSystem(context.Context, *connect.Request[v1.CreateAiSystemRequest]) (*connect.Response[v1.CreateAiSystemResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.CreateAiSystem is not implemented"))
+}
+
+func (UnimplementedRecordsServiceHandler) UpdateAiSystem(context.Context, *connect.Request[v1.UpdateAiSystemRequest]) (*connect.Response[v1.UpdateAiSystemResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.UpdateAiSystem is not implemented"))
+}
+
+func (UnimplementedRecordsServiceHandler) LogDsar(context.Context, *connect.Request[v1.LogDsarRequest]) (*connect.Response[v1.LogDsarResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.LogDsar is not implemented"))
+}
+
+func (UnimplementedRecordsServiceHandler) MarkDsarResponded(context.Context, *connect.Request[v1.MarkDsarRespondedRequest]) (*connect.Response[v1.MarkDsarRespondedResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.MarkDsarResponded is not implemented"))
 }

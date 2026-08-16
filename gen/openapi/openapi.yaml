@@ -500,6 +500,36 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - RecordsService
+            description: |-
+                Registers a system nobody has approved a finding about.
+
+                 Useful mostly for shadow AI: the system somebody adopted without telling
+                 anyone is exactly the one no finding will ever raise.
+
+                 Classifying a new system as `high` requires `reviewed`. See UpdateAiSystem.
+            operationId: RecordsService_CreateAiSystem
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateAiSystemRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateAiSystemResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/records/ai-systems/{aiSystemId}:
         get:
             tags:
@@ -518,6 +548,54 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/GetAiSystemResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        patch:
+            tags:
+                - RecordsService
+            description: |-
+                Replaces a system's fields.
+
+                 CHANGING A CLASSIFICATION REQUIRES `reviewed`, AND THAT IS THE POINT
+
+                 Any change to `risk_classification` is refused unless the request carries
+                 `reviewed: true`, and so is classifying a new system as `high`. The database
+                 enforces it, not this layer.
+
+                 The reason is that an Article 6 classification is the determination the
+                 whole high-risk obligation stack hangs off. Moving a system out of `high` in
+                 a form somebody was tabbing through would quietly retire Articles 9 to 17
+                 for it, and the record would show a change with nobody's deliberate decision
+                 behind it. A caller sends `reviewed` to say a human meant it, and the audit
+                 row records that they did.
+
+                 Refused answers `failed_precondition`: the caller may do this, and must
+                 confirm first. That is not `permission_denied` and not `resource_exhausted`,
+                 and a client shows a confirm step rather than an upgrade prompt.
+            operationId: RecordsService_UpdateAiSystem
+            parameters:
+                - name: aiSystemId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAiSystemRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UpdateAiSystemResponse'
                 default:
                     description: Default error response
                     content:
@@ -574,6 +652,35 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - RecordsService
+            description: |-
+                Logs a request that arrived.
+
+                 The only way a DSAR enters the register: nothing creates one from an
+                 approval, because a request comes from a person and an obligation that
+                 manufactured one would be inventing the requester.
+            operationId: RecordsService_LogDsar
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LogDsarRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LogDsarResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/records/dsars/{dsarId}:
         get:
             tags:
@@ -592,6 +699,50 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/GetDsarResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/records/dsars/{dsarId}:respond:
+        post:
+            tags:
+                - RecordsService
+            description: |-
+                Records that a response went out, which stops the statutory clock.
+
+                 Requires `reviewed`, for the same class of reason UpdateAiSystem does: this
+                 is the assertion that the organisation met an Article 12(3) deadline, and it
+                 is the single most consequential row in this register to get wrong. A
+                 regulator reading the log later is reading this field.
+
+                 Idempotent. Marking an already-answered request returns `applied: false` and
+                 writes nothing, rather than overwriting the date a response actually went
+                 out with the date somebody clicked the button twice.
+
+                 `:respond` rather than a status field on an update, per AIP-136: it is one
+                 transition with a gate, not an arbitrary field change.
+            operationId: RecordsService_MarkDsarResponded
+            parameters:
+                - name: dsarId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MarkDsarRespondedRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MarkDsarRespondedResponse'
                 default:
                     description: Default error response
                     content:
@@ -642,6 +793,37 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - RecordsService
+            description: |-
+                Adds an activity the Executor has not seen.
+
+                 Capped on the free plan, and the cap counts only manually-created rows: a
+                 record created from an approved finding is part of the compliance record and
+                 is never withheld behind a plan. Over the cap answers `resource_exhausted`
+                 rather than `permission_denied`, because the caller is entitled to do this
+                 and simply cannot right now, which is a distinction with a button under it.
+            operationId: RecordsService_CreateProcessingActivity
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateProcessingActivityRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateProcessingActivityResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/records/processing-activities/{processingActivityId}:
         get:
             tags:
@@ -660,6 +842,43 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/GetProcessingActivityResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        patch:
+            tags:
+                - RecordsService
+            description: |-
+                Replaces an activity's fields.
+
+                 A full replacement rather than a patch, and the field mask that would make
+                 it a patch is deliberately absent. Article 30 is a record of fact whose gaps
+                 are meaningful: clearing a legal basis is a real edit somebody makes when
+                 they realise the one recorded was wrong, and a partial update in which an
+                 omitted field means "leave it alone" gives a client no way to express that.
+            operationId: RecordsService_UpdateProcessingActivity
+            parameters:
+                - name: processingActivityId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProcessingActivityRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UpdateProcessingActivityResponse'
                 default:
                     description: Default error response
                     content:
@@ -771,6 +990,24 @@ components:
                     type: string
                     format: date-time
             description: One system in the AI Act register.
+        AiSystemFields:
+            type: object
+            properties:
+                name:
+                    type: string
+                vendor:
+                    type: string
+                purpose:
+                    type: string
+                riskClassification:
+                    type: string
+                    description: |-
+                        unacceptable, high, limited, minimal, or unclassified. Empty means
+                         `unclassified`, which is the honest default: see AiSystem.
+                documentationStatus:
+                    type: string
+                    description: missing, in_progress, or complete. Empty means `missing`.
+            description: The fields of an AI system entry a human supplies.
         ApproveFindingRequest:
             type: object
             properties:
@@ -863,6 +1100,19 @@ components:
                  See the service comment: every field is a value the database already holds.
                  A client renders `label` and links `url`; the structured parts are present so
                  a client can filter or group by regulation, not so it can rebuild the label.
+        CreateAiSystemRequest:
+            type: object
+            properties:
+                fields:
+                    $ref: '#/components/schemas/AiSystemFields'
+                reviewed:
+                    type: boolean
+                    description: Required when `risk_classification` is `high`. See UpdateAiSystem.
+        CreateAiSystemResponse:
+            type: object
+            properties:
+                aiSystem:
+                    $ref: '#/components/schemas/AiSystem'
         CreateOrganisationRequest:
             type: object
             properties:
@@ -886,6 +1136,18 @@ components:
                     description: |-
                         Always `owner`: whoever creates an organisation owns it. Returned rather
                          than assumed so a client never has to encode that rule.
+        CreateProcessingActivityRequest:
+            type: object
+            properties:
+                fields:
+                    $ref: '#/components/schemas/ProcessingActivityFields'
+        CreateProcessingActivityResponse:
+            type: object
+            properties:
+                processingActivity:
+                    allOf:
+                        - $ref: '#/components/schemas/ProcessingActivity'
+                    description: The created record, so a client renders it without a second call.
         Dsar:
             type: object
             properties:
@@ -1218,6 +1480,31 @@ components:
                          not otherwise have. The limit counts only rows with no `source_finding_id`:
                          a record the Executor created on an approved finding is part of the
                          compliance record and is never withheld behind a plan (ENT-84).
+        LogDsarRequest:
+            type: object
+            properties:
+                subjectName:
+                    type: string
+                    description: |-
+                        Optional: a request can arrive pseudonymously, before anyone has identified
+                         the person behind it.
+                requestType:
+                    type: string
+                    description: |-
+                        access, erasure, rectification, portability, objection, restriction. Free
+                         text, for the reason Dsar.request_type gives.
+                handler:
+                    type: string
+                    description: Optional. Often a role or an external DPO rather than a member.
+        LogDsarResponse:
+            type: object
+            properties:
+                dsar:
+                    allOf:
+                        - $ref: '#/components/schemas/Dsar'
+                    description: |-
+                        Carries the computed `response_due_at`, which is the field the person who
+                         logged it actually needs to know.
         ManualQuota:
             type: object
             properties:
@@ -1232,6 +1519,22 @@ components:
                          rather than rendering "3 of 0 used".
                     format: int32
             description: A plan limit on manually-created records, and current usage against it.
+        MarkDsarRespondedRequest:
+            type: object
+            properties:
+                dsarId:
+                    type: string
+                reviewed:
+                    type: boolean
+                    description: Must be true. See MarkDsarResponded.
+        MarkDsarRespondedResponse:
+            type: object
+            properties:
+                applied:
+                    type: boolean
+                    description: False when the request was already answered. See MarkDsarResponded.
+                dsar:
+                    $ref: '#/components/schemas/Dsar'
         Member:
             type: object
             properties:
@@ -1371,6 +1674,30 @@ components:
                  below are empty rather than invented. Article 30 is a record of fact, so a
                  plausible guess in `legal_basis` is the single worst thing this product could
                  write.
+        ProcessingActivityFields:
+            type: object
+            properties:
+                name:
+                    type: string
+                purpose:
+                    type: string
+                legalBasis:
+                    type: string
+                dataCategories:
+                    type: array
+                    items:
+                        type: string
+                recipients:
+                    type: array
+                    items:
+                        type: string
+                retentionPeriod:
+                    type: string
+            description: |-
+                The fields of an Article 30 entry a human supplies.
+
+                 Shared by create and update so the two cannot drift into accepting different
+                 things about the same record.
         RejectFindingRequest:
             type: object
             properties:
@@ -1488,6 +1815,21 @@ components:
                 sourceUrl:
                     type: string
             description: One quoted passage supporting a finding, from `finding_supporting_chunks`.
+        UpdateAiSystemRequest:
+            type: object
+            properties:
+                aiSystemId:
+                    type: string
+                fields:
+                    $ref: '#/components/schemas/AiSystemFields'
+                reviewed:
+                    type: boolean
+                    description: Required when this changes `risk_classification`. See UpdateAiSystem.
+        UpdateAiSystemResponse:
+            type: object
+            properties:
+                aiSystem:
+                    $ref: '#/components/schemas/AiSystem'
         UpdateMemberRoleRequest:
             type: object
             properties:
@@ -1521,6 +1863,18 @@ components:
                     description: |-
                         Returned deliberately, and unchanged by the rename. A client that assumed
                          otherwise finds out here rather than by building a broken link.
+        UpdateProcessingActivityRequest:
+            type: object
+            properties:
+                processingActivityId:
+                    type: string
+                fields:
+                    $ref: '#/components/schemas/ProcessingActivityFields'
+        UpdateProcessingActivityResponse:
+            type: object
+            properties:
+                processingActivity:
+                    $ref: '#/components/schemas/ProcessingActivity'
         User:
             type: object
             properties:
@@ -1642,12 +1996,20 @@ tags:
          the wrong half to have working. Reads come first for that reason, and because
          they are the half an auditor needs.
 
-         Editing comes next and is deliberately not in this contract. The write scopes
-         already exist (`records:ropa:write`, `records:ai-systems:write`,
-         `records:dsar:write`) and so do all six database functions behind them, in
-         00002. Declaring the RPCs now with no handler would put three entries in the
-         scope table that answer permission-denied for a reason unrelated to
-         permission, which is the failure mode §1.3 exists to stop.
+         Editing arrived after the read surface, in that order deliberately: the act
+         path was already writing records nobody could see, so reading was the half
+         that was missing. The write RPCs are additive and changed no read shape.
+
+         EVERY WRITE GOES THROUGH A DATABASE FUNCTION, NEVER A TABLE
+
+         The six functions in 00002 own these writes. Each one resolves the acting
+         human from the session GUC, enforces its own gate, and writes the audit row in
+         the same transaction as the change. A handler that wrote the table directly
+         would have to reimplement all three, and the audit row would be a second
+         statement that can fail on its own.
+
+         So there is no actor field on any request here, and there will not be one. A
+         caller cannot name someone else as the person who made a change.
 
          ONE SERVICE, THREE RECORD TYPES
 

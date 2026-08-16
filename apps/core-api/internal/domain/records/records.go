@@ -104,6 +104,30 @@ type Quota struct {
 	Limit int32
 }
 
+// ProcessingActivityFields is what a human supplies for an Article 30 entry.
+//
+// Shared by create and update so the two cannot drift into accepting different
+// things about the same record. A full replacement rather than a patch: see
+// UpdateProcessingActivity in the proto for why an omitted field must not mean
+// "leave it alone" on a record whose gaps are meaningful.
+type ProcessingActivityFields struct {
+	Name            string
+	Purpose         string
+	LegalBasis      string
+	DataCategories  []string
+	Recipients      []string
+	RetentionPeriod string
+}
+
+// AiSystemFields is what a human supplies for a register entry.
+type AiSystemFields struct {
+	Name                string
+	Vendor              string
+	Purpose             string
+	RiskClassification  string
+	DocumentationStatus string
+}
+
 // Completeness bands one Article 30 entry.
 //
 // Precedence is ReviewNeeded, then Complete, then Incomplete, and the first is
