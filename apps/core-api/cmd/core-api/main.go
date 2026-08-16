@@ -31,6 +31,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	"github.com/Entear-OU/kindlast/libs/chassis/denylist"
 	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
@@ -150,6 +151,21 @@ func run(logger *slog.Logger) error {
 	}
 	defer store.Close()
 
+	// The producer pool, on the kindlast_agent role. Optional: without it
+	// SweepService is not served, which is a supported configuration rather
+	// than a degraded one. Opening it here rather than lazily means a bad DSN
+	// or an absent role is a startup failure, not a surprise on the first
+	// sweep.
+	var producer sweep.Producer
+	if cfg.AgentDatabaseURL != "" {
+		agent, agentErr := postgres.NewAgent(ctx, cfg.AgentDatabaseURL)
+		if agentErr != nil {
+			return agentErr
+		}
+		defer agent.Close()
+		producer = agent
+	}
+
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	defer func() { _ = redisClient.Close() }()
 
@@ -176,6 +192,8 @@ func run(logger *slog.Logger) error {
 		Ready: func(ctx context.Context) error {
 			return store.Ping(ctx)
 		},
+		Producer:       producer,
+		BillingEnabled: cfg.BillingEnabled,
 	})
 	if err != nil {
 		return err

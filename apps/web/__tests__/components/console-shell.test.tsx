@@ -167,10 +167,24 @@ describe('the sidebar (ENT-222)', () => {
         <div>child</div>
       </ConsoleShell>,
     )
-    expect(screen.getByText('Feed')).toBeInTheDocument()
     expect(screen.getByText('Records')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Feed' })).toBeNull()
     expect(screen.queryByRole('link', { name: 'Records' })).toBeNull()
+  })
+
+  // The other half of the same rule, and the one that keeps it honest: a
+  // surface leaves the "Coming next" list by becoming a link, not by being
+  // quietly deleted from it. Feed made that move in ENT-203.
+  it('links a surface once it exists', () => {
+    render(
+      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+        <div>child</div>
+      </ConsoleShell>,
+    )
+    const sidebar = screen.getAllByRole('navigation', { name: 'Console' })[0]
+    expect(within(sidebar).getByRole('link', { name: 'Feed' })).toHaveAttribute(
+      'href',
+      '/o/acme-ltd/feed',
+    )
   })
 })
 
@@ -253,8 +267,12 @@ describe('the phone layout (ENT-222)', () => {
       </ConsoleShell>,
     )
     const tabBar = screen.getAllByRole('navigation', { name: 'Console' })[1]
-    expect(within(tabBar).queryByRole('link', { name: 'Feed' })).toBeNull()
     expect(within(tabBar).queryByRole('link', { name: 'Records' })).toBeNull()
+    // Feed is a tab now that it exists (ENT-203), which is the graduation this
+    // rule is for rather than an exception to it.
+    expect(
+      within(tabBar).getByRole('link', { name: 'Feed' }),
+    ).toBeInTheDocument()
   })
 
   // The rail has no column on a phone, so the tab points at it in the page.

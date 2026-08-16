@@ -47,6 +47,13 @@ function say(error: Failure): ActionState {
       // person: "an organisation must keep at least one owner". Passing it
       // through beats replacing it with something vaguer.
       return { status: 'error', message: error.message }
+    case 'payment':
+      // No endpoint on this surface is plan-gated, so this is unreachable
+      // today. It is handled rather than defaulted because the switch is
+      // exhaustive on purpose: adding `payment` to the Failure union (ENT-203)
+      // made this function stop compiling, which is exactly the reminder a new
+      // failure kind should produce in every place that renders one.
+      return { status: 'error', message: error.message }
     case 'unavailable':
       return {
         status: 'error',

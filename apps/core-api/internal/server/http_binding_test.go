@@ -93,6 +93,49 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.OrgService.InviteMember": {
 			Method: "POST", Path: "/api/v1/invitations",
 		},
+
+		// ENT-203. Same absence to review as the group above: no `{org_id}`
+		// anywhere. `{finding_id}` names the thing being acted on and is
+		// meaningless without the header, exactly as `{user_id}` is.
+		//
+		// The three act paths use `:approve`, `:reject` and `:snooze` rather
+		// than `/approve`, per AIP-136 and §12: a custom verb on a resource,
+		// not a subresource that does not exist. `AcceptInvitation` above set
+		// that precedent.
+		"kindlast.core.v1.FindingsService.ListFindings": {
+			Method: "GET", Path: "/api/v1/findings",
+		},
+		"kindlast.core.v1.FindingsService.GetFinding": {
+			Method: "GET", Path: "/api/v1/findings/{finding_id}",
+		},
+		"kindlast.core.v1.FindingsService.ApproveFinding": {
+			Method: "POST", Path: "/api/v1/findings/{finding_id}:approve",
+		},
+		"kindlast.core.v1.FindingsService.RejectFinding": {
+			Method: "POST", Path: "/api/v1/findings/{finding_id}:reject",
+		},
+		"kindlast.core.v1.FindingsService.SnoozeFinding": {
+			Method: "POST", Path: "/api/v1/findings/{finding_id}:snooze",
+		},
+		// Singular, and for the same reason UpdateOrganisation is: it
+		// addresses the dashboard of the organisation the header names, not a
+		// member of a collection of dashboards.
+		"kindlast.core.v1.DashboardService.GetDashboard": {
+			Method: "GET", Path: "/api/v1/dashboard",
+		},
+
+		// ENT-203. The only binding outside /api/v1, and the prefix is the
+		// reviewable part: /internal/v1 is not reachable through the edge's
+		// public routes and is not served to a browser client. The proto
+		// package is `platform` rather than `internal` only because Go gives
+		// any path segment called `internal` a visibility rule that would make
+		// the generated code unimportable; the route keeps the design's name.
+		//
+		// Still no {org_id}: a sweep names its organisation in the header like
+		// everything else.
+		"kindlast.platform.v1.SweepService.RunSweep": {
+			Method: "POST", Path: "/internal/v1/sweep",
+		},
 	}
 
 	got := map[string]httprule.Binding{}

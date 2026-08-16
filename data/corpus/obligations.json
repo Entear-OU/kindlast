@@ -13,7 +13,8 @@
       "severity": "high",
       "recurrence": "continuous",
       "effectiveDate": "2018-05-25",
-      "topicTags": ["ropa", "documentation", "accountability"]
+      "topicTags": ["ropa", "documentation", "accountability"],
+      "actionType": "create_ropa"
     },
     {
       "slug": "gdpr-art-35-dpia",
@@ -218,7 +219,8 @@
       "severity": "high",
       "recurrence": "continuous",
       "effectiveDate": "2026-08-02",
-      "topicTags": ["ai-act", "high-risk", "deployer"]
+      "topicTags": ["ai-act", "high-risk", "deployer"],
+      "actionType": "create_ai_system"
     },
     {
       "slug": "ai-act-annex-iii-high-risk-systems",
@@ -236,7 +238,8 @@
       "severity": "high",
       "recurrence": "continuous",
       "effectiveDate": "2026-08-02",
-      "topicTags": ["ai-act", "high-risk", "annex-iii"]
+      "topicTags": ["ai-act", "high-risk", "annex-iii"],
+      "actionType": "create_ai_system"
     },
     {
       "slug": "ai-act-art-50-transparency",

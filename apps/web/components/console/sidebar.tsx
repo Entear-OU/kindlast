@@ -30,10 +30,7 @@ import { orgPath } from '@/lib/auth/org'
  */
 
 /** Named in the rebuild, not yet built. Listed, never linked. */
-const COMING = [
-  { label: 'Feed', icon: ListChecks },
-  { label: 'Records', icon: FolderOpen },
-] as const
+const COMING = [{ label: 'Records', icon: FolderOpen }] as const
 
 export function ConsoleSidebar({
   orgSlug,
@@ -61,6 +58,13 @@ export function ConsoleSidebar({
         <li>
           <NavLink href={orgPath(orgSlug)} label="Overview" exact>
             <Gauge aria-hidden="true" className="size-4" />
+          </NavLink>
+        </li>
+        <li>
+          {/* Left COMING and became a link when ENT-203 landed it, which is the
+              one-line change per surface this list was built for. */}
+          <NavLink href={orgPath(orgSlug, '/feed')} label="Feed">
+            <ListChecks aria-hidden="true" className="size-4" />
           </NavLink>
         </li>
         <li>

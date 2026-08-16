@@ -23,6 +23,7 @@ convenient audience accepts tokens minted for a different service.
 | `KINDLAST_DATABASE_URL` | yes | Must connect as `kindlast_app`. |
 | `KINDLAST_REDIS_ADDR` | yes | The shared instance holding the revocation deny-list. |
 | `KINDLAST_CORE_API_LISTEN` | no | Internal listener, default `:8080`. There is no public one. |
+| `KINDLAST_BILLING_ENABLED` | no | Turns plan gating on. Off by default, which is the self-hosted case. |
 
 \* one of `KINDLAST_OIDC_AUDIENCE` or `KINDLAST_OIDC_AUDIENCE_FILE`.
 
@@ -32,6 +33,52 @@ superuser leaves every policy in the schema in place and makes every one of
 them a no-op, with no error and no warning. `core-api` refuses to start if it
 recognises either in the DSN, but that check is a courtesy and not a
 guarantee, because a DSN can name any role.
+
+## `KINDLAST_BILLING_ENABLED`, and why the default is off
+
+Unset, `core-api` does not gate the act path on a subscription plan. That is
+deliberate rather than an oversight: a self-hoster runs the whole product on
+their own hardware, has no subscription and no intention of acquiring one, and
+gating them out of the Executor because they are "on the free plan" would make
+the self-hosted build a demo.
+
+Set it (`1`, `true`, `yes` or `on`) and approving, rejecting or deferring a
+finding requires an active `pro` subscription for the organisation. Anything
+else, including a typo, leaves gating off, which is the safe direction for a
+flag whose failure mode is refusing a paying customer their feature.
+
+This is configuration rather than something inferred from whether a
+subscription row exists. That inference is wrong in the direction that costs
+money: a hosted customer between provisioning and their first row is
+indistinguishable from a self-hoster under it.
+
+## The `kindlast_agent` role
+
+`core-api` connects as `kindlast_app` and always will. From ENT-203 the
+database also has `kindlast_agent`, the role the Watcher and the Analyst run
+as, and it exists because `kindlast_app` deliberately cannot create findings:
+the thing that serves requests should not be able to fabricate a claim about a
+customer's legal exposure.
+
+`deploy/postgres/init/01-roles.sh` creates it on a fresh database. **An
+existing deployment must create it before migration `00008` runs**, or the
+migration fails with an explanation rather than skipping:
+
+```sql
+create role kindlast_agent login password '...'
+  nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+grant connect on database kindlast to kindlast_agent;
+grant usage on schema public to kindlast_agent;
+```
+
+A local stack gets it from `docker compose -f deploy/compose.yaml down -v` and
+back up. The password comes from `KINDLAST_AGENT_PASSWORD`.
+
+Its policies are the only ones in the schema that omit the membership half of
+the two-GUC form, because a sweep is started by the system and there is no
+member to check. Tenancy still binds: the role can only touch the organisation
+its `app.current_org_id` names, and it holds no grant on `organisations`,
+`memberships` or `audit_log` at all.
 
 ## `KINDLAST_OIDC_SCOPE_CLAIMS`, and why it exists
 

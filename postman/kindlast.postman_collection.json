@@ -451,6 +451,153 @@
             },
             "description": "Ordering matters and is easy to get wrong: this must run **before** the first GetCurrentUser. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to. `web`'s callback enforces that ordering (ENT-197); a direct caller has to keep it themselves.\n\n**Implemented as of ENT-196**, and reachable from here as of ENT-197. Required scope is `openid`, not `org:manage`: the caller is redeeming a capability they were sent and holds no role anywhere until it succeeds, so an organisation scope would make a first invitation impossible to accept.\n\nThe token is sent in the clear here and stored hashed, so the value in the database never matches this one. **Issuing invitations exists as of ENT-202** (see Invite member above), but you still cannot chain the two from here: that endpoint deliberately never returns the token, so a fixture written with a token you already know remains the only way to exercise acceptance, which is what the Go tests do.\n\nExpired, already accepted and never existed all answer `not_found` alike, deliberately, so this cannot be used to discover which tokens are real.\n\nThe response carries `orgSlug` as of ENT-198, so a client can redirect straight into `/o/{orgSlug}/` rather than making a second call to find out where the organisation it just joined actually lives."
           }
+        },
+        {
+          "name": "List findings",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageSize\": 20\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.FindingsService/ListFindings",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.FindingsService", "ListFindings"]
+            },
+            "description": "The feed: findings for the organisation the header names, newest first. Required scope: `findings:read`.\n\n**Implemented as of ENT-203.**\n\n**It will still not work from here yet, and the reason is not this endpoint.** No human token carries `findings:read` at all: `deploy/seed/seed.sh` creates all nineteen project roles and grants them to nobody, so a browser session's token has an empty role set (ENT-221). The client-credentials token above has the same problem. Until ENT-221 lands, the only callers that reach a scoped endpoint are the Go tests, which mint their own tokens against the stack's JWKS. Expect `permission_denied` here until then, from the scope interceptor rather than from the handler.\n\nPagination is keyset, not offset, over the `(org_id, created_at desc)` index 00002 built for this query. `pageToken` is opaque: do not parse or construct one. Send `pageSize: 0` (or omit it) to let the server choose. Treat a non-empty `nextPageToken` as the only signal that more exist — a full last page is ordinary and would otherwise read as another page waiting.\n\n`status` filters to one of `pending`, `approved`, `rejected`, `snoozed`. Omit it for every status, which is what the feed's default view wants: a finding somebody already dealt with is still part of the compliance record."
+          }
+        },
+        {
+          "name": "Get finding",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"findingId\": \"{{finding_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.FindingsService/GetFinding",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.FindingsService", "GetFinding"]
+            },
+            "description": "One finding plus the quoted regulatory text behind it. Required scope: `findings:read`. **Implemented as of ENT-203.** See List findings for why a real token still cannot reach it (ENT-221).\n\nThe `supporting` array comes from `finding_supporting_chunks`, which is org-gated in the database as well as in the handler and returns no rows rather than raising when the finding belongs to someone else.\n\n**An empty `supporting` array is normal and is not an error.** The corpus does not cover every instrument an obligation can cite. Empty means \"we cannot show you the text here\", which is honest; it is not the same as the citation being absent, and a client renders the citation either way.\n\n**On the `citation` object, which is the part worth reading carefully.** Every field in it is a value the database already stored, assembled by `analyst_citation_label` and `analyst_citation_url` when the finding was created. Render `label` and link `url`. Do **not** rebuild the label from `celex` and `article`: a second assembler is a second thing that can be wrong, and the product's whole value is that a human can check the claim against the law."
+          }
+        },
+        {
+          "name": "Approve finding",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"findingId\": \"{{finding_id}}\",\n  \"reviewed\": true\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.FindingsService/ApproveFinding",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.FindingsService", "ApproveFinding"]
+            },
+            "description": "The act path. Required scope: `findings:act`, which is deliberately **not** `findings:read`: rendering the console and approving on a human's behalf are separately dangerous, and a display-only integration should not be one credential leak away from the second.\n\n**Implemented as of ENT-203**, database half included (`00006_act_path_audit.sql`, which is what makes the audit row exist at all). See List findings for why a real token still cannot reach it (ENT-221).\n\n**Plan gating.** With `KINDLAST_BILLING_ENABLED` set, an organisation not on an active `pro` subscription gets `resource_exhausted` here rather than `permission_denied`: the two mean different things to the person reading the console, and only one of them has a button under it. Unset, which is the self-hosted default, the act path is ungated (\u00a718.1).\n\n**There is no actor field, and there will not be one.** The approving human is read from the session GUC the tenancy interceptor set, so a caller cannot name someone else as the approver. `approve_finding` lost its acting-user parameter in the ENT-192 rewrite for exactly this reason.\n\n**Idempotent.** Approving an already-approved finding returns `applied: false`, writes nothing and writes no second audit row. The usual cause is a double submit or a retry, neither of which is a problem worth showing a customer.\n\n`applied: false` also covers a finding that is unknown or belongs to another organisation. All three answer alike on purpose — telling them apart is what probing for a tenancy leak looks like.\n\n**`createdRecordId` is empty today and that is correct, not a bug.** Approving is supposed to create the record it promises (a ROPA entry, a DSAR, an AI system), but `findings.action_type` is always `review` because `analyst_convert_signal` never sets it, so none of the three executor triggers can fire (ENT-165). Until that is fixed, approving records the decision and creates nothing. The billing page sells this as \"One-tap Executor actions\"; ENT-165 is what makes that true.\n\n`reviewed` records whether a human actually read the supporting text rather than approving from the feed card. \"Approved\" and \"approved having read the regulation\" are different claims and the audit trail can tell them apart."
+          }
+        },
+        {
+          "name": "Reject finding",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"findingId\": \"{{finding_id}}\",\n  \"reason\": \"Not applicable: we process no special-category data\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.FindingsService/RejectFinding",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.FindingsService", "RejectFinding"]
+            },
+            "description": "Rejects a finding, optionally saying why. Required scope: `findings:act`. **Implemented as of ENT-203**; see List findings for the ENT-221 caveat.\n\n**The reason is worth sending even though it is optional.** Three rejections of the same obligation on the same profile raise a `product_review_flags` row, carrying the distinct reasons given. That is the mechanism by which a bad rule gets noticed rather than being quietly dismissed by every customer in turn, and it only works if the reasons are there.\n\nIdempotent in the same way as approve: rejecting an already-rejected finding returns `applied: false`, keeps the first reason, and writes no second audit row."
+          }
+        },
+        {
+          "name": "Snooze finding",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"findingId\": \"{{finding_id}}\",\n  \"days\": 14\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.FindingsService/SnoozeFinding",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.FindingsService", "SnoozeFinding"]
+            },
+            "description": "Defers a finding. Required scope: `findings:act`. **Implemented as of ENT-203**; see List findings for the ENT-221 caveat.\n\n`days` is clamped to 1..365 by the database; `0` or an omitted value means the default of 7. A snoozed finding returns to `pending` when `expire_snoozed_findings()` next runs, and nothing schedules that yet — the pg_cron jobs were dropped in 00001 and the schedules move to Temporal at build-order step 8.\n\n**Unlike approve and reject, this is deliberately not idempotent.** Snoozing an already-snoozed finding writes a second audit row, because deferring again is a second decision with a new date. A trail that recorded only the first would say a finding was deferred once when a human deferred it four times, which is precisely what an auditor is looking for."
+          }
+        },
+        {
+          "name": "Run sweep",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"detectOnly\": false\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.SweepService/RunSweep",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.SweepService", "RunSweep"]
+            },
+            "description": "Runs the Watcher and then the Analyst for the organisation the header names. **Implemented as of ENT-203.** Required scope: `internal:ingest`.\n\n**This is the one request here the client-credentials token above is actually for.** Every other Core API request needs a human scope nobody is granted yet (ENT-221); this one needs a machine scope. It still needs that role granted to the service user, which the seed does not do yet.\n\n**Why this endpoint exists at all.** Nothing runs the sweeps on a schedule. 00001 dropped the three pg_cron jobs when the schema moved off Supabase, and the schedules return with Temporal at build-order step 8. Between those points a perfectly correct feed shows an empty state forever, because nothing has ever looked. This is how you make something happen now, and when Temporal lands it becomes the thing Temporal calls rather than being replaced.\n\n**It runs as a different database role.** `core-api` serves requests as `kindlast_app`, which deliberately cannot create findings: the thing exposed to the world should not be able to fabricate a claim about a customer's legal exposure. Sweeps run on a second pool as `kindlast_agent` (00008). If `KINDLAST_AGENT_DATABASE_URL` is unset the service is not served at all and this answers `unimplemented`, which is a supported configuration rather than a fault.\n\n**Per-organisation, never global.** A request with no `Kindlast-Org-Id` is refused with `invalid_argument` rather than defaulting. Doing nothing would look like success, and sweeping everyone has every customer in its blast radius, so sweeping the estate is a loop somebody writes deliberately.\n\n`detectOnly` runs the Watcher and skips the Analyst. Use it when the feed is empty and you need to know which half is quiet: the Watcher finding nothing wrong is a different failure from the Analyst failing to resolve an obligation.\n\n`findings` lower than `signals` is normal, not an error. A signal whose obligation slug resolves to nothing is skipped and logged, because a finding with no obligation behind it could not cite anything."
+          }
+        },
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.DashboardService/GetDashboard",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.DashboardService", "GetDashboard"]
+            },
+            "description": "Posture, open counts by severity, and when the agents last ran. Required scope: `dashboard:read`, kept separate from `findings:read` so a viewer can be shown the summary without being entitled to every finding behind it. **Implemented as of ENT-203**; see List findings for the ENT-221 caveat.\n\n**`posture` has four values, and the fourth is the point:** `green`, `amber`, `red`, `not_assessed`. Before the Watcher has ever run there are no findings, and a posture derived by counting them reports green — telling a customer they are on track when the product has not looked (ENT-161). `not_assessed` is the only honest answer at that point.\n\n`pipeline` is what the agent rail (ENT-222) renders. `watcherLastRunAt` is absent when the Watcher has never run for this organisation, read from `compliance_profiles.watcher_last_run_at`. `profileExists` separates \"the agents have not run\" from \"there is nothing for them to run against\", which are different problems with different fixes.\n\n**Nothing currently runs the sweeps**, and that is deliberate rather than broken: 00001 dropped the three pg_cron jobs and the schedules move to Temporal at build-order step 8. So even a correct dashboard shows `not_assessed` until something invokes `run_watcher()` explicitly."
+          }
         }
       ]
     }

@@ -1,0 +1,341 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Findings, the feed, and the dashboard (core-api-surface §3 and §5).
+//
+// THE ORGANISATION IS NEVER IN THE PATH
+//
+// Same rule as OrgService and for the same reasons: every method here acts on
+// the organisation named by the `Kindlast-Org-Id` header, resolved once per
+// request before any handler runs. `{finding_id}` in a path names the thing
+// being acted on, not the tenant, and is meaningless without the header.
+//
+// READ AND ACT ARE DIFFERENT SCOPES, DELIBERATELY
+//
+// `findings:read` and `findings:act` are separate because they are separately
+// dangerous. Reading the feed discloses a customer's compliance gaps; acting on
+// it changes the compliance record and writes an audit row attributed to a
+// human. A token that can render the console is not thereby a token that can
+// approve on someone's behalf, and an integration that only needs to display
+// findings should not be one credential leak away from approving them.
+//
+// CITATIONS ARE CARRIED, NEVER ASSEMBLED BY A CLIENT
+//
+// This is the contract's most important property and the reason for the shape
+// of `Citation` below. Kindlast's value is that a human can check a claim
+// against the law, so a fabricated citation is worse than no finding at all.
+//
+// Every citation field here is a value the database already stored, assembled
+// by `analyst_citation_label` and `analyst_citation_url` at the time the
+// finding was created. There is no field a client is expected to combine, and
+// no field from which a client could derive a different citation than the one
+// the Analyst recorded. A renderer that wants "GDPR Art. 30(1)(b)" reads
+// `label`; it must not build that string from `celex` and `article`, because a
+// second assembler is a second thing that can be wrong, and the one that is
+// wrong will be the one nobody tested.
+service FindingsService {
+  // The feed: findings for the active organisation, newest first.
+  //
+  // Ordered and paginated over the `(org_id, created_at desc)` index that
+  // 00002 created for exactly this query. Keyset rather than offset, because
+  // the feed is written to while it is read: an offset page 2 silently skips a
+  // finding whenever one arrives between requests, which in this product means
+  // a compliance gap the customer never saw.
+  rpc ListFindings(ListFindingsRequest) returns (ListFindingsResponse) {
+    option (kindlast.options.v1.required_scope) = "findings:read";
+    option (google.api.http) = {get: "/api/v1/findings"};
+  }
+
+  // One finding, with the quoted regulatory text behind it.
+  //
+  // The supporting text comes from `finding_supporting_chunks`, which is
+  // org-gated in the database as well as here and returns no rows rather than
+  // raising when the finding belongs to someone else.
+  rpc GetFinding(GetFindingRequest) returns (GetFindingResponse) {
+    option (kindlast.options.v1.required_scope) = "findings:read";
+    option (google.api.http) = {get: "/api/v1/findings/{finding_id}"};
+  }
+
+  // Approves a finding: the act path.
+  //
+  // Writes exactly one audit row naming the acting human and the role they
+  // held at the time (00006). The actor is never a request field: it is read
+  // from the session GUC that the tenancy interceptor set, so a caller cannot
+  // name someone else as the approver.
+  //
+  // Idempotent. Approving an already-approved finding returns `applied: false`
+  // and writes nothing, rather than erroring: the common cause is a double
+  // submit or a retry, and neither is a problem the customer should be shown.
+  //
+  // `:approve` rather than `/approve`, per AIP-136 and §12: a custom verb on a
+  // resource, not a subresource that does not exist.
+  rpc ApproveFinding(ApproveFindingRequest) returns (ApproveFindingResponse) {
+    option (kindlast.options.v1.required_scope) = "findings:act";
+    option (google.api.http) = {
+      post: "/api/v1/findings/{finding_id}:approve"
+      body: "*"
+    };
+  }
+
+  // Rejects a finding, optionally saying why.
+  //
+  // The reason is not decoration. Three rejections of the same obligation on
+  // the same profile raise a product review flag, which is how a bad rule gets
+  // noticed rather than quietly ignored by every customer in turn.
+  rpc RejectFinding(RejectFindingRequest) returns (RejectFindingResponse) {
+    option (kindlast.options.v1.required_scope) = "findings:act";
+    option (google.api.http) = {
+      post: "/api/v1/findings/{finding_id}:reject"
+      body: "*"
+    };
+  }
+
+  // Defers a finding for a number of days.
+  //
+  // Deliberately NOT idempotent, unlike approve and reject. Deferring an
+  // already-deferred finding is a second decision with a new date, and each one
+  // is recorded, because a trail saying a finding was deferred once when a
+  // human deferred it four times is exactly what an auditor is looking for.
+  rpc SnoozeFinding(SnoozeFindingRequest) returns (SnoozeFindingResponse) {
+    option (kindlast.options.v1.required_scope) = "findings:act";
+    option (google.api.http) = {
+      post: "/api/v1/findings/{finding_id}:snooze"
+      body: "*"
+    };
+  }
+}
+
+// The dashboard's posture and the pipeline's honesty (§5).
+service DashboardService {
+  // Posture, open counts, and when the agents last ran.
+  //
+  // `dashboard:read` rather than `findings:read`: the posture is a summary a
+  // viewer may see without being entitled to the individual findings behind it,
+  // and keeping them separate leaves room for that.
+  rpc GetDashboard(GetDashboardRequest) returns (GetDashboardResponse) {
+    option (kindlast.options.v1.required_scope) = "dashboard:read";
+    option (google.api.http) = {get: "/api/v1/dashboard"};
+  }
+}
+
+message ListFindingsRequest {
+  // Opaque. Clients must treat it as a token and never parse or construct one;
+  // it encodes the keyset position and its format is free to change.
+  string page_token = 1;
+  // Server-clamped. Zero means "the server decides", which is what a first
+  // request should send.
+  int32 page_size = 2;
+  // Optional filter: pending, approved, rejected, snoozed. Empty means every
+  // status, which is what the feed's default view wants, because a finding a
+  // human already dealt with is still part of the record.
+  string status = 3;
+}
+
+message ListFindingsResponse {
+  repeated Finding findings = 1;
+  // Empty when this is the last page. A client must key "there is more" off
+  // this being non-empty rather than off the page being full: a full last page
+  // is ordinary and would otherwise read as another page waiting.
+  string next_page_token = 2;
+}
+
+// A finding as the feed renders it.
+//
+// Everything here is stored. Nothing is computed at render time, and nothing
+// requires a client to combine two fields to produce a third.
+message Finding {
+  string finding_id = 1;
+  // pending, approved, rejected or snoozed.
+  string status = 2;
+  // low, medium, high or critical. Derived by `analyst_severity` when the
+  // finding was created, not re-derived here, so the feed shows the severity
+  // that was assessed rather than one recomputed against today's rules.
+  string severity = 3;
+  // What the Watcher observed, in the customer's terms.
+  string detected = 4;
+  // The one specific thing to do about it.
+  //
+  // Today this is the SQL baseline sentence for every finding, because the
+  // narrative layer was deleted with the console and has not been rebuilt
+  // (ENT-162). The field is not new or provisional; what is missing is a
+  // better value in it, and that is a producer concern rather than a contract
+  // one.
+  string proposed_action = 5;
+  // minutes, hours, days or weeks: how much work this is likely to be.
+  string effort_estimate = 6;
+  // review, create_ropa, create_dsar or create_ai_system. Always `review`
+  // today (ENT-165), which is why approving a finding creates no record yet.
+  // Carried so a client can say what approving will do rather than promising
+  // something generic.
+  string action_type = 7;
+  Citation citation = 8;
+  google.protobuf.Timestamp created_at = 9;
+  // Set only when status is `snoozed`.
+  google.protobuf.Timestamp snoozed_until = 10;
+  // Set only when status is `approved`. The human who approved it, for "who
+  // decided this", which is a question the feed should answer without a trip
+  // to the audit log.
+  string approved_by = 11;
+  // Set only when status is `rejected`, and only when one was given.
+  string rejection_reason = 12;
+}
+
+// The regulatory basis for a finding, exactly as stored.
+//
+// See the service comment: every field is a value the database already holds.
+// A client renders `label` and links `url`; the structured parts are present so
+// a client can filter or group by regulation, not so it can rebuild the label.
+message Citation {
+  // The obligation this finding was raised against. Stable across rewordings
+  // of the obligation text, so it is the right key for "show me every finding
+  // about Article 30".
+  string obligation_slug = 1;
+  // The obligation's own title, as stored.
+  string title = 2;
+  // The CELEX number of the instrument, e.g. 32016R0679 for the GDPR. The
+  // natural key the corpus is indexed by.
+  string celex = 3;
+  // article, recital or annex. Exactly one of the three fields below is set,
+  // and the database enforces that with a check constraint rather than trusting
+  // whoever writes the next producer.
+  string kind = 4;
+  int32 article = 5;
+  int32 recital = 6;
+  string annex = 7;
+  // e.g. "1(b)". Present when the finding cites a sub-paragraph.
+  string paragraph = 8;
+  // The rendered citation, e.g. "GDPR Art. 30(1)(b)", assembled by
+  // `analyst_citation_label` when the finding was created. Render this. Do not
+  // rebuild it.
+  string label = 9;
+  // Deep link to the provision on EUR-Lex, assembled by
+  // `analyst_citation_url`. May be empty when the corpus has no anchor for the
+  // provision; a client shows the label unlinked rather than guessing a URL.
+  string url = 10;
+}
+
+message GetFindingRequest {
+  string finding_id = 1;
+}
+
+message GetFindingResponse {
+  Finding finding = 1;
+  // The quoted regulatory text behind the finding, in reading order.
+  //
+  // May be empty, and a client must cope: the corpus does not cover every
+  // instrument an obligation can cite. An empty list means "we cannot show you
+  // the text here", which is honest, and is not the same as the citation being
+  // absent.
+  repeated SupportingChunk supporting = 2;
+}
+
+// One quoted passage supporting a finding, from `finding_supporting_chunks`.
+message SupportingChunk {
+  // Reading order, starting at 1: the article first, then its sub-paragraphs.
+  int32 ordinal = 1;
+  // The citation label for this specific passage, which is more precise than
+  // the finding's own label when the passage is a sub-paragraph.
+  string label = 2;
+  // The regulatory text itself. Quoted from the corpus, never generated.
+  string quoted_text = 3;
+  string source_url = 4;
+}
+
+message ApproveFindingRequest {
+  string finding_id = 1;
+  // Whether a human actually read the supporting text before approving, as
+  // opposed to approving from the feed card. Recorded on the finding and
+  // carried into the audit row: "approved" and "approved having read the
+  // regulation" are different claims and the record should be able to tell
+  // them apart.
+  bool reviewed = 2;
+}
+
+message ApproveFindingResponse {
+  // False when the finding was already approved, unknown, or belongs to another
+  // organisation. All three are the same answer on purpose: a caller must not
+  // be able to tell an unknown finding from one in another tenant, because that
+  // difference is exactly what probing for tenancy leaks looks like.
+  bool applied = 1;
+  // The record the Executor created, when it created one. Empty today, because
+  // `action_type` is always `review` (ENT-165) and no executor trigger fires.
+  // A client sends the founder to this record when it is set and stays on the
+  // finding when it is not.
+  string created_record_id = 2;
+  // Which table `created_record_id` names, e.g. processing_activities. Present
+  // so a client can route without hard-coding the action-to-table mapping.
+  string created_record_table = 3;
+}
+
+message RejectFindingRequest {
+  string finding_id = 1;
+  // Optional, and worth asking for. See RejectFinding.
+  string reason = 2;
+}
+
+message RejectFindingResponse {
+  bool applied = 1;
+}
+
+message SnoozeFindingRequest {
+  string finding_id = 1;
+  // Clamped to 1..365 by the database. Zero means the default of 7 days.
+  int32 days = 2;
+}
+
+message SnoozeFindingResponse {
+  bool applied = 1;
+  google.protobuf.Timestamp snoozed_until = 2;
+}
+
+message GetDashboardRequest {}
+
+message GetDashboardResponse {
+  // green, amber, red, or not_assessed.
+  //
+  // `not_assessed` is the important one and it is why this is not a boolean or
+  // a score. Before the Watcher has ever run there are no findings, and a
+  // posture derived from counting them reports green, which tells a customer
+  // they are on track when the product has not looked (ENT-161). "We have not
+  // assessed this yet" is the only honest answer at that point, and a compliance
+  // product that says green instead is worse than one that says nothing.
+  string posture = 1;
+  // A plain-language sentence for the band, e.g. "Two critical gaps need
+  // attention". Server-side so that the wording is one thing rather than one
+  // per client.
+  string posture_headline = 2;
+  SeverityCounts open_by_severity = 3;
+  // Open findings across every severity.
+  int32 open_total = 4;
+  PipelineStatus pipeline = 5;
+}
+
+message SeverityCounts {
+  int32 critical = 1;
+  int32 high = 2;
+  int32 medium = 3;
+  int32 low = 4;
+}
+
+// Whether the agents have actually run, which is the question the console
+// currently cannot answer.
+//
+// The agent rail (ENT-222) exists to tell a human what The Watcher and The
+// Analyst are doing. Its first honest content is this: when they last ran, and
+// whether they ever have. Everything conversational comes later; this is the
+// part that stops the console implying work that has not happened.
+message PipelineStatus {
+  // Absent when the Watcher has never run for this organisation, which is the
+  // same condition that makes posture `not_assessed`. Read from
+  // `compliance_profiles.watcher_last_run_at`.
+  google.protobuf.Timestamp watcher_last_run_at = 1;
+  // False when no compliance profile exists yet, i.e. onboarding is not done.
+  // Distinguishes "the agents have not run" from "there is nothing for them to
+  // run against", which are different problems with different fixes.
+  bool profile_exists = 2;
+}
