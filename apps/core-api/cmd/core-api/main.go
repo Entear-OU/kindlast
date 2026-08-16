@@ -192,6 +192,7 @@ func run(logger *slog.Logger) error {
 		Ready: func(ctx context.Context) error {
 			return store.Ping(ctx)
 		},
+		HumanClientID:  cfg.HumanClientID,
 		Producer:       producer,
 		BillingEnabled: cfg.BillingEnabled,
 	})

@@ -170,9 +170,22 @@ if [ -z "$APP_ID" ]; then
     \"devMode\": true
   }")"
   echo "$RESPONSE" | jq '{clientId, clientSecret}' > /machinekey/web-client.json
+  # The client id alone, for core-api (ENT-221).
+  #
+  # A separate file from web-client.json on purpose: that one holds the client
+  # secret, and core-api has no business reading a credential it never uses.
+  # This is the same shape as core-api-audience.txt, and for the same reason —
+  # the value is generated here and cannot be baked into compose.
+  echo "$RESPONSE" | jq -r '.clientId' > /machinekey/web-client-id.txt
   echo "seed: created web client $(echo "$RESPONSE" | jq -r '.clientId')"
   echo "seed: credentials written to the zitadel-machinekey volume (web-client.json)"
 else
+  # Re-published on every run, not only on creation: a stack whose volume
+  # predates ENT-221 has the client but not the file, and core-api would then
+  # silently fall back to granted scopes for humans.
+  api POST "/management/v1/projects/${PROJECT_ID}/apps/_search" \
+    '{"queries":[{"nameQuery":{"name":"web","method":"TEXT_QUERY_METHOD_EQUALS"}}]}' \
+    | jq -r '.result[0].oidcConfig.clientId // empty' > /machinekey/web-client-id.txt
   echo "seed: web client exists (${APP_ID})"
 fi
 
