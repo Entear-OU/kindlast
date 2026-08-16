@@ -29,8 +29,15 @@ import { orgPath } from '@/lib/auth/org'
  * surface as each lands.
  */
 
-/** Named in the rebuild, not yet built. Listed, never linked. */
-const COMING = [{ label: 'Records', icon: FolderOpen }] as const
+/**
+ * Named in the rebuild, not yet built. Listed, never linked.
+ *
+ * Empty as of ENT-200, which took Records out of it. The list and its heading
+ * are rendered only when something is in it: a "Coming next" heading over
+ * nothing reads as a surface that failed to load rather than as a promise
+ * already kept.
+ */
+const COMING: readonly { label: string; icon: typeof FolderOpen }[] = []
 
 export function ConsoleSidebar({
   orgSlug,
@@ -68,28 +75,37 @@ export function ConsoleSidebar({
           </NavLink>
         </li>
         <li>
+          {/* Left COMING when ENT-200 landed the read surface, the same
+              one-line change per surface the list was built for. */}
+          <NavLink href={orgPath(orgSlug, '/records')} label="Records">
+            <FolderOpen aria-hidden="true" className="size-4" />
+          </NavLink>
+        </li>
+        <li>
           <NavLink href={orgPath(orgSlug, '/settings')} label="Settings">
             <Settings aria-hidden="true" className="size-4" />
           </NavLink>
         </li>
       </ul>
 
-      <div>
-        <p className="px-2 text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
-          Coming next
-        </p>
-        <ul className="mt-2 space-y-1">
-          {COMING.map(({ label, icon: Icon }) => (
-            <li
-              key={label}
-              className="flex items-center gap-2.5 px-2 py-2 text-sm text-muted-foreground/60"
-            >
-              <Icon aria-hidden="true" className="size-4" />
-              {label}
-            </li>
-          ))}
-        </ul>
-      </div>
+      {COMING.length > 0 ? (
+        <div>
+          <p className="px-2 text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
+            Coming next
+          </p>
+          <ul className="mt-2 space-y-1">
+            {COMING.map(({ label, icon: Icon }) => (
+              <li
+                key={label}
+                className="flex items-center gap-2.5 px-2 py-2 text-sm text-muted-foreground/60"
+              >
+                <Icon aria-hidden="true" className="size-4" />
+                {label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="mt-auto space-y-3 border-t border-border/60 pt-4">
         {orgName ? (

@@ -16,14 +16,18 @@ import { getDashboard, listFindings, type Failure } from '@/lib/findings/client'
  * and telling them the whole page is broken would be a worse answer than the
  * one we have.
  *
- * WHAT A REAL PERSON SEES TODAY
+ * WHAT A REAL PERSON SEES
  *
- * `permission_denied`, and that is not this page's bug. No human token carries
- * `findings:read`: `deploy/seed/seed.sh` creates all nineteen project roles and
- * grants them to nobody, so a browser session's token has an empty role set
- * (ENT-221). The page says so in those words rather than rendering an empty
- * feed, because an empty feed is a claim — it says we looked and found nothing
- * — and that claim would be false.
+ * The feed. This comment previously said `permission_denied`, because no human
+ * token carried `findings:read` at all: the seed created the project roles and
+ * granted them to nobody, so a browser session's token had an empty role set.
+ * ENT-221 fixed that twice over, first by granting the roles and then by
+ * deriving a human's scope set from the token's client rather than from grants,
+ * and a signed-in person now reaches the feed. Verified in a browser.
+ *
+ * What survives from that note is the rule it was written to protect: an empty
+ * feed is a claim. It says we looked and found nothing. So a failed read is
+ * always reported as itself and never rendered as an empty list.
  */
 export default async function FeedPage({
   params,
@@ -185,14 +189,16 @@ function EmptyFeed({ filtered }: { filtered: boolean }) {
 /**
  * A failed read, in words that say what to do about it.
  *
- * `denied` is spelled out rather than shown as a generic error because it is
- * the case every signed-in person hits today, and "you do not have permission"
- * with no explanation invites them to ask an owner who cannot help either.
+ * `denied` is spelled out rather than shown as a generic error, but what it
+ * says changed with ENT-221. It used to send people to a known gap in sign-in
+ * and tell them an owner could not help, which was true then and is not now: a
+ * signed-in person holds `findings:read`, so a denial today means something a
+ * person can actually act on.
  */
 function Unavailable({ what, error }: { what: string; error: Failure }) {
   const message =
     error.kind === 'denied'
-      ? 'Your session is not yet authorised to read findings. This is a known gap in sign-in (ENT-221) rather than a permission an owner can grant you.'
+      ? 'Your session is not permitted to read findings. Reading the feed needs the findings:read scope; an owner can grant it.'
       : `The ${what} could not be loaded just now. This is usually temporary; reloading is worth a try.`
 
   return (

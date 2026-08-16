@@ -161,14 +161,18 @@ describe('the sidebar (ENT-222)', () => {
   // nothing is worse than one visibly absent, and a nav item leading to a 404
   // is the worst version, because the person concludes the product is broken
   // rather than unfinished.
-  it('lists surfaces that do not exist yet without linking them', () => {
+  //
+  // Nothing is waiting any more. Records was the last entry and left when
+  // ENT-200 landed the read surface, so what this now asserts is the other half
+  // of the same rule: the heading goes with the list. A "Coming next" heading
+  // over nothing reads as a section that failed to load.
+  it('shows no coming-next heading when nothing is waiting', () => {
     render(
       <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
         <div>child</div>
       </ConsoleShell>,
     )
-    expect(screen.getByText('Records')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Records' })).toBeNull()
+    expect(screen.queryByText('Coming next')).toBeNull()
   })
 
   // The other half of the same rule, and the one that keeps it honest: a
@@ -258,21 +262,28 @@ describe('the phone layout (ENT-222)', () => {
   })
 
   // Same rule as the sidebar, and tighter: a tab bar has no room for a
-  // "Coming next" heading, so an unbuilt surface would have to appear as a
-  // dead tab, which is exactly the inert control ENT-202 argues against.
-  it('offers no tab for a surface that does not exist', () => {
+  // "Coming next" heading, so an unbuilt surface would have to appear as a dead
+  // tab, which is exactly the inert control ENT-202 argues against.
+  //
+  // A surface joins the bar when it becomes real and not before. Feed made that
+  // move in ENT-203, Records in ENT-200, and asserting the hrefs rather than
+  // mere presence is what stops a tab from graduating to a link that goes
+  // nowhere.
+  it('gives every built surface a tab that points at it', () => {
     render(
       <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
         <div>child</div>
       </ConsoleShell>,
     )
     const tabBar = screen.getAllByRole('navigation', { name: 'Console' })[1]
-    expect(within(tabBar).queryByRole('link', { name: 'Records' })).toBeNull()
-    // Feed is a tab now that it exists (ENT-203), which is the graduation this
-    // rule is for rather than an exception to it.
+
+    expect(within(tabBar).getByRole('link', { name: 'Feed' })).toHaveAttribute(
+      'href',
+      '/o/acme-ltd/feed',
+    )
     expect(
-      within(tabBar).getByRole('link', { name: 'Feed' }),
-    ).toBeInTheDocument()
+      within(tabBar).getByRole('link', { name: 'Records' }),
+    ).toHaveAttribute('href', '/o/acme-ltd/records')
   })
 
   // The rail has no column on a phone, so the tab points at it in the page.
