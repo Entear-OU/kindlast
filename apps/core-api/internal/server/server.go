@@ -11,6 +11,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/records"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
 	sweepservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
@@ -83,6 +84,7 @@ func New(deps Dependencies) (http.Handler, error) {
 	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(), chain))
 	mux.Handle(corev1connect.NewFindingsServiceHandler(findings.New(deps.BillingEnabled), chain))
 	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboard.New(), chain))
+	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(deps.BillingEnabled), chain))
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in

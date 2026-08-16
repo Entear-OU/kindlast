@@ -167,7 +167,7 @@ func (t *Tenant) Findings(ctx context.Context, status, cursor string, pageSize i
 // another organisation alike, because RLS makes them the same query result and
 // the handler must not tell them apart.
 func (t *Tenant) Finding(ctx context.Context, findingID string) (findings.Finding, []findings.SupportingChunk, error) {
-	id, ok := parseFindingID(findingID)
+	id, ok := parseID(findingID)
 	if !ok {
 		// Refused before it reaches SQL, so a malformed id reads as "no such
 		// finding" rather than as a cast error from inside a policy.
@@ -229,7 +229,7 @@ func (t *Tenant) Finding(ctx context.Context, findingID string) (findings.Findin
 // The audit row is written by the database (00006). Writing one here too would
 // duplicate it.
 func (t *Tenant) ApproveFinding(ctx context.Context, findingID string, reviewed bool) (findings.Acted, error) {
-	id, ok := parseFindingID(findingID)
+	id, ok := parseID(findingID)
 	if !ok {
 		return findings.Acted{}, nil
 	}
@@ -302,7 +302,7 @@ func (t *Tenant) withCreatedRecord(ctx context.Context, id uuid.UUID, acted find
 
 // RejectFinding rejects, optionally recording why.
 func (t *Tenant) RejectFinding(ctx context.Context, findingID, reason string) (findings.Acted, error) {
-	id, ok := parseFindingID(findingID)
+	id, ok := parseID(findingID)
 	if !ok {
 		return findings.Acted{}, nil
 	}
@@ -322,7 +322,7 @@ func (t *Tenant) RejectFinding(ctx context.Context, findingID, reason string) (f
 // is a fresh decision with a new date and each writes its own audit row. See
 // 00006's header.
 func (t *Tenant) SnoozeFinding(ctx context.Context, findingID string, days int32) (findings.Acted, error) {
-	id, ok := parseFindingID(findingID)
+	id, ok := parseID(findingID)
 	if !ok {
 		return findings.Acted{}, nil
 	}
@@ -461,16 +461,19 @@ func (t *Tenant) pipeline(ctx context.Context) (findings.Pipeline, error) {
 	return findings.Pipeline{WatcherLastRunAt: lastRun, ProfileExists: profiles > 0}, nil
 }
 
-// parseFindingID turns a caller-supplied id into a uuid.
+// parseID turns a caller-supplied id into a uuid.
 //
 // Returns a bool rather than an error on purpose. A malformed id is not a
-// server fault and not something to report: it names no finding, which is the
-// same answer as an id naming a finding in another organisation. Carrying it as
-// an error would invite a caller to be told the difference, and would make
-// every call site look like it was swallowing a failure.
-func parseFindingID(findingID string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(findingID)
-	return id, err == nil
+// server fault and not something to report: it names no row, which is the same
+// answer as an id naming a row in another organisation. Carrying it as an error
+// would invite a caller to be told the difference, and would make every call
+// site look like it was swallowing a failure.
+//
+// Shared by findings and by the record registers, which is why it is not named
+// after either.
+func parseID(id string) (uuid.UUID, bool) {
+	parsed, err := uuid.Parse(id)
+	return parsed, err == nil
 }
 
 func nullIfEmpty(s string) *string {
