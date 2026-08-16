@@ -7,10 +7,20 @@ import {
   UrgencyBadge,
 } from '@/components/records/badges'
 import { NotRecorded, Value, ValueList } from '@/components/records/states'
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 import type { AiSystem, Dsar, ProcessingActivity } from '@/lib/records/client'
 
 /**
- * The three registers as tables.
+ * The three registers, on the shared table primitives.
  *
  * Tables rather than cards, unlike the feed, and the difference is the job.
  * The feed asks for a decision on one finding at a time, so a card that carries
@@ -19,12 +29,26 @@ import type { AiSystem, Dsar, ProcessingActivity } from '@/lib/records/client'
  * usually "which rows are missing something" rather than "what does this one
  * say". Columns answer that; a stack of cards does not.
  *
- * Each table scrolls inside its own container rather than letting the page
- * scroll sideways, because a compliance record has genuinely wide rows and the
- * console's other surfaces must not start moving horizontally to accommodate it.
+ * TWO DELIBERATE OVERRIDES ON THE SHARED TABLE
+ *
+ * `Table` ships `whitespace-nowrap` on cells, which is right for the dense data
+ * tables it was built for and wrong here: an Article 30 retention period is a
+ * sentence in the customer's own words, and refusing to wrap it would push the
+ * useful columns off screen. `align-top` for the same reason, because a wrapped
+ * cell next to a one-word cell should line up at the first line.
+ *
+ * The caption is visually hidden rather than shown. `TableCaption` renders below
+ * the table by default, and each register already has a visible heading above
+ * it; keeping the caption for screen readers avoids announcing the table twice
+ * to everyone else.
  */
 
-function Table({
+/** Wraps rather than clipping. See the note above. */
+const CELL = 'whitespace-normal align-top py-3'
+const HEAD =
+  'text-xs font-medium tracking-[0.04em] text-muted-foreground uppercase'
+
+function Register({
   caption,
   head,
   children,
@@ -34,108 +58,85 @@ function Table({
   children: React.ReactNode
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border/60">
-      <table className="w-full min-w-[44rem] border-collapse text-left text-sm">
-        <caption className="sr-only">{caption}</caption>
-        <thead>
-          <tr className="border-b border-border/60 bg-muted/30">{head}</tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
+    <div className="rounded-xl border border-border/60">
+      <Table className="min-w-[44rem]">
+        <TableCaption className="sr-only">{caption}</TableCaption>
+        <TableHeader>
+          <TableRow className="bg-muted/30 hover:bg-muted/30">{head}</TableRow>
+        </TableHeader>
+        <TableBody>{children}</TableBody>
+      </Table>
     </div>
   )
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th
-      scope="col"
-      className="px-3 py-2 text-xs font-medium tracking-[0.04em] text-muted-foreground uppercase"
-    >
-      {children}
-    </th>
-  )
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-3 py-3 align-top">{children}</td>
-}
-
 export function RopaTable({ items }: { items: ProcessingActivity[] }) {
   return (
-    <Table
+    <Register
       caption="Record of processing activities"
       head={
         <>
-          <Th>Activity</Th>
-          <Th>Legal basis</Th>
-          <Th>Data</Th>
-          <Th>Recipients</Th>
-          <Th>Retention</Th>
-          <Th>State</Th>
+          <TableHead className={HEAD}>Activity</TableHead>
+          <TableHead className={HEAD}>Legal basis</TableHead>
+          <TableHead className={HEAD}>Data</TableHead>
+          <TableHead className={HEAD}>Recipients</TableHead>
+          <TableHead className={HEAD}>Retention</TableHead>
+          <TableHead className={HEAD}>State</TableHead>
         </>
       }
     >
       {items.map((activity) => (
-        <tr
-          key={activity.processingActivityId}
-          data-testid="ropa-row"
-          className="border-b border-border/40 last:border-0"
-        >
-          <Td>
+        <TableRow key={activity.processingActivityId} data-testid="ropa-row">
+          <TableCell className={cn(CELL, 'min-w-56')}>
             <span className="font-medium text-foreground">{activity.name}</span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
               <Value>{activity.purpose}</Value>
             </span>
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <Value>{activity.legalBasis}</Value>
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <ValueList items={activity.dataCategories} />
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <ValueList items={activity.recipients} />
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <Value>{activity.retentionPeriod}</Value>
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <CompletenessBadge value={activity.completeness} />
-          </Td>
-        </tr>
+          </TableCell>
+        </TableRow>
       ))}
-    </Table>
+    </Register>
   )
 }
 
 export function AiSystemsTable({ items }: { items: AiSystem[] }) {
   return (
-    <Table
+    <Register
       caption="AI system register"
       head={
         <>
-          <Th>System</Th>
-          <Th>Supplier</Th>
-          <Th>Risk</Th>
-          <Th>Documentation</Th>
-          <Th>Last reviewed</Th>
+          <TableHead className={HEAD}>System</TableHead>
+          <TableHead className={HEAD}>Supplier</TableHead>
+          <TableHead className={HEAD}>Risk</TableHead>
+          <TableHead className={HEAD}>Documentation</TableHead>
+          <TableHead className={HEAD}>Last reviewed</TableHead>
         </>
       }
     >
       {items.map((system) => (
-        <tr
-          key={system.aiSystemId}
-          data-testid="ai-system-row"
-          className="border-b border-border/40 last:border-0"
-        >
-          <Td>
+        <TableRow key={system.aiSystemId} data-testid="ai-system-row">
+          <TableCell className={cn(CELL, 'min-w-56')}>
             <span className="font-medium text-foreground">{system.name}</span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
               <Value>{system.purpose}</Value>
             </span>
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             {/* Empty means built in house, which is a fact rather than a gap:
                 the AI Act's provider and deployer duties differ. */}
             {system.vendor && system.vendor.trim() !== '' ? (
@@ -143,47 +144,43 @@ export function AiSystemsTable({ items }: { items: AiSystem[] }) {
             ) : (
               <span className="text-muted-foreground/60">Built in house</span>
             )}
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <RiskBadge value={system.riskClassification} />
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <DocumentationBadge value={system.documentationStatus} />
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <DateValue value={system.lastReviewedAt} never="Never" />
-          </Td>
-        </tr>
+          </TableCell>
+        </TableRow>
       ))}
-    </Table>
+    </Register>
   )
 }
 
 export function DsarTable({ items }: { items: Dsar[] }) {
   return (
-    <Table
+    <Register
       caption="Data-subject requests"
       head={
         <>
-          <Th>Received</Th>
-          <Th>Type</Th>
-          <Th>Handler</Th>
-          <Th>Deadline</Th>
+          <TableHead className={HEAD}>Received</TableHead>
+          <TableHead className={HEAD}>Type</TableHead>
+          <TableHead className={HEAD}>Handler</TableHead>
+          <TableHead className={HEAD}>Deadline</TableHead>
           {/* "Response sent" rather than "Answered", which would repeat the
               word the urgency badge in the last column uses for a different
               thing: this column is a date, that one is a state. */}
-          <Th>Response sent</Th>
-          <Th>State</Th>
+          <TableHead className={HEAD}>Response sent</TableHead>
+          <TableHead className={HEAD}>State</TableHead>
         </>
       }
     >
       {items.map((dsar) => (
-        <tr
-          key={dsar.dsarId}
-          data-testid="dsar-row"
-          className="border-b border-border/40 last:border-0"
-        >
-          <Td>
+        <TableRow key={dsar.dsarId} data-testid="dsar-row">
+          <TableCell className={CELL}>
             <span className="font-medium text-foreground">
               <DateValue value={dsar.receivedAt} never="Not recorded" />
             </span>
@@ -198,14 +195,14 @@ export function DsarTable({ items }: { items: Dsar[] }) {
                 </span>
               )}
             </span>
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <Value>{dsar.requestType}</Value>
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <Value>{dsar.handler}</Value>
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <span className="block">
               <DateValue value={dsar.responseDueAt} never="Not recorded" />
             </span>
@@ -215,16 +212,16 @@ export function DsarTable({ items }: { items: Dsar[] }) {
                 daysUntilDue={dsar.daysUntilDue}
               />
             </span>
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <DateValue value={dsar.respondedAt} never="Not yet" />
-          </Td>
-          <Td>
+          </TableCell>
+          <TableCell className={CELL}>
             <UrgencyBadge value={dsar.urgency} />
-          </Td>
-        </tr>
+          </TableCell>
+        </TableRow>
       ))}
-    </Table>
+    </Register>
   )
 }
 

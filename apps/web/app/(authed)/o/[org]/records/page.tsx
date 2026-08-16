@@ -82,9 +82,9 @@ export default async function RecordsPage({
             testId={`records-${register.error.kind}`}
           />
         ) : activities.length === 0 ? (
-          <EmptyRegister testId="ropa-empty">
-            Nothing on file yet. Approving a finding about an activity adds an
-            entry here for you to complete.
+          <EmptyRegister title="Nothing on file yet" testId="ropa-empty">
+            Approving a finding about an activity adds an entry here for you to
+            complete.
           </EmptyRegister>
         ) : (
           <RopaTable items={activities} />

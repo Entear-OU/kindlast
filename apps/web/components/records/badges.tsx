@@ -1,11 +1,23 @@
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+
 /**
  * The pills that carry a record's state.
  *
- * Every label here is a lookup on a value the server computed, never a rule
- * re-implemented in the browser. `completeness` and `urgency` in particular are
- * derived in `domain/records` precisely so there is one definition of them, and
- * the Article 12(3) escalation window is a regulatory threshold rather than a
- * display choice.
+ * Built on the shared `Badge` rather than on a bespoke span, so sizing, focus
+ * ring, icon slots and typography come from one place and these cannot drift
+ * from every other badge in the console.
+ *
+ * `destructive` and `secondary` are real Badge variants and are used as such.
+ * The other three tones are compliance-specific and have no variant, so they are
+ * `outline` plus a colour override rather than three new variants: a status the
+ * rest of the product never renders does not belong in a shared component's API.
+ *
+ * Every label is a lookup on a value the server computed, never a rule
+ * re-implemented in the browser. `completeness` and `urgency` are derived in
+ * `domain/records` precisely so there is one definition of them, and the Article
+ * 12(3) escalation window is a regulatory threshold rather than a display
+ * choice.
  *
  * An unknown value renders as itself rather than as a default. A register that
  * silently showed "Minimal" for a classification it did not recognise would be
@@ -14,15 +26,14 @@
 
 type Tone = 'neutral' | 'info' | 'warn' | 'danger' | 'done'
 
-const TONES: Record<Tone, string> = {
-  neutral: 'border-border/60 bg-muted/40 text-muted-foreground',
+/** Tones that map onto a real Badge variant, and the colours for those that do not. */
+const TONE_CLASS: Record<Exclude<Tone, 'neutral' | 'danger'>, string> = {
   info: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300',
   warn: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  danger: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
   done: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
 }
 
-function Pill({
+function StateBadge({
   children,
   tone,
   title,
@@ -31,13 +42,24 @@ function Pill({
   tone: Tone
   title?: string
 }) {
+  if (tone === 'danger') {
+    return (
+      <Badge variant="destructive" title={title}>
+        {children}
+      </Badge>
+    )
+  }
+  if (tone === 'neutral') {
+    return (
+      <Badge variant="secondary" title={title}>
+        {children}
+      </Badge>
+    )
+  }
   return (
-    <span
-      title={title}
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONES[tone]}`}
-    >
+    <Badge variant="outline" title={title} className={cn(TONE_CLASS[tone])}>
       {children}
-    </span>
+    </Badge>
   )
 }
 
@@ -65,11 +87,11 @@ const COMPLETENESS: Record<
 export function CompletenessBadge({ value }: { value?: string }) {
   if (!value) return null
   const known = COMPLETENESS[value]
-  if (!known) return <Pill tone="neutral">{value}</Pill>
+  if (!known) return <StateBadge tone="neutral">{value}</StateBadge>
   return (
-    <Pill tone={known.tone} title={known.hint}>
+    <StateBadge tone={known.tone} title={known.hint}>
       {known.label}
-    </Pill>
+    </StateBadge>
   )
 }
 
@@ -84,9 +106,9 @@ const RISK: Record<string, { label: string; tone: Tone }> = {
 export function RiskBadge({ value }: { value?: string }) {
   if (!value) return null
   const known = RISK[value]
-  if (!known) return <Pill tone="neutral">{value}</Pill>
+  if (!known) return <StateBadge tone="neutral">{value}</StateBadge>
   return (
-    <Pill
+    <StateBadge
       tone={known.tone}
       title={
         value === 'unclassified'
@@ -95,7 +117,7 @@ export function RiskBadge({ value }: { value?: string }) {
       }
     >
       {known.label}
-    </Pill>
+    </StateBadge>
   )
 }
 
@@ -108,8 +130,8 @@ const DOCUMENTATION: Record<string, { label: string; tone: Tone }> = {
 export function DocumentationBadge({ value }: { value?: string }) {
   if (!value) return null
   const known = DOCUMENTATION[value]
-  if (!known) return <Pill tone="neutral">{value}</Pill>
-  return <Pill tone={known.tone}>{known.label}</Pill>
+  if (!known) return <StateBadge tone="neutral">{value}</StateBadge>
+  return <StateBadge tone={known.tone}>{known.label}</StateBadge>
 }
 
 const URGENCY: Record<string, { label: string; tone: Tone }> = {
@@ -122,8 +144,8 @@ const URGENCY: Record<string, { label: string; tone: Tone }> = {
 export function UrgencyBadge({ value }: { value?: string }) {
   if (!value) return null
   const known = URGENCY[value]
-  if (!known) return <Pill tone="neutral">{value}</Pill>
-  return <Pill tone={known.tone}>{known.label}</Pill>
+  if (!known) return <StateBadge tone="neutral">{value}</StateBadge>
+  return <StateBadge tone={known.tone}>{known.label}</StateBadge>
 }
 
 /**

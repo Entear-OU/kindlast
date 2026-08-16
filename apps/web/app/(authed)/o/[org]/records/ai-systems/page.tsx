@@ -75,9 +75,9 @@ export default async function AiSystemsPage({
             testId={`ai-systems-${register.error.kind}`}
           />
         ) : systems.length === 0 ? (
-          <EmptyRegister testId="ai-systems-empty">
-            Nothing on file yet. Approving a finding about an AI system adds an
-            entry here for you to classify.
+          <EmptyRegister title="Nothing on file yet" testId="ai-systems-empty">
+            Approving a finding about an AI system adds an entry here for you to
+            classify.
           </EmptyRegister>
         ) : (
           <AiSystemsTable items={systems} />

@@ -113,10 +113,13 @@ export default async function DsarsPage({
             testId={`dsars-${register.error.kind}`}
           />
         ) : dsars.length === 0 ? (
-          <EmptyRegister testId="dsars-empty">
+          <EmptyRegister
+            title={status ? 'None with that status' : 'Nothing logged yet'}
+            testId="dsars-empty"
+          >
             {status
-              ? 'No requests with that status.'
-              : 'No data-subject requests logged. These are added by hand: a request comes from a person, so nothing creates one for you.'}
+              ? 'No requests are in that state right now.'
+              : 'These are added by hand: a request comes from a person, so nothing creates one for you.'}
           </EmptyRegister>
         ) : (
           <DsarTable items={dsars} />
