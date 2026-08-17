@@ -64,7 +64,39 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (hasSession && pathname === '/sign-in') {
+  // A convenience, and one that has to know when to stop.
+  //
+  // WHY `returnTo` GATES THIS
+  //
+  // The cookie carries a session id and the session itself lives in Redis, so
+  // the cookie outlives the session whenever the session goes first: it
+  // expires, somebody signs out everywhere, Redis restarts, or a developer
+  // tears the stack down. The browser is then holding a cookie that resolves
+  // to nothing, and the proxy cannot tell, because there is no Redis on the
+  // edge.
+  //
+  // That is the state where this redirect and the pages disagree, and the
+  // disagreement is a trap rather than a nuisance:
+  //
+  //   /workspace + dead cookie -> the page finds no session -> /sign-in?returnTo=
+  //   /sign-in   + dead cookie -> this line sees a cookie    -> /workspace
+  //
+  // ERR_TOO_MANY_REDIRECTS, and the person is locked out of every page of the
+  // product including the one that would sign them in again. The only escape
+  // is clearing cookies by hand.
+  //
+  // `returnTo` is the signal that ends it. It means a protected surface sent
+  // this visitor here, which is to say something has just read the session and
+  // rejected it, so sending them back is sending them to be rejected again.
+  // Rendering sign-in is both the loop-breaker and the honest answer.
+  //
+  // Gated here rather than fixed per page on purpose. Every protected surface
+  // redirects to sign-in when the session does not resolve, the list of them
+  // grows, and a fix that works only while every future page remembers is the
+  // same bug waiting.
+  const sentHereByAPage = request.nextUrl.searchParams.has('returnTo')
+
+  if (hasSession && pathname === '/sign-in' && !sentHereByAPage) {
     const url = request.nextUrl.clone()
     url.pathname = DEFAULT_RETURN_TO
     url.search = ''
