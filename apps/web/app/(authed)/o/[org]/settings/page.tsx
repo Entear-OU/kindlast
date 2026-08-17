@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 
+import { InviteForm } from '@/components/settings/invite-form'
 import { MembersTable } from '@/components/settings/members-table'
 import { OrganisationForm } from '@/components/settings/organisation-form'
 import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
@@ -73,8 +74,13 @@ export default async function SettingsPage({
           <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Members
           </h2>
-          {canManage ? <InviteUnavailable /> : null}
         </div>
+
+        {canManage ? (
+          <div className="mt-4">
+            <InviteForm slug={slug} />
+          </div>
+        ) : null}
 
         <div className="mt-4">
           {members === null ? (
@@ -104,27 +110,5 @@ export default async function SettingsPage({
         </div>
       </section>
     </main>
-  )
-}
-
-/**
- * The invite control, visibly unavailable rather than present and inert.
- *
- * core-api can create an invitation today. Nothing can deliver one: the raw
- * token exists for the length of the handler that mints it and is then held
- * only as a hash, and the transactional outbox that will carry it is ENT-219.
- *
- * So the button is not rendered as a working control. An owner who clicked it
- * would get a created invitation, no email, and no way to know that the person
- * they invited will never hear about it. A control that silently does nothing
- * is worse than one that is honestly missing, and worse still here because the
- * failure is invisible from both ends.
- */
-function InviteUnavailable() {
-  return (
-    <p className="text-xs text-muted-foreground">
-      Inviting people is not available yet: invitations cannot be delivered
-      until email is wired up (ENT-219).
-    </p>
   )
 }

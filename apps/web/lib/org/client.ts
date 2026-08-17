@@ -58,6 +58,33 @@ export function removeMember(
   )
 }
 
+export interface Invitation {
+  invitationId: string
+  expiresAt?: string
+}
+
+/**
+ * Invite somebody by email address.
+ *
+ * The response deliberately never carries the token: the raw value exists for
+ * the life of core-api's handler, which writes the email into the transactional
+ * outbox in the same transaction, and only its hash is stored (ENT-219). So
+ * there is nothing here for the console to display or resend, and that is the
+ * point rather than a limitation.
+ */
+export function inviteMember(
+  accessToken: string,
+  orgId: string,
+  email: string,
+  role: string,
+) {
+  return call<Invitation>('kindlast.core.v1.OrgService/InviteMember', {
+    accessToken,
+    orgId,
+    body: { email, role },
+  })
+}
+
 export function renameOrganisation(
   accessToken: string,
   orgId: string,
