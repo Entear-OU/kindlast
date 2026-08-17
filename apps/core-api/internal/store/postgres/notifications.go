@@ -123,7 +123,6 @@ type Doorbell struct {
 type Recipient struct {
 	UserID          string
 	Email           string
-	DisplayName     string
 	MinSeverity     string
 	FindingSeverity string
 	Timezone        string
@@ -170,7 +169,7 @@ func (a *AgentStore) ClaimDoorbell(ctx context.Context, tx pgx.Tx) (Doorbell, er
 // function answers one question about one row instead. See 00015's header.
 func (a *AgentStore) Recipients(ctx context.Context, tx pgx.Tx, outboxID string) ([]Recipient, error) {
 	rows, err := tx.Query(ctx, `
-		select user_id::text, email, coalesce(display_name, ''),
+		select user_id::text, email,
 		       min_severity::text, finding_severity::text, timezone,
 		       coalesce(to_char(quiet_hours_start, 'HH24:MI'), ''),
 		       coalesce(to_char(quiet_hours_end, 'HH24:MI'), ''),
@@ -185,7 +184,7 @@ func (a *AgentStore) Recipients(ctx context.Context, tx pgx.Tx, outboxID string)
 	var out []Recipient
 	for rows.Next() {
 		var r Recipient
-		if err := rows.Scan(&r.UserID, &r.Email, &r.DisplayName, &r.MinSeverity,
+		if err := rows.Scan(&r.UserID, &r.Email, &r.MinSeverity,
 			&r.FindingSeverity, &r.Timezone, &r.QuietHoursStart, &r.QuietHoursEnd,
 			&r.OrgSlug, &r.OrgName); err != nil {
 			return nil, fmt.Errorf("postgres: reading a recipient: %w", err)

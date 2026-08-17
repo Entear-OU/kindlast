@@ -96,9 +96,15 @@ create policy notification_outbox_dispatch_write on public.notification_outbox
 -- +goose StatementBegin
 create or replace function public.notification_recipients(p_outbox_id uuid)
 returns table (
+  -- The minimal projection delivery needs, and deliberately nothing adjacent.
+  --
+  -- No role, no membership row, and no identity beyond the address. `user_id`
+  -- is here only because each recipient gets their own unsubscribe token and a
+  -- shared one would let any recipient unsubscribe every other. A display name
+  -- would be pleasant in a greeting and is exactly the sort of extra column
+  -- that turns a narrow answer into a slow enumeration of everybody.
   user_id            uuid,
   email              text,
-  display_name       text,
   min_severity       public.severity_level,
   finding_severity   public.severity_level,
   timezone           text,
@@ -136,7 +142,6 @@ as $function$
   select
     m.user_id,
     coalesce(nullif(np.email, ''), ui.email)                     as email,
-    ui.display_name,
     coalesce(np.min_severity_for_email, 'medium'::public.severity_level)
                                                                  as min_severity,
     f.severity                                                   as finding_severity,

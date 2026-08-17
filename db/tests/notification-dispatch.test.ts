@@ -355,6 +355,42 @@ describe.skipIf(!reachable)('notification_recipients', () => {
     )
   })
 
+  it('returns nothing for a row that does not exist', async () => {
+    // The function takes an outbox id and nothing else: no org id, no user id,
+    // no predicate a caller could widen. So the only way to ask it about
+    // somebody is to already hold a due row about them, and asking about a row
+    // that is not there answers with silence rather than an error that would
+    // distinguish "no such row" from "nobody wants it".
+    const r = await agent.query(`select * from notification_recipients($1)`, [
+      randomUUID(),
+    ])
+    expect(r.rows).toHaveLength(0)
+  })
+
+  it('returns only what delivery needs, and no identity beyond the address', async () => {
+    // The narrow-projection condition. This function exists so the agent does
+    // not need grants on memberships, preferences and identities; returning a
+    // display name, a role or a membership row would give back through the
+    // window what the missing grants keep out of the door, one outbox row at a
+    // time.
+    const r = await agent.query(`select * from notification_recipients($1)`, [
+      outboxA,
+    ])
+    expect(Object.keys(r.rows[0]).sort()).toEqual(
+      [
+        'email',
+        'finding_severity',
+        'min_severity',
+        'org_name',
+        'org_slug',
+        'quiet_hours_end',
+        'quiet_hours_start',
+        'timezone',
+        'user_id',
+      ].sort(),
+    )
+  })
+
   it('is not executable by the application role', async () => {
     // The narrow-grant argument depends on this. If the app could call it, the
     // function would be a way around every policy on memberships and
