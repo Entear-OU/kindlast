@@ -12,6 +12,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	auditservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/audit"
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
+	corpusservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/corpus"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
@@ -164,6 +165,10 @@ func New(deps Dependencies) (http.Handler, error) {
 	// this surface is absent. A compliance record whose audit view depends on
 	// how the operator configured the stack is not one an auditor can rely on.
 	mux.Handle(corev1connect.NewAuditServiceHandler(auditservice.New(), chain))
+	// The regulatory corpus (ENT-207). Read only and unconditional: there is no
+	// deployment where a customer should be unable to look up the obligation a
+	// finding cites.
+	mux.Handle(corev1connect.NewCorpusServiceHandler(corpusservice.New(), chain))
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in

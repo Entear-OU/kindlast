@@ -709,8 +709,12 @@ type Obligation struct {
 	EffectiveDate string   `protobuf:"bytes,9,opt,name=effective_date,json=effectiveDate,proto3" json:"effective_date,omitempty"`
 	TopicTags     []string `protobuf:"bytes,10,rep,name=topic_tags,json=topicTags,proto3" json:"topic_tags,omitempty"`
 	// What approving a finding for this obligation creates, e.g. `create_ropa`.
-	// Empty means approving records the decision and creates nothing, which is
-	// the honest answer for an obligation with no register behind it.
+	//
+	// One of `review`, `create_ropa`, `create_dsar`, `create_ai_system`, matching
+	// `findings.action_type` and constrained in the database (00007). Empty is
+	// read as `review`, which is the honest answer for an obligation with no
+	// register behind it: approving records the decision and creates no row. That
+	// is a value rather than an absence, and the column is NOT NULL because of it.
 	ActionType    string `protobuf:"bytes,11,opt,name=action_type,json=actionType,proto3" json:"action_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

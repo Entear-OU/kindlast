@@ -985,6 +985,83 @@
           }
         },
         {
+          "name": "List obligations (corpus)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.CorpusService/ListObligations",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.CorpusService", "ListObligations"]
+            },
+            "description": "What this deployment checks organisations against. Required scope: `corpus:read`. **Served as of ENT-207.**\n\n**The only service in `core.v1` whose data is not tenant data.** The corpus has no `org_id`: it is the same regulation for every customer, and ENT-207 says in terms not to give it one to make it look like the rest of the schema. ENT-192's ten public-read policies carry that, so every member of every organisation reads the same rows.\n\nThe organisation header is still required. That keeps one shape for every request on this surface, and it means a caller has to be a member of something: the law is public, but this deployment's copy of it is not a public API.\n\n**Read only, and there is no write RPC anywhere in `core.v1` for this.** Writing the corpus is `IngestService` on `/internal/v1`, behind `internal:ingest`, on the `kindlast_ingest` Postgres role which holds grants on the ten regulatory tables and cannot read a finding. That separation is the product's central claim: a customer trusts a finding because they can check it against the law, which only means something if the thing serving the claim cannot edit the law.\n\n**No role gate.** Every member sees this, viewers included.\n\n**Unpaged**, deliberately: there are fifteen obligations, they change when a regulation changes rather than when a customer does something, and a keyset cursor would be machinery for a page that fits on a screen. Ordered worst-first by severity rather than alphabetically, because `high` sorts after `low` and `medium` and that is the wrong way round.\n\n**`citation` is the SAME message FindingsService returns**, imported rather than redeclared. Render `citation.label` and link `citation.url`; do not rebuild either from the parts. Two implementations of \"what is this citation called\" diverge the first time a regulation needs a special case.\n\n**A label reading like `32016R0679 Art. 30` instead of `GDPR Art. 30` means something specific**: `analyst_citation_label` fell through to its raw-CELEX fallback because no document with that CELEX is in the corpus. That was the state of every obligation in this product before ENT-207 filled the tables, and it is what an unloaded deployment looks like.\n\n`severity` here is the law's view of the duty, the same for every customer. It says nothing about whether any organisation is failing it; that is the findings feed."
+          }
+        },
+        {
+          "name": "Get obligation (corpus)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"gdpr-art-30-ropa\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.CorpusService/GetObligation",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.CorpusService", "GetObligation"]
+            },
+            "description": "One obligation, with the regulatory text behind it. Required scope: `corpus:read`. **Served as of ENT-207.**\n\nKeyed by **slug**, not by id, and that is deliberate. A slug is stable across rewordings of the obligation text, so `gdpr-art-30-ropa` is a key somebody can put in a document; the row's uuid is generated per deployment and would differ between two installations reading the same law.\n\n**404 for an unknown slug, plainly.** None of the care the tenant surfaces take about telling \"does not exist\" from \"not yours\" applies: the corpus is the same for everybody, so an unknown slug is simply unknown and saying so leaks nothing.\n\n`citedSummary`, `citedHeading` and `citedParagraphSummary` are the text the citation points at. **They are OUR summaries, not the Official Journal wording.** The corpus stores no verbatim text: every article, recital and annex row carries a curated 1-2000 character summary, and the authoritative wording lives at `citation.url`. A client showing this must say so, because a reader deciding whether to act on a finding needs to know they are reading a paraphrase.\n\n**An empty `citedSummary` is a real condition rather than a blank.** Ingest refuses to store an obligation whose citation resolves to nothing, so reaching it here means either the corpus was written some other way or a regulation was loaded without the one this cites."
+          }
+        },
+        {
+          "name": "List regulatory documents (corpus)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.CorpusService/ListDocuments",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.CorpusService", "ListDocuments"]
+            },
+            "description": "Which regulations this deployment holds, and how much of each. Required scope: `corpus:read`. **Served as of ENT-207.**\n\nExists so a console can say \"the GDPR, 99 articles, as at 4 May 2016\" rather than leaving a customer to wonder whether the corpus is current. **A compliance product that cannot say which version of the law it is working from is asking for trust it has not earned**, and the counts plus `versionDate` plus the CELEX number are a claim a reader can check in one click through `officialUrl`.\n\n**An empty list is the most important response this returns.** It means no regulation has been ingested, which makes every citation on every finding fall back to a raw CELEX number, and it is a condition an operator can fix rather than a bug. A console should say so rather than render an empty panel.\n\nAfter loading `data/corpus/` this reports the GDPR (99 articles, 173 recitals) and the EU AI Act (113 articles, 180 recitals, 1 annex)."
+          }
+        },
+        {
+          "name": "Ingest the corpus (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pack\": {\n    \"packId\": \"example\",\n    \"obligations\": [\n      {\n        \"slug\": \"example-obligation\",\n        \"title\": \"An example\",\n        \"summary\": \"At least one hundred characters of plain-language summary, because this is the text a person reads to decide whether a finding applies to them.\",\n        \"citation\": {\n          \"kind\": \"article\",\n          \"celex\": \"32016R0679\",\n          \"articleNumber\": 30\n        },\n        \"severity\": \"high\",\n        \"actionType\": \"create_ropa\"\n      }\n    ]\n  },\n  \"dryRun\": true\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.IngestService/IngestCorpus",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.IngestService", "IngestCorpus"]
+            },
+            "description": "Writes the regulatory corpus. Required scope: `internal:ingest`. **Served as of ENT-207.**\n\n**Use the client-credentials token, not a human one.** This is the platform surface: `internal:*` scopes are issued to service clients and never to the browser client, so a console token is refused before any handler runs. `internal:ingest` is the same scope RunSweep carries.\n\n**No organisation header, and that is not an omission.** The corpus has no `org_id`, so there is no organisation for a tenancy interceptor to resolve. This runs on the shorter interceptor chain, like the sweep.\n\n**It takes a pack, and nothing in the contract names GDPR or the AI Act.** A pack is a document with its articles, recitals and annexes, plus obligations, guidelines and enforcement decisions. Every field is optional, so correcting one obligation's severity does not mean re-sending 200KB of unchanged articles. A third regulation is a third call rather than a code change.\n\n**Start with `dryRun: true`.** It validates everything and writes nothing, and it reports every dangling citation at once rather than failing on the first, so a curator can see whether to fix the pack or ingest the regulation it depends on. A real run with an unresolved citation fails with `failed_precondition` instead, because a partially-good pack must not look like a success with a note attached.\n\n**Idempotent.** Every row upserts on its natural key: a document on CELEX, an article on (document, number), an obligation on slug. Running the same pack twice produces no duplicates and no drift, which matters because §20.3 makes this a scheduled singleton once Temporal lands. An unchanged re-ingest does not even bump `updated_at`, so \"what changed last Tuesday\" stays answerable.\n\n**One transaction, and nothing is ever deleted.** A pack that fails leaves nothing behind. The `kindlast_ingest` role holds insert and update and no delete grant, because a finding cites an obligation and an obligation cites an article, and removing either out from under a stored finding turns a claim a customer could check into a dangling reference, retroactively.\n\n**Ordering matters when you send several packs**: obligations cite articles, so the regulations go first. A run that sent obligations first would have every one of them refused against an empty corpus, entirely correctly.\n\nThe practical way to load `data/corpus/` is the command rather than this request:\n\n```\ngo run ./apps/core-api/cmd/corpus-load \\\n  -api http://localhost:8000 -token \"$TOKEN\" -dry-run\n```\n\nOne wire detail that fails silently if you hand-write a pack: proto3 JSON carries **int64 as a string**, so `fineEur` on an enforcement decision must be quoted. `hasFine` rides alongside it because proto3 JSON omits a zero, and a penalty of nothing is a different fact from no penalty."
+          }
+        },
+        {
           "name": "List audit entries",
           "request": {
             "method": "POST",

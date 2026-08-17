@@ -68,6 +68,12 @@ var HumanScopes = []string{
 	"audit:read",
 	"billing:manage",
 	"billing:read",
+	// The regulatory corpus (ENT-207). Every member reads it, including
+	// viewers: the corpus is the same law for every customer and it is what a
+	// finding's citation points at. A product whose users cannot look up the
+	// obligation they are being told about is asking for trust it has not
+	// earned.
+	"corpus:read",
 	"dashboard:read",
 	"findings:act",
 	"findings:read",

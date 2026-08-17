@@ -223,6 +223,85 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /api/v1/corpus/documents:
+        get:
+            tags:
+                - CorpusService
+            description: |-
+                Which regulations this deployment holds, and how much of each.
+
+                 Exists so a console can say "the GDPR, 99 articles, as at 4 May 2016"
+                 rather than leaving a customer to wonder whether the corpus is current.
+                 A compliance product that cannot say which version of the law it is working
+                 from is asking for trust it has not earned.
+            operationId: CorpusService_ListDocuments
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListDocumentsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/corpus/obligations:
+        get:
+            tags:
+                - CorpusService
+            description: |-
+                What this deployment checks organisations against.
+
+                 Every obligation, with its citation resolved to a label and a URL that
+                 point at the publisher rather than at us. Not paged: there are fifteen of
+                 them, they change when a regulation changes, and a person reading this page
+                 wants the whole list rather than a window onto it.
+            operationId: CorpusService_ListObligations
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListObligationsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/corpus/obligations/{slug}:
+        get:
+            tags:
+                - CorpusService
+            description: |-
+                One obligation, with the regulatory text behind it.
+
+                 The article or recital summary, and the paragraph when the citation names
+                 one. This is where somebody lands from a finding asking "says who".
+            operationId: CorpusService_GetObligation
+            parameters:
+                - name: slug
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetObligationResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/dashboard:
         get:
             tags:
@@ -1611,6 +1690,50 @@ components:
                  See the service comment: every field is a value the database already holds.
                  A client renders `label` and links `url`; the structured parts are present so
                  a client can filter or group by regulation, not so it can rebuild the label.
+        CorpusObligation:
+            type: object
+            properties:
+                slug:
+                    type: string
+                title:
+                    type: string
+                summary:
+                    type: string
+                severity:
+                    type: string
+                    description: '`low`, `medium` or `high`.'
+                recurrence:
+                    type: string
+                dueWithinDays:
+                    type: integer
+                    format: int32
+                effectiveDate:
+                    type: string
+                topicTags:
+                    type: array
+                    items:
+                        type: string
+                actionType:
+                    type: string
+                    description: |-
+                        What approving a finding for this creates: `review`, `create_ropa`,
+                         `create_dsar` or `create_ai_system`.
+                citation:
+                    allOf:
+                        - $ref: '#/components/schemas/Citation'
+                    description: |-
+                        The SAME `Citation` message FindingsService returns, imported rather than
+                         redeclared.
+
+                         That is deliberate and it is the whole reason this file imports
+                         findings.proto. A finding cites an obligation; this is that obligation. Two
+                         citation shapes would let a console render the same provision two ways, and
+                         "GDPR Art. 30" on one page beside "32016R0679 Art. 30" on another is how a
+                         customer decides the product does not know what it is talking about.
+
+                         `obligation_slug` on it is redundant with `slug` above and is populated
+                         anyway, because a client filtering findings by obligation uses that field
+                         and should not have to know which message it came from.
         CreateAiSystemRequest:
             type: object
             properties:
@@ -2036,6 +2159,26 @@ components:
             properties:
                 preferences:
                     $ref: '#/components/schemas/NotificationPreferences'
+        GetObligationResponse:
+            type: object
+            properties:
+                obligation:
+                    $ref: '#/components/schemas/CorpusObligation'
+                citedSummary:
+                    type: string
+                    description: |-
+                        The regulatory text the citation points at: an article's summary, a
+                         recital's, or an annex's.
+
+                         Empty when the citation resolves to nothing, which ingest refuses to
+                         create. If it is ever empty here, something wrote the corpus without going
+                         through IngestService and that is worth knowing.
+                citedHeading:
+                    type: string
+                    description: The heading of the cited article or annex. Recitals have none.
+                citedParagraphSummary:
+                    type: string
+                    description: The paragraph's summary, when the citation names one.
         GetProcessingActivityResponse:
             type: object
             properties:
@@ -2195,6 +2338,13 @@ components:
                          that would return something. A dropdown listing every action type the
                          schema could theoretically hold sends a person hunting for rows that were
                          never written.
+        ListDocumentsResponse:
+            type: object
+            properties:
+                documents:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/RegulatoryDocumentSummary'
         ListDsarsResponse:
             type: object
             properties:
@@ -2225,6 +2375,13 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/Member'
+        ListObligationsResponse:
+            type: object
+            properties:
+                obligations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CorpusObligation'
         ListProcessingActivitiesResponse:
             type: object
             properties:
@@ -2474,8 +2631,12 @@ components:
                     type: string
                     description: |-
                         What approving a finding for this obligation creates, e.g. `create_ropa`.
-                         Empty means approving records the decision and creates nothing, which is
-                         the honest answer for an obligation with no register behind it.
+
+                         One of `review`, `create_ropa`, `create_dsar`, `create_ai_system`, matching
+                         `findings.action_type` and constrained in the database (00007). Empty is
+                         read as `review`, which is the honest answer for an obligation with no
+                         register behind it: approving records the decision and creates no row. That
+                         is a value rather than an absence, and the column is NOT NULL because of it.
             description: Obligation is a duty derived from the law, and the thing a finding cites.
         Paragraph:
             type: object
@@ -2685,6 +2846,29 @@ components:
                          inserted or already exists, and nothing removes one, because the junction
                          has no natural way to tell a link somebody deleted from a link a smaller
                          pack simply did not mention.
+        RegulatoryDocumentSummary:
+            type: object
+            properties:
+                celexNumber:
+                    type: string
+                title:
+                    type: string
+                shortTitle:
+                    type: string
+                versionDate:
+                    type: string
+                    description: The version of the text this corpus was built from, as an ISO date.
+                officialUrl:
+                    type: string
+                articleCount:
+                    type: integer
+                    format: int32
+                recitalCount:
+                    type: integer
+                    format: int32
+                annexCount:
+                    type: integer
+                    format: int32
         RejectFindingRequest:
             type: object
             properties:
@@ -2972,6 +3156,35 @@ tags:
          than a degraded one. So this service answers "billing is not configured here"
          as a first-class response rather than erroring, and a console that reads it
          shows a settings page with no checkout rather than a broken one.
+    - name: CorpusService
+      description: |-
+        The regulatory corpus, read (§10, §24; ENT-207).
+
+         # THIS IS THE SURFACE THE PRODUCT'S CLAIM RESTS ON
+
+         A finding says an organisation has an obligation, and cites the law it comes
+         from. The reason anybody should believe that is that they can go and look.
+         This service is the looking.
+
+         # NOT TENANT DATA, AND THE ONLY SERVICE IN core.v1 THAT IS NOT
+
+         The corpus has no `org_id`: it is the same regulation for every customer, and
+         ENT-207 says in terms not to give it one to make it look like the rest of the
+         schema. Ten public-read policies from ENT-192 carry that, so every member of
+         every organisation reads the same rows.
+
+         The organisation header is still required, and that is deliberate rather than
+         an oversight. It keeps one shape for every request on this surface, and a
+         caller has to be a member of SOMETHING to read the corpus at all: the law is
+         public, but this deployment's copy of it is not a public API.
+
+         # READ ONLY, AND THE WRITE LIVES SOMEWHERE A PERSON CANNOT REACH
+
+         There is no write RPC here. Writing the corpus is `IngestService` on the
+         platform surface, behind `internal:ingest`, on a Postgres role that holds
+         grants on the ten regulatory tables and cannot read a finding. A request from
+         the console that could change the law would make this service's whole purpose
+         a formality.
     - name: DashboardService
       description: The dashboard's posture and the pipeline's honesty (§5).
     - name: FindingsService
