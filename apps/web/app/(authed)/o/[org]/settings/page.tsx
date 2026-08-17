@@ -6,7 +6,8 @@ import { OrganisationForm } from '@/components/settings/organisation-form'
 import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
-import { membersOf } from './actions'
+import { NotificationsForm } from '@/components/settings/notifications-form'
+import { channelsFor, membersOf, notificationsFor } from './actions'
 
 /**
  * Organisation settings (ENT-202).
@@ -46,6 +47,13 @@ export default async function SettingsPage({
   // no members. The distinction is shown rather than collapsed: an empty table
   // would tell an owner their colleagues had vanished.
   const members = await membersOf(session.accessToken, membership.orgId)
+
+  // Fetched together, because they are rendered together and each is a
+  // round trip the page would otherwise make in series.
+  const [notifications, channels] = await Promise.all([
+    notificationsFor(session.accessToken, membership.orgId),
+    channelsFor(session.accessToken, membership.orgId),
+  ])
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-12">
@@ -98,6 +106,34 @@ export default async function SettingsPage({
               members={members}
               viewerRole={membership.role ?? ''}
               viewerUserId={me.user?.userId}
+            />
+          )}
+        </div>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          Notifications
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Yours alone, and only for this organisation. Nobody else can see or
+          change them, and if you belong to more than one organisation each has
+          its own.
+        </p>
+        <div className="mt-4">
+          {notifications === null ? (
+            // Null means the call failed, which is not the same as somebody who
+            // has never changed anything. Rendering the defaults here would tell
+            // a person their settings are one thing while the database holds
+            // another, and they would have no way to notice.
+            <p className="text-sm text-muted-foreground">
+              Could not load your notification settings. Reload to try again.
+            </p>
+          ) : (
+            <NotificationsForm
+              slug={slug}
+              preferences={notifications}
+              channels={channels ?? []}
             />
           )}
         </div>

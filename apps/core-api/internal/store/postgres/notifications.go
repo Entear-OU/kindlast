@@ -302,10 +302,14 @@ func (a *AgentStore) Begin(ctx context.Context) (pgx.Tx, error) {
 // already redeemed, wrong kind and never existed alike. Collapsing those is
 // deliberate: distinguishing them would make this an oracle for which tokens
 // are real, to a caller who has proved nothing.
-func (s *Store) RedeemCapabilityToken(ctx context.Context, tokenHash, kind string) (string, error) {
+// Takes the raw token and hashes it here, with the same function the mint side
+// uses, so the two halves cannot drift. That is the arrangement `invitations`
+// already has.
+func (s *Store) RedeemCapabilityToken(ctx context.Context, token, kind string) (string, error) {
 	var orgID *string
 	err := s.pool.QueryRow(ctx,
-		`select redeem_capability_token($1, $2)::text`, tokenHash, kind).Scan(&orgID)
+		`select redeem_capability_token($1, $2)::text`,
+		HashInvitationToken(token), kind).Scan(&orgID)
 	if err != nil {
 		return "", fmt.Errorf("postgres: redeeming a capability token: %w", err)
 	}

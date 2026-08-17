@@ -200,6 +200,7 @@ func run(logger *slog.Logger) error {
 		BillingEnabled: cfg.BillingEnabled,
 		AppBaseURL:     cfg.AppBaseURL,
 		SMTPConfigured: cfg.SMTPAddr != "",
+		Tokens:         store,
 	})
 	if err != nil {
 		return err

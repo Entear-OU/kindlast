@@ -14,6 +14,13 @@ import {
   type Failure,
   type Member,
 } from '@/lib/org/client'
+import {
+  getCapabilities,
+  getPreferences,
+  updatePreferences,
+  type NotificationChannel,
+  type NotificationPreferences,
+} from '@/lib/notifications/client'
 
 /**
  * The settings surface's writes (ENT-202).
@@ -184,6 +191,63 @@ export async function inviteMemberAction(
 
   revalidatePath(orgPath(slug, '/settings'))
   return { status: 'ok', message: `Invitation on its way to ${email}.` }
+}
+
+/**
+ * Save the caller's own notification preferences (ENT-209).
+ *
+ * No user id anywhere, deliberately. The row is the caller's by policy, so
+ * there is nothing for a form to name and nothing for this action to refuse.
+ *
+ * Checkboxes are read as "present means on", which is how HTML forms report
+ * them: an unchecked box is absent from the payload entirely rather than sent
+ * as false. Reading `=== 'true'` would work for the checked case and silently
+ * turn everything off for the unchecked one.
+ */
+export async function updateNotificationsAction(
+  slug: string,
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const ctx = await context(slug)
+  if (!ctx) return { status: 'error', message: 'Your session has expired.' }
+
+  const result = await updatePreferences(ctx.accessToken, ctx.orgId, {
+    email: String(form.get('email') ?? '').trim(),
+    minSeverityForEmail: String(form.get('minSeverityForEmail') ?? 'medium'),
+    weeklyBriefingEnabled: form.get('weeklyBriefingEnabled') !== null,
+    deadlineAlertsEnabled: form.get('deadlineAlertsEnabled') !== null,
+    timezone: String(form.get('timezone') ?? '').trim(),
+    quietHoursStart: String(form.get('quietHoursStart') ?? '').trim(),
+    quietHoursEnd: String(form.get('quietHoursEnd') ?? '').trim(),
+  })
+  if (!result.ok) return say(result.error)
+
+  revalidatePath(orgPath(slug, '/settings'))
+  return { status: 'ok', message: 'Notification settings saved.' }
+}
+
+/** The caller's preferences, or null when they could not be read. */
+export async function notificationsFor(
+  accessToken: string,
+  orgId: string,
+): Promise<NotificationPreferences | null> {
+  const result = await getPreferences(accessToken, orgId)
+  if (!result.ok) return null
+  // An empty object is a real answer: core-api returns defaults for somebody
+  // who has never saved anything, so `{}` here would mean the call succeeded
+  // and the message was empty, which the form renders as its own defaults.
+  return result.value.preferences ?? {}
+}
+
+/** The channels this deployment can deliver on, or null when unreadable. */
+export async function channelsFor(
+  accessToken: string,
+  orgId: string,
+): Promise<NotificationChannel[] | null> {
+  const result = await getCapabilities(accessToken, orgId)
+  if (!result.ok) return null
+  return result.value.channels ?? []
 }
 
 /** The member list, or null when it could not be read. */

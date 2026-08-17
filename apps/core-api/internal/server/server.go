@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -75,6 +76,26 @@ type Dependencies struct {
 	// mail, and only the second is worth telling a person about on a settings
 	// page: the first resolves itself and the queue survives it.
 	SMTPConfigured bool
+
+	// Tokens redeems capability tokens for callers with no session (ENT-209).
+	//
+	// Optional: nil leaves the unsubscribe endpoint answering 501 rather than
+	// panicking, which is the honest reply from a deployment that has not wired
+	// it, and keeps this dependency from being one every test has to supply.
+	Tokens CapabilityTokens
+}
+
+// CapabilityTokens redeems a link that acts without a session.
+//
+// An interface here so this package does not depend on a database driver, the
+// same reason TenantOpener is one. Implemented by the Postgres store on the
+// application pool: redemption goes through a SECURITY DEFINER function,
+// because a caller with no session sets no tenancy GUCs and every policy in the
+// schema would otherwise refuse.
+type CapabilityTokens interface {
+	// Takes the raw token, not its hash: the store hashes with the same
+	// function the mint side uses, so the two cannot drift.
+	RedeemCapabilityToken(ctx context.Context, token, kind string) (string, error)
 }
 
 // New builds the HTTP handler core-api serves.
@@ -138,6 +159,66 @@ func New(deps Dependencies) (http.Handler, error) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
+	})
+
+	// Unsubscribing, for somebody with no session at all (§8, ENT-209).
+	//
+	// # WHY THIS IS NOT AN RPC
+	//
+	// Every method on the Connect chain runs behind authentication, a scope
+	// check and tenancy. The person clicking this link has none of those: they
+	// are reading an email, they may never have signed in, and requiring them to
+	// authenticate in order to stop mail they did not ask for is how a product
+	// earns a spam complaint instead of an unsubscribe.
+	//
+	// So the token is the only identity claim, which is why it is stored hashed,
+	// expires, and is single use, and why the function behind this answers
+	// identically for expired, already redeemed, wrong kind and never existed.
+	// A caller who has proved nothing must not be able to learn which tokens are
+	// real by comparing responses.
+	//
+	// # WHY POST AND NOT GET
+	//
+	// A GET that changes something is wrong in principle and dangerous in
+	// practice here, because corporate mail gateways and link scanners follow
+	// every URL in a message before a human sees it. Under a GET, the act of
+	// receiving the email would unsubscribe the recipient, silently, and the
+	// symptom would be a customer who stops getting compliance notifications for
+	// reasons nobody can reconstruct. Web renders a page on GET and posts here.
+	mux.HandleFunc("POST /api/v1/unsubscribe", func(w http.ResponseWriter, r *http.Request) {
+		if deps.Tokens == nil {
+			http.Error(w, "unsubscribe is not available", http.StatusNotImplemented)
+			return
+		}
+
+		var body struct {
+			Token string `json:"token"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if body.Token == "" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+
+		// The raw token goes to the store, which hashes it with the same
+		// function the mint side uses. Hashing here would put the two halves in
+		// different packages and invite them to drift, which is the arrangement
+		// `invitations` already avoids.
+		orgID, err := deps.Tokens.RedeemCapabilityToken(r.Context(), body.Token, "unsubscribe")
+		if err != nil {
+			// One answer for every unusable token, and 404 rather than 401,
+			// because 401 would invite a client to authenticate and there is
+			// nothing to authenticate as.
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `{"orgId":%q}`, orgID)
 	})
 
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {

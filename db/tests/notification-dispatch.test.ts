@@ -162,7 +162,12 @@ beforeAll(async () => {
     await migrator.query(
       `insert into user_identities (user_id, issuer, subject, email, display_name)
        values ($1, 'https://test.invalid', $2, $3, $4)`,
-      [user, `subject-${user}`, `${handle}-${user.slice(0, 8)}@example.invalid`, handle],
+      [
+        user,
+        `subject-${user}`,
+        `${handle}-${user.slice(0, 8)}@example.invalid`,
+        handle,
+      ],
     )
   }
 
@@ -187,13 +192,29 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!reachable) return
   const orgs = [orgA, orgB]
-  await migrator.query(`delete from capability_tokens where org_id = any($1)`, [orgs])
-  await migrator.query(`delete from notification_outbox where org_id = any($1)`, [orgs])
+  await migrator.query(`delete from capability_tokens where org_id = any($1)`, [
+    orgs,
+  ])
+  await migrator.query(
+    `delete from notification_outbox where org_id = any($1)`,
+    [orgs],
+  )
   await migrator.query(`delete from findings where org_id = any($1)`, [orgs])
-  await migrator.query(`delete from watcher_findings where org_id = any($1)`, [orgs])
-  await migrator.query(`delete from compliance_profiles where org_id = any($1)`, [orgs])
-  await migrator.query(`delete from onboarding_sessions where org_id = any($1)`, [orgs])
-  await migrator.query(`delete from notification_preferences where org_id = any($1)`, [orgs])
+  await migrator.query(`delete from watcher_findings where org_id = any($1)`, [
+    orgs,
+  ])
+  await migrator.query(
+    `delete from compliance_profiles where org_id = any($1)`,
+    [orgs],
+  )
+  await migrator.query(
+    `delete from onboarding_sessions where org_id = any($1)`,
+    [orgs],
+  )
+  await migrator.query(
+    `delete from notification_preferences where org_id = any($1)`,
+    [orgs],
+  )
   await migrator.query(`delete from obligations where id = $1`, [obligationID])
   await migrator.query(`delete from memberships where org_id = any($1)`, [orgs])
   await migrator.query(`delete from user_identities where user_id = any($1)`, [
@@ -262,7 +283,10 @@ describe.skipIf(!reachable)('the dispatcher role', () => {
       `insert into notification_outbox (finding_id, org_id) values ($1, $2)`,
       [findingB, orgB],
     )
-    expect(error, 'the dispatcher enqueued for another organisation').not.toBeNull()
+    expect(
+      error,
+      'the dispatcher enqueued for another organisation',
+    ).not.toBeNull()
     expect(error?.code).toBe('42501')
   })
 })
@@ -275,7 +299,7 @@ describe.skipIf(!reachable)('notification_recipients', () => {
     const users = r.rows.map((row) => row.user_id)
 
     expect(users, 'Ada should hear about her own organisation').toContain(ada)
-    expect(users, "Bob is in another organisation entirely").not.toContain(bob)
+    expect(users, 'Bob is in another organisation entirely').not.toContain(bob)
   })
 
   it('omits somebody with no address rather than returning a row nobody can send', async () => {
@@ -335,9 +359,11 @@ describe.skipIf(!reachable)('notification_recipients', () => {
     // The narrow-grant argument depends on this. If the app could call it, the
     // function would be a way around every policy on memberships and
     // identities rather than a way to avoid granting them.
-    const error = await refused(app, `select * from notification_recipients($1)`, [
-      outboxA,
-    ])
+    const error = await refused(
+      app,
+      `select * from notification_recipients($1)`,
+      [outboxA],
+    )
     expect(error, 'the application could resolve recipients').not.toBeNull()
   })
 })
@@ -350,10 +376,13 @@ describe.skipIf(!reachable)('capability tokens', () => {
     const hash = `hash-${randomUUID()}`
     await mintToken(orgA, ada, hash)
 
-    const r = await app.query(`select redeem_capability_token($1, 'unsubscribe') as org`, [
-      hash,
-    ])
-    expect(r.rows[0].org, 'redemption did not return the organisation').toBe(orgA)
+    const r = await app.query(
+      `select redeem_capability_token($1, 'unsubscribe') as org`,
+      [hash],
+    )
+    expect(r.rows[0].org, 'redemption did not return the organisation').toBe(
+      orgA,
+    )
 
     const prefs = await migrator.query(
       `select weekly_briefing_enabled, deadline_alerts_enabled, min_severity_for_email
@@ -459,8 +488,9 @@ describe.skipIf(!reachable)('capability tokens', () => {
     await setTenant(app, orgA, ada)
     const error = await refused(app, `select id from capability_tokens`)
     expect(error, 'the application could read capability tokens').not.toBeNull()
-    expect(error?.code, 'the table is reachable but empty rather than refused').toBe(
-      '42501',
-    )
+    expect(
+      error?.code,
+      'the table is reachable but empty rather than refused',
+    ).toBe('42501')
   })
 })

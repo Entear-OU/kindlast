@@ -600,6 +600,95 @@
           }
         },
         {
+          "name": "Notification preferences (read)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/GetNotificationPreferences",
+              "host": ["{{api_base_url}}"],
+              "path": [
+                "kindlast.core.v1.NotificationService",
+                "GetNotificationPreferences"
+              ]
+            },
+            "description": "The caller's own notification settings for the organisation the header names. **Implemented as of ENT-209.** Required scope: `notifications:read`.\n\n**There is no user id in the request, and there will not be one.** `notification_preferences` is keyed `(org_id, user_id)` and its policies are the only ones in the schema that pin `user_id` to `app.current_user_id`, so the row is the caller's by policy rather than by argument. A parameter would invite a client to pass somebody else's and make the handler the thing that refuses, when the policy already does.\n\nPreferences are **personal within an organisation**. Somebody in two organisations holds two sets and can want a weekly briefing from one and silence from the other.\n\n**Never answers not-found.** Somebody who has never opened the settings page has no row and is nonetheless subscribed, because the product default is that a member is told: the opposite default means a critical finding sits unread until each person individually opts in. So this returns defaults (`medium` and above, briefing on, deadline alerts on, `Europe/Tallinn`) rather than an error, and \"I have not changed anything\" stays distinguishable from a fault."
+          }
+        },
+        {
+          "name": "Notification preferences (write)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preferences\": {\n    \"email\": \"compliance@example.com\",\n    \"minSeverityForEmail\": \"medium\",\n    \"weeklyBriefingEnabled\": true,\n    \"deadlineAlertsEnabled\": true,\n    \"timezone\": \"Europe/Tallinn\",\n    \"quietHoursStart\": \"22:00\",\n    \"quietHoursEnd\": \"07:00\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/UpdateNotificationPreferences",
+              "host": ["{{api_base_url}}"],
+              "path": [
+                "kindlast.core.v1.NotificationService",
+                "UpdateNotificationPreferences"
+              ]
+            },
+            "description": "Replace the caller's own settings. **Implemented as of ENT-209.** Required scope: `notifications:write`, which `notifications:read` does not satisfy: scope matching is exact, never by prefix.\n\n**A whole-object write, not a patch.** The settings surface renders every field at once, and a partial update would mean deciding what an absent field means, where \"unset\" and \"set to false\" are different intentions a proto3 scalar cannot tell apart. The REST alias is `PUT /api/v1/notification-preferences` for the same reason, unlike the records surface which is `PATCH`: here the body genuinely is the resource, with no server-owned columns to preserve.\n\n`minSeverityForEmail` is a **floor**, one of `low`, `medium`, `high`, `critical`. Not a switch, because \"tell me everything\" trains people to ignore the mail and \"tell me nothing\" is how a critical finding goes unread.\n\n`email` empty means \"use the address I sign in with\". It is a separate field because a compliance contact is often a shared mailbox nobody signs in as.\n\nQuiet hours are local `HH:MM` and **may wrap midnight**: `22:00` to `07:00` means what it looks like. Both empty means no quiet window; one alone is refused, because \"quiet from 22:00\" with no end reads to a person as overnight and would behave as no quiet hours at all.\n\nAnswers `invalid_argument` for an unknown severity, an IANA timezone that will not load, a time that is not `HH:MM`, or half a quiet window. The timezone is checked here rather than at send time, because an unloadable zone at send time is a notification that fails hours later for a reason nobody connects to a settings page.\n\nThe response is re-read from the database rather than echoed, so it describes what is stored."
+          }
+        },
+        {
+          "name": "Notification capabilities",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/GetNotificationCapabilities",
+              "host": ["{{api_base_url}}"],
+              "path": [
+                "kindlast.core.v1.NotificationService",
+                "GetNotificationCapabilities"
+              ]
+            },
+            "description": "Which channels this deployment can actually deliver on (§18.3). **Implemented as of ENT-209.** Required scope: `notifications:read`.\n\nExists so a console never renders a channel it cannot deliver on. Telegram, Slack and WhatsApp are in the design and are not built, and they are **absent from this response rather than listed as unavailable**: a settings page offering a switch that silently does nothing is indistinguishable from a broken integration, and generates support instead of value.\n\n`email` is present always and `available` is false on a deployment with no `KINDLAST_SMTP_ADDR`, carrying a plain-language `unavailableReason` for the console to show. Read from configuration rather than probed, because a mail server that happens to be down is not the same as a deployment that was never told where to submit mail, and only the second is worth telling a person about.\n\nDeployment-wide rather than tenant-scoped: the answer is the same for every organisation in an installation. The organisation header is still sent because the chain requires it."
+          }
+        },
+        {
+          "name": "Unsubscribe (no session)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"paste-the-token-from-the-unsubscribe-link\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/api/v1/unsubscribe",
+              "host": ["{{api_base_url}}"],
+              "path": ["api", "v1", "unsubscribe"]
+            },
+            "description": "Spend an unsubscribe token. **Implemented as of ENT-209.**\n\n**The only endpoint in this collection with no Authorization header and no organisation header, and that is the whole point.** The person clicking an unsubscribe link is reading an email, may never have signed in, and requiring them to authenticate in order to stop mail they did not ask for is how a product earns a spam complaint instead of an unsubscribe. So the token is the only identity claim, which is why it is stored hashed, expires after 30 days, and is spent once.\n\nIt is therefore **not on the Connect surface**: every method there runs behind authentication, a scope check and tenancy, and this caller has none of them. It is a plain route on core-api's mux beside `/healthz`.\n\n**POST rather than GET, deliberately.** Corporate mail gateways and link scanners follow every URL in a message before a human sees it, so under a GET the act of delivering the email would unsubscribe the recipient. `web` renders a confirmation page at `/unsubscribe/{token}` and posts here.\n\n**404 for every unusable token**, whether expired, already redeemed, of the wrong kind, or never real. Distinguishing them would make this an oracle for which tokens exist, to a caller who has proved nothing. 404 rather than 401 for the same reason: 401 invites a client to authenticate and there is nothing to authenticate as.\n\nOn success it returns the organisation the token named, and turns off the weekly briefing and deadline alerts and raises the email floor to `critical` for that person in that organisation alone.\n\nTo try it on the local stack: trigger a finding, read the message in Mailpit at `http://localhost:8025`, and copy the token out of the unsubscribe link."
+          }
+        },
+        {
           "name": "List processing activities (ROPA)",
           "request": {
             "method": "POST",
