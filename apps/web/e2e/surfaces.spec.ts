@@ -33,6 +33,16 @@ import {
  *     docker compose -f deploy/compose.yaml up -d
  *     bash scripts/web-env.sh   # after any `down -v`
  *     bun run dev
+ *
+ * # AND THERE IS A SHORT LIST THIS STILL CANNOT REACH
+ *
+ * `MANUAL-CHECKS.md`, next to this file. Two failures got past this suite
+ * after it was written, and neither was an ordinary coverage gap: one needed
+ * a session cookie that had gone stale before the page was opened, and one
+ * needed a container serving a binary older than the source. A run that
+ * builds its own fixtures and its own binary starts in neither state, which
+ * is the same property that makes it repeatable. Read that file before
+ * assuming a green run here means a working product.
  */
 
 async function skipSecondFactorOffer(page: Page) {
