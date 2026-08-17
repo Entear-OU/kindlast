@@ -260,7 +260,12 @@ func run(logger *slog.Logger) error {
 		// *CorpusStore to the interface makes it non-nil, so the guard has to
 		// stay on the concrete pointer.
 		Corpus: corpusDependency(corpusWriter),
-		Logger: logger,
+		// Same typed-nil trap as Corpus above, and the same shape of guard.
+		// The agent pool exists only when a sweep is configured, and a
+		// deployment that runs no agents should answer Unimplemented here
+		// rather than accept a run record it cannot store.
+		AgentRuns: agentRunsDependency(outbox),
+		Logger:    logger,
 	})
 	if err != nil {
 		return err
@@ -444,6 +449,13 @@ func (o tenantOpener) BeginTenant(ctx context.Context, subject, orgID string) (i
 // and every ingest call would panic on a nil pool. This is the classic Go trap
 // and it is worth a named function rather than a clever inline conditional.
 func corpusDependency(store *postgres.CorpusStore) ingest.Writer {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+func agentRunsDependency(store *postgres.AgentStore) ingest.RunRecorder {
 	if store == nil {
 		return nil
 	}

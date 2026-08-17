@@ -24,6 +24,375 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type AgentRunOutcome int32
+
+const (
+	AgentRunOutcome_AGENT_RUN_OUTCOME_UNSPECIFIED AgentRunOutcome = 0
+	AgentRunOutcome_AGENT_RUN_OUTCOME_SUCCEEDED   AgentRunOutcome = 1
+	// A guardrail stopped it: a budget exhausted, a citation that did not
+	// resolve, a tool outside the skill's allow-list.
+	//
+	// FIRST CLASS, NOT A KIND OF FAILURE. §26.3 makes refusal what a working
+	// guardrail produces. An enum offering only success and failure would push
+	// refusals into one of them and lose the distinction that matters most for
+	// trust: the difference between "the harness stopped this" and "the harness
+	// broke".
+	AgentRunOutcome_AGENT_RUN_OUTCOME_REFUSED AgentRunOutcome = 2
+	// Something went wrong that was nobody's policy.
+	AgentRunOutcome_AGENT_RUN_OUTCOME_FAILED AgentRunOutcome = 3
+)
+
+// Enum value maps for AgentRunOutcome.
+var (
+	AgentRunOutcome_name = map[int32]string{
+		0: "AGENT_RUN_OUTCOME_UNSPECIFIED",
+		1: "AGENT_RUN_OUTCOME_SUCCEEDED",
+		2: "AGENT_RUN_OUTCOME_REFUSED",
+		3: "AGENT_RUN_OUTCOME_FAILED",
+	}
+	AgentRunOutcome_value = map[string]int32{
+		"AGENT_RUN_OUTCOME_UNSPECIFIED": 0,
+		"AGENT_RUN_OUTCOME_SUCCEEDED":   1,
+		"AGENT_RUN_OUTCOME_REFUSED":     2,
+		"AGENT_RUN_OUTCOME_FAILED":      3,
+	}
+)
+
+func (x AgentRunOutcome) Enum() *AgentRunOutcome {
+	p := new(AgentRunOutcome)
+	*p = x
+	return p
+}
+
+func (x AgentRunOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AgentRunOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_kindlast_platform_v1_ingest_proto_enumTypes[0].Descriptor()
+}
+
+func (AgentRunOutcome) Type() protoreflect.EnumType {
+	return &file_kindlast_platform_v1_ingest_proto_enumTypes[0]
+}
+
+func (x AgentRunOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AgentRunOutcome.Descriptor instead.
+func (AgentRunOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{0}
+}
+
+// RecordAgentRunRequest is one finished run.
+//
+// Minimal on purpose. §26.4 gives this a versioned profile reference and
+// normalised evidence, and ENT-228 adds them. The shape here is what those
+// grow into rather than something they replace.
+type RecordAgentRunRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The organisation the run was for. Required, and carried in the message
+	// rather than a header because this caller has no active organisation: it
+	// runs for whichever tenant the work belonged to, and says so per call.
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// What ran, with versions. A bare name would record that "the analyst skill"
+	// ran, which is not a fact anybody can act on a year later.
+	Skill        string `protobuf:"bytes,2,opt,name=skill,proto3" json:"skill,omitempty"`
+	SkillVersion string `protobuf:"bytes,3,opt,name=skill_version,json=skillVersion,proto3" json:"skill_version,omitempty"`
+	Model        string `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
+	// For a local model this is the weights' digest, not a marketing version.
+	ModelVersion string `protobuf:"bytes,5,opt,name=model_version,json=modelVersion,proto3" json:"model_version,omitempty"`
+	// The person this ran for, when there was one.
+	//
+	// Empty for a scheduled sweep, which runs for the organisation and for
+	// nobody in particular. Setting it there would be a lie that later reads as
+	// "this person asked for this".
+	OnBehalfOfUserId string `protobuf:"bytes,6,opt,name=on_behalf_of_user_id,json=onBehalfOfUserId,proto3" json:"on_behalf_of_user_id,omitempty"`
+	// The input the run was given, as JSON. Not the assembled prompt: that
+	// includes the corpus prefix and is reconstructible from the skill version,
+	// so storing it per run would copy the corpus into every row.
+	RequestJson string `protobuf:"bytes,7,opt,name=request_json,json=requestJson,proto3" json:"request_json,omitempty"`
+	// Ordered tool calls with arguments and result summaries, as JSON.
+	ToolCallsJson string `protobuf:"bytes,8,opt,name=tool_calls_json,json=toolCallsJson,proto3" json:"tool_calls_json,omitempty"`
+	// Citations, split into those that resolved to a stored obligation and those
+	// the validator refused, as JSON.
+	//
+	// BOTH HALVES, AND THE REJECTED HALF IS THE IMPORTANT ONE. A validator that
+	// silently dropped a bad citation would leave a record indistinguishable
+	// from a run where the model never tried to cite anything. The customer's
+	// question is "what did it get wrong", and an omission cannot answer it.
+	CitationsJson string          `protobuf:"bytes,9,opt,name=citations_json,json=citationsJson,proto3" json:"citations_json,omitempty"`
+	Outcome       AgentRunOutcome `protobuf:"varint,10,opt,name=outcome,proto3,enum=kindlast.platform.v1.AgentRunOutcome" json:"outcome,omitempty"`
+	// Why, when the outcome was not success. For a human to read, not a code to
+	// branch on.
+	OutcomeDetail string         `protobuf:"bytes,11,opt,name=outcome_detail,json=outcomeDetail,proto3" json:"outcome_detail,omitempty"`
+	Usage         *AgentRunUsage `protobuf:"bytes,12,opt,name=usage,proto3" json:"usage,omitempty"`
+	// Queued, started, finished. Three rather than two because ENT-238 needs to
+	// tell "slow because the model is slow" from "slow because it waited", and
+	// those are different problems with different fixes.
+	QueuedAt      *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=queued_at,json=queuedAt,proto3" json:"queued_at,omitempty"`
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordAgentRunRequest) Reset() {
+	*x = RecordAgentRunRequest{}
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordAgentRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordAgentRunRequest) ProtoMessage() {}
+
+func (x *RecordAgentRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordAgentRunRequest.ProtoReflect.Descriptor instead.
+func (*RecordAgentRunRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *RecordAgentRunRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetSkill() string {
+	if x != nil {
+		return x.Skill
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetSkillVersion() string {
+	if x != nil {
+		return x.SkillVersion
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetModelVersion() string {
+	if x != nil {
+		return x.ModelVersion
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetOnBehalfOfUserId() string {
+	if x != nil {
+		return x.OnBehalfOfUserId
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetRequestJson() string {
+	if x != nil {
+		return x.RequestJson
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetToolCallsJson() string {
+	if x != nil {
+		return x.ToolCallsJson
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetCitationsJson() string {
+	if x != nil {
+		return x.CitationsJson
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetOutcome() AgentRunOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return AgentRunOutcome_AGENT_RUN_OUTCOME_UNSPECIFIED
+}
+
+func (x *RecordAgentRunRequest) GetOutcomeDetail() string {
+	if x != nil {
+		return x.OutcomeDetail
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetUsage() *AgentRunUsage {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+func (x *RecordAgentRunRequest) GetQueuedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.QueuedAt
+	}
+	return nil
+}
+
+func (x *RecordAgentRunRequest) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *RecordAgentRunRequest) GetFinishedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FinishedAt
+	}
+	return nil
+}
+
+type AgentRunUsage struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	InputTokens int32                  `protobuf:"varint,1,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
+	// Separate because every provider that offers prompt caching prices it
+	// separately, and because with a local model it is the measurement showing
+	// the corpus prefix is reused rather than reprocessed (§26).
+	CachedInputTokens int32 `protobuf:"varint,2,opt,name=cached_input_tokens,json=cachedInputTokens,proto3" json:"cached_input_tokens,omitempty"`
+	OutputTokens      int32 `protobuf:"varint,3,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
+	// Micros, not a float. Money in a float is a bug waiting for a
+	// reconciliation. Zero for a local model, which is a true statement about
+	// marginal cost rather than a missing value.
+	CostMicros    int64 `protobuf:"varint,4,opt,name=cost_micros,json=costMicros,proto3" json:"cost_micros,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentRunUsage) Reset() {
+	*x = AgentRunUsage{}
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentRunUsage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentRunUsage) ProtoMessage() {}
+
+func (x *AgentRunUsage) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentRunUsage.ProtoReflect.Descriptor instead.
+func (*AgentRunUsage) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *AgentRunUsage) GetInputTokens() int32 {
+	if x != nil {
+		return x.InputTokens
+	}
+	return 0
+}
+
+func (x *AgentRunUsage) GetCachedInputTokens() int32 {
+	if x != nil {
+		return x.CachedInputTokens
+	}
+	return 0
+}
+
+func (x *AgentRunUsage) GetOutputTokens() int32 {
+	if x != nil {
+		return x.OutputTokens
+	}
+	return 0
+}
+
+func (x *AgentRunUsage) GetCostMicros() int64 {
+	if x != nil {
+		return x.CostMicros
+	}
+	return 0
+}
+
+type RecordAgentRunResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The stored run's id, so a caller can reference it from whatever it goes on
+	// to write.
+	Id            string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordAgentRunResponse) Reset() {
+	*x = RecordAgentRunResponse{}
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordAgentRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordAgentRunResponse) ProtoMessage() {}
+
+func (x *RecordAgentRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordAgentRunResponse.ProtoReflect.Descriptor instead.
+func (*RecordAgentRunResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RecordAgentRunResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
 type IngestCorpusRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Pack  *RegulationPack        `protobuf:"bytes,1,opt,name=pack,proto3" json:"pack,omitempty"`
@@ -40,7 +409,7 @@ type IngestCorpusRequest struct {
 
 func (x *IngestCorpusRequest) Reset() {
 	*x = IngestCorpusRequest{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[0]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -52,7 +421,7 @@ func (x *IngestCorpusRequest) String() string {
 func (*IngestCorpusRequest) ProtoMessage() {}
 
 func (x *IngestCorpusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[0]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65,7 +434,7 @@ func (x *IngestCorpusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestCorpusRequest.ProtoReflect.Descriptor instead.
 func (*IngestCorpusRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{0}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *IngestCorpusRequest) GetPack() *RegulationPack {
@@ -105,7 +474,7 @@ type RegulationPack struct {
 
 func (x *RegulationPack) Reset() {
 	*x = RegulationPack{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[1]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -117,7 +486,7 @@ func (x *RegulationPack) String() string {
 func (*RegulationPack) ProtoMessage() {}
 
 func (x *RegulationPack) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[1]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -130,7 +499,7 @@ func (x *RegulationPack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegulationPack.ProtoReflect.Descriptor instead.
 func (*RegulationPack) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{1}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RegulationPack) GetPackId() string {
@@ -195,7 +564,7 @@ type RegulatoryDocument struct {
 
 func (x *RegulatoryDocument) Reset() {
 	*x = RegulatoryDocument{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[2]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -207,7 +576,7 @@ func (x *RegulatoryDocument) String() string {
 func (*RegulatoryDocument) ProtoMessage() {}
 
 func (x *RegulatoryDocument) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[2]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -220,7 +589,7 @@ func (x *RegulatoryDocument) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegulatoryDocument.ProtoReflect.Descriptor instead.
 func (*RegulatoryDocument) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{2}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RegulatoryDocument) GetCelexNumber() string {
@@ -304,7 +673,7 @@ type Article struct {
 
 func (x *Article) Reset() {
 	*x = Article{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[3]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -316,7 +685,7 @@ func (x *Article) String() string {
 func (*Article) ProtoMessage() {}
 
 func (x *Article) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[3]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -329,7 +698,7 @@ func (x *Article) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Article.ProtoReflect.Descriptor instead.
 func (*Article) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{3}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Article) GetArticleNumber() int32 {
@@ -380,7 +749,7 @@ type Paragraph struct {
 
 func (x *Paragraph) Reset() {
 	*x = Paragraph{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[4]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -392,7 +761,7 @@ func (x *Paragraph) String() string {
 func (*Paragraph) ProtoMessage() {}
 
 func (x *Paragraph) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[4]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -405,7 +774,7 @@ func (x *Paragraph) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Paragraph.ProtoReflect.Descriptor instead.
 func (*Paragraph) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{4}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Paragraph) GetLabel() string {
@@ -439,7 +808,7 @@ type Recital struct {
 
 func (x *Recital) Reset() {
 	*x = Recital{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[5]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -451,7 +820,7 @@ func (x *Recital) String() string {
 func (*Recital) ProtoMessage() {}
 
 func (x *Recital) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[5]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -464,7 +833,7 @@ func (x *Recital) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Recital.ProtoReflect.Descriptor instead.
 func (*Recital) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{5}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Recital) GetRecitalNumber() int32 {
@@ -495,7 +864,7 @@ type Annex struct {
 
 func (x *Annex) Reset() {
 	*x = Annex{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[6]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -507,7 +876,7 @@ func (x *Annex) String() string {
 func (*Annex) ProtoMessage() {}
 
 func (x *Annex) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[6]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -520,7 +889,7 @@ func (x *Annex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Annex.ProtoReflect.Descriptor instead.
 func (*Annex) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{6}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Annex) GetLabel() string {
@@ -572,7 +941,7 @@ type AnnexItem struct {
 
 func (x *AnnexItem) Reset() {
 	*x = AnnexItem{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[7]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -584,7 +953,7 @@ func (x *AnnexItem) String() string {
 func (*AnnexItem) ProtoMessage() {}
 
 func (x *AnnexItem) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[7]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,7 +966,7 @@ func (x *AnnexItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnnexItem.ProtoReflect.Descriptor instead.
 func (*AnnexItem) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{7}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AnnexItem) GetLabel() string {
@@ -645,7 +1014,7 @@ type ArticleRecitalLink struct {
 
 func (x *ArticleRecitalLink) Reset() {
 	*x = ArticleRecitalLink{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[8]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -657,7 +1026,7 @@ func (x *ArticleRecitalLink) String() string {
 func (*ArticleRecitalLink) ProtoMessage() {}
 
 func (x *ArticleRecitalLink) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[8]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -670,7 +1039,7 @@ func (x *ArticleRecitalLink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArticleRecitalLink.ProtoReflect.Descriptor instead.
 func (*ArticleRecitalLink) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{8}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ArticleRecitalLink) GetArticleNumber() int32 {
@@ -722,7 +1091,7 @@ type Obligation struct {
 
 func (x *Obligation) Reset() {
 	*x = Obligation{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[9]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -734,7 +1103,7 @@ func (x *Obligation) String() string {
 func (*Obligation) ProtoMessage() {}
 
 func (x *Obligation) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[9]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -747,7 +1116,7 @@ func (x *Obligation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Obligation.ProtoReflect.Descriptor instead.
 func (*Obligation) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{9}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Obligation) GetSlug() string {
@@ -849,7 +1218,7 @@ type Citation struct {
 
 func (x *Citation) Reset() {
 	*x = Citation{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[10]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -861,7 +1230,7 @@ func (x *Citation) String() string {
 func (*Citation) ProtoMessage() {}
 
 func (x *Citation) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[10]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -874,7 +1243,7 @@ func (x *Citation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Citation.ProtoReflect.Descriptor instead.
 func (*Citation) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{10}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Citation) GetKind() string {
@@ -934,7 +1303,7 @@ type Guideline struct {
 
 func (x *Guideline) Reset() {
 	*x = Guideline{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[11]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -946,7 +1315,7 @@ func (x *Guideline) String() string {
 func (*Guideline) ProtoMessage() {}
 
 func (x *Guideline) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[11]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -959,7 +1328,7 @@ func (x *Guideline) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Guideline.ProtoReflect.Descriptor instead.
 func (*Guideline) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{11}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Guideline) GetSlug() string {
@@ -1033,7 +1402,7 @@ type EnforcementDecision struct {
 
 func (x *EnforcementDecision) Reset() {
 	*x = EnforcementDecision{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[12]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1045,7 +1414,7 @@ func (x *EnforcementDecision) String() string {
 func (*EnforcementDecision) ProtoMessage() {}
 
 func (x *EnforcementDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[12]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1058,7 +1427,7 @@ func (x *EnforcementDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnforcementDecision.ProtoReflect.Descriptor instead.
 func (*EnforcementDecision) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{12}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *EnforcementDecision) GetSlug() string {
@@ -1154,7 +1523,7 @@ type IngestCorpusResponse struct {
 
 func (x *IngestCorpusResponse) Reset() {
 	*x = IngestCorpusResponse{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[13]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1166,7 +1535,7 @@ func (x *IngestCorpusResponse) String() string {
 func (*IngestCorpusResponse) ProtoMessage() {}
 
 func (x *IngestCorpusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[13]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1179,7 +1548,7 @@ func (x *IngestCorpusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestCorpusResponse.ProtoReflect.Descriptor instead.
 func (*IngestCorpusResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{13}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *IngestCorpusResponse) GetApplied() bool {
@@ -1228,7 +1597,7 @@ type IngestCounts struct {
 
 func (x *IngestCounts) Reset() {
 	*x = IngestCounts{}
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[14]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1240,7 +1609,7 @@ func (x *IngestCounts) String() string {
 func (*IngestCounts) ProtoMessage() {}
 
 func (x *IngestCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[14]
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1253,7 +1622,7 @@ func (x *IngestCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestCounts.ProtoReflect.Descriptor instead.
 func (*IngestCounts) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{14}
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *IngestCounts) GetDocuments() int32 {
@@ -1330,7 +1699,34 @@ var File_kindlast_platform_v1_ingest_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"\n" +
-	"!kindlast/platform/v1/ingest.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"h\n" +
+	"!kindlast/platform/v1/ingest.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\x9a\x05\n" +
+	"\x15RecordAgentRunRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x14\n" +
+	"\x05skill\x18\x02 \x01(\tR\x05skill\x12#\n" +
+	"\rskill_version\x18\x03 \x01(\tR\fskillVersion\x12\x14\n" +
+	"\x05model\x18\x04 \x01(\tR\x05model\x12#\n" +
+	"\rmodel_version\x18\x05 \x01(\tR\fmodelVersion\x12.\n" +
+	"\x14on_behalf_of_user_id\x18\x06 \x01(\tR\x10onBehalfOfUserId\x12!\n" +
+	"\frequest_json\x18\a \x01(\tR\vrequestJson\x12&\n" +
+	"\x0ftool_calls_json\x18\b \x01(\tR\rtoolCallsJson\x12%\n" +
+	"\x0ecitations_json\x18\t \x01(\tR\rcitationsJson\x12?\n" +
+	"\aoutcome\x18\n" +
+	" \x01(\x0e2%.kindlast.platform.v1.AgentRunOutcomeR\aoutcome\x12%\n" +
+	"\x0eoutcome_detail\x18\v \x01(\tR\routcomeDetail\x129\n" +
+	"\x05usage\x18\f \x01(\v2#.kindlast.platform.v1.AgentRunUsageR\x05usage\x127\n" +
+	"\tqueued_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\bqueuedAt\x129\n" +
+	"\n" +
+	"started_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
+	"\vfinished_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"finishedAt\"\xa8\x01\n" +
+	"\rAgentRunUsage\x12!\n" +
+	"\finput_tokens\x18\x01 \x01(\x05R\vinputTokens\x12.\n" +
+	"\x13cached_input_tokens\x18\x02 \x01(\x05R\x11cachedInputTokens\x12#\n" +
+	"\routput_tokens\x18\x03 \x01(\x05R\foutputTokens\x12\x1f\n" +
+	"\vcost_micros\x18\x04 \x01(\x03R\n" +
+	"costMicros\"(\n" +
+	"\x16RecordAgentRunResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"h\n" +
 	"\x13IngestCorpusRequest\x128\n" +
 	"\x04pack\x18\x01 \x01(\v2$.kindlast.platform.v1.RegulationPackR\x04pack\x12\x17\n" +
 	"\adry_run\x18\x02 \x01(\bR\x06dryRun\"\xd4\x02\n" +
@@ -1455,9 +1851,15 @@ const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"guidelines\x18\t \x01(\x05R\n" +
 	"guidelines\x123\n" +
 	"\x15enforcement_decisions\x18\n" +
-	" \x01(\x05R\x14enforcementDecisions2\xb1\x01\n" +
+	" \x01(\x05R\x14enforcementDecisions*\x92\x01\n" +
+	"\x0fAgentRunOutcome\x12!\n" +
+	"\x1dAGENT_RUN_OUTCOME_UNSPECIFIED\x10\x00\x12\x1f\n" +
+	"\x1bAGENT_RUN_OUTCOME_SUCCEEDED\x10\x01\x12\x1d\n" +
+	"\x19AGENT_RUN_OUTCOME_REFUSED\x10\x02\x12\x1c\n" +
+	"\x18AGENT_RUN_OUTCOME_FAILED\x10\x032\xdc\x02\n" +
 	"\rIngestService\x12\x9f\x01\n" +
-	"\fIngestCorpus\x12).kindlast.platform.v1.IngestCorpusRequest\x1a*.kindlast.platform.v1.IngestCorpusResponse\"8\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/internal/v1/corpus:ingestB\xdf\x01\n" +
+	"\fIngestCorpus\x12).kindlast.platform.v1.IngestCorpusRequest\x1a*.kindlast.platform.v1.IngestCorpusResponse\"8\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/internal/v1/corpus:ingest\x12\xa8\x01\n" +
+	"\x0eRecordAgentRun\x12+.kindlast.platform.v1.RecordAgentRunRequest\x1a,.kindlast.platform.v1.RecordAgentRunResponse\";\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/internal/v1/agent-runsB\xdf\x01\n" +
 	"\x18com.kindlast.platform.v1B\vIngestProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
 var (
@@ -1472,47 +1874,59 @@ func file_kindlast_platform_v1_ingest_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_ingest_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_kindlast_platform_v1_ingest_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_kindlast_platform_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_kindlast_platform_v1_ingest_proto_goTypes = []any{
-	(*IngestCorpusRequest)(nil),   // 0: kindlast.platform.v1.IngestCorpusRequest
-	(*RegulationPack)(nil),        // 1: kindlast.platform.v1.RegulationPack
-	(*RegulatoryDocument)(nil),    // 2: kindlast.platform.v1.RegulatoryDocument
-	(*Article)(nil),               // 3: kindlast.platform.v1.Article
-	(*Paragraph)(nil),             // 4: kindlast.platform.v1.Paragraph
-	(*Recital)(nil),               // 5: kindlast.platform.v1.Recital
-	(*Annex)(nil),                 // 6: kindlast.platform.v1.Annex
-	(*AnnexItem)(nil),             // 7: kindlast.platform.v1.AnnexItem
-	(*ArticleRecitalLink)(nil),    // 8: kindlast.platform.v1.ArticleRecitalLink
-	(*Obligation)(nil),            // 9: kindlast.platform.v1.Obligation
-	(*Citation)(nil),              // 10: kindlast.platform.v1.Citation
-	(*Guideline)(nil),             // 11: kindlast.platform.v1.Guideline
-	(*EnforcementDecision)(nil),   // 12: kindlast.platform.v1.EnforcementDecision
-	(*IngestCorpusResponse)(nil),  // 13: kindlast.platform.v1.IngestCorpusResponse
-	(*IngestCounts)(nil),          // 14: kindlast.platform.v1.IngestCounts
-	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
+	(AgentRunOutcome)(0),           // 0: kindlast.platform.v1.AgentRunOutcome
+	(*RecordAgentRunRequest)(nil),  // 1: kindlast.platform.v1.RecordAgentRunRequest
+	(*AgentRunUsage)(nil),          // 2: kindlast.platform.v1.AgentRunUsage
+	(*RecordAgentRunResponse)(nil), // 3: kindlast.platform.v1.RecordAgentRunResponse
+	(*IngestCorpusRequest)(nil),    // 4: kindlast.platform.v1.IngestCorpusRequest
+	(*RegulationPack)(nil),         // 5: kindlast.platform.v1.RegulationPack
+	(*RegulatoryDocument)(nil),     // 6: kindlast.platform.v1.RegulatoryDocument
+	(*Article)(nil),                // 7: kindlast.platform.v1.Article
+	(*Paragraph)(nil),              // 8: kindlast.platform.v1.Paragraph
+	(*Recital)(nil),                // 9: kindlast.platform.v1.Recital
+	(*Annex)(nil),                  // 10: kindlast.platform.v1.Annex
+	(*AnnexItem)(nil),              // 11: kindlast.platform.v1.AnnexItem
+	(*ArticleRecitalLink)(nil),     // 12: kindlast.platform.v1.ArticleRecitalLink
+	(*Obligation)(nil),             // 13: kindlast.platform.v1.Obligation
+	(*Citation)(nil),               // 14: kindlast.platform.v1.Citation
+	(*Guideline)(nil),              // 15: kindlast.platform.v1.Guideline
+	(*EnforcementDecision)(nil),    // 16: kindlast.platform.v1.EnforcementDecision
+	(*IngestCorpusResponse)(nil),   // 17: kindlast.platform.v1.IngestCorpusResponse
+	(*IngestCounts)(nil),           // 18: kindlast.platform.v1.IngestCounts
+	(*timestamppb.Timestamp)(nil),  // 19: google.protobuf.Timestamp
 }
 var file_kindlast_platform_v1_ingest_proto_depIdxs = []int32{
-	1,  // 0: kindlast.platform.v1.IngestCorpusRequest.pack:type_name -> kindlast.platform.v1.RegulationPack
-	2,  // 1: kindlast.platform.v1.RegulationPack.document:type_name -> kindlast.platform.v1.RegulatoryDocument
-	9,  // 2: kindlast.platform.v1.RegulationPack.obligations:type_name -> kindlast.platform.v1.Obligation
-	11, // 3: kindlast.platform.v1.RegulationPack.guidelines:type_name -> kindlast.platform.v1.Guideline
-	12, // 4: kindlast.platform.v1.RegulationPack.enforcement_decisions:type_name -> kindlast.platform.v1.EnforcementDecision
-	3,  // 5: kindlast.platform.v1.RegulatoryDocument.articles:type_name -> kindlast.platform.v1.Article
-	5,  // 6: kindlast.platform.v1.RegulatoryDocument.recitals:type_name -> kindlast.platform.v1.Recital
-	6,  // 7: kindlast.platform.v1.RegulatoryDocument.annexes:type_name -> kindlast.platform.v1.Annex
-	8,  // 8: kindlast.platform.v1.RegulatoryDocument.article_recitals:type_name -> kindlast.platform.v1.ArticleRecitalLink
-	4,  // 9: kindlast.platform.v1.Article.paragraphs:type_name -> kindlast.platform.v1.Paragraph
-	7,  // 10: kindlast.platform.v1.Annex.items:type_name -> kindlast.platform.v1.AnnexItem
-	10, // 11: kindlast.platform.v1.Obligation.citation:type_name -> kindlast.platform.v1.Citation
-	14, // 12: kindlast.platform.v1.IngestCorpusResponse.counts:type_name -> kindlast.platform.v1.IngestCounts
-	15, // 13: kindlast.platform.v1.IngestCorpusResponse.ingested_at:type_name -> google.protobuf.Timestamp
-	0,  // 14: kindlast.platform.v1.IngestService.IngestCorpus:input_type -> kindlast.platform.v1.IngestCorpusRequest
-	13, // 15: kindlast.platform.v1.IngestService.IngestCorpus:output_type -> kindlast.platform.v1.IngestCorpusResponse
-	15, // [15:16] is the sub-list for method output_type
-	14, // [14:15] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	0,  // 0: kindlast.platform.v1.RecordAgentRunRequest.outcome:type_name -> kindlast.platform.v1.AgentRunOutcome
+	2,  // 1: kindlast.platform.v1.RecordAgentRunRequest.usage:type_name -> kindlast.platform.v1.AgentRunUsage
+	19, // 2: kindlast.platform.v1.RecordAgentRunRequest.queued_at:type_name -> google.protobuf.Timestamp
+	19, // 3: kindlast.platform.v1.RecordAgentRunRequest.started_at:type_name -> google.protobuf.Timestamp
+	19, // 4: kindlast.platform.v1.RecordAgentRunRequest.finished_at:type_name -> google.protobuf.Timestamp
+	5,  // 5: kindlast.platform.v1.IngestCorpusRequest.pack:type_name -> kindlast.platform.v1.RegulationPack
+	6,  // 6: kindlast.platform.v1.RegulationPack.document:type_name -> kindlast.platform.v1.RegulatoryDocument
+	13, // 7: kindlast.platform.v1.RegulationPack.obligations:type_name -> kindlast.platform.v1.Obligation
+	15, // 8: kindlast.platform.v1.RegulationPack.guidelines:type_name -> kindlast.platform.v1.Guideline
+	16, // 9: kindlast.platform.v1.RegulationPack.enforcement_decisions:type_name -> kindlast.platform.v1.EnforcementDecision
+	7,  // 10: kindlast.platform.v1.RegulatoryDocument.articles:type_name -> kindlast.platform.v1.Article
+	9,  // 11: kindlast.platform.v1.RegulatoryDocument.recitals:type_name -> kindlast.platform.v1.Recital
+	10, // 12: kindlast.platform.v1.RegulatoryDocument.annexes:type_name -> kindlast.platform.v1.Annex
+	12, // 13: kindlast.platform.v1.RegulatoryDocument.article_recitals:type_name -> kindlast.platform.v1.ArticleRecitalLink
+	8,  // 14: kindlast.platform.v1.Article.paragraphs:type_name -> kindlast.platform.v1.Paragraph
+	11, // 15: kindlast.platform.v1.Annex.items:type_name -> kindlast.platform.v1.AnnexItem
+	14, // 16: kindlast.platform.v1.Obligation.citation:type_name -> kindlast.platform.v1.Citation
+	18, // 17: kindlast.platform.v1.IngestCorpusResponse.counts:type_name -> kindlast.platform.v1.IngestCounts
+	19, // 18: kindlast.platform.v1.IngestCorpusResponse.ingested_at:type_name -> google.protobuf.Timestamp
+	4,  // 19: kindlast.platform.v1.IngestService.IngestCorpus:input_type -> kindlast.platform.v1.IngestCorpusRequest
+	1,  // 20: kindlast.platform.v1.IngestService.RecordAgentRun:input_type -> kindlast.platform.v1.RecordAgentRunRequest
+	17, // 21: kindlast.platform.v1.IngestService.IngestCorpus:output_type -> kindlast.platform.v1.IngestCorpusResponse
+	3,  // 22: kindlast.platform.v1.IngestService.RecordAgentRun:output_type -> kindlast.platform.v1.RecordAgentRunResponse
+	21, // [21:23] is the sub-list for method output_type
+	19, // [19:21] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_ingest_proto_init() }
@@ -1525,13 +1939,14 @@ func file_kindlast_platform_v1_ingest_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_ingest_proto_rawDesc), len(file_kindlast_platform_v1_ingest_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   15,
+			NumEnums:      1,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_kindlast_platform_v1_ingest_proto_goTypes,
 		DependencyIndexes: file_kindlast_platform_v1_ingest_proto_depIdxs,
+		EnumInfos:         file_kindlast_platform_v1_ingest_proto_enumTypes,
 		MessageInfos:      file_kindlast_platform_v1_ingest_proto_msgTypes,
 	}.Build()
 	File_kindlast_platform_v1_ingest_proto = out.File

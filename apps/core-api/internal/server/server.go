@@ -108,6 +108,16 @@ type Dependencies struct {
 	// this package keeps depending on no database driver.
 	Corpus ingestservice.Writer
 
+	// AgentRuns records what an agent run did, on the kindlast_agent pool
+	// (ENT-218, §26.3).
+	//
+	// A separate field from Corpus above because the two are different roles on
+	// different pools: `kindlast_ingest` can write the corpus and reach nothing
+	// else, `kindlast_agent` can insert a run record and cannot touch the
+	// corpus. Nil when this deployment runs no agents, and then RecordAgentRun
+	// answers Unimplemented rather than panicking.
+	AgentRuns ingestservice.RunRecorder
+
 	// Logger is what the internal handlers report to. An ingest that refused a
 	// pack has to say so somewhere a person will look, because its caller is a
 	// schedule rather than a browser.
@@ -202,9 +212,15 @@ func New(deps Dependencies) (http.Handler, error) {
 	// configured one answers 404 rather than 500. The pool names
 	// `kindlast_ingest`, which holds grants on the ten regulatory tables and no
 	// others; see 00018 for why that is a sixth role and not the migrator.
-	if deps.Corpus != nil {
+	//
+	// Registered when EITHER dependency exists, because the service now carries
+	// two RPCs on two pools: a deployment may load the corpus without running
+	// agents, or run agents against a corpus somebody else loaded. The handler
+	// answers Unimplemented for whichever half it was not given, which is a
+	// better answer than a 404 on a path that does exist.
+	if deps.Corpus != nil || deps.AgentRuns != nil {
 		mux.Handle(platformv1connect.NewIngestServiceHandler(
-			ingestservice.New(deps.Corpus, deps.Logger), internal))
+			ingestservice.New(deps.Corpus, deps.AgentRuns, deps.Logger), internal))
 	}
 
 	// Unauthenticated by design, and bound to the internal listener only.

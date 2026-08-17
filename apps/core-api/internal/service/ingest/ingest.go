@@ -23,12 +23,13 @@ package ingest
 
 import (
 	"context"
-
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	domain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
@@ -44,27 +45,48 @@ type Writer interface {
 	Ingest(ctx context.Context, pack domain.Pack, dryRun bool) (postgres.Counts, []string, error)
 }
 
+// RunRecorder is what this handler needs to record an agent run (ENT-218).
+//
+// A second dependency rather than a method on Writer, because the two run on
+// different pools as different roles: the corpus writes as `kindlast_ingest`,
+// which holds grants on the ten regulatory tables and nothing else, and a run
+// record writes as `kindlast_agent`, which holds insert on `agent_runs` and
+// cannot touch the corpus at all. One interface would suggest one credential.
+type RunRecorder interface {
+	RecordAgentRun(ctx context.Context, run postgres.AgentRun) (uuid.UUID, error)
+}
+
 // Service implements platformv1connect.IngestServiceHandler.
 type Service struct {
 	store  Writer
+	runs   RunRecorder
 	logger *slog.Logger
 	now    func() time.Time
 }
 
-func New(store Writer, logger *slog.Logger) *Service {
+func New(store Writer, runs RunRecorder, logger *slog.Logger) *Service {
 	if logger == nil {
 		// A discarding logger rather than a nil dereference. This handler's
 		// caller is a schedule, so the one place it must not fail is while
 		// reporting that something else failed.
 		logger = slog.New(slog.DiscardHandler)
 	}
-	return &Service{store: store, logger: logger, now: time.Now}
+	return &Service{store: store, runs: runs, logger: logger, now: time.Now}
 }
 
 func (s *Service) IngestCorpus(
 	ctx context.Context,
 	req *connect.Request[platformv1.IngestCorpusRequest],
 ) (*connect.Response[platformv1.IngestCorpusResponse], error) {
+	// Nil since ENT-218, because the service is now registered when EITHER
+	// dependency exists: a deployment may run agents against a corpus somebody
+	// else loaded. Unimplemented rather than a panic, and rather than a 404 on
+	// a path that does exist.
+	if s.store == nil {
+		return nil, connect.NewError(connect.CodeUnimplemented,
+			errors.New("this deployment does not write the corpus"))
+	}
+
 	pack := toPack(req.Msg.GetPack())
 
 	// Shape first, before anything touches the database. Everything checkable
@@ -270,6 +292,122 @@ func toPack(in *platformv1.RegulationPack) domain.Pack {
 	}
 
 	return pack
+}
+
+// RecordAgentRun stores one finished run (ENT-218, §26.3).
+//
+// The organisation comes from the message rather than a header, because a run
+// happens for whichever tenant the work belonged to and Intelligence holds no
+// session to derive one from. See the store's comment for why that is safe and
+// what would stop it being so.
+func (s *Service) RecordAgentRun(
+	ctx context.Context,
+	req *connect.Request[platformv1.RecordAgentRunRequest],
+) (*connect.Response[platformv1.RecordAgentRunResponse], error) {
+	if s.runs == nil {
+		return nil, connect.NewError(connect.CodeUnimplemented,
+			errors.New("this deployment records no agent runs"))
+	}
+
+	msg := req.Msg
+
+	orgID, err := uuid.Parse(msg.GetOrgId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("org_id is not a uuid: %w", err))
+	}
+
+	// Required, and refused rather than defaulted. A run recorded without a
+	// skill or model version is a row that answers "what produced this" with
+	// "something", which is worse than no row because it looks like an answer.
+	for name, value := range map[string]string{
+		"skill":         msg.GetSkill(),
+		"skill_version": msg.GetSkillVersion(),
+		"model":         msg.GetModel(),
+		"model_version": msg.GetModelVersion(),
+	} {
+		if value == "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("%s is required: a run whose provenance is unknown is not a record", name))
+		}
+	}
+
+	outcome, err := toOutcome(msg.GetOutcome())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	var onBehalfOf *uuid.UUID
+	if raw := msg.GetOnBehalfOfUserId(); raw != "" {
+		parsed, parseErr := uuid.Parse(raw)
+		if parseErr != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument,
+				fmt.Errorf("on_behalf_of_user_id is not a uuid: %w", parseErr))
+		}
+		onBehalfOf = &parsed
+	}
+
+	// All three timestamps are required. Defaulting a missing one to now()
+	// would put a plausible number in a column ENT-238 measures queue wait
+	// with, and a wrong measurement is harder to notice than a missing one.
+	if msg.GetQueuedAt() == nil || msg.GetStartedAt() == nil || msg.GetFinishedAt() == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("queued_at, started_at and finished_at are all required"))
+	}
+
+	usage := msg.GetUsage()
+	id, err := s.runs.RecordAgentRun(ctx, postgres.AgentRun{
+		OrgID:             orgID,
+		Skill:             msg.GetSkill(),
+		SkillVersion:      msg.GetSkillVersion(),
+		Model:             msg.GetModel(),
+		ModelVersion:      msg.GetModelVersion(),
+		OnBehalfOfUserID:  onBehalfOf,
+		RequestJSON:       msg.GetRequestJson(),
+		ToolCallsJSON:     msg.GetToolCallsJson(),
+		CitationsJSON:     msg.GetCitationsJson(),
+		Outcome:           outcome,
+		OutcomeDetail:     msg.GetOutcomeDetail(),
+		InputTokens:       usage.GetInputTokens(),
+		CachedInputTokens: usage.GetCachedInputTokens(),
+		OutputTokens:      usage.GetOutputTokens(),
+		CostMicros:        usage.GetCostMicros(),
+		QueuedAt:          msg.GetQueuedAt().AsTime(),
+		StartedAt:         msg.GetStartedAt().AsTime(),
+		FinishedAt:        msg.GetFinishedAt().AsTime(),
+	})
+	if err != nil {
+		s.logger.Error("recording an agent run failed",
+			"org", orgID, "skill", msg.GetSkill(), "error", err)
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Logged at info even on success, because a run that produced a finding is
+	// the thing an operator traces backwards from when a customer disputes one.
+	s.logger.Info("recorded an agent run",
+		"id", id, "org", orgID,
+		"skill", msg.GetSkill(), "skill_version", msg.GetSkillVersion(),
+		"model", msg.GetModel(), "outcome", outcome)
+
+	return connect.NewResponse(&platformv1.RecordAgentRunResponse{Id: id.String()}), nil
+}
+
+// toOutcome maps the enum to the column's check constraint.
+//
+// UNSPECIFIED is refused rather than defaulted to failed. A run whose outcome
+// nobody set is a caller bug, and guessing would put a definite-looking value
+// in the column a customer reads to decide whether to trust a finding.
+func toOutcome(outcome platformv1.AgentRunOutcome) (string, error) {
+	switch outcome {
+	case platformv1.AgentRunOutcome_AGENT_RUN_OUTCOME_SUCCEEDED:
+		return "succeeded", nil
+	case platformv1.AgentRunOutcome_AGENT_RUN_OUTCOME_REFUSED:
+		return "refused", nil
+	case platformv1.AgentRunOutcome_AGENT_RUN_OUTCOME_FAILED:
+		return "failed", nil
+	default:
+		return "", errors.New("outcome is required: succeeded, refused or failed")
+	}
 }
 
 func toCounts(counts postgres.Counts) *platformv1.IngestCounts {

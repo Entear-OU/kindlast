@@ -1267,6 +1267,66 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/agent-runs:
+        post:
+            tags:
+                - IngestService
+            description: |-
+                Records one agent run: what was asked, what answered, what it consulted,
+                 what it cost, and how it ended (ENT-218, §26.3).
+
+                 # WHY THE SCOPE IS DIFFERENT FROM THE RPC ABOVE
+
+                 `internal:intelligence`, not `internal:ingest`, and the difference is the
+                 point rather than an inconsistency. The scope option is per method
+                 precisely so one internal surface can hold writes that different platform
+                 callers make. The corpus loader may not record agent runs and the
+                 Intelligence service may not rewrite the law, and neither holds the
+                 other's scope.
+
+                 What the two share, and the reason they sit on one service, is the
+                 property in this file's header: no person's token reaches either. The
+                 package boundary answers "is this reachable by a human" and the scope
+                 answers "by which of us".
+
+                 # WHY INTELLIGENCE DOES NOT WRITE THIS ITSELF
+
+                 It holds no database credential (§1.6). Go persists; Python drafts and
+                 returns. So the run record travels back over this RPC rather than being
+                 written where it was produced, which also means the record is written by
+                 something that can be trusted to write the org_id honestly.
+
+                 # ONE CALL, AT THE END
+
+                 A run is recorded once, when it finishes, carrying both timestamps. There
+                 is no start call to pair with. A record a producer can amend after the
+                 fact is worth less than one it cannot, which is the same argument
+                 `audit_log` rests on, and 00019 enforces it by granting no update to
+                 anybody.
+
+                 A refusal is a run and is recorded. A run that failed to record is not a
+                 run that did not happen, so the caller must treat a failure here as
+                 serious rather than as best-effort telemetry.
+            operationId: IngestService_RecordAgentRun
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RecordAgentRunRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecordAgentRunResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/corpus:ingest:
         post:
             tags:
@@ -1417,6 +1477,28 @@ components:
                  It is one today, and §26 has agents producing acts that reference their run
                  record. `kind` exists so that day adds a value rather than a field, and so a
                  console is never written around "the actor's name" being a human's name.
+        AgentRunUsage:
+            type: object
+            properties:
+                inputTokens:
+                    type: integer
+                    format: int32
+                cachedInputTokens:
+                    type: integer
+                    description: |-
+                        Separate because every provider that offers prompt caching prices it
+                         separately, and because with a local model it is the measurement showing
+                         the corpus prefix is reused rather than reprocessed (§26).
+                    format: int32
+                outputTokens:
+                    type: integer
+                    format: int32
+                costMicros:
+                    type: string
+                    description: |-
+                        Micros, not a float. Money in a float is a bug waiting for a
+                         reconciliation. Zero for a local model, which is a true statement about
+                         marginal cost rather than a missing value.
         AiSystem:
             type: object
             properties:
@@ -2773,6 +2855,96 @@ components:
                     format: int32
                 summary:
                     type: string
+        RecordAgentRunRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                    description: |-
+                        The organisation the run was for. Required, and carried in the message
+                         rather than a header because this caller has no active organisation: it
+                         runs for whichever tenant the work belonged to, and says so per call.
+                skill:
+                    type: string
+                    description: |-
+                        What ran, with versions. A bare name would record that "the analyst skill"
+                         ran, which is not a fact anybody can act on a year later.
+                skillVersion:
+                    type: string
+                model:
+                    type: string
+                modelVersion:
+                    type: string
+                    description: For a local model this is the weights' digest, not a marketing version.
+                onBehalfOfUserId:
+                    type: string
+                    description: |-
+                        The person this ran for, when there was one.
+
+                         Empty for a scheduled sweep, which runs for the organisation and for
+                         nobody in particular. Setting it there would be a lie that later reads as
+                         "this person asked for this".
+                requestJson:
+                    type: string
+                    description: |-
+                        The input the run was given, as JSON. Not the assembled prompt: that
+                         includes the corpus prefix and is reconstructible from the skill version,
+                         so storing it per run would copy the corpus into every row.
+                toolCallsJson:
+                    type: string
+                    description: Ordered tool calls with arguments and result summaries, as JSON.
+                citationsJson:
+                    type: string
+                    description: |-
+                        Citations, split into those that resolved to a stored obligation and those
+                         the validator refused, as JSON.
+
+                         BOTH HALVES, AND THE REJECTED HALF IS THE IMPORTANT ONE. A validator that
+                         silently dropped a bad citation would leave a record indistinguishable
+                         from a run where the model never tried to cite anything. The customer's
+                         question is "what did it get wrong", and an omission cannot answer it.
+                outcome:
+                    enum:
+                        - AGENT_RUN_OUTCOME_UNSPECIFIED
+                        - AGENT_RUN_OUTCOME_SUCCEEDED
+                        - AGENT_RUN_OUTCOME_REFUSED
+                        - AGENT_RUN_OUTCOME_FAILED
+                    type: string
+                    format: enum
+                outcomeDetail:
+                    type: string
+                    description: |-
+                        Why, when the outcome was not success. For a human to read, not a code to
+                         branch on.
+                usage:
+                    $ref: '#/components/schemas/AgentRunUsage'
+                queuedAt:
+                    type: string
+                    description: |-
+                        Queued, started, finished. Three rather than two because ENT-238 needs to
+                         tell "slow because the model is slow" from "slow because it waited", and
+                         those are different problems with different fixes.
+                    format: date-time
+                startedAt:
+                    type: string
+                    format: date-time
+                finishedAt:
+                    type: string
+                    format: date-time
+            description: |-
+                RecordAgentRunRequest is one finished run.
+
+                 Minimal on purpose. §26.4 gives this a versioned profile reference and
+                 normalised evidence, and ENT-228 adds them. The shape here is what those
+                 grow into rather than something they replace.
+        RecordAgentRunResponse:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: |-
+                        The stored run's id, so a caller can reference it from whatever it goes on
+                         to write.
         RegulationPack:
             type: object
             properties:

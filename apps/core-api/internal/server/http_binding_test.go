@@ -302,6 +302,21 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.IngestService.IngestCorpus": {
 			Method: "POST", Path: "/internal/v1/corpus:ingest",
 		},
+
+		// A plural collection and a plain POST, unlike its neighbour above,
+		// because this one really is creating a resource: one run happened and
+		// one row records it. The corpus RPC is a colon verb because applying a
+		// pack is an action over ten tables rather than the creation of a
+		// thing.
+		//
+		// No {org_id} in the path, and for a different reason from the corpus.
+		// The corpus has no organisation at all; a run has exactly one, and it
+		// travels in the body because this caller holds no session to derive an
+		// active organisation from. See the RPC's comment for why that is safe
+		// and what would stop it being so.
+		"kindlast.platform.v1.IngestService.RecordAgentRun": {
+			Method: "POST", Path: "/internal/v1/agent-runs",
+		},
 	}
 
 	got := map[string]httprule.Binding{}
