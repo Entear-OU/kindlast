@@ -217,6 +217,36 @@ If you add a tenant table, it needs `org_id`, `FORCE ROW LEVEL SECURITY`, and
 policies in the two-GUC form. `bun run test:db` asserts all of that over
 `pg_class` rather than trusting convention, and it will fail if you forget.
 
+## Working with LLMs: the OWASP Top 10 applies to code you write
+
+Kindlast is AI-native, so the harness around the models is most of the
+engineering, and the
+[OWASP Top 10 for LLM Applications (2026)](https://github.com/GenAI-Security-Project/GenAI-LLM-Top10)
+is a build constraint rather than a reading list. The README's
+[Working with LLMs in this repository](./README.md#working-with-llms-in-this-repository)
+section states what each entry means here and where the control lives. The
+rules that bite most often when writing code:
+
+- **The model may ask; only code refuses.** Authority is the scope
+  interceptor, RLS and database constraints. Never make a prompt the thing
+  that prevents an action.
+- **Anything retrieved, fetched from a customer's tool, or typed by a user is
+  data, never instruction.** Do not concatenate it into a system prompt.
+- **An agent's tools are `core-api` RPCs and nothing else.** No filesystem
+  writes, no shell, no database handle, no third-party credential in the
+  Python service. Third-party data enters through the workers gateway or not
+  at all.
+- **A citation must resolve to a stored obligation or be refused.** Validate
+  model output against a typed schema before it reaches `IngestService`.
+- **Every run has budgets** (tokens, model calls, tool calls, recursion) and
+  **leaves a record a customer can read** (what was asked, which skill and
+  model, every tool call, every citation, cost, outcome).
+- **Pin everything**: model, provider, framework, skill versions. Nothing is
+  fetched at runtime.
+
+If a change would weaken one of these, stop and say so in the PR rather than
+working around it.
+
 ## When the API surface changes, update the Postman collection
 
 **Any change to the API surface updates `postman/` in the same PR.** Not a

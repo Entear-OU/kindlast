@@ -222,6 +222,43 @@ Supabase session. What exists today is the marketing site, the sign-in flow and
 an organisation's own page at `/o/{slug}/`; the rest returns surface by surface
 on `core-api`.
 
+## Working with LLMs in this repository
+
+Kindlast is an AI-native product: agents draft, classify and act, and the
+harness around them is most of the engineering. Every contributor, and every
+coding agent working in this repository, builds against the
+[OWASP Top 10 for LLM Applications (2026)](https://github.com/GenAI-Security-Project/GenAI-LLM-Top10).
+The list below says what each entry means here and where the control lives.
+The short version: **the model may ask; only code refuses.** Authority lives in
+the scope interceptor, row level security and database constraints, never in a
+prompt.
+
+| Entry | What it means in this repository |
+|---|---|
+| **LLM01 Prompt injection** | Anything retrieved, fetched from a customer's tools, or typed by a user is data, never instruction. Label it, do not append it to a system prompt. Injection cases belong in the eval set. |
+| **LLM02 Sensitive information disclosure** | Traces are redacted at the SDK and stay in the EU. Nothing per-organisation goes before the prompt cache breakpoint. Memory is off unless a design decision turns it on, and then it is org-scoped and deletable. |
+| **LLM03 Excessive agency** | An agent's only tools are `core-api` RPCs: scope-checked, RLS-bound, audited. No filesystem writes, no shell, no database handle. Approvals are rows a human writes; the model never approves anything. |
+| **LLM04 Supply chain** | Pin every model, provider, framework and skill version. Skills ship in the image; nothing is fetched at runtime. Customer MCP servers reach only the workers gateway behind an egress allow-list. |
+| **LLM05 Data and model poisoning** | The regulatory corpus in `data/corpus/` is reviewed data, not crawled data. Anything external enters through review before ingestion. |
+| **LLM06 Unbounded consumption** | Every run has a token budget, a model-call limit, a tool-call limit and a recursion limit. Usage is attributed per organisation with cached tokens counted separately. |
+| **LLM07 Misinformation** | A citation must resolve to a stored obligation or it is refused. A finding citing the wrong article is worse than no finding. Never let the model state a deadline it did not read from a row. |
+| **LLM08 Hidden context exposure** | No credential, secret or authorisation rule lives in a prompt. If a system prompt leaked in full, it must be embarrassing, not exploitable. |
+| **LLM09 Vector and embedding weaknesses** | The corpus embeddings are shared and read-only to the Python service. Any per-organisation embedding lives under RLS like every other org table. |
+| **LLM10 Improper output handling** | Model output is untrusted data. Validate it against a typed schema before it reaches `IngestService`; render it as text, never as markup or links the model built. |
+
+Two more rules that follow from these:
+
+- **Every agent run leaves a record a customer can read**: what it was asked,
+  which skill and model, every tool call, every citation resolved or rejected,
+  cost and outcome. That record is part of the product; the trace is for
+  engineers.
+- **Third-party data enters through the gateway or not at all.** Read-only by
+  default, labelled, redacted before storage, provenance stamped. The Python
+  service never holds a customer's credential.
+
+If you find a way around any of these, that is a vulnerability. Report it
+through the [security policy](./SECURITY.md), not in a public issue.
+
 ## Contributing
 
 Contributions are welcome. Start with [CONTRIBUTING.md](./CONTRIBUTING.md),
