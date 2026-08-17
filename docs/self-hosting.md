@@ -72,23 +72,69 @@ and not a settings edit.
 
 | Variable | Why |
 |---|---|
-| `OPENAI_API_KEY` | Powers the agent loop. Nothing intelligent works without it. |
 | `NOTIFICATION_TOKEN_SECRET` | Signs one-tap approve, reject and unsubscribe links. Must be a long random string. |
 | `CRON_SECRET` | Bearer token the scheduled endpoints require. Must be a long random string. |
 
 Generate the two secrets with something like `openssl rand -hex 32`. They are
 independent and should not be the same value.
 
+**There is no required API key for the model.** That row used to read
+`OPENAI_API_KEY`, "nothing intelligent works without it", and it is gone
+because the stack now runs a model itself. See the next section.
+
 Both are for surfaces currently being rebuilt: the notification and scheduled
 paths went with the Supabase removal, so nothing reads these yet. They are
 listed because the values should be settled before the surfaces return, not
 improvised on the day.
 
+### The model
+
+**The stack runs its own model and needs no API key to do it.** That is the
+default and it is the point: a deployment holding a compliance record can run
+with no outbound internet at all.
+
+`docker compose up -d` starts two services. `model-init` fetches the weights
+once, checks them against a pinned SHA256 and exits; `model` is llama.cpp's
+`llama-server`, OpenAI-compatible on port 8081.
+
+| Variable | Default | Why |
+|---|---|---|
+| `KINDLAST_MODEL_TIER` | `4b` | `2b`, `4b` or `9b`. Picks filename, URL and digest together, which is why it is one variable rather than three. |
+| `KINDLAST_MODEL_CTX` | `16384` | Context window. A **memory** decision, not a capability one: the model supports 262144 natively, and allocating that would want far more RAM than the weights. |
+| `KINDLAST_MODEL_PARALLEL` | `2` | Concurrent slots. |
+| `KINDLAST_MODEL_PORT` | `8081` | Host port for the endpoint. |
+
+Sizing, so you can pick before rather than after:
+
+| Tier | Download | RAM at 4-bit |
+|---|---|---|
+| `2b` | 1.2 GB | ~3.5 GB |
+| `4b` (default) | 2.7 GB | ~5.5 GB |
+| `9b` | 5.7 GB | ~6.5 GB |
+
+The weights land in `deploy/models/` on the host, not in a Docker volume, so
+`docker compose down -v` does not throw them away. Re-running `up -d` with the
+file already present verifies the digest and exits in under a second.
+
+**Air-gapped installs.** Put the `.gguf` in `deploy/models/` yourself and
+symlink it to `deploy/models/current.gguf`. `model-init` verifies what it finds
+and never opens a socket. To supply a model that is not one of the three tiers,
+set `KINDLAST_MODEL_FILE`, `KINDLAST_MODEL_URL` and `KINDLAST_MODEL_SHA256`
+**together**; setting only some of them is refused rather than merged, because
+a filename from one model and a digest from another is a configuration that
+deletes a good file and fetches the wrong one.
+
+**Using a hosted provider instead.** Anything OpenAI-compatible works, so point
+the client at it and leave the `model` service out. Understand what that
+changes: your compliance profile, findings and DSAR content start leaving the
+deployment, and the provider becomes a processor you are responsible for
+recording.
+
 ### Required for the full agent loop
 
 | Variable | Why |
 |---|---|
-| `TAVILY_API_KEY` | The Analyst fetches verbatim regulatory text at citation time. Without it, citations degrade. |
+| `TAVILY_API_KEY` | Currently unused. Nothing calls `lib/websearch` since the Analyst was removed, and the stored corpus may have made it unnecessary; see ENT-240. Leave it unset unless you have restored a caller. |
 | `NEXT_PUBLIC_APP_URL` | Absolute origin for links in outbound email. Falls back to the request's forwarded host, which is usually wrong behind a proxy. |
 
 ### Optional

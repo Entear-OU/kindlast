@@ -75,6 +75,81 @@
               }
             }
           ]
+        },
+        {
+          "name": "Model health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{model_base_url}}/health",
+              "host": [
+                "{{model_base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "llama.cpp `llama-server`, the local model (ENT-235, §26.6). Returns 200 only once the weights are loaded, which is why the compose healthcheck uses it: a dependant waiting on this is waiting on a model that can answer, not on a process that has started.\n\nNo Authorization header, deliberately. Inference is local and the endpoint is bound to loopback, so there is no key to send. That is the point rather than an omission: a deployment holding a compliance record can run with no outbound internet at all."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('model is up', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Model structured output",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"You extract a regulation citation. Reply with JSON having exactly two fields: `regulation` (a string, one of GDPR or EU AI Act) and `article` (an integer).\"},\n    {\"role\": \"user\", \"content\": \"Which article of the GDPR requires a record of processing activities?\"}\n  ],\n  \"response_format\": {\n    \"type\": \"json_schema\",\n    \"json_schema\": {\n      \"name\": \"citation\",\n      \"schema\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"regulation\": {\"type\": \"string\"},\n          \"article\": {\"type\": \"integer\"}\n        },\n        \"required\": [\"regulation\", \"article\"],\n        \"additionalProperties\": false\n      }\n    }\n  },\n  \"temperature\": 0.7\n}"
+            },
+            "url": {
+              "raw": "{{model_base_url}}/v1/chat/completions",
+              "host": [
+                "{{model_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "The typed-output path §26.3 depends on. `llama-server` converts the JSON Schema to a GBNF grammar and constrains decoding, so the shape is guaranteed by the runtime rather than by the model choosing to comply.\n\nTHE TRAP, WHICH COSTS AN AFTERNOON IF YOU HIT IT BLIND: the schema constrains decoding and is NOT injected into the prompt. Notice the system message above describes the fields in words as well. Remove that description and you still get schema-valid JSON, with the wrong values in the right shape. Passing a Pydantic schema and assuming the model has seen it is the bug this request exists to demonstrate."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('completion returns 200', () => pm.response.to.have.status(200));",
+                  "const content = pm.response.json().choices[0].message.content;",
+                  "pm.test('content parses as JSON', () => { JSON.parse(content); });",
+                  "pm.test('matches the schema it was given', () => {",
+                  "  const o = JSON.parse(content);",
+                  "  pm.expect(o).to.have.property('regulation');",
+                  "  pm.expect(o).to.have.property('article');",
+                  "  pm.expect(o.article).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },

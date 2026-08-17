@@ -31,9 +31,22 @@
 #                      AOF on, noeviction: a cache policy that silently drops
 #                      a session or a rate-limit counter is the trap §15.3
 #                      exists to prevent.
+#   model-init         Fetches the GGUF, verifies its SHA256, exits zero. A job
+#                      rather than boot code for the same reason `migrate` is:
+#                      the bytes a model serves must be pinned, and a server
+#                      that pulls its own weights is the runtime fetch
+#                      AGENTS.md forbids. Idempotent; a re-run is a no-op.
+#   model              llama.cpp `llama-server`, OpenAI-compatible on :8080.
+#                      Qwen3.5-4B Q4_K_M by default (§26.6). THE STACK NEEDS NO
+#                      API KEY: inference is local, which is what lets a
+#                      deployment holding a compliance record run with no
+#                      outbound internet at all (§18.1).
 #   edge               Caddy. Terminates the stack's front door; today it
 #                      serves a health endpoint and reserves the routes web
 #                      and core-api will claim in build-order step 1.
+#
+# The model file lives at deploy/models/ on the host, deliberately not in a
+# named volume, so `down -v` does not cost a 2.7 GB re-download.
 #
 # Passwords: every default below is a LOCAL DEVELOPMENT value. Override via
 # environment or an env file for anything that leaves a laptop.
@@ -401,6 +414,218 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  # The model, fetched once and verified, then served (ENT-235, §26.6).
+  #
+  # WHY A JOB AND NOT A VOLUME THE SERVER FILLS ITSELF
+  #
+  # `AGENTS.md` says pin everything and fetch nothing at runtime. A server that
+  # pulls its own weights on boot is the thing that rule forbids: the bytes it
+  # runs depend on what a registry served that morning. So the fetch is a job
+  # that verifies a digest and exits zero, the same shape `migrate`,
+  # `machinekey-init` and `seed` already use, and the server only ever opens a
+  # file that has already been checked.
+  #
+  # llama.cpp's own convenience path, `llama-server -hf <repo>`, is exactly the
+  # runtime pull this avoids. It is fine for evaluating a model and wrong here.
+  model-init:
+    container_name: kindlast-model-init
+    image: curlimages/curl:8.21.0
+    volumes:
+      # A BIND MOUNT, NOT A NAMED VOLUME, AND THIS IS DELIBERATE.
+      #
+      # docs/self-hosting.md tells people to tear the stack down with
+      # `down -v`. With a named volume that instruction costs a 2.7 GB
+      # re-download every single time, and the stack would feel permanently
+      # slow for a reason nobody would guess. A host path survives it.
+      - ./models:/models
+    environment:
+      # ONE VARIABLE, BECAUSE THE THREE UNDERNEATH IT ARE A MATCHED TRIPLE.
+      #
+      # Filename, URL and digest have to move together. Setting one alone is
+      # not a partial configuration, it is a wrong one: point the 4B digest at
+      # the 2B filename and this job concludes the file on disk is corrupt,
+      # deletes a good model, and fetches the other one under the wrong name.
+      # That happened once while this was being written, which is why the tier
+      # is a single value and the triple is derived rather than typed.
+      KINDLAST_MODEL_TIER: ${KINDLAST_MODEL_TIER:-4b}
+
+      # The escape hatch, for a model that is not one of the three tiers. All
+      # three must be set together; setting some is refused rather than merged
+      # with the tier's values, for the reason above.
+      KINDLAST_MODEL_FILE: ${KINDLAST_MODEL_FILE:-}
+      KINDLAST_MODEL_URL: ${KINDLAST_MODEL_URL:-}
+      KINDLAST_MODEL_SHA256: ${KINDLAST_MODEL_SHA256:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+
+        # Custom model: all three or none.
+        n=0
+        [ -n "$${KINDLAST_MODEL_FILE}" ]   && n=$$((n+1)) || true
+        [ -n "$${KINDLAST_MODEL_URL}" ]    && n=$$((n+1)) || true
+        [ -n "$${KINDLAST_MODEL_SHA256}" ] && n=$$((n+1)) || true
+
+        if [ "$$n" -gt 0 ] && [ "$$n" -lt 3 ]; then
+          echo "refusing a partial model override: set KINDLAST_MODEL_FILE, KINDLAST_MODEL_URL and KINDLAST_MODEL_SHA256 together, or none of them and use KINDLAST_MODEL_TIER" >&2
+          exit 1
+        fi
+
+        if [ "$$n" -eq 0 ]; then
+          # Digests and revisions read from the Hugging Face API on 2026-08-17,
+          # not copied from a document. The URL pins a repository commit rather
+          # than `main`, so the bytes cannot change under a redeploy.
+          case "$${KINDLAST_MODEL_TIER}" in
+            2b)
+              KINDLAST_MODEL_FILE=Qwen3.5-2B-Q4_K_M.gguf
+              KINDLAST_MODEL_URL=https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf
+              KINDLAST_MODEL_SHA256=aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
+              ;;
+            4b)
+              KINDLAST_MODEL_FILE=Qwen3.5-4B-Q4_K_M.gguf
+              KINDLAST_MODEL_URL=https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf
+              KINDLAST_MODEL_SHA256=00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4
+              ;;
+            9b)
+              KINDLAST_MODEL_FILE=Qwen3.5-9B-Q4_K_M.gguf
+              KINDLAST_MODEL_URL=https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf
+              KINDLAST_MODEL_SHA256=03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8
+              ;;
+            *)
+              echo "unknown KINDLAST_MODEL_TIER '$${KINDLAST_MODEL_TIER}': expected 2b, 4b or 9b" >&2
+              exit 1
+              ;;
+          esac
+        fi
+
+        target="/models/$${KINDLAST_MODEL_FILE}"
+
+        if [ -f "$$target" ]; then
+          # Already here and correct: exit immediately. This is what makes a
+          # second `up -d` instant rather than a re-verify of gigabytes.
+          if echo "$${KINDLAST_MODEL_SHA256}  $$target" | sha256sum -c -; then
+            ln -sf "$${KINDLAST_MODEL_FILE}" /models/current.gguf
+            echo "model present and verified: $$target"
+            exit 0
+          fi
+          echo "model present but FAILED verification, refetching" >&2
+          rm -f "$$target"
+        fi
+
+        # Airgapped installs put the file here by hand and never reach this
+        # line. If you are here with no network, that is the supported path.
+        echo "fetching $${KINDLAST_MODEL_FILE} (this is gigabytes; it runs once)"
+        curl -fL --retry 3 --retry-delay 2 --no-progress-meter \
+          -o "$$target.part" "$${KINDLAST_MODEL_URL}"
+
+        # Verify BEFORE the rename. A half-written file under the real name
+        # would pass the `-f` test on the next boot and be served as weights.
+        echo "$${KINDLAST_MODEL_SHA256}  $$target.part" | sha256sum -c -
+        mv "$$target.part" "$$target"
+
+        # The server loads `current.gguf` and never learns the tier, so
+        # switching tiers is this job's business alone. Without the indirection
+        # the filename would have to be threaded into the server's command
+        # line too, which is the desync this whole block exists to prevent.
+        ln -sf "$${KINDLAST_MODEL_FILE}" /models/current.gguf
+        echo "model fetched and verified: $$target"
+
+  model:
+    container_name: kindlast-model
+    # Pinned by digest rather than by tag: `:server` moves, and the bytes that
+    # serve a customer's compliance record should not change because a tag was
+    # repointed. Resolved 2026-08-17 from ghcr.io/ggml-org/llama.cpp:server.
+    image: ghcr.io/ggml-org/llama.cpp@sha256:2244d2b223b49912c7e0c31b4a3654e5e62cf19899f1f36ad30e785eac171a31
+    depends_on:
+      model-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./models:/models:ro
+    command:
+      # A symlink `model-init` points at whichever tier it just verified. The
+      # server therefore has no opinion about which model it is serving, and
+      # changing tier is one variable on the job rather than two values that
+      # have to agree across two services.
+      #
+      # THE SERVER MUST BE RESTARTED WHEN THE LINK MOVES. It opens the file
+      # once at boot, so re-running `model-init` alone against a running server
+      # repoints the link and changes nothing that is being served. A full
+      # `up -d` handles it through the `depends_on` below; a tier switch on a
+      # live stack needs `up -d --force-recreate model`. Without this note the
+      # symptom is an operator who changed the tier, saw the job succeed, and
+      # is being answered by the old model with no indication why.
+      - --model
+      - /models/current.gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      # Context is a RAM decision, not a capability one. Qwen3.5 supports
+      # 262144 tokens natively, and allocating that much KV cache would want
+      # far more memory than the model itself. This is sized for the corpus
+      # prefix plus a run, and an operator with headroom raises it.
+      - --ctx-size
+      - "${KINDLAST_MODEL_CTX:-16384}"
+      # NO `--cache-reuse` HERE, AND THAT IS A FINDING RATHER THAN AN OMISSION.
+      #
+      # §26 wants the corpus as a cached static prompt prefix, so this file
+      # originally carried `--cache-reuse 256`. The server disables it: it logs
+      # "cache_reuse is not supported by this context, it will be disabled" and
+      # starts anyway. Tried with `--kv-unified` as well, on the theory that a
+      # unified KV cache was the missing requirement; `kv_unified = 'true'` in
+      # the log and the flag is still refused, so it is the model rather than
+      # the cache mode. Shipping it would mean a warning on every boot for a
+      # behaviour that never happens.
+      #
+      # The prefix caching §26 actually needs does work, by the simpler exact
+      # prefix match a slot does on its own. Measured on a repeat request:
+      # `prompt_tokens_details.cached_tokens` came back 38 of 44. So the corpus
+      # prefix is not reprocessed per run, which was the requirement; it just
+      # is not this flag that delivers it.
+      #
+      # Chat template handling, needed for the tool and structured-output paths
+      # to render the way the model was trained.
+      - --jinja
+      # THINKING IS OFF, AND IT IS NOT OFF BY DEFAULT.
+      #
+      # Measured, not assumed. Qwen3.5's small models are documented as having
+      # reasoning disabled by default, and this build does the opposite: a
+      # plain request came back with `content` empty, `reasoning_content` full
+      # of a thinking trace, and `finish_reason: length` because it exhausted
+      # the token limit before answering. With reasoning off the same request
+      # answered in 41 completion tokens instead of over 200.
+      #
+      # §26.3's per-run token budget assumes the cheap path, so the cheap path
+      # has to be the server's default. A caller that wants thinking can ask
+      # for it per request; nothing gets it by accident.
+      - --reasoning
+      - "off"
+      - --parallel
+      - "${KINDLAST_MODEL_PARALLEL:-2}"
+    healthcheck:
+      # `/health` returns 200 only once the weights are loaded, so a dependent
+      # service waiting on this is waiting on a model that can actually answer
+      # rather than on a process that has started.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      # Generous: first load reads gigabytes off disk, and a cold page cache
+      # on a laptop is slower than anything else in this file.
+      retries: 60
+      start_period: 30s
+    ports:
+      # Loopback only, like every other published port in this file. The server
+      # logs a warning on boot that CORS allows all origins and no API key is
+      # set, which is true and worth understanding rather than silencing: a
+      # page in a browser on this machine can reach the endpoint. The exposure
+      # is compute, not data (the model holds no tenant state and reads no
+      # database), and it is the same posture as postgres and redis publishing
+      # here, which carry considerably more. A deployment that wants the
+      # endpoint closed should drop this mapping: nothing in the stack needs
+      # it, because services reach the model over the compose network. It is
+      # published for `bun run dev`, the Postman collection, and debugging.
+      - "127.0.0.1:${KINDLAST_MODEL_PORT:-8081}:8080"
 
   edge:
     container_name: kindlast-edge
