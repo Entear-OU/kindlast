@@ -6,7 +6,10 @@ import {
   RiskBadge,
   UrgencyBadge,
 } from '@/components/records/badges'
+import { RespondButton } from '@/components/records/dsar-form'
 import { NotRecorded, Value, ValueList } from '@/components/records/states'
+import { Button } from '@/components/ui/button'
+import type { RecordActionState } from '@/lib/records/action-state'
 import {
   Table,
   TableBody,
@@ -70,7 +73,14 @@ function Register({
   )
 }
 
-export function RopaTable({ items }: { items: ProcessingActivity[] }) {
+export function RopaTable({
+  items,
+  onEdit,
+}: {
+  items: ProcessingActivity[]
+  /** Absent on a read-only render, which is what a server component gives. */
+  onEdit?: (id: string) => void
+}) {
   return (
     <Register
       caption="Record of processing activities"
@@ -82,6 +92,9 @@ export function RopaTable({ items }: { items: ProcessingActivity[] }) {
           <TableHead className={HEAD}>Recipients</TableHead>
           <TableHead className={HEAD}>Retention</TableHead>
           <TableHead className={HEAD}>State</TableHead>
+          {/* The column exists only when there is something in it. A header
+              over an empty column reads as a feature that failed to load. */}
+          {onEdit ? <TableHead className="sr-only">Actions</TableHead> : null}
         </>
       }
     >
@@ -108,13 +121,48 @@ export function RopaTable({ items }: { items: ProcessingActivity[] }) {
           <TableCell className={CELL}>
             <CompletenessBadge value={activity.completeness} />
           </TableCell>
+          {onEdit ? (
+            <TableCell className={CELL}>
+              <EditButton
+                onClick={() => onEdit(activity.processingActivityId)}
+                label={`Edit ${activity.name}`}
+              />
+            </TableCell>
+          ) : null}
         </TableRow>
       ))}
     </Register>
   )
 }
 
-export function AiSystemsTable({ items }: { items: AiSystem[] }) {
+/**
+ * The per-row edit control.
+ *
+ * The accessible name carries the record it edits, because a table of buttons
+ * all called "Edit" is a list of identical controls to anyone navigating by
+ * them. The visible label stays short so the column does not grow.
+ */
+function EditButton({
+  onClick,
+  label,
+}: {
+  onClick: () => void
+  label: string
+}) {
+  return (
+    <Button type="button" variant="ghost" onClick={onClick} aria-label={label}>
+      Edit
+    </Button>
+  )
+}
+
+export function AiSystemsTable({
+  items,
+  onEdit,
+}: {
+  items: AiSystem[]
+  onEdit?: (id: string) => void
+}) {
   return (
     <Register
       caption="AI system register"
@@ -125,6 +173,7 @@ export function AiSystemsTable({ items }: { items: AiSystem[] }) {
           <TableHead className={HEAD}>Risk</TableHead>
           <TableHead className={HEAD}>Documentation</TableHead>
           <TableHead className={HEAD}>Last reviewed</TableHead>
+          {onEdit ? <TableHead className="sr-only">Actions</TableHead> : null}
         </>
       }
     >
@@ -154,13 +203,35 @@ export function AiSystemsTable({ items }: { items: AiSystem[] }) {
           <TableCell className={CELL}>
             <DateValue value={system.lastReviewedAt} never="Never" />
           </TableCell>
+          {onEdit ? (
+            <TableCell className={CELL}>
+              <EditButton
+                onClick={() => onEdit(system.aiSystemId)}
+                label={`Edit ${system.name}`}
+              />
+            </TableCell>
+          ) : null}
         </TableRow>
       ))}
     </Register>
   )
 }
 
-export function DsarTable({ items }: { items: Dsar[] }) {
+export function DsarTable({
+  items,
+  slug,
+  respondAction,
+}: {
+  items: Dsar[]
+  slug?: string
+  respondAction?: (
+    slug: string,
+    previous: RecordActionState,
+    form: FormData,
+  ) => Promise<RecordActionState>
+}) {
+  const respondable = Boolean(slug && respondAction)
+
   return (
     <Register
       caption="Data-subject requests"
@@ -175,6 +246,9 @@ export function DsarTable({ items }: { items: Dsar[] }) {
               thing: this column is a date, that one is a state. */}
           <TableHead className={HEAD}>Response sent</TableHead>
           <TableHead className={HEAD}>State</TableHead>
+          {respondable ? (
+            <TableHead className="sr-only">Actions</TableHead>
+          ) : null}
         </>
       }
     >
@@ -219,6 +293,20 @@ export function DsarTable({ items }: { items: Dsar[] }) {
           <TableCell className={CELL}>
             <UrgencyBadge value={dsar.urgency} />
           </TableCell>
+          {respondable ? (
+            <TableCell className={CELL}>
+              {/* Nothing to offer once it is answered. The transition is one
+                  way, and a second "mark responded" would be a control whose
+                  only outcome is being told it changed nothing. */}
+              {dsar.urgency === 'answered' ? null : (
+                <RespondButton
+                  slug={slug as string}
+                  dsarId={dsar.dsarId}
+                  action={respondAction as NonNullable<typeof respondAction>}
+                />
+              )}
+            </TableCell>
+          ) : null}
         </TableRow>
       ))}
     </Register>

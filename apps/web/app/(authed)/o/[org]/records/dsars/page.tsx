@@ -1,9 +1,12 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
+import { AddDisclosure } from '@/components/records/activity-form'
+import { DsarForm } from '@/components/records/dsar-form'
 import { RegisterNav } from '@/components/records/register-nav'
-import { DsarTable } from '@/components/records/registers'
+import { RespondableDsars } from '@/components/records/editable'
 import { EmptyRegister, RegisterUnavailable } from '@/components/records/states'
+import { addDsar, respondToDsar } from '../actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { listDsars } from '@/lib/records/client'
@@ -122,8 +125,17 @@ export default async function DsarsPage({
               : 'These are added by hand: a request comes from a person, so nothing creates one for you.'}
           </EmptyRegister>
         ) : (
-          <DsarTable items={dsars} />
+          <RespondableDsars slug={slug} items={dsars} action={respondToDsar} />
         )}
+      </div>
+
+      {/* The only way a request enters this register. Nothing creates one from
+          an approval: a request comes from a person, and an obligation that
+          manufactured one would be inventing the requester. */}
+      <div className="mt-4">
+        <AddDisclosure label="Log a request" title="Log a data-subject request">
+          {(close) => <DsarForm slug={slug} action={addDsar} onDone={close} />}
+        </AddDisclosure>
       </div>
 
       {register.ok && register.value.nextPageToken ? (

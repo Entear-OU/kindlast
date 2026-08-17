@@ -1,9 +1,11 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
+import { ActivityForm, AddDisclosure } from '@/components/records/activity-form'
 import { RegisterNav } from '@/components/records/register-nav'
-import { RopaTable } from '@/components/records/registers'
+import { EditableRopa } from '@/components/records/editable'
 import { EmptyRegister, RegisterUnavailable } from '@/components/records/states'
+import { addProcessingActivity, editProcessingActivity } from './actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { listProcessingActivities } from '@/lib/records/client'
@@ -19,8 +21,9 @@ import { listProcessingActivities } from '@/lib/records/client'
  * path wrote into a space the customer could not look at. Reading comes first
  * because that is the half that was missing and the half an auditor needs.
  *
- * Editing arrives next. The write scopes and the database functions behind them
- * already exist, so the gap is the surface rather than the mechanism.
+ * Editing arrived with it: add an entry the Executor has not seen, and complete
+ * the stub it created. Both go through the database functions in 00002, which
+ * enforce the plan cap and write the audit row in the same transaction.
  */
 export default async function RecordsPage({
   params,
@@ -87,8 +90,36 @@ export default async function RecordsPage({
             complete.
           </EmptyRegister>
         ) : (
-          <RopaTable items={activities} />
+          <EditableRopa
+            slug={slug}
+            items={activities}
+            action={editProcessingActivity}
+          />
         )}
+      </div>
+
+      {/* The cap is checked here so the control says why it is unavailable,
+          and enforced again by the database, which is the one that matters. A
+          browser check alone would be a suggestion. */}
+      <div className="mt-4">
+        <AddDisclosure
+          label="Add activity"
+          title="Add a processing activity"
+          disabled={atManualLimit(quota)}
+          disabledReason={
+            atManualLimit(quota)
+              ? `Your plan allows ${quota?.limit} manually added activities. Entries created from approved findings do not count towards it.`
+              : undefined
+          }
+        >
+          {(close) => (
+            <ActivityForm
+              slug={slug}
+              action={addProcessingActivity}
+              onDone={close}
+            />
+          )}
+        </AddDisclosure>
       </div>
 
       {quota && quota.limit ? (
@@ -110,6 +141,18 @@ export default async function RecordsPage({
       />
     </div>
   )
+}
+
+/**
+ * Whether the plan's cap on manually added entries is reached.
+ *
+ * `limit: 0` means unlimited, which is what a paid plan and a billing-disabled
+ * self-hosted deployment both report, so a bare `used >= limit` would read every
+ * uncapped organisation as full.
+ */
+function atManualLimit(quota?: { used?: number; limit?: number }): boolean {
+  if (!quota?.limit) return false
+  return (quota.used ?? 0) >= quota.limit
 }
 
 /**

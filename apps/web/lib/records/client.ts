@@ -149,3 +149,106 @@ export function getDsar(accessToken: string, orgId: string, dsarId: string) {
     body: { dsarId },
   })
 }
+
+/**
+ * The fields a human supplies for an Article 30 entry.
+ *
+ * Every field is required in the type even though most are optional in the
+ * record, because the contract is a full replacement rather than a patch:
+ * omitting a field clears it, so a caller that means "leave this alone" has to
+ * send the current value. Making them optional here would let a caller wipe a
+ * legal basis by forgetting it.
+ */
+export interface ProcessingActivityFields {
+  name: string
+  purpose: string
+  legalBasis: string
+  dataCategories: string[]
+  recipients: string[]
+  retentionPeriod: string
+}
+
+export interface AiSystemFields {
+  name: string
+  vendor: string
+  purpose: string
+  riskClassification: string
+  documentationStatus: string
+}
+
+export function createProcessingActivity(
+  accessToken: string,
+  orgId: string,
+  fields: ProcessingActivityFields,
+) {
+  return call<{ processingActivity?: ProcessingActivity }>(
+    'kindlast.core.v1.RecordsService/CreateProcessingActivity',
+    { accessToken, orgId, body: { fields } },
+  )
+}
+
+export function updateProcessingActivity(
+  accessToken: string,
+  orgId: string,
+  processingActivityId: string,
+  fields: ProcessingActivityFields,
+) {
+  return call<{ processingActivity?: ProcessingActivity }>(
+    'kindlast.core.v1.RecordsService/UpdateProcessingActivity',
+    { accessToken, orgId, body: { processingActivityId, fields } },
+  )
+}
+
+/** `reviewed` is required when the classification is `high`. */
+export function createAiSystem(
+  accessToken: string,
+  orgId: string,
+  fields: AiSystemFields,
+  reviewed: boolean,
+) {
+  return call<{ aiSystem?: AiSystem }>(
+    'kindlast.core.v1.RecordsService/CreateAiSystem',
+    { accessToken, orgId, body: { fields, reviewed } },
+  )
+}
+
+/** `reviewed` is required whenever this changes the classification. */
+export function updateAiSystem(
+  accessToken: string,
+  orgId: string,
+  aiSystemId: string,
+  fields: AiSystemFields,
+  reviewed: boolean,
+) {
+  return call<{ aiSystem?: AiSystem }>(
+    'kindlast.core.v1.RecordsService/UpdateAiSystem',
+    { accessToken, orgId, body: { aiSystemId, fields, reviewed } },
+  )
+}
+
+export function logDsar(
+  accessToken: string,
+  orgId: string,
+  subjectName: string,
+  requestType: string,
+  handler: string,
+) {
+  return call<{ dsar?: Dsar }>('kindlast.core.v1.RecordsService/LogDsar', {
+    accessToken,
+    orgId,
+    body: { subjectName, requestType, handler },
+  })
+}
+
+/** `reviewed` must be true. Returns `applied: false` if already answered. */
+export function markDsarResponded(
+  accessToken: string,
+  orgId: string,
+  dsarId: string,
+  reviewed: boolean,
+) {
+  return call<{ applied?: boolean; dsar?: Dsar }>(
+    'kindlast.core.v1.RecordsService/MarkDsarResponded',
+    { accessToken, orgId, body: { dsarId, reviewed } },
+  )
+}

@@ -1,9 +1,12 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
+import { AddDisclosure } from '@/components/records/activity-form'
 import { RegisterNav } from '@/components/records/register-nav'
-import { AiSystemsTable } from '@/components/records/registers'
+import { EditableAiSystems } from '@/components/records/editable'
 import { EmptyRegister, RegisterUnavailable } from '@/components/records/states'
+import { SystemForm } from '@/components/records/system-form'
+import { addAiSystem, editAiSystem } from '../actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { listAiSystems } from '@/lib/records/client'
@@ -80,8 +83,22 @@ export default async function AiSystemsPage({
             classify.
           </EmptyRegister>
         ) : (
-          <AiSystemsTable items={systems} />
+          <EditableAiSystems
+            slug={slug}
+            items={systems}
+            action={editAiSystem}
+          />
         )}
+      </div>
+
+      {/* Useful mostly for shadow AI: the system somebody adopted without
+          telling anyone is exactly the one no finding will ever raise. */}
+      <div className="mt-4">
+        <AddDisclosure label="Register a system" title="Register an AI system">
+          {(close) => (
+            <SystemForm slug={slug} action={addAiSystem} onDone={close} />
+          )}
+        </AddDisclosure>
       </div>
 
       {register.ok && register.value.nextPageToken ? (
