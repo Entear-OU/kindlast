@@ -47,15 +47,41 @@ message GetCurrentUserResponse {
   string plan = 4;
 }
 
+// TWO IDENTIFIERS, AND WHY THEY ARE NOT ONE (ENT-220)
+//
+// This message carries the same human twice, deliberately, and the next reader
+// should not simplify them into one field.
+//
+// `id` is the identifier the authorization server uses: a Zitadel snowflake
+// like `386250729179840515`, or `auth0|abc123`. Its shape is the IdP's to
+// choose and it changes if the deployment changes IdP.
+//
+// `user_id` is this system's own key for that person, a version 5 uuid derived
+// from (issuer, subject) by `libs/chassis/subject`. It is what `memberships`,
+// `created_by` and `approved_by` actually store, and it is what `Member.user_id`
+// returns.
+//
+// The derivation is one-way on purpose, so a client holding `id` cannot compute
+// `user_id`, and `user_identities` is the only way back. Before this field
+// existed a console could list an organisation's members and not work out which
+// row was the person reading the page, which is why an owner could not leave an
+// organisation the API was perfectly willing to let them leave.
 message User {
-  // The IdP subject claim. The tenancy key is org_id; this identifies the
-  // human, and is what created_by and approved_by record.
+  // The IdP subject claim. Identifies the human to the authorization server,
+  // and is NOT what this system stores against their actions: see `user_id`.
   string id = 1;
   string email = 2;
   string display_name = 3;
   // Gates finding approval: an unverified address must not be able to sign
   // off a regulatory decision (§1.7).
   bool email_verified = 4;
+
+  // This system's own identifier for the same human, matching
+  // `Member.user_id`, `created_by` and `approved_by`.
+  //
+  // Added rather than replacing `id`, which keeps the change additive: an
+  // existing client reading `id` is unaffected, and `buf breaking` stays quiet.
+  string user_id = 5;
 }
 
 message Membership {

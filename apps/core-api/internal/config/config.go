@@ -107,6 +107,49 @@ type Config struct {
 	// self-hoster and would get the paid feature free. Deployment shape is
 	// deployment configuration, not something to reconstruct from a table.
 	BillingEnabled bool
+
+	// AppBaseURL is where a browser reaches the console, used to build the
+	// invitation link (`{AppBaseURL}/invite/{token}`).
+	//
+	// core-api has no other reason to know a public address: it binds no
+	// published port and every other URL it handles is one a client already
+	// holds. This is the exception because the link is rendered at mint, inside
+	// the transaction, and the raw token is gone by the time anything else could
+	// render it (ENT-219).
+	//
+	// Optional here and enforced at the point of use: InviteMember refuses
+	// rather than minting an invitation whose link cannot be built. See the note
+	// there for why that is better than defaulting to localhost.
+	AppBaseURL string
+
+	// SMTPAddr is the mail submission address, host:port, for the dispatcher.
+	//
+	// Optional, and absent is a supported configuration rather than a broken
+	// one. With no SMTP the dispatcher does not run and transactional messages
+	// accumulate as `pending`, which is the outbox working: nothing is lost, and
+	// configuring SMTP later delivers the backlog. That is the honest degraded
+	// mode. The alternative, a channel that logs and marks the row sent, records
+	// a delivery that never happened, and `sent` on this table is evidence.
+	SMTPAddr string
+
+	// EmailFrom is the envelope and header sender for dispatched messages.
+	EmailFrom string
+
+	// BillingDatabaseURL must connect as `kindlast_billing`, the webhook's role
+	// (ENT-210).
+	//
+	// Optional, and its absence is the self-hosted default rather than a
+	// misconfiguration: a deployment that sells nothing does not serve the
+	// webhook at all. The role holds grants on exactly two tables and cannot
+	// reach a finding; see 00017.
+	BillingDatabaseURL string
+
+	// BillingWebhookSecret is the shared secret the provider signs with.
+	//
+	// Without it the webhook is not served, because the signature check is the
+	// entire authentication of an endpoint anybody can POST to. Serving it with
+	// no secret would mean accepting whatever arrived.
+	BillingWebhookSecret string
 }
 
 // Load reads the environment.
@@ -123,6 +166,15 @@ func Load() (*Config, error) {
 		HumanClientID:    fileOrValue("KINDLAST_HUMAN_CLIENT_ID"),
 		AgentDatabaseURL: os.Getenv("KINDLAST_AGENT_DATABASE_URL"),
 		BillingEnabled:   truthy(os.Getenv("KINDLAST_BILLING_ENABLED")),
+		AppBaseURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_APP_BASE_URL")), "/"),
+		SMTPAddr:         strings.TrimSpace(os.Getenv("KINDLAST_SMTP_ADDR")),
+		EmailFrom:        valueOr("KINDLAST_EMAIL_FROM", "noreply@kindlast.localhost"),
+
+		BillingDatabaseURL: os.Getenv("KINDLAST_BILLING_DATABASE_URL"),
+		// Through fileOrValue, because a signing secret is exactly the sort of
+		// value an operator mounts as a file rather than putting in an
+		// environment variable a `docker inspect` prints.
+		BillingWebhookSecret: fileOrValue("KINDLAST_BILLING_WEBHOOK_SECRET"),
 	}
 
 	// Zitadel names its roles claim after the project the roles belong to:

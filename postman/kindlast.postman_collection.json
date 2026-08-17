@@ -304,7 +304,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.SessionService", "GetCurrentUser"]
             },
-            "description": "The console bootstrap call: user, memberships with roles, active organisation, plan.\n\nOn a subject it has never seen it provisions a personal organisation and an owner membership in one transaction, idempotent on the `sub` claim. Required scope: `openid`, declared on the proto method.\n\n**Answerable from here as of ENT-197**, now that the edge routes `/kindlast.core.v1.*` to core-api. It is a Connect call, so POST with a JSON body even though it reads: `{}` is the empty request message, and an empty body is a parse error rather than the same thing.\n\nWhat `openid` means here is worth knowing before it surprises you. It is not a permission and no authorization server grants it: verification asserts it, so a token that passed signature, issuer, audience and expiry carries it whether or not the IdP said anything about scopes. Measured on this stack, a real Zitadel access token carries seven project roles and no `openid` at all. That is why this endpoint is reachable by a caller holding no grants, which it has to be, because this is where their first grant comes from.\n\nTwo behaviours worth knowing before you read a response. **The organisation header is optional on the first call** and must be: a client that has never signed in cannot know an organisation id, because none exists yet, so omitting it resolves the caller's default. And a brand-new organisation has no subscription row, so `plan` comes back `free` rather than empty.\n\nHow the personal organisation gets its name is worth knowing, because it involves a call you cannot see from here. It is named from the token's display name or email, and Zitadel puts neither in an **access** token, so core-api asks the provider's userinfo endpoint with your own access token and names it from that. Only on the request that provisions, never on later calls. If userinfo is unreachable or the provider declares none, the name falls back to the raw subject id, which looks like `386250729179840515` and is the symptom to recognise.\n\nEach membership carries an `orgSlug` as of ENT-198, and that is what the console routes on: every authenticated page lives under `/o/{orgSlug}/`. It is derived from the name when the organisation is created and never recomputed, so it does not follow a rename. Use `orgName` for a label and `orgSlug` for a link; the two drift apart the moment anyone renames an organisation, and that is by design, because slugs live in bookmarks and in emailed approval links."
+            "description": "The console bootstrap call: user, memberships with roles, active organisation, plan.\n\nOn a subject it has never seen it provisions a personal organisation and an owner membership in one transaction, idempotent on the `sub` claim. Required scope: `openid`, declared on the proto method.\n\n**Answerable from here as of ENT-197**, now that the edge routes `/kindlast.core.v1.*` to core-api. It is a Connect call, so POST with a JSON body even though it reads: `{}` is the empty request message, and an empty body is a parse error rather than the same thing.\n\nWhat `openid` means here is worth knowing before it surprises you. It is not a permission and no authorization server grants it: verification asserts it, so a token that passed signature, issuer, audience and expiry carries it whether or not the IdP said anything about scopes. Measured on this stack, a real Zitadel access token carries seven project roles and no `openid` at all. That is why this endpoint is reachable by a caller holding no grants, which it has to be, because this is where their first grant comes from.\n\nTwo behaviours worth knowing before you read a response. **The organisation header is optional on the first call** and must be: a client that has never signed in cannot know an organisation id, because none exists yet, so omitting it resolves the caller's default. And a brand-new organisation has no subscription row, so `plan` comes back `free` rather than empty.\n\nHow the personal organisation gets its name is worth knowing, because it involves a call you cannot see from here. It is named from the token's display name or email, and Zitadel puts neither in an **access** token, so core-api asks the provider's userinfo endpoint with your own access token and names it from that. Only on the request that provisions, never on later calls. If userinfo is unreachable or the provider declares none, the name falls back to the raw subject id, which looks like `386250729179840515` and is the symptom to recognise.\n\nEach membership carries an `orgSlug` as of ENT-198, and that is what the console routes on: every authenticated page lives under `/o/{orgSlug}/`. It is derived from the name when the organisation is created and never recomputed, so it does not follow a rename. Use `orgName` for a label and `orgSlug` for a link; the two drift apart the moment anyone renames an organisation, and that is by design, because slugs live in bookmarks and in emailed approval links.\n\n**`user` carries two identifiers as of ENT-220, and they are not interchangeable.** `user.id` is the IdP subject claim, a Zitadel snowflake like `386250729179840515`. `user.userId` is core-api's own key for the same human, a version 5 uuid derived from (issuer, subject), and it is what `memberships`, `created_by`, `approved_by` and **`Member.userId` from ListMembers** all store.\n\nCompare `user.userId` when you want to know which row in a member list is the caller. Comparing `user.id` matches nothing and does so silently, which is the bug this field exists to close: before it, a console could list an organisation's members and not work out which one was the person reading the page, so an owner could not leave an organisation the API was perfectly willing to let them leave. The derivation is one-way, so you cannot compute one from the other client-side."
           }
         },
         {
@@ -429,7 +429,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.OrgService", "InviteMember"]
             },
-            "description": "Creates an invitation to the organisation the header names. **Implemented as of ENT-202.** Required scope: `org:manage`, owner-only. Invitations expire after seven days.\n\n**The response does not contain the token, and never will.** It carries `invitationId` and `expiresAt` only. The raw token exists in exactly two places: the email sent to the invitee, and a SHA-256 hash stored against the row. Returning it here would let anyone who can invite also redeem on the invitee's behalf, which defeats the point of a capability sent to an address.\n\nA practical consequence for anyone testing from here: you cannot chain this into Accept invitation. To exercise acceptance, write a fixture invitation with a token you already know, which is what the Go tests do via the store's `CreateInvitation`.\n\n**Email delivery is ENT-202 PR 2.** As of PR 1 the invitation is created, hashed and stored, and nothing is sent. Until then the invitee learns of it out of band.\n\nEmail validation is deliberately shallow — non-empty and containing an `@`. Anything stricter rejects addresses that are valid under RFC 5321, and the authoritative test of an address is whether mail to it arrives."
+            "description": "Creates an invitation to the organisation the header names. **Implemented as of ENT-202.** Required scope: `org:manage`, owner-only. Invitations expire after seven days.\n\n**The response does not contain the token, and never will.** It carries `invitationId` and `expiresAt` only. The raw token exists in exactly two places: the email sent to the invitee, and a SHA-256 hash stored against the row. Returning it here would let anyone who can invite also redeem on the invitee's behalf, which defeats the point of a capability sent to an address.\n\nA practical consequence for anyone testing from here: you cannot chain this into Accept invitation. To exercise acceptance, write a fixture invitation with a token you already know, which is what the Go tests do via the store's `CreateInvitation`.\n\n**Email delivery works as of ENT-219.** The invitation and the email carrying it are written in one transaction: the raw token exists only inside this handler, so a row committed without its message would be permanently undeliverable rather than merely unsent. The message lands in `transactional_outbox` and a dispatcher drains it onto SMTP, which on the local stack is Mailpit at `localhost:8025`. Expect it within about ten seconds, which is the dispatcher's interval.\n\n**This can now answer `failed_precondition`,** and the message says so: a deployment with no `KINDLAST_APP_BASE_URL` refuses to invite rather than minting an invitation whose link cannot be built. That is not a caller error to retry. The alternative is worse than refusing, because the invitation would be stored, listed as pending, and impossible either to accept or to repair.\n\nA deployment with no `KINDLAST_SMTP_ADDR` still accepts the call. The message queues as `pending` and delivers whenever SMTP is configured, which is the outbox working rather than failing.\n\nEmail validation is deliberately shallow — non-empty and containing an `@`. Anything stricter rejects addresses that are valid under RFC 5321, and the authoritative test of an address is whether mail to it arrives."
           }
         },
         {
@@ -449,7 +449,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.OrgService", "AcceptInvitation"]
             },
-            "description": "Ordering matters and is easy to get wrong: this must run **before** the first GetCurrentUser. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to. `web`'s callback enforces that ordering (ENT-197); a direct caller has to keep it themselves.\n\n**Implemented as of ENT-196**, and reachable from here as of ENT-197. Required scope is `openid`, not `org:manage`: the caller is redeeming a capability they were sent and holds no role anywhere until it succeeds, so an organisation scope would make a first invitation impossible to accept.\n\nThe token is sent in the clear here and stored hashed, so the value in the database never matches this one. **Issuing invitations exists as of ENT-202** (see Invite member above), but you still cannot chain the two from here: that endpoint deliberately never returns the token, so a fixture written with a token you already know remains the only way to exercise acceptance, which is what the Go tests do.\n\nExpired, already accepted and never existed all answer `not_found` alike, deliberately, so this cannot be used to discover which tokens are real.\n\nThe response carries `orgSlug` as of ENT-198, so a client can redirect straight into `/o/{orgSlug}/` rather than making a second call to find out where the organisation it just joined actually lives."
+            "description": "Ordering matters and is easy to get wrong: this must run **before** the first GetCurrentUser. Get it backwards and every invited user ends up owning a personal organisation they never asked for, alongside the one they were invited to. `web`'s callback enforces that ordering (ENT-197); a direct caller has to keep it themselves.\n\n**Implemented as of ENT-196**, and reachable from here as of ENT-197. Required scope is `openid`, not `org:manage`: the caller is redeeming a capability they were sent and holds no role anywhere until it succeeds, so an organisation scope would make a first invitation impossible to accept.\n\nThe token is sent in the clear here and stored hashed, so the value in the database never matches this one. **Issuing invitations exists as of ENT-202** (see Invite member above), and that endpoint still deliberately never returns the token, so you cannot chain the two from the response alone.\n\nOn a local stack you no longer need a hand-written fixture though: as of ENT-219 the invitation email is actually delivered, so call Invite member, open Mailpit at `http://localhost:8025`, and copy the token out of the link in the message. That is the same path a real invitee takes, which makes it a better test than a fixture. The Go tests still write a known token directly, because they must not depend on a mail server.\n\nExpired, already accepted and never existed all answer `not_found` alike, deliberately, so this cannot be used to discover which tokens are real.\n\nThe response carries `orgSlug` as of ENT-198, so a client can redirect straight into `/o/{orgSlug}/` rather than making a second call to find out where the organisation it just joined actually lives."
           }
         },
         {
@@ -600,6 +600,95 @@
           }
         },
         {
+          "name": "Notification preferences (read)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/GetNotificationPreferences",
+              "host": ["{{api_base_url}}"],
+              "path": [
+                "kindlast.core.v1.NotificationService",
+                "GetNotificationPreferences"
+              ]
+            },
+            "description": "The caller's own notification settings for the organisation the header names. **Implemented as of ENT-209.** Required scope: `notifications:read`.\n\n**There is no user id in the request, and there will not be one.** `notification_preferences` is keyed `(org_id, user_id)` and its policies are the only ones in the schema that pin `user_id` to `app.current_user_id`, so the row is the caller's by policy rather than by argument. A parameter would invite a client to pass somebody else's and make the handler the thing that refuses, when the policy already does.\n\nPreferences are **personal within an organisation**. Somebody in two organisations holds two sets and can want a weekly briefing from one and silence from the other.\n\n**Never answers not-found.** Somebody who has never opened the settings page has no row and is nonetheless subscribed, because the product default is that a member is told: the opposite default means a critical finding sits unread until each person individually opts in. So this returns defaults (`medium` and above, briefing on, deadline alerts on, `Europe/Tallinn`) rather than an error, and \"I have not changed anything\" stays distinguishable from a fault."
+          }
+        },
+        {
+          "name": "Notification preferences (write)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preferences\": {\n    \"email\": \"compliance@example.com\",\n    \"minSeverityForEmail\": \"medium\",\n    \"weeklyBriefingEnabled\": true,\n    \"deadlineAlertsEnabled\": true,\n    \"timezone\": \"Europe/Tallinn\",\n    \"quietHoursStart\": \"22:00\",\n    \"quietHoursEnd\": \"07:00\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/UpdateNotificationPreferences",
+              "host": ["{{api_base_url}}"],
+              "path": [
+                "kindlast.core.v1.NotificationService",
+                "UpdateNotificationPreferences"
+              ]
+            },
+            "description": "Replace the caller's own settings. **Implemented as of ENT-209.** Required scope: `notifications:write`, which `notifications:read` does not satisfy: scope matching is exact, never by prefix.\n\n**A whole-object write, not a patch.** The settings surface renders every field at once, and a partial update would mean deciding what an absent field means, where \"unset\" and \"set to false\" are different intentions a proto3 scalar cannot tell apart. The REST alias is `PUT /api/v1/notification-preferences` for the same reason, unlike the records surface which is `PATCH`: here the body genuinely is the resource, with no server-owned columns to preserve.\n\n`minSeverityForEmail` is a **floor**, one of `low`, `medium`, `high`, `critical`. Not a switch, because \"tell me everything\" trains people to ignore the mail and \"tell me nothing\" is how a critical finding goes unread.\n\n`email` empty means \"use the address I sign in with\". It is a separate field because a compliance contact is often a shared mailbox nobody signs in as.\n\nQuiet hours are local `HH:MM` and **may wrap midnight**: `22:00` to `07:00` means what it looks like. Both empty means no quiet window; one alone is refused, because \"quiet from 22:00\" with no end reads to a person as overnight and would behave as no quiet hours at all.\n\nAnswers `invalid_argument` for an unknown severity, an IANA timezone that will not load, a time that is not `HH:MM`, or half a quiet window. The timezone is checked here rather than at send time, because an unloadable zone at send time is a notification that fails hours later for a reason nobody connects to a settings page.\n\nThe response is re-read from the database rather than echoed, so it describes what is stored."
+          }
+        },
+        {
+          "name": "Notification capabilities",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/GetNotificationCapabilities",
+              "host": ["{{api_base_url}}"],
+              "path": [
+                "kindlast.core.v1.NotificationService",
+                "GetNotificationCapabilities"
+              ]
+            },
+            "description": "Which channels this deployment can actually deliver on (§18.3). **Implemented as of ENT-209.** Required scope: `notifications:read`.\n\nExists so a console never renders a channel it cannot deliver on. Telegram, Slack and WhatsApp are in the design and are not built, and they are **absent from this response rather than listed as unavailable**: a settings page offering a switch that silently does nothing is indistinguishable from a broken integration, and generates support instead of value.\n\n`email` is present always and `available` is false on a deployment with no `KINDLAST_SMTP_ADDR`, carrying a plain-language `unavailableReason` for the console to show. Read from configuration rather than probed, because a mail server that happens to be down is not the same as a deployment that was never told where to submit mail, and only the second is worth telling a person about.\n\nDeployment-wide rather than tenant-scoped: the answer is the same for every organisation in an installation. The organisation header is still sent because the chain requires it."
+          }
+        },
+        {
+          "name": "Unsubscribe (no session)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"paste-the-token-from-the-unsubscribe-link\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/api/v1/unsubscribe",
+              "host": ["{{api_base_url}}"],
+              "path": ["api", "v1", "unsubscribe"]
+            },
+            "description": "Spend an unsubscribe token. **Implemented as of ENT-209.**\n\n**The only endpoint in this collection with no Authorization header and no organisation header, and that is the whole point.** The person clicking an unsubscribe link is reading an email, may never have signed in, and requiring them to authenticate in order to stop mail they did not ask for is how a product earns a spam complaint instead of an unsubscribe. So the token is the only identity claim, which is why it is stored hashed, expires after 30 days, and is spent once.\n\nIt is therefore **not on the Connect surface**: every method there runs behind authentication, a scope check and tenancy, and this caller has none of them. It is a plain route on core-api's mux beside `/healthz`.\n\n**POST rather than GET, deliberately.** Corporate mail gateways and link scanners follow every URL in a message before a human sees it, so under a GET the act of delivering the email would unsubscribe the recipient. `web` renders a confirmation page at `/unsubscribe/{token}` and posts here.\n\n**404 for every unusable token**, whether expired, already redeemed, of the wrong kind, or never real. Distinguishing them would make this an oracle for which tokens exist, to a caller who has proved nothing. 404 rather than 401 for the same reason: 401 invites a client to authenticate and there is nothing to authenticate as.\n\nOn success it returns the organisation the token named, and turns off the weekly briefing and deadline alerts and raises the email floor to `critical` for that person in that organisation alone.\n\nTo try it on the local stack: trigger a finding, read the message in Mailpit at `http://localhost:8025`, and copy the token out of the unsubscribe link."
+          }
+        },
+        {
           "name": "List processing activities (ROPA)",
           "request": {
             "method": "POST",
@@ -743,7 +832,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "CreateProcessingActivity"]
             },
-            "description": "Adds an Article 30 entry the Executor has not seen. Required scope: `records:ropa:write`, which is deliberately not `records:read`. **Served as of ENT-200.**\n\n**Capped on the free plan, and over the cap answers `resource_exhausted`, not `permission_denied`.** The caller is entitled to do this and has run out of allowance, which is a distinction with a button under it: one has an upgrade, the other sends somebody to an owner who cannot help. The cap counts only manually created rows, because a record created from an approved finding is part of the compliance record and is never withheld behind a plan.\n\n**`failed_precondition` here means the organisation has no compliance profile**, so there is nothing for a record to hang off. Finish onboarding first.\n\nThere is no actor field and there will not be one. `create_processing_activity` reads the acting human from the session GUC, enforces the cap, and writes the audit row in the same transaction as the insert. A handler writing the table directly would have to reimplement all three."
+            "description": "Adds an Article 30 entry the Executor has not seen. Required scope: `records:ropa:write`, which is deliberately not `records:read`. **Served as of ENT-200.**\n\n**Capped on the free plan, and over the cap answers `resource_exhausted`, not `permission_denied`.** The caller is entitled to do this and has run out of allowance, which is a distinction with a button under it: one has an upgrade, the other sends somebody to an owner who cannot help. The cap counts only manually created rows, because a record created from an approved finding is part of the compliance record and is never withheld behind a plan.\n\n**`failed_precondition` here means the organisation has no compliance profile**, so there is nothing for a record to hang off. Finish onboarding first.\n\nThere is no actor field and there will not be one. `The store reads the acting human from the session GUC, enforces the cap, and writes the audit row in the same transaction as the insert. A handler writing the table directly would have to reimplement all three."
           }
         },
         {
@@ -806,7 +895,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "UpdateAiSystem"]
             },
-            "description": "Replaces a system's fields. Required scope: `records:ai-systems:write`. **Served as of ENT-200.**\n\n**ANY change to `riskClassification` is refused unless `reviewed` is true**, and the refusal is `failed_precondition` rather than `permission_denied`: the caller may do this and must confirm first, so a console shows a confirm step rather than an upgrade prompt or an owner's name.\n\nThe reason is that an Article 6 classification is the determination the whole high-risk obligation stack hangs off. Moving a system out of `high` in a form somebody was tabbing through would quietly retire Articles 9 to 17 for it, and the record would show a change with nobody's deliberate decision behind it. `reviewed` says a human meant it, and the audit row records that they did.\n\n**An edit that leaves the classification alone needs no confirmation**, which is what keeps the gate from being a nuisance on every save. The gate lives in `update_ai_system`, not in the handler: a check in Go would be a second implementation, and the copy furthest from the data is the one that drifts."
+            "description": "Replaces a system's fields. Required scope: `records:ai-systems:write`. **Served as of ENT-200.**\n\n**ANY change to `riskClassification` is refused unless `reviewed` is true**, and the refusal is `failed_precondition` rather than `permission_denied`: the caller may do this and must confirm first, so a console shows a confirm step rather than an upgrade prompt or an owner's name.\n\nThe reason is that an Article 6 classification is the determination the whole high-risk obligation stack hangs off. Moving a system out of `high` in a form somebody was tabbing through would quietly retire Articles 9 to 17 for it, and the record would show a change with nobody's deliberate decision behind it. `reviewed` says a human meant it, and the audit row records that they did.\n\n**An edit that leaves the classification alone needs no confirmation**, which is what keeps the gate from being a nuisance on every save. **The gate lives in Go as of ENT-225**, and this sentence used to say the opposite. It read: \"the gate lives in `update_ai_system`, not in the handler: a check in Go would be a second implementation, and the copy furthest from the data is the one that drifts.\" That was a reasonable argument and it lost. A classification change requiring a reviewed approval is a decision, not an invariant, and 00016 dropped the function. There is exactly one implementation either way; what changed is which language it is in and whether it can be table-tested without a database."
           }
         },
         {
@@ -849,6 +938,109 @@
               "path": ["kindlast.core.v1.RecordsService", "MarkDsarResponded"]
             },
             "description": "Records that a response went out, which stops the statutory clock. Required scope: `records:dsar:write`. **Served as of ENT-200.**\n\n**`reviewed` must be true**, for the same class of reason Update AI system needs it: this is the assertion that the organisation met an Article 12(3) deadline, and it is the single most consequential row in this register to get wrong. A regulator reading the log later is reading this field. Without it, `failed_precondition`.\n\n**Idempotent.** Marking an already-answered request returns `applied: false` and writes nothing, rather than overwriting the date a response actually went out with the date somebody clicked the button twice. The status is read BEFORE the call rather than after, which matters: reading it afterwards reports `applied` on every repeat, and that is a bug the findings act path shipped with and had to fix.\n\n**Worth knowing if you script against this:** every gate here is a `raise exception`, and a raise aborts the whole Postgres transaction. Each request gets its own transaction so a refusal costs nothing, but two writes in one request will see the second fail with `25P02` for a reason unrelated to it."
+          }
+        },
+        {
+          "name": "Billing (GetBilling)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.BillingService/GetBilling",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.BillingService", "GetBilling"]
+            },
+            "description": "What this organisation is on, and what this deployment can offer it. Required scope: `billing:read`. **Served as of ENT-210.**\n\n**Read only, and BillingService has no write RPC at all.** A plan changes because a payment provider's signed webhook said so. An endpoint that could change one from a session would be a way to grant yourself a paid entitlement with a request, so it does not exist rather than existing behind a check.\n\n**Owner-only, refused with `permission_denied` for a member.** The scope says what a token may attempt and the role says who inside the organisation may; a member holds `billing:read` like everybody else, so the handler checks the role as well. The console renders 404 rather than the refusal, because \"you are not allowed\" is itself information about the organisation.\n\n**`plan` and `status` are different questions and both are returned.** `plan` is the entitlement in force, so a `pro` subscription that is `past_due` or `canceled` reports `plan: \"free\"` here. A client that rendered only `plan` would tell a paying customer whose card was declined that they had downgraded themselves, which is why `status` is carried separately.\n\n**`billingConfigured` is read from configuration, not inferred from the absence of a subscription row.** A hosted customer between provisioning and their first row looks identical to a self-hoster, and would otherwise be shown a page saying the product cannot be bought. `gatingEnabled` is separate again, because an operator may wire a provider before turning gating on, and then nothing is withheld and nothing should be advertised as withheld.\n\nAn organisation that has never bought anything has no subscription row and reports `plan: \"free\"` with an empty `status`."
+          }
+        },
+        {
+          "name": "Billing webhook (no session, signed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Stripe-Signature",
+                "value": "t={{$timestamp}},v1=compute-this-yourself-see-description"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_local_001\",\n  \"type\": \"customer.subscription.updated\",\n  \"data\": {\n    \"object\": {\n      \"customer\": \"cus_local_001\",\n      \"status\": \"past_due\",\n      \"current_period_end\": 1789000000,\n      \"items\": {\n        \"data\": [{ \"price\": { \"lookup_key\": \"pro\" } }]\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/api/v1/billing/webhook",
+              "host": ["{{api_base_url}}"],
+              "path": ["api", "v1", "billing", "webhook"]
+            },
+            "description": "Applies a payment provider's subscription event. **Implemented as of ENT-210.**\n\n**Unauthenticated, and it changes what a customer is entitled to.** No session, no token, no caller identity: anybody on the internet can POST here. The only thing separating a real event from an invented one is the HMAC in `Stripe-Signature`, which is why it is verified **before the body is parsed** and before anything is read out of it. A handler that unmarshals first has already let the caller choose what its parser sees.\n\nNot on the Connect surface for the same reason as Unsubscribe: every method there runs behind authentication, a scope check and tenancy, and this caller has none of them. It is a plain route on core-api's mux, and the edge routes exactly this one path to core-api rather than the whole `/api/v1/*` prefix.\n\n**Signing a request by hand**, which you must do because Postman cannot compute it for you:\n\n```\nt=$(date +%s)\nbody='{\"id\":\"evt_local_001\",...}'   # byte for byte what you send\nprintf '%s.%s' \"$t\" \"$body\" \\\n  | openssl dgst -sha256 -hmac \"$KINDLAST_BILLING_WEBHOOK_SECRET\" -hex\n```\n\nThen send `Stripe-Signature: t=<t>,v1=<hex>`. The signed payload is `timestamp + \".\" + raw body`, so any reformatting of the JSON invalidates it. The header may carry several `v1=` values and any one matching is accepted, which is what makes a secret rotation not an outage.\n\n**The timestamp is checked in both directions**, five minutes either side. A signature would otherwise be valid forever, and a timestamp far in the future is as much a forgery signal as one far in the past.\n\n**Every refusal is a bare 4xx with no body.** No signature, a bad signature and an expired one are indistinguishable to the caller on purpose: an endpoint that explains why it refused is one an attacker can use to search for a working forgery.\n\n**Replays return 200 and change nothing.** The event id is claimed in the same transaction as the subscription write, so a retried delivery hits the primary key and the whole transaction rolls back. Providers retry on any non-2xx and on timeouts, so a 4xx here would be retried forever and a 500 would be retried on something already applied.\n\n**An unknown customer is also 200 and also records nothing**, deliberately: a customer this deployment has not seen may be one whose checkout has not landed yet, and burning the event id would make the provider's retry a permanent no-op.\n\n**Only three event types do anything**: `customer.subscription.created`, `.updated` and `.deleted`. An allow-list rather than a switch with a default, so a provider adding a type cannot silently start moving plans. Everything else is acknowledged and ignored.\n\nThe plan comes from the price's **`lookup_key`**, not its id: a price id is generated per environment and would make this deployment-specific. Anything other than `pro` reads as `free`, and any status this code does not recognise reads as `canceled`, because an unknown must never grant.\n\nThe request runs on its own Postgres role, `kindlast_billing`, which holds grants on two tables and nothing else. It resolves the customer to an organisation through its one unscoped select, sets `app.current_org_id` to what it resolved, and only then writes: a crafted payload cannot turn one event into an upgrade for a different tenant, because the write matches zero rows rather than the wrong ones.\n\nTo try it locally, set `KINDLAST_BILLING_ENABLED=true` and a `KINDLAST_BILLING_WEBHOOK_SECRET` in the compose environment, and give an organisation a `provider_customer_id` to resolve against."
+          }
+        },
+        {
+          "name": "List audit entries",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filter\": {\n    \"since\": \"2026-08-01T00:00:00Z\",\n    \"until\": \"2026-09-01T00:00:00Z\",\n    \"actionTypes\": [\"approve_finding\", \"reject_finding\", \"snooze_finding\"]\n  },\n  \"pageSize\": 50\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.AuditService/ListAuditEntries",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.AuditService", "ListAuditEntries"]
+            },
+            "description": "What was decided, by whom, and when. Required scope: `audit:read`. **Served as of ENT-223.**\n\n**This surface reads `audit_log` and nothing else.** Not traces, not model calls, not anything an observability tool holds (§7.2). That firewall is the product rather than an implementation detail: an auditor is buying a record a regulator can be shown, and a record assembled partly from a vendor's telemetry has completeness that depends on that vendor's retention settings. `audit_log` is append-only by trigger, lives in the customer's own database, and is written in the same transaction as the act it describes.\n\n**Read only, and structurally so.** AuditService has no write RPC and will not get one. The table carries an append-only trigger, `kindlast_app` holds no update or delete grant on it, and the only insert path is bound by policy to the human in the GUC.\n\n**No role gate**, unlike BillingService. Every member sees this, viewers included: a plan and a renewal date are commercial facts about the company, but \"who approved this finding\" is the shared record of the work these people did together. The organisation boundary is still absolute and supplied by RLS.\n\n**There is no failure dimension and no `level` field**, which is the one real difference from the infrastructure log views this is modelled on. A refused act writes nothing, because the gates are constraints and policies and a refusal aborts the transaction the row would have been written in. Every row here is a thing that happened.\n\n**`filter.until` is EXCLUSIVE.** Pulling January and then February with inclusive bounds returns any boundary row twice, and a duplicated decision in an audit file is a question nobody wants to have to answer. A range whose end is at or before its start is `invalid_argument` rather than swapped or ignored: both of those look like they worked, and in an export the difference is a month of decisions versus all of them.\n\n**`filter.query` does not search `before` and `after`.** Those hold whatever the acted-on row contained, which for a DSAR includes a data subject's name, and a substring search across them would turn the audit log into a search engine over the personal data it exists to account for. It searches the action type, the target table, and the actor's name and email. The payloads are still returned in full: it is the search that stops at the boundary, not the record.\n\n**`actor.actorRole` is the role held AT THE TIME**, snapshotted into the row rather than resolved now. A client that looked it up would relabel a past act every time somebody's role changed. `actor.displayName` and `actor.email` are empty for an actor who has left, and the row is still returned: a log that dropped entries when somebody was offboarded would be defeatable by offboarding somebody.\n\n**`agentRunId` and `actor.kind` are declared and always unpopulated.** `agent_runs` arrives with ENT-218 (§26). They exist now so the day an agent produces an act is a server change rather than a contract change, and so nothing gets written on the assumption that every actor is a human.\n\nPagination is keyset over `(occurred_at desc, id desc)`. The id tie-break matters more here than in the other registers: an act writes the decision and the record it created in ONE transaction, so both rows share `occurred_at` exactly, and without it a cursor skips a row or repeats one forever. `pageToken` is opaque; `pageSize` defaults to 50 and caps at 200.\n\n`availableActionTypes` lists every action type present in this organisation's log, ignoring the filter, so a console can offer only values that would return something."
+          }
+        },
+        {
+          "name": "Export audit entries (CSV)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filter\": {\n    \"since\": \"2026-08-01T00:00:00Z\",\n    \"until\": \"2026-09-01T00:00:00Z\"\n  },\n  \"format\": \"EXPORT_FORMAT_CSV\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.AuditService/ExportAuditEntries",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.AuditService", "ExportAuditEntries"]
+            },
+            "description": "The same filtered set, as a file an auditor can attach to a report. Required scope: `audit:read`. **Served as of ENT-223.**\n\n**A separate RPC rather than a flag on the list**, because the two answer different questions. The list answers \"what is on this page\" and is paged by construction. This answers \"everything that matched\", and an export that silently stopped at a page boundary is worse than none: the auditor cannot see the truncation, and the file is the artefact that leaves the building.\n\n**Check `truncated` on every response.** It is true when the export hit its 50,000 row cap, and it is the only signal there is: a truncated CSV is a valid CSV that simply stops. `rowCount` says how many rows the file holds. Narrow the range and export again.\n\n**The response is a `oneof` and today it is always `content`.** §7 designs the export as a request returning a signed download URL and §25 leaves synchronous-versus-job open. A synchronous body is right at today's volumes; the shape that grows into a URL is decided now, so the day a customer's log outgrows one response it becomes `download` with no contract break and no second RPC. **The synchronous path is the interim, not the decision.**\n\n`content.data` is base64 over Connect's JSON codec, which is how proto `bytes` travel. Decode it before writing the file.\n\n**The file carries a UTF-8 BOM**, for the unglamorous reason that Excel on Windows otherwise reads UTF-8 as the local code page and mangles every non-ASCII name. The names that get mangled are disproportionately not English ones, and this is a record of who did what.\n\n**Spreadsheet formula injection is defused.** Any cell opening with `= + - @` or a leading tab is prefixed with an apostrophe, OWASP's mitigation. Several columns carry text a user chose (a display name, and the `before`/`after` payloads), the person opening the file is an auditor on a corporate laptop, and spreadsheets evaluate those cells. **This changes the exported bytes deliberately**: the record of truth is `audit_log` in the customer's own database, untouched and append-only, and a rendering that can execute is not a safer record. A parser consuming these files should strip a single leading apostrophe.\n\n**The column order is a contract.** Somebody will point a spreadsheet at column C. Append, never rearrange: `occurred_at, action_type, actor_user_id, actor_name, actor_email, actor_role, finding_id, target_table, target_id, before, after, agent_run_id, audit_id`.\n\nTimestamps are RFC 3339 in UTC, not a friendly local format. This file is read in other timezones and possibly years later, and `14:32` with no offset is a fact nobody can verify.\n\n**`format` may be omitted**, and UNSPECIFIED is accepted as CSV. It is the only format there is, so refusing an unset enum would fail every caller written against the obvious reading of a one-value enum. A second format changes that.\n\nA zero-row export is a real answer and still returns a file with its header row: a completely empty file reads as a broken download."
+          }
+        },
+        {
+          "name": "Download the audit export (web)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{web_base_url}}/o/{{org_slug}}/logs/export?since=2026-08-01&until=2026-08-31",
+              "host": ["{{web_base_url}}"],
+              "path": ["o", "{{org_slug}}", "logs", "export"],
+              "query": [
+                { "key": "since", "value": "2026-08-01" },
+                { "key": "until", "value": "2026-08-31" }
+              ]
+            },
+            "description": "`web`'s download endpoint, in front of ExportAuditEntries. **Implemented as of ENT-223.**\n\nIn the collection because it is one of the halves that will never appear in a proto file: a browser-facing route with its own status codes and its own headers, which is exactly what this collection is the source of truth for.\n\n**Authenticated by the session cookie, not a bearer token**, so this request only works from a browser that has signed in. There is nothing to paste into Postman here; it is documented so the contract is reviewable.\n\n**A route handler rather than a server action**, because the result is a file and a download has to survive being a plain link. A server action returning bytes needs client-side JavaScript to turn them into a saved file, and the artefact an auditor's whole workflow ends in should not depend on a hydration step.\n\nIt reads the SAME query string the page does, through the same `toFilter`, which is what makes \"export what I am looking at\" true by construction rather than because two implementations agree. `page` is deliberately dropped: an export is the whole matching set, and carrying a cursor into it would be asking for \"everything, starting from page three\".\n\n**The filename carries the truncation.** When core-api reports the cap was hit, the file is named `-partial`. That is the only signal that survives the trip: the file gets attached to a report and emailed onwards long after any banner in the console is gone, and a name is the one piece of context that travels with it. `X-Kindlast-Truncated` and `X-Kindlast-Row-Count` carry the same facts for a script.\n\nStatus codes worth knowing: **401** with no session, and deliberately not a redirect, because redirecting a file endpoint into a sign-in page saves an HTML document called `audit.csv`. **404** for a slug the caller does not belong to, matching the rest of the console, so this cannot be used to discover which organisations exist. **400** when core-api refused the filter (a backwards range). **502** when core-api was unreachable or returned no file; a response with no content is a fault rather than an empty export, because an export of nothing still carries a header row and a zero-byte file looks like an answer.\n\n`Cache-Control: no-store, private`. This is a per-organisation record behind a session, and a shared proxy holding one tenant's audit log is the worst cache bug available in this product."
           }
         }
       ]

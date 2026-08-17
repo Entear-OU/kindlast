@@ -28,9 +28,15 @@ type accepting interface {
 }
 
 // Service implements corev1connect.OrgServiceHandler.
-type Service struct{}
+type Service struct {
+	// appBaseURL is where a browser reaches the console, used to build the
+	// invitation link at mint (ENT-219). Empty means this deployment cannot
+	// send invitations, and InviteMember refuses rather than creating one that
+	// can never be accepted.
+	appBaseURL string
+}
 
-func New() *Service { return &Service{} }
+func New(appBaseURL string) *Service { return &Service{appBaseURL: appBaseURL} }
 
 // AcceptInvitation joins the organisation an invitation names.
 func (s *Service) AcceptInvitation(

@@ -1,0 +1,281 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kindlast/options/v1/scope.proto";
+
+// The audit log: what was decided, by whom, and when (§7.2, §24; ENT-223).
+//
+// THIS SURFACE READS `audit_log` AND NOTHING ELSE
+//
+// Not traces, not model calls, not anything an observability tool holds. That
+// firewall is the product rather than an implementation detail: an auditor is
+// buying a record that a regulator can be shown, and a record assembled partly
+// from a vendor's telemetry is one whose completeness depends on that vendor's
+// retention settings. `audit_log` is append-only by trigger, lives in the
+// customer's own database, and is written in the same transaction as the act it
+// describes. A trace is none of those things.
+//
+// A console rendering this should say so in its own words. "Traces are not the
+// audit log" is a sentence an auditor needs to read, not infer.
+//
+// EVERY ROW IS A THING THAT HAPPENED
+//
+// There is no failure dimension here, and that is a real difference from the
+// infrastructure log views this surface is modelled on. A refused act writes
+// nothing: the gates are constraints and policies, and a refusal aborts the
+// transaction the audit row would have been written in. So there is no `level`
+// and no status filter, because there is no such thing as a failed row.
+//
+// READ ONLY, AND STRUCTURALLY SO
+//
+// There is no write RPC on this service and there will not be one. The table
+// carries an append-only trigger, `kindlast_app` holds no update or delete
+// grant on it, and the only insert path is the one bound to the acting human by
+// policy. A record a customer can edit is not an audit log.
+service AuditService {
+  // The decisions, filtered and paged.
+  //
+  // Keyset over `(occurred_at desc, id desc)`, matching the
+  // `audit_log_org_occurred_idx` index. Offset pagination would let a row
+  // written between two page requests shift the window, and this is the one
+  // register where a skipped row is a compliance problem rather than a
+  // cosmetic one.
+  rpc ListAuditEntries(ListAuditEntriesRequest) returns (ListAuditEntriesResponse) {
+    option (kindlast.options.v1.required_scope) = "audit:read";
+    option (google.api.http) = {get: "/api/v1/audit"};
+  }
+
+  // The same filtered set, as a file an auditor can attach to a report.
+  //
+  // WHY THIS IS A SEPARATE RPC RATHER THAN A FLAG ON THE LIST
+  //
+  // Because the two answer different questions. The list answers "what is on
+  // this page", and is paged by construction. An export answers "everything
+  // that matched", and an export that silently stopped at a page boundary is
+  // worse than no export: the auditor cannot see the truncation, and the file
+  // is the artefact that leaves the building.
+  //
+  // WHY THE RESPONSE IS A ONEOF
+  //
+  // §7 designs the export as a request that returns a signed download URL, and
+  // §25 leaves synchronous-versus-job open. At today's volumes a synchronous
+  // body is right and a job queue would be machinery for nobody. But the shape
+  // that grows into a URL and the shape that does not are decided now, so the
+  // response carries a `oneof`: today it is always `content`, and the day a
+  // customer's log outgrows one response it becomes `download`, with no
+  // contract break and no second RPC.
+  rpc ExportAuditEntries(ExportAuditEntriesRequest) returns (ExportAuditEntriesResponse) {
+    option (kindlast.options.v1.required_scope) = "audit:read";
+    option (google.api.http) = {post: "/api/v1/audit:export"};
+  }
+}
+
+// AuditFilter is the set of rows a request is about.
+//
+// Shared by the list and the export deliberately, so "export what I am looking
+// at" is the same set by construction rather than by two implementations
+// agreeing. An export that quietly differs from the table above it is a bug an
+// auditor discovers after they have filed the report.
+message AuditFilter {
+  // Inclusive lower bound on `occurred_at`. Absent means from the beginning.
+  google.protobuf.Timestamp since = 1;
+
+  // Exclusive upper bound on `occurred_at`. Absent means up to now.
+  //
+  // Exclusive rather than inclusive so that consecutive ranges tile without
+  // overlapping. An auditor pulling January and then February with inclusive
+  // bounds gets any row on the boundary twice, and a duplicated decision in an
+  // audit file is a question nobody wants to answer.
+  google.protobuf.Timestamp until = 2;
+
+  // Restrict to these action types, e.g. `approve_finding`. Empty means all.
+  //
+  // Repeated rather than singular because the useful question is almost always
+  // a group: "every decision a human made" is three action types, and making a
+  // client issue three requests and merge them would also break the ordering.
+  repeated string action_types = 3;
+
+  // Restrict to these actors, by user id. Empty means all.
+  repeated string actor_user_ids = 4;
+
+  // Free text over the action type, the target table, and the actor's name and
+  // email.
+  //
+  // Deliberately NOT over the `before` and `after` payloads. Those are jsonb
+  // holding whatever the acted-on row contained, which for a DSAR includes a
+  // data subject's name. A substring search across them would turn the audit
+  // log into a search engine over personal data that the surface exists to
+  // account for, which is the wrong direction for a GDPR product to be pointing
+  // its own tooling.
+  string query = 5;
+}
+
+message ListAuditEntriesRequest {
+  AuditFilter filter = 1;
+
+  // Opaque. Do not parse or construct one; a token from another list is
+  // refused rather than misread.
+  string page_token = 2;
+
+  // Defaults to 50, capped at 200.
+  int32 page_size = 3;
+}
+
+message ListAuditEntriesResponse {
+  repeated AuditEntry entries = 1;
+
+  // Empty when there are no more. The only signal that more exist: do not
+  // infer it from a full page.
+  string next_page_token = 2;
+
+  // Every action type present in this organisation's log, whatever the filter.
+  //
+  // Returned so a console can render a filter control that offers only values
+  // that would return something. A dropdown listing every action type the
+  // schema could theoretically hold sends a person hunting for rows that were
+  // never written.
+  repeated string available_action_types = 3;
+}
+
+message ExportAuditEntriesRequest {
+  AuditFilter filter = 1;
+
+  // The only format for now. Named rather than assumed so adding one later is
+  // an enum value rather than a new RPC.
+  ExportFormat format = 2;
+}
+
+enum ExportFormat {
+  EXPORT_FORMAT_UNSPECIFIED = 0;
+  // Comma separated, RFC 4180, UTF-8 with a BOM.
+  //
+  // The BOM is there for one unglamorous reason: an auditor opens this in Excel
+  // on Windows, and without it Excel reads UTF-8 as the local code page and
+  // mangles every non-ASCII name in the file. The people whose names get
+  // mangled are disproportionately not English speakers.
+  EXPORT_FORMAT_CSV = 1;
+}
+
+message ExportAuditEntriesResponse {
+  oneof result {
+    // The file itself. What this returns today.
+    ExportContent content = 1;
+    // A signed, expiring URL to fetch it from. Not yet produced; declared so
+    // the day a log outgrows one response is a server change rather than a
+    // contract break.
+    ExportDownload download = 2;
+  }
+
+  // How many rows the file holds.
+  int32 row_count = 3;
+
+  // True when the export hit its row cap and the file is not the whole matching
+  // set.
+  //
+  // **A console must show this, and it is the reason this field exists.** A
+  // truncated export is invisible in the file itself: it is a valid CSV that
+  // simply stops. An auditor who attaches it to a report has attached an
+  // incomplete record without knowing, which is the specific failure this whole
+  // surface exists to prevent. Narrow the time range and export again.
+  bool truncated = 4;
+}
+
+message ExportContent {
+  bytes data = 1;
+  // Suggested filename, e.g. `kindlast-audit-2026-08-17.csv`.
+  string filename = 2;
+  string content_type = 3;
+}
+
+message ExportDownload {
+  string url = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+// AuditEntry is one act, as recorded when it happened.
+message AuditEntry {
+  string id = 1;
+
+  // When it happened. The transaction timestamp, so two rows written by one act
+  // (the decision, and the record it created) share it. Their order relative to
+  // each other is not observable and a client must not imply one.
+  google.protobuf.Timestamp occurred_at = 2;
+
+  // What was done: `approve_finding`, `reject_finding`, `snooze_finding`, and
+  // the `create_*` rows the Executor writes.
+  //
+  // A string rather than an enum, deliberately. The vocabulary grows as
+  // obligations are added, and an old row whose action type a new client does
+  // not recognise must still render as itself rather than as
+  // `ACTION_UNSPECIFIED`. An audit log is the one register where an unknown
+  // value must not be flattened.
+  string action_type = 3;
+
+  Actor actor = 4;
+
+  // The finding this act was about, when there was one.
+  string finding_id = 5;
+
+  // The row this act created or changed: the table name and its id.
+  string target_table = 6;
+  string target_id = 7;
+
+  // The acted-on row before and after, as JSON, or empty when not recorded.
+  //
+  // Carried as strings rather than Struct so what a client renders is byte for
+  // byte what the database stored. Round-tripping through Struct silently
+  // rewrites numbers as doubles and reorders keys, and a diff view built on
+  // that is showing the auditor a re-serialisation rather than the record.
+  string before_json = 8;
+  string after_json = 9;
+
+  // The agent run that produced this act, when one did (§26).
+  //
+  // Always empty today: nothing writes it, because `agent_runs` arrives with
+  // ENT-218. Declared now so the read model does not have to change when it
+  // does, and so no client is written on the assumption that every act had a
+  // human behind it.
+  string agent_run_id = 10;
+}
+
+// Actor is who acted.
+//
+// NOT ASSUMED TO BE A PERSON
+//
+// It is one today, and §26 has agents producing acts that reference their run
+// record. `kind` exists so that day adds a value rather than a field, and so a
+// console is never written around "the actor's name" being a human's name.
+message Actor {
+  string user_id = 1;
+
+  // Display name and email, resolved from the identity record. Both empty for
+  // an actor who has left the organisation, and for a non-human actor.
+  //
+  // A row is NOT hidden when its actor is gone, and the entry keeps the user
+  // id. An audit log that dropped rows when somebody was offboarded would be
+  // trivially defeatable by offboarding somebody.
+  string display_name = 2;
+  string email = 3;
+
+  // The role held AT THE TIME OF THE ACT, snapshotted into the row rather than
+  // looked up now.
+  //
+  // This is the whole reason the column exists. A page that resolved the role at
+  // render time would say "approved by X, an admin" about an act X performed as
+  // an owner, and would change what it said about a past act every time
+  // somebody's role changed. The log has to stay true about the past.
+  string actor_role = 4;
+
+  ActorKind kind = 5;
+}
+
+enum ActorKind {
+  ACTOR_KIND_UNSPECIFIED = 0;
+  // A signed-in human.
+  ACTOR_KIND_HUMAN = 1;
+  // A service principal or agent run. Not produced yet; see `agent_run_id`.
+  ACTOR_KIND_SERVICE = 2;
+}

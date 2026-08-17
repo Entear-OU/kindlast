@@ -155,6 +155,63 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.RecordsService.GetAiSystem": {
 			Method: "GET", Path: "/api/v1/records/ai-systems/{ai_system_id}",
 		},
+		// Notifications (ENT-209). A singleton resource rather than a
+		// collection: the preferences being read and written are always the
+		// caller's own, for the organisation the header names, so there is
+		// nothing to identify in the path. A `/{user_id}` segment would offer a
+		// client somebody else's id to try, and make this handler the thing that
+		// refuses when the policy already does.
+		//
+		// PUT rather than PATCH, unlike the records surface above, because here
+		// the body genuinely IS the resource: every field is client-owned and
+		// the settings page renders all of them at once. There are no
+		// server-owned columns to preserve, so the promise PUT makes is one this
+		// endpoint can keep.
+		"kindlast.core.v1.NotificationService.GetNotificationPreferences": {
+			Method: "GET", Path: "/api/v1/notification-preferences",
+		},
+		"kindlast.core.v1.NotificationService.UpdateNotificationPreferences": {
+			Method: "PUT", Path: "/api/v1/notification-preferences",
+		},
+		// Deployment-wide rather than tenant-scoped: what this installation can
+		// deliver on is the same answer for every organisation in it.
+		"kindlast.core.v1.NotificationService.GetNotificationCapabilities": {
+			Method: "GET", Path: "/api/v1/notification-capabilities",
+		},
+
+		// Billing (ENT-210). A singleton like the notification preferences
+		// above, and read-only: there is no PUT, because a plan changes when
+		// the signed webhook says so and never because a session asked.
+		//
+		// The webhook itself is deliberately absent from this table. It is not
+		// an RPC and carries no `google.api.http` annotation: it is a plain
+		// route on the mux, registered only when billing is configured, and
+		// routed at the edge by exactly one path rather than by a wildcard.
+		"kindlast.core.v1.BillingService.GetBilling": {
+			Method: "GET", Path: "/api/v1/billing",
+		},
+
+		// The audit log (ENT-223). A GET on the collection, and an export that
+		// is a POST for two reasons rather than one.
+		//
+		// The first is the ordinary one: the filter is a structured object and
+		// belongs in a body. The second matters more here. An export of an
+		// audit log is a request for a file containing a whole organisation's
+		// decision history, and a GET is the method that gets logged in proxy
+		// access logs, retried by link scanners, and put in a browser's history
+		// with its query string intact. A filter naming a specific person and a
+		// date range is not a thing to leave in three intermediaries' logs.
+		//
+		// The colon verb rather than `/api/v1/audit/export`, because this is an
+		// action on the collection and not a subresource. There is nothing at
+		// `/audit/export` to GET.
+		"kindlast.core.v1.AuditService.ListAuditEntries": {
+			Method: "GET", Path: "/api/v1/audit",
+		},
+		"kindlast.core.v1.AuditService.ExportAuditEntries": {
+			Method: "POST", Path: "/api/v1/audit:export",
+		},
+
 		"kindlast.core.v1.RecordsService.ListDsars": {
 			Method: "GET", Path: "/api/v1/records/dsars",
 		},

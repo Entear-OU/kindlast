@@ -40,6 +40,14 @@ type Tenant interface {
 	// caller has no membership yet, which is the state a brand-new subject is
 	// in until ENT-196 provisions one.
 	Role() string
+	// UserID is this system's own identifier for the caller: the version 5 uuid
+	// derived from (issuer, subject), which is what `memberships`, `created_by`
+	// and `approved_by` store.
+	//
+	// Distinct from the IdP's subject claim, and deliberately so: the derivation
+	// is one-way, so a client holding the subject cannot compute this, and
+	// without it a client cannot recognise itself in a member list (ENT-220).
+	UserID() string
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
 }

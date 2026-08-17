@@ -2,7 +2,18 @@
 
 import { useActionState } from 'react'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import {
   removeMemberAction,
   updateMemberRoleAction,
@@ -22,17 +33,28 @@ const ROLES = ['owner', 'member', 'viewer'] as const
  *
  * A viewer therefore sees the list and no buttons, which is exactly what
  * ListMembers declaring `org:read` rather than `org:manage` is for.
+ *
+ * `viewerUserId` is core-api's derived id for the person reading the page, not
+ * the IdP subject claim (ENT-220). Comparing the wrong one silently matches
+ * nothing, so every row would look like somebody else and leaving would
+ * disappear again.
  */
 export function MembersTable({
   slug,
   members,
   viewerRole,
+  viewerUserId,
 }: {
   slug: string
   members: Member[]
   viewerRole: string
+  viewerUserId?: string
 }) {
   const canManage = viewerRole === 'owner'
+  // Every role may leave: `memberships_delete_owner_or_self` has always allowed
+  // removing yourself, so the action column is no longer owner-only.
+  const showActions =
+    canManage || members.some((m) => m.userId === viewerUserId)
 
   return (
     <table className="w-full text-left text-sm">
@@ -40,7 +62,7 @@ export function MembersTable({
         <tr className="border-b border-border/60">
           <th className="pb-2 font-medium text-muted-foreground">Person</th>
           <th className="pb-2 font-medium text-muted-foreground">Role</th>
-          {canManage ? <th className="pb-2 sr-only">Actions</th> : null}
+          {showActions ? <th className="pb-2 sr-only">Actions</th> : null}
         </tr>
       </thead>
       <tbody>
@@ -50,6 +72,13 @@ export function MembersTable({
             slug={slug}
             member={member}
             canManage={canManage}
+            showActions={showActions}
+            isViewer={
+              // Guarded against undefined on both sides. Without the check a
+              // deployment where user_id did not arrive would match the first
+              // member with no id and offer to remove a stranger.
+              Boolean(viewerUserId) && member.userId === viewerUserId
+            }
           />
         ))}
       </tbody>
@@ -61,10 +90,14 @@ function MemberRow({
   slug,
   member,
   canManage,
+  showActions,
+  isViewer,
 }: {
   slug: string
   member: Member
   canManage: boolean
+  showActions: boolean
+  isViewer: boolean
 }) {
   const [roleState, changeRole] = useActionState<ActionState, FormData>(
     updateMemberRoleAction.bind(null, slug),
@@ -93,6 +126,11 @@ function MemberRow({
         <span className="text-foreground">
           {member.displayName || member.email || member.userId}
         </span>
+        {isViewer ? (
+          <Badge variant="secondary" className="ml-2 align-middle">
+            You
+          </Badge>
+        ) : null}
         {member.displayName && member.email ? (
           <span className="ml-2 text-muted-foreground">{member.email}</span>
         ) : null}
@@ -131,14 +169,54 @@ function MemberRow({
         )}
       </td>
 
-      {canManage ? (
+      {showActions ? (
         <td className="py-3 text-right">
-          <form action={remove}>
-            <input type="hidden" name="userId" value={member.userId} />
-            <Button type="submit" variant="ghost" size="sm">
-              Remove
-            </Button>
-          </form>
+          {isViewer ? (
+            // Leaving is confirmed, removing somebody else is not, and the
+            // asymmetry is deliberate. Removing a colleague is reversible by
+            // inviting them back. Removing yourself takes your own access away
+            // immediately, and if you were the last owner able to invite, there
+            // may be no way back without an operator opening a database
+            // session. That asymmetry deserves a stop, and nothing else here
+            // does.
+            <Dialog>
+              <DialogTrigger
+                render={<Button type="button" variant="outline" size="sm" />}
+              >
+                Leave
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Leave this organisation?</DialogTitle>
+                  <DialogDescription>
+                    You will lose access to its compliance records, findings and
+                    settings straight away. Another owner has to invite you back
+                    to undo it.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose
+                    render={<Button type="button" variant="outline" />}
+                  >
+                    Stay
+                  </DialogClose>
+                  <form action={remove}>
+                    <input type="hidden" name="userId" value={member.userId} />
+                    <Button type="submit" variant="destructive">
+                      Leave organisation
+                    </Button>
+                  </form>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : canManage ? (
+            <form action={remove}>
+              <input type="hidden" name="userId" value={member.userId} />
+              <Button type="submit" variant="ghost" size="sm">
+                Remove
+              </Button>
+            </form>
+          ) : null}
         </td>
       ) : null}
     </tr>

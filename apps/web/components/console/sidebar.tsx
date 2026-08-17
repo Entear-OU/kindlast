@@ -1,5 +1,11 @@
 import Link from 'next/link'
-import { Gauge, ListChecks, FolderOpen, Settings } from 'lucide-react'
+import {
+  Gauge,
+  ListChecks,
+  FolderOpen,
+  ScrollText,
+  Settings,
+} from 'lucide-react'
 
 import { SignOutForm } from '@/components/auth/sign-out-form'
 import { KindlastMark } from '@/components/console/mark'
@@ -79,6 +85,14 @@ export function ConsoleSidebar({
               one-line change per surface the list was built for. */}
           <NavLink href={orgPath(orgSlug, '/records')} label="Records">
             <FolderOpen aria-hidden="true" className="size-4" />
+          </NavLink>
+        </li>
+        <li>
+          {/* Left COMING and became a link when ENT-223 landed the audit
+              surface, the same one-line change per surface this list was built
+              for. */}
+          <NavLink href={orgPath(orgSlug, '/logs')} label="Logs">
+            <ScrollText aria-hidden="true" className="size-4" />
           </NavLink>
         </li>
         <li>

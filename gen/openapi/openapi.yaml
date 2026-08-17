@@ -6,6 +6,223 @@ info:
     title: Kindlast Core API
     version: 1.0.0
 paths:
+    /api/v1/audit:
+        get:
+            tags:
+                - AuditService
+            description: |-
+                The decisions, filtered and paged.
+
+                 Keyset over `(occurred_at desc, id desc)`, matching the
+                 `audit_log_org_occurred_idx` index. Offset pagination would let a row
+                 written between two page requests shift the window, and this is the one
+                 register where a skipped row is a compliance problem rather than a
+                 cosmetic one.
+            operationId: AuditService_ListAuditEntries
+            parameters:
+                - name: filter.since
+                  in: query
+                  description: Inclusive lower bound on `occurred_at`. Absent means from the beginning.
+                  schema:
+                    type: string
+                    format: date-time
+                - name: filter.until
+                  in: query
+                  description: |-
+                    Exclusive upper bound on `occurred_at`. Absent means up to now.
+
+                     Exclusive rather than inclusive so that consecutive ranges tile without
+                     overlapping. An auditor pulling January and then February with inclusive
+                     bounds gets any row on the boundary twice, and a duplicated decision in an
+                     audit file is a question nobody wants to answer.
+                  schema:
+                    type: string
+                    format: date-time
+                - name: filter.actionTypes
+                  in: query
+                  description: |-
+                    Restrict to these action types, e.g. `approve_finding`. Empty means all.
+
+                     Repeated rather than singular because the useful question is almost always
+                     a group: "every decision a human made" is three action types, and making a
+                     client issue three requests and merge them would also break the ordering.
+                  schema:
+                    type: array
+                    items:
+                        type: string
+                - name: filter.actorUserIds
+                  in: query
+                  description: Restrict to these actors, by user id. Empty means all.
+                  schema:
+                    type: array
+                    items:
+                        type: string
+                - name: filter.query
+                  in: query
+                  description: |-
+                    Free text over the action type, the target table, and the actor's name and
+                     email.
+
+                     Deliberately NOT over the `before` and `after` payloads. Those are jsonb
+                     holding whatever the acted-on row contained, which for a DSAR includes a
+                     data subject's name. A substring search across them would turn the audit
+                     log into a search engine over personal data that the surface exists to
+                     account for, which is the wrong direction for a GDPR product to be pointing
+                     its own tooling.
+                  schema:
+                    type: string
+                - name: pageToken
+                  in: query
+                  description: |-
+                    Opaque. Do not parse or construct one; a token from another list is
+                     refused rather than misread.
+                  schema:
+                    type: string
+                - name: pageSize
+                  in: query
+                  description: Defaults to 50, capped at 200.
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListAuditEntriesResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/audit:export:
+        post:
+            tags:
+                - AuditService
+            description: |-
+                The same filtered set, as a file an auditor can attach to a report.
+
+                 WHY THIS IS A SEPARATE RPC RATHER THAN A FLAG ON THE LIST
+
+                 Because the two answer different questions. The list answers "what is on
+                 this page", and is paged by construction. An export answers "everything
+                 that matched", and an export that silently stopped at a page boundary is
+                 worse than no export: the auditor cannot see the truncation, and the file
+                 is the artefact that leaves the building.
+
+                 WHY THE RESPONSE IS A ONEOF
+
+                 §7 designs the export as a request that returns a signed download URL, and
+                 §25 leaves synchronous-versus-job open. At today's volumes a synchronous
+                 body is right and a job queue would be machinery for nobody. But the shape
+                 that grows into a URL and the shape that does not are decided now, so the
+                 response carries a `oneof`: today it is always `content`, and the day a
+                 customer's log outgrows one response it becomes `download`, with no
+                 contract break and no second RPC.
+            operationId: AuditService_ExportAuditEntries
+            parameters:
+                - name: filter.since
+                  in: query
+                  description: Inclusive lower bound on `occurred_at`. Absent means from the beginning.
+                  schema:
+                    type: string
+                    format: date-time
+                - name: filter.until
+                  in: query
+                  description: |-
+                    Exclusive upper bound on `occurred_at`. Absent means up to now.
+
+                     Exclusive rather than inclusive so that consecutive ranges tile without
+                     overlapping. An auditor pulling January and then February with inclusive
+                     bounds gets any row on the boundary twice, and a duplicated decision in an
+                     audit file is a question nobody wants to answer.
+                  schema:
+                    type: string
+                    format: date-time
+                - name: filter.actionTypes
+                  in: query
+                  description: |-
+                    Restrict to these action types, e.g. `approve_finding`. Empty means all.
+
+                     Repeated rather than singular because the useful question is almost always
+                     a group: "every decision a human made" is three action types, and making a
+                     client issue three requests and merge them would also break the ordering.
+                  schema:
+                    type: array
+                    items:
+                        type: string
+                - name: filter.actorUserIds
+                  in: query
+                  description: Restrict to these actors, by user id. Empty means all.
+                  schema:
+                    type: array
+                    items:
+                        type: string
+                - name: filter.query
+                  in: query
+                  description: |-
+                    Free text over the action type, the target table, and the actor's name and
+                     email.
+
+                     Deliberately NOT over the `before` and `after` payloads. Those are jsonb
+                     holding whatever the acted-on row contained, which for a DSAR includes a
+                     data subject's name. A substring search across them would turn the audit
+                     log into a search engine over personal data that the surface exists to
+                     account for, which is the wrong direction for a GDPR product to be pointing
+                     its own tooling.
+                  schema:
+                    type: string
+                - name: format
+                  in: query
+                  description: |-
+                    The only format for now. Named rather than assumed so adding one later is
+                     an enum value rather than a new RPC.
+                  schema:
+                    enum:
+                        - EXPORT_FORMAT_UNSPECIFIED
+                        - EXPORT_FORMAT_CSV
+                    type: string
+                    format: enum
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExportAuditEntriesResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/billing:
+        get:
+            tags:
+                - BillingService
+            description: |-
+                What this organisation is on, and what the console may offer.
+
+                 Owner-only, per §20.1. A member cannot see it: billing is not secret from
+                 colleagues in a moral sense, but a plan and a renewal date are commercial
+                 facts about the company, and the role that manages them is the one that
+                 signed for them.
+            operationId: BillingService_GetBilling
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetBillingResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/dashboard:
         get:
             tags:
@@ -397,6 +614,92 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/UpdateMemberRoleResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/notification-capabilities:
+        get:
+            tags:
+                - NotificationService
+            description: |-
+                Which notification channels this deployment can actually use (§18.3).
+
+                 Exists so a console never renders a channel it cannot deliver on. Telegram,
+                 Slack and WhatsApp are in the design and are not built, and the failure
+                 this prevents is a settings page offering a switch that silently does
+                 nothing, which is indistinguishable from a broken integration and generates
+                 support instead of value.
+
+                 Read from configuration rather than from a hard-coded array, because
+                 "email" is only available on a deployment that has told core-api where to
+                 submit mail. A self-hoster with no SMTP has no channels at all, and saying
+                 so plainly is better than listing one that will queue forever.
+            operationId: NotificationService_GetNotificationCapabilities
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetNotificationCapabilitiesResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/notification-preferences:
+        get:
+            tags:
+                - NotificationService
+            description: |-
+                The caller's own preferences for the active organisation.
+
+                 Returns defaults rather than an error when no row exists, because somebody
+                 who has never opened the settings page has no row and is nonetheless
+                 subscribed: the product default is that a member is told. An error here
+                 would make "I have not changed anything" indistinguishable from a fault.
+            operationId: NotificationService_GetNotificationPreferences
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetNotificationPreferencesResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        put:
+            tags:
+                - NotificationService
+            description: |-
+                Replace the caller's preferences for the active organisation.
+
+                 A whole-object write rather than a patch. The settings surface renders every
+                 field at once, so a partial update would mean deciding what an absent field
+                 means, and "unset" and "set to false" are different intentions that a proto3
+                 scalar cannot tell apart.
+            operationId: NotificationService_UpdateNotificationPreferences
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateNotificationPreferencesRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UpdateNotificationPreferencesResponse'
                 default:
                     description: Default error response
                     content:
@@ -944,6 +1247,47 @@ components:
                         The URL segment to redirect into, so an accepted invitation lands the
                          person inside the organisation they just joined rather than at a page
                          that has to look it up again (§20.1, ENT-198).
+        Actor:
+            type: object
+            properties:
+                userId:
+                    type: string
+                displayName:
+                    type: string
+                    description: |-
+                        Display name and email, resolved from the identity record. Both empty for
+                         an actor who has left the organisation, and for a non-human actor.
+
+                         A row is NOT hidden when its actor is gone, and the entry keeps the user
+                         id. An audit log that dropped rows when somebody was offboarded would be
+                         trivially defeatable by offboarding somebody.
+                email:
+                    type: string
+                actorRole:
+                    type: string
+                    description: |-
+                        The role held AT THE TIME OF THE ACT, snapshotted into the row rather than
+                         looked up now.
+
+                         This is the whole reason the column exists. A page that resolved the role at
+                         render time would say "approved by X, an admin" about an act X performed as
+                         an owner, and would change what it said about a past act every time
+                         somebody's role changed. The log has to stay true about the past.
+                kind:
+                    enum:
+                        - ACTOR_KIND_UNSPECIFIED
+                        - ACTOR_KIND_HUMAN
+                        - ACTOR_KIND_SERVICE
+                    type: string
+                    format: enum
+            description: |-
+                Actor is who acted.
+
+                 NOT ASSUMED TO BE A PERSON
+
+                 It is one today, and §26 has agents producing acts that reference their run
+                 record. `kind` exists so that day adds a value rather than a field, and so a
+                 console is never written around "the actor's name" being a human's name.
         AiSystem:
             type: object
             properties:
@@ -1048,6 +1392,60 @@ components:
                     description: |-
                         Which table `created_record_id` names, e.g. processing_activities. Present
                          so a client can route without hard-coding the action-to-table mapping.
+        AuditEntry:
+            type: object
+            properties:
+                id:
+                    type: string
+                occurredAt:
+                    type: string
+                    description: |-
+                        When it happened. The transaction timestamp, so two rows written by one act
+                         (the decision, and the record it created) share it. Their order relative to
+                         each other is not observable and a client must not imply one.
+                    format: date-time
+                actionType:
+                    type: string
+                    description: |-
+                        What was done: `approve_finding`, `reject_finding`, `snooze_finding`, and
+                         the `create_*` rows the Executor writes.
+
+                         A string rather than an enum, deliberately. The vocabulary grows as
+                         obligations are added, and an old row whose action type a new client does
+                         not recognise must still render as itself rather than as
+                         `ACTION_UNSPECIFIED`. An audit log is the one register where an unknown
+                         value must not be flattened.
+                actor:
+                    $ref: '#/components/schemas/Actor'
+                findingId:
+                    type: string
+                    description: The finding this act was about, when there was one.
+                targetTable:
+                    type: string
+                    description: 'The row this act created or changed: the table name and its id.'
+                targetId:
+                    type: string
+                beforeJson:
+                    type: string
+                    description: |-
+                        The acted-on row before and after, as JSON, or empty when not recorded.
+
+                         Carried as strings rather than Struct so what a client renders is byte for
+                         byte what the database stored. Round-tripping through Struct silently
+                         rewrites numbers as doubles and reorders keys, and a diff view built on
+                         that is showing the auditor a re-serialisation rather than the record.
+                afterJson:
+                    type: string
+                agentRunId:
+                    type: string
+                    description: |-
+                        The agent run that produced this act, when one did (§26).
+
+                         Always empty today: nothing writes it, because `agent_runs` arrives with
+                         ENT-218. Declared now so the read model does not have to change when it
+                         does, and so no client is written on the assumption that every act had a
+                         human behind it.
+            description: AuditEntry is one act, as recorded when it happened.
         Citation:
             type: object
             properties:
@@ -1236,6 +1634,54 @@ components:
                     type: string
                     format: date-time
             description: A data-subject access request, and the clock on it.
+        ExportAuditEntriesResponse:
+            type: object
+            properties:
+                content:
+                    allOf:
+                        - $ref: '#/components/schemas/ExportContent'
+                    description: The file itself. What this returns today.
+                download:
+                    allOf:
+                        - $ref: '#/components/schemas/ExportDownload'
+                    description: |-
+                        A signed, expiring URL to fetch it from. Not yet produced; declared so
+                         the day a log outgrows one response is a server change rather than a
+                         contract break.
+                rowCount:
+                    type: integer
+                    description: How many rows the file holds.
+                    format: int32
+                truncated:
+                    type: boolean
+                    description: |-
+                        True when the export hit its row cap and the file is not the whole matching
+                         set.
+
+                         **A console must show this, and it is the reason this field exists.** A
+                         truncated export is invisible in the file itself: it is a valid CSV that
+                         simply stops. An auditor who attaches it to a report has attached an
+                         incomplete record without knowing, which is the specific failure this whole
+                         surface exists to prevent. Narrow the time range and export again.
+        ExportContent:
+            type: object
+            properties:
+                data:
+                    type: string
+                    format: bytes
+                filename:
+                    type: string
+                    description: Suggested filename, e.g. `kindlast-audit-2026-08-17.csv`.
+                contentType:
+                    type: string
+        ExportDownload:
+            type: object
+            properties:
+                url:
+                    type: string
+                expiresAt:
+                    type: string
+                    format: date-time
         Finding:
             type: object
             properties:
@@ -1310,6 +1756,52 @@ components:
             properties:
                 aiSystem:
                     $ref: '#/components/schemas/AiSystem'
+        GetBillingResponse:
+            type: object
+            properties:
+                plan:
+                    type: string
+                    description: |-
+                        The plan in force: `free` or `pro`.
+
+                         Reported from the subscription's plan AND status together, never the plan
+                         column alone. A cancelled or past_due `pro` row reads as `free` here,
+                         because entitlement is what the customer currently has rather than what
+                         they last bought. That trap has been hit twice in this codebase.
+                status:
+                    type: string
+                    description: |-
+                        The raw subscription status: `active`, `past_due` or `canceled`. Empty when
+                         no subscription row exists, which is a new organisation rather than an
+                         error.
+
+                         Separate from `plan` so a console can say "your payment failed" rather than
+                         silently showing a downgrade the customer did not ask for. `past_due` is
+                         the state where the two differ and the difference is the whole message.
+                currentPeriodEnd:
+                    type: string
+                    description: When the current period ends. Absent when there is no subscription.
+                    format: date-time
+                billingConfigured:
+                    type: boolean
+                    description: |-
+                        Whether this deployment sells anything at all.
+
+                         False on a self-hosted stack with no provider configured, and then a
+                         console must render no upgrade path, no checkout and no plan comparison.
+                         Reported rather than inferred from the absence of a subscription row: a
+                         hosted customer between provisioning and their first row would look
+                         identical, and would be shown a page telling them their own product cannot
+                         be bought.
+                gatingEnabled:
+                    type: boolean
+                    description: |-
+                        Whether plan gating applies. False means no feature is withheld for being
+                         on the free plan, which is the self-hosted default (§18.1).
+
+                         Distinct from `billing_configured` on purpose: an operator may wire a
+                         provider before turning gating on, and during that window the honest
+                         answer is that checkout exists and nothing is withheld yet.
         GetCurrentUserResponse:
             type: object
             properties:
@@ -1386,6 +1878,18 @@ components:
                          instrument an obligation can cite. An empty list means "we cannot show you
                          the text here", which is honest, and is not the same as the citation being
                          absent.
+        GetNotificationCapabilitiesResponse:
+            type: object
+            properties:
+                channels:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/NotificationChannel'
+        GetNotificationPreferencesResponse:
+            type: object
+            properties:
+                preferences:
+                    $ref: '#/components/schemas/NotificationPreferences'
         GetProcessingActivityResponse:
             type: object
             properties:
@@ -1427,6 +1931,29 @@ components:
                         $ref: '#/components/schemas/AiSystem'
                 nextPageToken:
                     type: string
+        ListAuditEntriesResponse:
+            type: object
+            properties:
+                entries:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/AuditEntry'
+                nextPageToken:
+                    type: string
+                    description: |-
+                        Empty when there are no more. The only signal that more exist: do not
+                         infer it from a full page.
+                availableActionTypes:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Every action type present in this organisation's log, whatever the filter.
+
+                         Returned so a console can render a filter control that offers only values
+                         that would return something. A dropdown listing every action type the
+                         schema could theoretically hold sends a person hunting for rows that were
+                         never written.
         ListDsarsResponse:
             type: object
             properties:
@@ -1605,6 +2132,67 @@ components:
                          emailed capability-token links, which are exactly the links a compliance
                          product has to keep working. A client that wants a label shows org_name; a
                          client that wants a link uses this.
+        NotificationChannel:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: Stable identifier, e.g. `email`. Not a label.
+                displayName:
+                    type: string
+                    description: What to call it in an interface.
+                available:
+                    type: boolean
+                    description: |-
+                        Whether this deployment can deliver on it right now. A channel that is
+                         known but unconfigured is reported as unavailable rather than omitted, so a
+                         console can say why it is not offered instead of silently lacking it.
+                unavailableReason:
+                    type: string
+                    description: |-
+                        Plain-language reason when it is not available, for the console to show.
+                         Empty when it is.
+        NotificationPreferences:
+            type: object
+            properties:
+                email:
+                    type: string
+                    description: |-
+                        Where to send email, when it should not be the address the person signs in
+                         with. Empty means use the identity's own address.
+
+                         Its own field rather than an implicit default, because the two are
+                         different facts: a compliance contact is often a shared mailbox that nobody
+                         signs in as.
+                minSeverityForEmail:
+                    type: string
+                    description: |-
+                        The floor for emailing about a finding. One of low, medium, high, critical.
+
+                         A floor rather than a switch, because "tell me about everything" and "tell
+                         me about nothing" are both wrong for a compliance product: the first trains
+                         people to ignore it, the second is how a critical finding goes unread.
+                weeklyBriefingEnabled:
+                    type: boolean
+                deadlineAlertsEnabled:
+                    type: boolean
+                timezone:
+                    type: string
+                    description: |-
+                        IANA name, e.g. Europe/Tallinn. Decides when a briefing and a quiet window
+                         fall for this person, so it is theirs rather than the organisation's: a
+                         consultant and their client are not always in the same country.
+                quietHoursStart:
+                    type: string
+                    description: |-
+                        Local times, HH:MM, during which email is held rather than sent. Both empty
+                         means no quiet hours.
+
+                         Held rather than dropped. A deadline that passes overnight still has to be
+                         told about in the morning, and a notification system that silently discards
+                         during quiet hours is one nobody can trust with a statutory clock.
+                quietHoursEnd:
+                    type: string
         PipelineStatus:
             type: object
             properties:
@@ -1867,6 +2455,20 @@ components:
             properties:
                 member:
                     $ref: '#/components/schemas/Member'
+        UpdateNotificationPreferencesRequest:
+            type: object
+            properties:
+                preferences:
+                    $ref: '#/components/schemas/NotificationPreferences'
+        UpdateNotificationPreferencesResponse:
+            type: object
+            properties:
+                preferences:
+                    allOf:
+                        - $ref: '#/components/schemas/NotificationPreferences'
+                    description: |-
+                        Re-read rather than echoed, so the response describes what the database
+                         holds rather than what was sent.
         UpdateOrganisationRequest:
             type: object
             properties:
@@ -1902,8 +2504,8 @@ components:
                 id:
                     type: string
                     description: |-
-                        The IdP subject claim. The tenancy key is org_id; this identifies the
-                         human, and is what created_by and approved_by record.
+                        The IdP subject claim. Identifies the human to the authorization server,
+                         and is NOT what this system stores against their actions: see `user_id`.
                 email:
                     type: string
                 displayName:
@@ -1913,7 +2515,85 @@ components:
                     description: |-
                         Gates finding approval: an unverified address must not be able to sign
                          off a regulatory decision (§1.7).
+                userId:
+                    type: string
+                    description: |-
+                        This system's own identifier for the same human, matching
+                         `Member.user_id`, `created_by` and `approved_by`.
+
+                         Added rather than replacing `id`, which keeps the change additive: an
+                         existing client reading `id` is unaffected, and `buf breaking` stays quiet.
+            description: |-
+                TWO IDENTIFIERS, AND WHY THEY ARE NOT ONE (ENT-220)
+
+                 This message carries the same human twice, deliberately, and the next reader
+                 should not simplify them into one field.
+
+                 `id` is the identifier the authorization server uses: a Zitadel snowflake
+                 like `386250729179840515`, or `auth0|abc123`. Its shape is the IdP's to
+                 choose and it changes if the deployment changes IdP.
+
+                 `user_id` is this system's own key for that person, a version 5 uuid derived
+                 from (issuer, subject) by `libs/chassis/subject`. It is what `memberships`,
+                 `created_by` and `approved_by` actually store, and it is what `Member.user_id`
+                 returns.
+
+                 The derivation is one-way on purpose, so a client holding `id` cannot compute
+                 `user_id`, and `user_identities` is the only way back. Before this field
+                 existed a console could list an organisation's members and not work out which
+                 row was the person reading the page, which is why an owner could not leave an
+                 organisation the API was perfectly willing to let them leave.
 tags:
+    - name: AuditService
+      description: |-
+        The audit log: what was decided, by whom, and when (§7.2, §24; ENT-223).
+
+         THIS SURFACE READS `audit_log` AND NOTHING ELSE
+
+         Not traces, not model calls, not anything an observability tool holds. That
+         firewall is the product rather than an implementation detail: an auditor is
+         buying a record that a regulator can be shown, and a record assembled partly
+         from a vendor's telemetry is one whose completeness depends on that vendor's
+         retention settings. `audit_log` is append-only by trigger, lives in the
+         customer's own database, and is written in the same transaction as the act it
+         describes. A trace is none of those things.
+
+         A console rendering this should say so in its own words. "Traces are not the
+         audit log" is a sentence an auditor needs to read, not infer.
+
+         EVERY ROW IS A THING THAT HAPPENED
+
+         There is no failure dimension here, and that is a real difference from the
+         infrastructure log views this surface is modelled on. A refused act writes
+         nothing: the gates are constraints and policies, and a refusal aborts the
+         transaction the audit row would have been written in. So there is no `level`
+         and no status filter, because there is no such thing as a failed row.
+
+         READ ONLY, AND STRUCTURALLY SO
+
+         There is no write RPC on this service and there will not be one. The table
+         carries an append-only trigger, `kindlast_app` holds no update or delete
+         grant on it, and the only insert path is the one bound to the acting human by
+         policy. A record a customer can edit is not an audit log.
+    - name: BillingService
+      description: |-
+        Billing, per organisation (core-api-surface §9, §18.1; ENT-210).
+
+         BILLING KEYS ON THE ORGANISATION, NEVER ON A PERSON
+
+         `subscriptions.user_id` was dropped in ENT-192 and replaced by a unique
+         `org_id`, so nothing in the schema can key billing to an individual any more.
+         That is the point rather than a detail: a company pays, people come and go,
+         and an owner leaving must not take the subscription with them.
+
+         AND IT IS OPTIONAL
+
+         A deployment with no payment provider configured runs on a single plan and
+         renders no upgrade path at all. A self-hoster has no Stripe account and must
+         not need one; the design's posture is that they are a first-class user rather
+         than a degraded one. So this service answers "billing is not configured here"
+         as a first-class response rather than erroring, and a console that reads it
+         shows a settings page with no checkout rather than a broken one.
     - name: DashboardService
       description: The dashboard's posture and the pipeline's honesty (§5).
     - name: FindingsService
@@ -1950,6 +2630,30 @@ tags:
          `label`; it must not build that string from `celex` and `article`, because a
          second assembler is a second thing that can be wrong, and the one that is
          wrong will be the one nobody tested.
+    - name: NotificationService
+      description: |-
+        Notification preferences and the channels a deployment actually has
+         (core-api-surface §6, §17, §18.3, §18.5; ENT-209).
+
+         PREFERENCES ARE PERSONAL WITHIN AN ORGANISATION, NOT PER PERSON
+
+         `notification_preferences` is keyed `(org_id, user_id)`, and the policies on
+         it are the only ones in the schema that pin `user_id` to
+         `app.current_user_id`. So a consultant serving three clients can want a
+         weekly briefing from one and silence from another, and no member can read or
+         change a colleague's settings even though they share an organisation.
+
+         That is why these RPCs take no user id. The caller is the subject, always,
+         and offering a parameter would invite a client to pass somebody else's and a
+         handler to be the thing that refuses. Authority stays in the policy.
+
+         WHAT IS DELIBERATELY ABSENT
+
+         No RPC to send a notification, and none to read the outbox. Dispatch is a
+         background duty of the agent role, not something a client asks for: a caller
+         that could trigger delivery could use this service to mail an arbitrary
+         address on a timer. The outbox is not readable here either, because a queue
+         of pending messages is operational detail rather than a customer surface.
     - name: OrgService
       description: |-
         Organisations and membership (core-api-surface §20.1).

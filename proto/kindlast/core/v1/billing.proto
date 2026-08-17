@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Billing, per organisation (core-api-surface §9, §18.1; ENT-210).
+//
+// BILLING KEYS ON THE ORGANISATION, NEVER ON A PERSON
+//
+// `subscriptions.user_id` was dropped in ENT-192 and replaced by a unique
+// `org_id`, so nothing in the schema can key billing to an individual any more.
+// That is the point rather than a detail: a company pays, people come and go,
+// and an owner leaving must not take the subscription with them.
+//
+// AND IT IS OPTIONAL
+//
+// A deployment with no payment provider configured runs on a single plan and
+// renders no upgrade path at all. A self-hoster has no Stripe account and must
+// not need one; the design's posture is that they are a first-class user rather
+// than a degraded one. So this service answers "billing is not configured here"
+// as a first-class response rather than erroring, and a console that reads it
+// shows a settings page with no checkout rather than a broken one.
+service BillingService {
+  // What this organisation is on, and what the console may offer.
+  //
+  // Owner-only, per §20.1. A member cannot see it: billing is not secret from
+  // colleagues in a moral sense, but a plan and a renewal date are commercial
+  // facts about the company, and the role that manages them is the one that
+  // signed for them.
+  rpc GetBilling(GetBillingRequest) returns (GetBillingResponse) {
+    option (kindlast.options.v1.required_scope) = "billing:read";
+    option (google.api.http) = {get: "/api/v1/billing"};
+  }
+}
+
+message GetBillingRequest {}
+
+message GetBillingResponse {
+  // The plan in force: `free` or `pro`.
+  //
+  // Reported from the subscription's plan AND status together, never the plan
+  // column alone. A cancelled or past_due `pro` row reads as `free` here,
+  // because entitlement is what the customer currently has rather than what
+  // they last bought. That trap has been hit twice in this codebase.
+  string plan = 1;
+
+  // The raw subscription status: `active`, `past_due` or `canceled`. Empty when
+  // no subscription row exists, which is a new organisation rather than an
+  // error.
+  //
+  // Separate from `plan` so a console can say "your payment failed" rather than
+  // silently showing a downgrade the customer did not ask for. `past_due` is
+  // the state where the two differ and the difference is the whole message.
+  string status = 2;
+
+  // When the current period ends. Absent when there is no subscription.
+  google.protobuf.Timestamp current_period_end = 3;
+
+  // Whether this deployment sells anything at all.
+  //
+  // False on a self-hosted stack with no provider configured, and then a
+  // console must render no upgrade path, no checkout and no plan comparison.
+  // Reported rather than inferred from the absence of a subscription row: a
+  // hosted customer between provisioning and their first row would look
+  // identical, and would be shown a page telling them their own product cannot
+  // be bought.
+  bool billing_configured = 4;
+
+  // Whether plan gating applies. False means no feature is withheld for being
+  // on the free plan, which is the self-hosted default (§18.1).
+  //
+  // Distinct from `billing_configured` on purpose: an operator may wire a
+  // provider before turning gating on, and during that window the honest
+  // answer is that checkout exists and nothing is withheld yet.
+  bool gating_enabled = 5;
+}

@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/notify"
 	domain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
@@ -26,6 +27,12 @@ type managing interface {
 	SetMemberRole(ctx context.Context, userID, role string) error
 	RemoveMember(ctx context.Context, userID string) error
 	CreateInvitation(ctx context.Context, email, role, token string) (domain.Invitation, error)
+	// Both needed by InviteMember, and both on this interface rather than a
+	// second one because they run in the same transaction as CreateInvitation:
+	// the invitation and the message that carries it commit together or not at
+	// all (ENT-219).
+	OrganisationName(ctx context.Context) (string, error)
+	EnqueueMessage(ctx context.Context, msg notify.Message) error
 	Role() string
 	UserID() string
 }
@@ -260,16 +267,35 @@ func (s *Service) refuseIfLastOwner(
 	return nil
 }
 
-// InviteMember records an invitation and returns everything but its token.
+// InviteMember records an invitation and queues the email carrying it.
 //
-// PR 1 of ENT-202 creates the invitation; delivering it by email is PR 2. Until
-// then the token is generated, hashed and stored, and the raw value is
-// discarded here rather than returned, because returning it would let anyone
-// who can invite also redeem on the invitee's behalf.
+// The raw token is never returned, because returning it would let anyone who
+// can invite also redeem on the invitee's behalf. It is rendered into a message
+// and written to the outbox in the same transaction as the invitation, which is
+// the whole of ENT-219: the token exists for the life of this call and nothing
+// can reconstruct it afterwards, so an invitation committed without its message
+// is permanently undeliverable rather than merely unsent.
 func (s *Service) InviteMember(
 	ctx context.Context,
 	req *connect.Request[corev1.InviteMemberRequest],
 ) (*connect.Response[corev1.InviteMemberResponse], error) {
+	// Checked before anything is minted. An invitation whose link cannot be
+	// built must not exist: it would be stored, counted, and shown in the
+	// members list as pending, while being impossible to accept and impossible
+	// to repair, because reissuing produces a different token and the original
+	// row still sits there looking valid.
+	//
+	// Refusing is therefore the honest answer, and `failed_precondition` is the
+	// honest code: the caller is entitled to invite, the deployment is not
+	// configured to carry one yet. Defaulting to a guessed localhost would be
+	// worse than refusing, because it produces links that resolve for whoever
+	// happens to be running the console on that machine and for nobody else.
+	if !notify.ValidBaseURL(s.appBaseURL) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition,
+			errors.New("this deployment cannot send invitations yet: "+
+				"KINDLAST_APP_BASE_URL is not set to the address the console is served from"))
+	}
+
 	store, err := tenantFor(ctx)
 	if err != nil {
 		return nil, err
@@ -298,8 +324,31 @@ func (s *Service) InviteMember(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
+	// Read before the invitation is written so the message can name the
+	// organisation. Inside the same transaction, so it is the name as it is at
+	// mint rather than whatever it becomes before delivery.
+	orgName, err := store.OrganisationName(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
 	invitation, err := store.CreateInvitation(ctx, email, role, token)
 	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// The mint-time egress (doc §20.1). This is the only moment the raw token
+	// is in memory, so it is the only moment a redeemable link can be written.
+	// The interceptor commits the transaction, so a failure here rolls the
+	// invitation back too, which is the intended pairing: no invitation without
+	// a way to accept it.
+	message := notify.Invitation(
+		email,
+		orgName,
+		notify.InvitationLink(s.appBaseURL, token),
+		int(postgres.InvitationLifetime.Hours()/24),
+	)
+	if err := store.EnqueueMessage(ctx, message); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 

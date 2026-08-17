@@ -20,7 +20,10 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/billing"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/dispatch"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
@@ -138,11 +141,16 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	// The billing flag is carried into the database as a session GUC, because
-	// `ropa_manual_activity_limit()` needs it and a function cannot read the
-	// environment. Without it a self-hosted deployment, which bills nobody,
-	// still capped manual Article 30 entries at three and then refused the
-	// fourth with a message about a plan it does not sell.
+	// The billing flag reaches the store as a field on every transaction, and
+	// decides whether the manual-record cap applies at all.
+	//
+	// It used to be carried as a third session GUC, because
+	// `ropa_manual_activity_limit()` needed the fact and a database function
+	// cannot read the environment. ENT-225 moved that decision into Go and
+	// 00016 dropped both. What the flag is for is unchanged: without it a
+	// self-hosted deployment, which bills nobody, capped manual Article 30
+	// entries at three and refused the fourth with a message about a plan it
+	// does not sell.
 	store, err := postgres.New(ctx, cfg.DatabaseURL, provider.Issuer,
 		postgres.WithBilling(cfg.BillingEnabled))
 	if err != nil {
@@ -156,6 +164,7 @@ func run(logger *slog.Logger) error {
 	// or an absent role is a startup failure, not a surprise on the first
 	// sweep.
 	var producer sweep.Producer
+	var outbox *postgres.AgentStore
 	if cfg.AgentDatabaseURL != "" {
 		agent, agentErr := postgres.NewAgent(ctx, cfg.AgentDatabaseURL)
 		if agentErr != nil {
@@ -163,6 +172,32 @@ func run(logger *slog.Logger) error {
 		}
 		defer agent.Close()
 		producer = agent
+		outbox = agent
+	}
+
+	// The billing webhook's pool, on its own role (ENT-210).
+	//
+	// Optional, exactly like the producer pool above, and for the sharper
+	// reason: a deployment that bills nobody has no provider, no secret and no
+	// reason to expose an unauthenticated endpoint. Both halves are required,
+	// because a webhook served without a signing secret would accept whatever
+	// arrived, and one served without a database could only fail.
+	var billingWebhook http.HandlerFunc
+	if cfg.BillingDatabaseURL != "" && cfg.BillingWebhookSecret != "" {
+		payments, payErr := postgres.NewBilling(ctx, cfg.BillingDatabaseURL)
+		if payErr != nil {
+			return payErr
+		}
+		defer payments.Close()
+		billingWebhook = billing.Handler(payments, cfg.BillingWebhookSecret, logger)
+		logger.Info("billing webhook enabled")
+	} else if cfg.BillingEnabled {
+		// Worth a line, because this combination is somebody halfway through
+		// configuring billing: gating is on, so customers can be refused for
+		// being on the free plan, while nothing can move them off it.
+		logger.Warn("billing gating is enabled but the webhook is not configured; " +
+			"plan changes cannot be applied. Set KINDLAST_BILLING_DATABASE_URL and " +
+			"KINDLAST_BILLING_WEBHOOK_SECRET, or turn KINDLAST_BILLING_ENABLED off")
 	}
 
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
@@ -194,10 +229,16 @@ func run(logger *slog.Logger) error {
 		HumanClientID:  cfg.HumanClientID,
 		Producer:       producer,
 		BillingEnabled: cfg.BillingEnabled,
+		AppBaseURL:     cfg.AppBaseURL,
+		SMTPConfigured: cfg.SMTPAddr != "",
+		Tokens:         store,
+		BillingWebhook: billingWebhook,
 	})
 	if err != nil {
 		return err
 	}
+
+	startDispatcher(ctx, logger, cfg, outbox)
 
 	httpServer := newHTTPServer(cfg.ListenAddr, handler)
 
@@ -214,6 +255,70 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// startDispatcher runs the outbox drain in the background, if this deployment
+// is configured to deliver mail.
+//
+// # WHY EVERY MISSING PIECE IS A WARNING AND NOT A STARTUP FAILURE
+//
+// Three things have to be present before a message can leave: the agent pool,
+// an SMTP address, and a sender. Any of them absent means messages queue up as
+// `pending` and nothing is delivered, and that is a supported state rather than
+// a broken one. The outbox exists precisely so that the write and the delivery
+// are separable: rows are safe on disk, they are not lost, and configuring the
+// missing piece later drains the backlog.
+//
+// So refusing to start would be the wrong trade. It would take a deployment
+// that is serving every request correctly and stop it over a channel it may not
+// use. What is not acceptable is silence, because the symptom of a missing
+// dispatcher is an invitation that never arrives, which nobody reports for days
+// and which reads like a spam filter problem. Hence a warning naming the
+// setting, at boot, every time.
+//
+// InviteMember still refuses without KINDLAST_APP_BASE_URL, and that asymmetry
+// is deliberate: an undelivered message is recoverable, an unbuildable link is
+// not.
+func startDispatcher(ctx context.Context, logger *slog.Logger, cfg *config.Config, outbox *postgres.AgentStore) {
+	if outbox == nil {
+		logger.Warn("no outbox dispatcher: KINDLAST_AGENT_DATABASE_URL is not set, " +
+			"so transactional messages such as invitation emails will queue and not be delivered")
+		return
+	}
+	if cfg.SMTPAddr == "" {
+		logger.Warn("no outbox dispatcher: KINDLAST_SMTP_ADDR is not set, " +
+			"so transactional messages such as invitation emails will queue and not be delivered")
+		return
+	}
+
+	channel, err := delivery.NewSMTP(cfg.SMTPAddr, cfg.EmailFrom)
+	if err != nil {
+		logger.Error("no outbox dispatcher: the SMTP channel could not be built; "+
+			"transactional messages will queue and not be delivered", "error", err)
+		return
+	}
+
+	go dispatch.New(outbox, channel, logger, 0, 0).Run(ctx)
+
+	// The doorbell path (ENT-209), on the same channel and a separate loop.
+	//
+	// Two loops rather than one, because the two queues resolve their recipient
+	// at different times: a transactional message carries one decided at mint,
+	// a notification's is worked out now from memberships and preferences.
+	// Sharing the channel is what keeps this one delivery mechanism rather than
+	// two (§23.6); sharing the drain would have meant forcing a recipient into
+	// the notification row at enqueue, which is precisely what ENT-192's
+	// as-built note warns against.
+	//
+	// Skipped without a base URL, because every notification carries a link
+	// into `/o/{slug}/` and an email whose only actionable content is broken is
+	// worse than one that has not been sent.
+	if cfg.AppBaseURL == "" {
+		logger.Warn("no doorbell dispatcher: KINDLAST_APP_BASE_URL is not set, " +
+			"so finding notifications will queue and not be delivered")
+		return
+	}
+	go dispatch.NewDoorbell(outbox, channel, logger, cfg.AppBaseURL, 0, 0).Run(ctx)
 }
 
 // newHTTPServer builds the listener, serving HTTP/1.1 and unencrypted HTTP/2 on

@@ -26,10 +26,30 @@ export interface Membership {
   role?: string
 }
 
+/**
+ * The signed-in person, as `GetCurrentUser` actually returns them.
+ *
+ * TWO IDENTIFIERS, DELIBERATELY (ENT-220)
+ *
+ * `id` is the authorization server's subject claim, a Zitadel snowflake or an
+ * `auth0|...` string, whose shape belongs to whichever IdP the deployment uses.
+ *
+ * `userId` is core-api's own key for the same human: a version 5 uuid derived
+ * from (issuer, subject). It is what `Member.userId` carries, so it is the one
+ * to compare against when marking which row in a member list is you. The
+ * derivation is one-way, so `id` cannot be turned into it client-side.
+ *
+ * This interface previously declared `subject` and `name`, which are not fields
+ * the API has ever returned, so `me.user.subject` and `me.user.name` were
+ * `undefined` at every call site. Nothing depended on them, which is why it went
+ * unnoticed; the names below are the wire's.
+ */
 export interface User {
-  subject?: string
+  id?: string
+  userId?: string
   email?: string
-  name?: string
+  displayName?: string
+  emailVerified?: boolean
 }
 
 export interface CurrentUser {

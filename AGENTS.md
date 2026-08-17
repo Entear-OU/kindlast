@@ -217,6 +217,34 @@ If you add a tenant table, it needs `org_id`, `FORCE ROW LEVEL SECURITY`, and
 policies in the two-GUC form. `bun run test:db` asserts all of that over
 `pg_class` rather than trusting convention, and it will fail if you forget.
 
+## What goes in the database, and what does not
+
+**If it must hold no matter who writes, it is a constraint. If it decides, it
+is Go.**
+
+Invariants stay in Postgres: RLS, constraints, the append-only trigger on
+`audit_log`, indexes, and the few `SECURITY DEFINER` functions that exist
+because RLS structurally cannot express the check. Decisions live in Go: a rule
+that consults a plan, a role, a status or a threshold, and could reasonably be
+different next quarter, is a decision.
+
+The reason to be explicit about this is that **the schema does not obey it
+yet**, so the shape of what is already in `db/migrations/` is a poor guide.
+`00001` and `00002` carried a large body of plpgsql over from the Supabase era,
+where the database was the only place to put logic, and it is being undone one
+surface at a time (ENT-225). A function existing is not a precedent for adding
+one.
+
+The drivers are not performance; at this scale a Go implementation does the
+same row work. They are one language for domain rules, table tests instead of
+plpgsql only exercisable through a live stack, and typed errors: the
+`check_violation` message parsing that used to sit in the records store existed
+solely because two business rules lived in SQL and a Go caller had to recover
+which had fired by reading English out of an exception.
+
+[`db/README.md`](./db/README.md) has the longer version, including the test for
+telling the two apart.
+
 ## Working with LLMs: the OWASP Top 10 applies to code you write
 
 Kindlast is AI-native, so the harness around the models is most of the

@@ -8,7 +8,7 @@
 # shielded the app from this by running it as a dedicated non-superuser role;
 # a self-managed container has to build that shield here.
 #
-# Three roles, three jobs, no overlap:
+# Five roles, five jobs, no overlap:
 #
 #   kindlast_migrator   owns the kindlast database and schema, runs the goose
 #                       migrations and seeds. BYPASSRLS, because it is the
@@ -30,6 +30,27 @@
 #                       is no member to check. Tenancy still binds it: it can
 #                       only write into the organisation its GUC names.
 #
+#   kindlast_billing    the payment webhook, and nothing else (ENT-210).
+#                       NOSUPERUSER, NOBYPASSRLS, owns nothing, and holds
+#                       grants on exactly two tables: billing_webhook_events
+#                       and subscriptions.
+#
+#                       A fourth role rather than extending kindlast_agent,
+#                       and the difference matters. The agent can invent a
+#                       finding, which is a claim about a customer's legal
+#                       exposure; 00008 made a point of it being unable to
+#                       approve one or read who decided anything. Granting it
+#                       subscription writes would make it a role that can
+#                       invent a finding AND grant itself a paid plan, which
+#                       is a new capability rather than a wider read.
+#
+#                       The webhook is also a different trust boundary from
+#                       the sweeps: unauthenticated inbound, signature
+#                       verified, writing across tenants with no session. A
+#                       role that literally cannot reach a finding is the
+#                       strongest available answer to "the webhook must not
+#                       bypass RLS".
+#
 #   kindlast_vector_ro  read-only role for Intelligence's vector search,
 #                       scoped to the chunk/embedding tables once those land
 #                       (ENT-51). Created now so the connection string exists
@@ -42,6 +63,7 @@ set -euo pipefail
 : "${KINDLAST_MIGRATOR_PASSWORD:?KINDLAST_MIGRATOR_PASSWORD must be set}"
 : "${KINDLAST_APP_PASSWORD:?KINDLAST_APP_PASSWORD must be set}"
 : "${KINDLAST_AGENT_PASSWORD:?KINDLAST_AGENT_PASSWORD must be set}"
+: "${KINDLAST_BILLING_PASSWORD:?KINDLAST_BILLING_PASSWORD must be set}"
 : "${KINDLAST_VECTOR_RO_PASSWORD:?KINDLAST_VECTOR_RO_PASSWORD must be set}"
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
@@ -55,6 +77,10 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
 
 	create role kindlast_agent
 	  login password '${KINDLAST_AGENT_PASSWORD}'
+	  nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+
+	create role kindlast_billing
+	  login password '${KINDLAST_BILLING_PASSWORD}'
 	  nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
 
 	create role kindlast_vector_ro
@@ -76,7 +102,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-EOSQL
 	create database kindlast owner kindlast_migrator;
 	revoke all on database kindlast from public;
 	grant connect on database kindlast
-	  to kindlast_migrator, kindlast_app, kindlast_agent, kindlast_vector_ro;
+	  to kindlast_migrator, kindlast_app, kindlast_agent, kindlast_billing, kindlast_vector_ro;
 EOSQL
 
 # Schema ownership and the CREATE fence. The migrator owns public; the app
@@ -85,5 +111,5 @@ EOSQL
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname kindlast <<-EOSQL
 	alter schema public owner to kindlast_migrator;
 	revoke create on schema public from public;
-	grant usage on schema public to kindlast_app, kindlast_agent, kindlast_vector_ro;
+	grant usage on schema public to kindlast_app, kindlast_agent, kindlast_billing, kindlast_vector_ro;
 EOSQL

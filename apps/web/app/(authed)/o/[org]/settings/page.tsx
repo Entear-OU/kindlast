@@ -1,11 +1,13 @@
 import { notFound, redirect } from 'next/navigation'
 
+import { InviteForm } from '@/components/settings/invite-form'
 import { MembersTable } from '@/components/settings/members-table'
 import { OrganisationForm } from '@/components/settings/organisation-form'
 import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
-import { membersOf } from './actions'
+import { NotificationsForm } from '@/components/settings/notifications-form'
+import { channelsFor, membersOf, notificationsFor } from './actions'
 
 /**
  * Organisation settings (ENT-202).
@@ -38,13 +40,20 @@ export default async function SettingsPage({
   if (resolved.status === 'unavailable')
     return <WorkspaceUnavailable title="Settings" />
 
-  const { membership } = resolved
+  const { membership, me } = resolved
   const canManage = membership.role === 'owner'
 
   // Null means the call failed, which is not the same as an organisation with
   // no members. The distinction is shown rather than collapsed: an empty table
   // would tell an owner their colleagues had vanished.
   const members = await membersOf(session.accessToken, membership.orgId)
+
+  // Fetched together, because they are rendered together and each is a
+  // round trip the page would otherwise make in series.
+  const [notifications, channels] = await Promise.all([
+    notificationsFor(session.accessToken, membership.orgId),
+    channelsFor(session.accessToken, membership.orgId),
+  ])
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-12">
@@ -73,8 +82,13 @@ export default async function SettingsPage({
           <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Members
           </h2>
-          {canManage ? <InviteUnavailable /> : null}
         </div>
+
+        {canManage ? (
+          <div className="mt-4">
+            <InviteForm slug={slug} />
+          </div>
+        ) : null}
 
         <div className="mt-4">
           {members === null ? (
@@ -82,49 +96,48 @@ export default async function SettingsPage({
               Could not load the member list. Reload to try again.
             </p>
           ) : (
-            /* No "which row is you" marker, and its absence is a finding
-               rather than an omission. GetCurrentUser returns the IdP's
-               subject claim; ListMembers returns the version-5 uuid derived
-               from it by libs/chassis/subject. The derivation is one-way, so
-               a client holding one cannot recognise the other, and web has no
-               way to identify itself in this list.
-
-               That costs more than a label. An owner leaving an organisation
-               is a legitimate act, and without knowing which row is theirs the
-               page can neither offer it as "leave" nor warn before a
-               self-removal. ENT-220 fixes it in the contract rather than
-               here, because a client-side join through user_identities would
-               be the console answering a question the API should. */
+            /* `me.user.userId`, not `me.user.id` (ENT-220). The first is
+               core-api's derived key and is what `Member.userId` carries; the
+               second is the IdP's subject claim, which matches no row here.
+               Passing the wrong one is silent: nothing matches, no row is
+               marked, and leaving quietly disappears again. */
             <MembersTable
               slug={slug}
               members={members}
               viewerRole={membership.role ?? ''}
+              viewerUserId={me.user?.userId}
+            />
+          )}
+        </div>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          Notifications
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Yours alone, and only for this organisation. Nobody else can see or
+          change them, and if you belong to more than one organisation each has
+          its own.
+        </p>
+        <div className="mt-4">
+          {notifications === null ? (
+            // Null means the call failed, which is not the same as somebody who
+            // has never changed anything. Rendering the defaults here would tell
+            // a person their settings are one thing while the database holds
+            // another, and they would have no way to notice.
+            <p className="text-sm text-muted-foreground">
+              Could not load your notification settings. Reload to try again.
+            </p>
+          ) : (
+            <NotificationsForm
+              slug={slug}
+              preferences={notifications}
+              channels={channels ?? []}
             />
           )}
         </div>
       </section>
     </main>
-  )
-}
-
-/**
- * The invite control, visibly unavailable rather than present and inert.
- *
- * core-api can create an invitation today. Nothing can deliver one: the raw
- * token exists for the length of the handler that mints it and is then held
- * only as a hash, and the transactional outbox that will carry it is ENT-219.
- *
- * So the button is not rendered as a working control. An owner who clicked it
- * would get a created invitation, no email, and no way to know that the person
- * they invited will never hear about it. A control that silently does nothing
- * is worse than one that is honestly missing, and worse still here because the
- * failure is invisible from both ends.
- */
-function InviteUnavailable() {
-  return (
-    <p className="text-xs text-muted-foreground">
-      Inviting people is not available yet: invitations cannot be delivered
-      until email is wired up (ENT-219).
-    </p>
   )
 }

@@ -24,8 +24,53 @@ convenient audience accepts tokens minted for a different service.
 | `KINDLAST_REDIS_ADDR` | yes | The shared instance holding the revocation deny-list. |
 | `KINDLAST_CORE_API_LISTEN` | no | Internal listener, default `:8080`. There is no public one. |
 | `KINDLAST_BILLING_ENABLED` | no | Turns plan gating on. Off by default, which is the self-hosted case. |
+| `KINDLAST_APP_BASE_URL` | no† | Where a browser reaches the console, used to build invitation links. |
+| `KINDLAST_SMTP_ADDR` | no | Mail submission address, `host:port`. Without it, transactional messages queue and are not delivered. |
+| `KINDLAST_EMAIL_FROM` | no | Sender address, default `noreply@kindlast.localhost`. |
 
 \* one of `KINDLAST_OIDC_AUDIENCE` or `KINDLAST_OIDC_AUDIENCE_FILE`.
+
+† not required to start, but **required to invite anybody**. See below.
+
+## Sending invitations: `KINDLAST_APP_BASE_URL` and `KINDLAST_SMTP_ADDR`
+
+These two look like a pair and behave differently on purpose. One is required
+before an invitation can be created at all; the other only decides when it
+arrives.
+
+**`KINDLAST_APP_BASE_URL` gates creation.** Without it, `InviteMember` refuses
+with `failed_precondition` and no invitation is written. That looks strict for
+a missing URL, and it is the only safe behaviour: the invitation token exists
+in memory for the life of one request, and only its hash is stored. An
+invitation minted with an unusable link is therefore not "an email to fix
+later", it is a row that can never be accepted and can never be repaired,
+sitting in the members list looking pending. Reissuing produces a different
+token and leaves the original there.
+
+It must be the address **a browser** uses, not the one the compose network
+uses. `http://web:3000` resolves inside Docker and nowhere else, so a link to
+it in somebody's inbox goes nowhere.
+
+**`KINDLAST_SMTP_ADDR` only gates delivery.** Without it, `core-api` logs a
+warning at boot, the dispatcher does not run, and messages accumulate in
+`transactional_outbox` with `status = 'pending'`. Nothing is lost. Set the
+variable later and the backlog drains on the next tick. That is a supported
+way to run the product, not a broken one, which is why it is a warning rather
+than a refusal to start.
+
+There is deliberately no channel that logs a message and marks it delivered. A
+`sent` row is what a regulator would read as evidence the invitation went out,
+so nothing writes it except an actual successful handoff to a mail server.
+
+On the bundled stack both are set in `deploy/compose.yaml`, pointing at
+`localhost:3000` and at Mailpit on `mailpit:1025`. Mailpit publishes no SMTP
+port to the host, so only something inside the compose network can reach it;
+read the captured mail at `http://localhost:8025`.
+
+No authentication and no TLS are supported on the SMTP connection yet. That is
+correct for a private compose network with a local capture server and wrong for
+anything sending real mail, so treat this as unfinished for a production
+deployment rather than as a configuration you are missing.
 
 `KINDLAST_DATABASE_URL` must name `kindlast_app`: a role that owns nothing, is
 `NOSUPERUSER` and is `NOBYPASSRLS`. Connecting as the migrator or the
