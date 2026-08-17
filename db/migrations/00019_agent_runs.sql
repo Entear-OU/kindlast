@@ -33,11 +33,20 @@
 -- progress indicator. `queued_at` is here from the start so ENT-238's queue
 -- wait is a subtraction rather than a migration.
 --
--- No append-only trigger yet, deliberately: `audit_log` has one because the
--- application holds an insert path and a policy that could be widened. Here
--- there is no update grant and no update policy for anybody, so the trigger
--- would be a third lock on a door with no handle. Add it the day an update
--- path is proposed, not before.
+-- The trigger below binds even `kindlast_migrator`, which is the reason it is
+-- here rather than left until an update path is proposed.
+--
+-- The first draft omitted it, arguing that with no update grant and no update
+-- policy for anybody it was a third lock on a door with no handle. True of the
+-- roles that exist, and it misses what `audit_log`'s trigger is actually for:
+-- the migrator bypasses RLS and holds every grant, so grants and policies do
+-- not constrain it at all. The product-facing claim on this table is "how this
+-- was produced", and that wants "nobody, including us" enforced rather than
+-- observed.
+--
+-- The state described in that first draft, no update path today, is exactly
+-- the state in which the trigger costs nothing and gets forgotten, until
+-- somebody proposes an update path having never read this comment.
 --
 -- MINIMAL ON PURPOSE, AND ENT-228 GROWS IT
 --
@@ -148,6 +157,21 @@ create table public.agent_runs (
 );
 -- +goose StatementEnd
 
+-- +goose StatementBegin
+create function public.agent_runs_forbid_update() returns trigger
+  language plpgsql
+  as $$
+begin
+  raise exception 'agent_runs is append-only: UPDATE on row % is not permitted', old.id
+    using errcode = 'check_violation';
+end;
+$$;
+-- +goose StatementEnd
+
+create trigger agent_runs_no_update
+  before update on public.agent_runs
+  for each row execute function public.agent_runs_forbid_update();
+
 -- The console reads a run by the finding it produced, and lists recent runs
 -- for an organisation. Keyset over (org_id, finished_at desc), matching how
 -- `audit_log` is read, because it is the same question asked of a different
@@ -208,3 +232,6 @@ drop policy if exists agent_runs_select_org on public.agent_runs;
 revoke all on public.agent_runs from kindlast_agent;
 revoke all on public.agent_runs from kindlast_app;
 drop table if exists public.agent_runs;
+-- After the table, because dropping it takes the trigger with it and the
+-- function would otherwise be dropped out from under a live trigger.
+drop function if exists public.agent_runs_forbid_update();

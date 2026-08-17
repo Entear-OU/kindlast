@@ -235,3 +235,30 @@ func TestTheAgentCannotUpdateOrDeleteARun(t *testing.T) {
 		t.Error("the agent role deleted a run record; it holds no delete grant and must not")
 	}
 }
+
+func TestNotEvenTheMigratorCanUpdateARun(t *testing.T) {
+	// THE TRIGGER, AND WHY IT IS NOT REDUNDANT WITH THE TEST ABOVE.
+	//
+	// Grants and policies constrain the application roles. They constrain the
+	// migrator not at all: it bypasses RLS and holds every privilege, so
+	// "kindlast_agent has no update grant" says nothing about what an operator
+	// with a psql prompt can do.
+	//
+	// The claim this table makes to a customer is "how this was produced", and
+	// that wants "nobody, including us" enforced rather than observed. Same
+	// reasoning `audit_log` carries, and the reason the first draft of 00019
+	// was wrong to leave the trigger out.
+	store := agentStore(t)
+	org := seedOrg(t)
+
+	id, err := store.RecordAgentRun(t.Context(), aRun(org))
+	if err != nil {
+		t.Fatalf("recording a run: %v", err)
+	}
+
+	conn := migratorConn(t)
+	if _, err := conn.Exec(t.Context(),
+		`update agent_runs set outcome = 'failed' where id = $1`, id); err == nil {
+		t.Error("the migrator rewrote a run record; the append-only trigger is not in force")
+	}
+}
