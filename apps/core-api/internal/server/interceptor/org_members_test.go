@@ -51,7 +51,10 @@ func buildOrgChain(t *testing.T, a *authServer) (
 
 	mux := http.NewServeMux()
 	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(a.profiles(t)), chain))
-	mux.Handle(corev1connect.NewOrgServiceHandler(orgservice.New(), chain))
+	// A real base URL: InviteMember refuses without one (ENT-219), and these
+	// tests exercise inviting.
+	mux.Handle(corev1connect.NewOrgServiceHandler(
+		orgservice.New("http://console.test.invalid"), chain))
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)

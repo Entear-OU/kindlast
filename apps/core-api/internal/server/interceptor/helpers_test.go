@@ -36,7 +36,10 @@ func serveOrg(t *testing.T, interceptors ...connect.Interceptor) corev1connect.O
 	t.Helper()
 
 	mux := http.NewServeMux()
-	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(),
+	// A real base URL, because InviteMember refuses without one (ENT-219) and a
+	// test service that could not invite would report that refusal as though it
+	// were the behaviour under test.
+	mux.Handle(corev1connect.NewOrgServiceHandler(org.New("http://console.test.invalid"),
 		connect.WithInterceptors(interceptors...)))
 
 	server := httptest.NewServer(mux)

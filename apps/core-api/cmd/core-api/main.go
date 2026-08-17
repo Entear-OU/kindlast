@@ -21,6 +21,8 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/dispatch"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
@@ -156,6 +158,7 @@ func run(logger *slog.Logger) error {
 	// or an absent role is a startup failure, not a surprise on the first
 	// sweep.
 	var producer sweep.Producer
+	var outbox *postgres.AgentStore
 	if cfg.AgentDatabaseURL != "" {
 		agent, agentErr := postgres.NewAgent(ctx, cfg.AgentDatabaseURL)
 		if agentErr != nil {
@@ -163,6 +166,7 @@ func run(logger *slog.Logger) error {
 		}
 		defer agent.Close()
 		producer = agent
+		outbox = agent
 	}
 
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
@@ -194,10 +198,13 @@ func run(logger *slog.Logger) error {
 		HumanClientID:  cfg.HumanClientID,
 		Producer:       producer,
 		BillingEnabled: cfg.BillingEnabled,
+		AppBaseURL:     cfg.AppBaseURL,
 	})
 	if err != nil {
 		return err
 	}
+
+	startDispatcher(ctx, logger, cfg, outbox)
 
 	httpServer := newHTTPServer(cfg.ListenAddr, handler)
 
@@ -214,6 +221,50 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// startDispatcher runs the outbox drain in the background, if this deployment
+// is configured to deliver mail.
+//
+// # WHY EVERY MISSING PIECE IS A WARNING AND NOT A STARTUP FAILURE
+//
+// Three things have to be present before a message can leave: the agent pool,
+// an SMTP address, and a sender. Any of them absent means messages queue up as
+// `pending` and nothing is delivered, and that is a supported state rather than
+// a broken one. The outbox exists precisely so that the write and the delivery
+// are separable: rows are safe on disk, they are not lost, and configuring the
+// missing piece later drains the backlog.
+//
+// So refusing to start would be the wrong trade. It would take a deployment
+// that is serving every request correctly and stop it over a channel it may not
+// use. What is not acceptable is silence, because the symptom of a missing
+// dispatcher is an invitation that never arrives, which nobody reports for days
+// and which reads like a spam filter problem. Hence a warning naming the
+// setting, at boot, every time.
+//
+// InviteMember still refuses without KINDLAST_APP_BASE_URL, and that asymmetry
+// is deliberate: an undelivered message is recoverable, an unbuildable link is
+// not.
+func startDispatcher(ctx context.Context, logger *slog.Logger, cfg *config.Config, outbox *postgres.AgentStore) {
+	if outbox == nil {
+		logger.Warn("no outbox dispatcher: KINDLAST_AGENT_DATABASE_URL is not set, " +
+			"so transactional messages such as invitation emails will queue and not be delivered")
+		return
+	}
+	if cfg.SMTPAddr == "" {
+		logger.Warn("no outbox dispatcher: KINDLAST_SMTP_ADDR is not set, " +
+			"so transactional messages such as invitation emails will queue and not be delivered")
+		return
+	}
+
+	channel, err := delivery.NewSMTP(cfg.SMTPAddr, cfg.EmailFrom)
+	if err != nil {
+		logger.Error("no outbox dispatcher: the SMTP channel could not be built; "+
+			"transactional messages will queue and not be delivered", "error", err)
+		return
+	}
+
+	go dispatch.New(outbox, channel, logger, 0, 0).Run(ctx)
 }
 
 // newHTTPServer builds the listener, serving HTTP/1.1 and unencrypted HTTP/2 on

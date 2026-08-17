@@ -59,6 +59,12 @@ type Dependencies struct {
 	// GUC the store sets: one answer to the question, so the cap a console shows
 	// and the cap a write meets cannot disagree.
 	BillingEnabled bool
+
+	// AppBaseURL is where a browser reaches the console. OrgService renders the
+	// invitation link from it at mint (ENT-219), and refuses to invite when it
+	// is empty, because an invitation whose link cannot be built is one nobody
+	// can ever accept or repair.
+	AppBaseURL string
 }
 
 // New builds the HTTP handler core-api serves.
@@ -86,7 +92,7 @@ func New(deps Dependencies) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(deps.Profiles), chain))
-	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(), chain))
+	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(deps.AppBaseURL), chain))
 	mux.Handle(corev1connect.NewFindingsServiceHandler(findings.New(deps.BillingEnabled), chain))
 	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboard.New(), chain))
 	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(), chain))

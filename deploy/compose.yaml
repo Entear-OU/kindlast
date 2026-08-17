@@ -284,6 +284,27 @@ services:
       KINDLAST_HUMAN_CLIENT_ID_FILE: /machinekey/web-client-id.txt
       KINDLAST_AGENT_DATABASE_URL: postgres://kindlast_agent:${KINDLAST_AGENT_PASSWORD:-agent-dev-password}@postgres-app:5432/kindlast?sslmode=disable
       KINDLAST_REDIS_ADDR: redis:6379
+
+      # Where a browser reaches the console, used to build the invitation link
+      # at mint (ENT-219).
+      #
+      # This is the one public address core-api is told about, and it has to be
+      # the browser's view rather than the compose network's: `web:3000` exists
+      # only in here, and a link to it in somebody's inbox resolves nowhere.
+      #
+      # Required for inviting. InviteMember refuses rather than minting an
+      # invitation whose link cannot be built, because the raw token exists for
+      # one handler and a bad link cannot be repaired afterwards.
+      KINDLAST_APP_BASE_URL: http://localhost:${KINDLAST_WEB_PORT:-3000}
+
+      # The dispatcher's mail submission address (ENT-219).
+      #
+      # Mailpit publishes no SMTP port to the host deliberately, so this only
+      # resolves from inside the compose network, which is where core-api runs.
+      # Absent, transactional messages queue as `pending` and nothing is lost;
+      # core-api warns at boot rather than failing to start.
+      KINDLAST_SMTP_ADDR: mailpit:1025
+      KINDLAST_EMAIL_FROM: noreply@kindlast.localhost
     volumes:
       - zitadel-machinekey:/machinekey:ro
     healthcheck:
