@@ -213,7 +213,13 @@ export function SiteHeader() {
               aria-expanded={menuOpen}
               aria-controls="mobile-nav"
               onClick={() => setMenuOpen((v) => !v)}
-              className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00C9A7] md:hidden"
+              // `cursor-pointer` explicitly, and not by oversight in either
+              // direction: Tailwind v4's preflight no longer sets it on
+              // `button` the way v3 did. This one keeps its own styling rather
+              // than using the shared `Button`, because the marketing header
+              // renders over a dark hero and sizes to a 44px touch target;
+              // wrapping it would mean overriding most of what Button brings.
+              className="-mr-2 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00C9A7] md:hidden"
             >
               <MenuGlyph open={menuOpen} dark={overDarkHero} />
             </button>
