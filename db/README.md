@@ -90,3 +90,40 @@ It needs the compose stack. **It self-skips when the stack is unreachable**, so
 a green local run does not prove it ran; check the test count. CI boots the
 stack and fails loudly if it cannot, which is what stops coverage disappearing
 silently.
+
+## `audit_log` has no retention policy, and that is a decision
+
+Nothing deletes from `audit_log`. Not a scheduled job, not a cascade, not a
+manual path in the product. The table carries an append-only trigger and
+`kindlast_app` holds no delete grant on it, so the absence is enforced rather
+than merely observed.
+
+This is written down because ENT-223 asked for it to be a decision rather than
+an omission, and because from the outside the two look identical.
+
+**Why keep everything.** The value of the record is that a regulator can be
+shown it, and a record that thins out after a fixed window is one whose answer
+to "what happened in 2024" depends on when somebody asks. Accountability under
+Article 5(2) has no expiry, enforcement limitation periods run for years, and
+the specific thing a customer buys here is that nobody, including us, can
+quietly make a decision disappear. A retention job is a supported, audited,
+scheduled deletion path into the one table that must not have one.
+
+**What it costs.** An organisation making twenty decisions a day writes roughly
+seven thousand rows a year, each a few hundred bytes plus two jsonb payloads.
+That is not a table which grows into a problem at any customer size this
+product is aimed at, and every read is keyset over
+`(org_id, occurred_at desc)`.
+
+**What would change the answer.** A customer with a contractual or statutory
+requirement to delete after a fixed period, which some sectors do have. That is
+a per-tenant policy with an audit trail of its own rather than a default, and
+it is a different piece of work from adding a cron. If it is ever built, the
+deletion itself has to be recorded somewhere that is not the table being
+deleted from.
+
+One open question, deliberately not answered here: `before` and `after` hold
+whatever the acted-on row contained, which for a DSAR includes a data subject's
+name. An erasure request reaching those payloads needs a decision about whether
+an accountability record is exempt under Article 17(3), which is a legal call
+rather than an engineering one. Raise it; do not solve it in a migration.
