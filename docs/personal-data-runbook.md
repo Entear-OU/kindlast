@@ -64,10 +64,21 @@ reasoning about who could have touched something.
 
 The other three roles hold nothing relevant here. `kindlast_billing` reaches
 only `subscriptions` and `billing_webhook_events`. `kindlast_ingest` reaches
-only the regulatory corpus, which holds no personal data. `kindlast_vector_ro`
-holds **no grants at all, anywhere**, and that is deliberate: it is dormant
-until Intelligence retrieval lands (§14.1 item 5). It is listed here so that a
-future reader finds a decision rather than an anomaly.
+only the regulatory corpus, which holds no personal data.
+
+`kindlast_vector_ro` holds **no grants at all, anywhere**, and that is
+deliberate rather than unfinished: it is the read-only role for Intelligence's
+vector search, and `deploy/postgres/init/01-roles.sh:87` and `compose.yaml:14`
+both say it is waiting for the chunk tables (§14.1 item 5).
+
+Two details matter for anyone auditing this later. **The `vector` extension is
+installed** (0.8.6) and **no column anywhere uses it**, so the capability is
+provisioned and unused. And the chunk tables it waits for are not merely
+unbuilt: ENT-228 makes per-organisation embeddings conditional, "only if a
+consumer needs them". So the honest status is dormant pending a decision that
+has not been taken, rather than dormant pending an implementation that is
+scheduled. If that decision lands as "no embeddings", the role and the
+extension should both go, and this section should say so.
 
 `kindlast_migrator` reaches everything and bypasses RLS. It is the role an
 operator uses for the procedures below, and the only one that can.
