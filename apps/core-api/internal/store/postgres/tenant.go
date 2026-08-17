@@ -41,12 +41,27 @@ const noOrganisation = "00000000-0000-0000-0000-000000000000"
 type Store struct {
 	pool   *pgxpool.Pool
 	issuer string
+	// billingEnabled is carried into every transaction as a GUC, because
+	// `ropa_manual_activity_limit()` needs it and a database function cannot
+	// read an environment variable. False is the self-hosted default (§18.1).
+	billingEnabled bool
+}
+
+// WithBilling tells the database whether this deployment bills anybody.
+//
+// A functional option rather than a fourth parameter, so the two callers that
+// do not care keep compiling. The default is off, which is both the documented
+// self-hosted default and the safe direction: a billing gate that fails open
+// charges nobody and blocks nobody, where one that fails closed refuses a paying
+// customer's work because a configuration line was missing.
+func WithBilling(enabled bool) func(*Store) {
+	return func(s *Store) { s.billingEnabled = enabled }
 }
 
 // New opens the pool. The DSN must name `kindlast_app`: a role that owns
 // nothing, is NOSUPERUSER and is NOBYPASSRLS, because RLS is silently absent
 // for anything else (§14.1).
-func New(ctx context.Context, dsn, issuer string) (*Store, error) {
+func New(ctx context.Context, dsn, issuer string, options ...func(*Store)) (*Store, error) {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: opening the pool: %w", err)
@@ -55,7 +70,11 @@ func New(ctx context.Context, dsn, issuer string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("postgres: pinging: %w", err)
 	}
-	return &Store{pool: pool, issuer: issuer}, nil
+	store := &Store{pool: pool, issuer: issuer}
+	for _, apply := range options {
+		apply(store)
+	}
+	return store, nil
 }
 
 func (s *Store) Close() { s.pool.Close() }
@@ -132,7 +151,26 @@ func (s *Store) resolve(ctx context.Context, tx pgx.Tx, userID uuid.UUID, reques
 		return nil, err
 	}
 
+	// Not a tenancy GUC and never read by a policy. It carries one fact the
+	// database cannot otherwise learn: whether this deployment bills anybody.
+	// Unset reads as off, so a transaction that somehow skipped this is
+	// uncapped rather than wrongly capped.
+	if err := setLocal(ctx, tx, "app.billing_enabled", billingGUC(s.billingEnabled)); err != nil {
+		return nil, err
+	}
+
 	return &Tenant{tx: tx, orgID: orgID, role: role, userID: userID.String()}, nil
+}
+
+// billingGUC renders the flag as the database reads it.
+//
+// A string because a GUC is always text, and the SQL side accepts on/true/1 so
+// that a value set by hand in psql behaves the same way as one set here.
+func billingGUC(enabled bool) string {
+	if enabled {
+		return "on"
+	}
+	return "off"
 }
 
 func (s *Store) membership(ctx context.Context, tx pgx.Tx, userID uuid.UUID, requestedOrgID string) (orgID, role string, err error) {

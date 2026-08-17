@@ -145,7 +145,13 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	store, err := postgres.New(ctx, cfg.DatabaseURL, provider.Issuer)
+	// The billing flag is carried into the database as a session GUC, because
+	// `ropa_manual_activity_limit()` needs it and a function cannot read the
+	// environment. Without it a self-hosted deployment, which bills nobody,
+	// still capped manual Article 30 entries at three and then refused the
+	// fourth with a message about a plan it does not sell.
+	store, err := postgres.New(ctx, cfg.DatabaseURL, provider.Issuer,
+		postgres.WithBilling(cfg.BillingEnabled))
 	if err != nil {
 		return err
 	}

@@ -150,11 +150,18 @@ func TestAnActivityUpdateReplacesEveryFieldIncludingWithNothing(t *testing.T) {
 
 // The gate that has an upgrade under it.
 func TestTheFreeTierCapIsReportedAsAQuotaRatherThanADenial(t *testing.T) {
-	store := testStore(t)
+	// Billing on, explicitly. The deployment default is off, which since 00013
+	// means no cap at all: a self-hosted stack that sells nothing must not refuse
+	// a fourth activity with a message about a plan it does not offer. So a test
+	// about the plan limit has to turn billing on to have a limit to test.
+	//
+	// This test caught that change by failing loudly rather than skipping, which
+	// is the whole reason the assertion below is a Fatal and not a Skip.
+	store := testStore(t, WithBilling(true))
 	ctx := t.Context()
 
-	// Bob's organisation, not Ada's, and that is the whole setup: Beta's fixture
-	// subscription is `free` where Alpha's is `pro`, and
+	// Bob's organisation, not Ada's, and that is the second half of the setup:
+	// Beta's fixture subscription is `free` where Alpha's is `pro`, and
 	// `ropa_manual_activity_limit()` returns null (uncapped) for pro.
 	//
 	// This started as a t.Skip when run against Alpha, which is worse than no
