@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 
 import { FindingCard } from '@/components/feed/finding-card'
 import { PipelineNote, PostureBand } from '@/components/feed/posture-band'
+import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { getDashboard, listFindings, type Failure } from '@/lib/findings/client'
@@ -45,7 +46,8 @@ export default async function FeedPage({
 
   const resolved = await resolveOrg(session.accessToken, slug)
   if (resolved.status === 'not-a-member') notFound()
-  if (resolved.status === 'unavailable') return null
+  if (resolved.status === 'unavailable')
+    return <WorkspaceUnavailable title="Feed" />
 
   const orgId = resolved.membership.orgId
 

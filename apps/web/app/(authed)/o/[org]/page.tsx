@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
 import { currentSession } from '@/lib/auth/session'
+import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 
 /**
@@ -32,7 +33,8 @@ export default async function OrgHomePage({
   const resolved = await resolveOrg(session.accessToken, slug)
   if (resolved.status === 'not-a-member') notFound()
   // The layout has already rendered the unavailable state around this.
-  if (resolved.status === 'unavailable') return null
+  if (resolved.status === 'unavailable')
+    return <WorkspaceUnavailable title="Overview" />
 
   const { me, membership } = resolved
   const others = me.memberships.filter((m) => m.orgSlug !== slug)

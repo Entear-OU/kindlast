@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 
 import { ActControls } from '@/components/feed/act-controls'
 import { SeverityBadge, StatusLabel } from '@/components/feed/severity'
+import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { getFinding } from '@/lib/findings/client'
@@ -36,7 +37,8 @@ export default async function FindingPage({
 
   const resolved = await resolveOrg(session.accessToken, slug)
   if (resolved.status === 'not-a-member') notFound()
-  if (resolved.status === 'unavailable') return null
+  if (resolved.status === 'unavailable')
+    return <WorkspaceUnavailable title="Feed" />
 
   const result = await getFinding(
     session.accessToken,
