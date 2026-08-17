@@ -43,9 +43,22 @@ func ingestStore(t *testing.T) *CorpusStore {
 
 	store, err := NewCorpus(t.Context(), dsn)
 	if err != nil {
-		// Fatal rather than Skip, matching entitlement_test.go. A skip here
-		// would report a green suite while never once exercising the ingest.
-		t.Fatalf("connecting as the ingest role: %v", err)
+		// Skips on a laptop, fails in CI, exactly as `testStore` does.
+		//
+		// The first version was a bare Fatalf, copied from entitlement_test.go's
+		// `migratorConn` without noticing why that one can afford to be fatal:
+		// it is only ever reached AFTER `testStore` has already skipped. This
+		// helper is the first call in every corpus test, so it had nothing in
+		// front of it, and it turned the no-stack CI job red.
+		//
+		// The skip is still not a way to lose coverage. The compose job sets
+		// KINDLAST_REQUIRE_STACK, which turns this same line into a failure, so
+		// a green CI run cannot mean the ingest was never exercised.
+		if os.Getenv("KINDLAST_REQUIRE_STACK") != "" {
+			t.Fatalf("KINDLAST_REQUIRE_STACK is set, so this must not skip: %s unreachable (%v)", dsn, err)
+		}
+		t.Skipf("compose stack not reachable at %s (%v); "+
+			"run: docker compose -f deploy/compose.yaml up -d", dsn, err)
 	}
 	t.Cleanup(store.Close)
 	return store
