@@ -939,6 +939,50 @@
             },
             "description": "Records that a response went out, which stops the statutory clock. Required scope: `records:dsar:write`. **Served as of ENT-200.**\n\n**`reviewed` must be true**, for the same class of reason Update AI system needs it: this is the assertion that the organisation met an Article 12(3) deadline, and it is the single most consequential row in this register to get wrong. A regulator reading the log later is reading this field. Without it, `failed_precondition`.\n\n**Idempotent.** Marking an already-answered request returns `applied: false` and writes nothing, rather than overwriting the date a response actually went out with the date somebody clicked the button twice. The status is read BEFORE the call rather than after, which matters: reading it afterwards reports `applied` on every repeat, and that is a bug the findings act path shipped with and had to fix.\n\n**Worth knowing if you script against this:** every gate here is a `raise exception`, and a raise aborts the whole Postgres transaction. Each request gets its own transaction so a refusal costs nothing, but two writes in one request will see the second fail with `25P02` for a reason unrelated to it."
           }
+        },
+        {
+          "name": "Billing (GetBilling)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.BillingService/GetBilling",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.BillingService", "GetBilling"]
+            },
+            "description": "What this organisation is on, and what this deployment can offer it. Required scope: `billing:read`. **Served as of ENT-210.**\n\n**Read only, and BillingService has no write RPC at all.** A plan changes because a payment provider's signed webhook said so. An endpoint that could change one from a session would be a way to grant yourself a paid entitlement with a request, so it does not exist rather than existing behind a check.\n\n**Owner-only, refused with `permission_denied` for a member.** The scope says what a token may attempt and the role says who inside the organisation may; a member holds `billing:read` like everybody else, so the handler checks the role as well. The console renders 404 rather than the refusal, because \"you are not allowed\" is itself information about the organisation.\n\n**`plan` and `status` are different questions and both are returned.** `plan` is the entitlement in force, so a `pro` subscription that is `past_due` or `canceled` reports `plan: \"free\"` here. A client that rendered only `plan` would tell a paying customer whose card was declined that they had downgraded themselves, which is why `status` is carried separately.\n\n**`billingConfigured` is read from configuration, not inferred from the absence of a subscription row.** A hosted customer between provisioning and their first row looks identical to a self-hoster, and would otherwise be shown a page saying the product cannot be bought. `gatingEnabled` is separate again, because an operator may wire a provider before turning gating on, and then nothing is withheld and nothing should be advertised as withheld.\n\nAn organisation that has never bought anything has no subscription row and reports `plan: \"free\"` with an empty `status`."
+          }
+        },
+        {
+          "name": "Billing webhook (no session, signed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Stripe-Signature",
+                "value": "t={{$timestamp}},v1=compute-this-yourself-see-description"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_local_001\",\n  \"type\": \"customer.subscription.updated\",\n  \"data\": {\n    \"object\": {\n      \"customer\": \"cus_local_001\",\n      \"status\": \"past_due\",\n      \"current_period_end\": 1789000000,\n      \"items\": {\n        \"data\": [{ \"price\": { \"lookup_key\": \"pro\" } }]\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/api/v1/billing/webhook",
+              "host": ["{{api_base_url}}"],
+              "path": ["api", "v1", "billing", "webhook"]
+            },
+            "description": "Applies a payment provider's subscription event. **Implemented as of ENT-210.**\n\n**Unauthenticated, and it changes what a customer is entitled to.** No session, no token, no caller identity: anybody on the internet can POST here. The only thing separating a real event from an invented one is the HMAC in `Stripe-Signature`, which is why it is verified **before the body is parsed** and before anything is read out of it. A handler that unmarshals first has already let the caller choose what its parser sees.\n\nNot on the Connect surface for the same reason as Unsubscribe: every method there runs behind authentication, a scope check and tenancy, and this caller has none of them. It is a plain route on core-api's mux, and the edge routes exactly this one path to core-api rather than the whole `/api/v1/*` prefix.\n\n**Signing a request by hand**, which you must do because Postman cannot compute it for you:\n\n```\nt=$(date +%s)\nbody='{\"id\":\"evt_local_001\",...}'   # byte for byte what you send\nprintf '%s.%s' \"$t\" \"$body\" \\\n  | openssl dgst -sha256 -hmac \"$KINDLAST_BILLING_WEBHOOK_SECRET\" -hex\n```\n\nThen send `Stripe-Signature: t=<t>,v1=<hex>`. The signed payload is `timestamp + \".\" + raw body`, so any reformatting of the JSON invalidates it. The header may carry several `v1=` values and any one matching is accepted, which is what makes a secret rotation not an outage.\n\n**The timestamp is checked in both directions**, five minutes either side. A signature would otherwise be valid forever, and a timestamp far in the future is as much a forgery signal as one far in the past.\n\n**Every refusal is a bare 4xx with no body.** No signature, a bad signature and an expired one are indistinguishable to the caller on purpose: an endpoint that explains why it refused is one an attacker can use to search for a working forgery.\n\n**Replays return 200 and change nothing.** The event id is claimed in the same transaction as the subscription write, so a retried delivery hits the primary key and the whole transaction rolls back. Providers retry on any non-2xx and on timeouts, so a 4xx here would be retried forever and a 500 would be retried on something already applied.\n\n**An unknown customer is also 200 and also records nothing**, deliberately: a customer this deployment has not seen may be one whose checkout has not landed yet, and burning the event id would make the provider's retry a permanent no-op.\n\n**Only three event types do anything**: `customer.subscription.created`, `.updated` and `.deleted`. An allow-list rather than a switch with a default, so a provider adding a type cannot silently start moving plans. Everything else is acknowledged and ignored.\n\nThe plan comes from the price's **`lookup_key`**, not its id: a price id is generated per environment and would make this deployment-specific. Anything other than `pro` reads as `free`, and any status this code does not recognise reads as `canceled`, because an unknown must never grant.\n\nThe request runs on its own Postgres role, `kindlast_billing`, which holds grants on two tables and nothing else. It resolves the customer to an organisation through its one unscoped select, sets `app.current_org_id` to what it resolved, and only then writes: a crafted payload cannot turn one event into an upgrade for a different tenant, because the write matches zero rows rather than the wrong ones.\n\nTo try it locally, set `KINDLAST_BILLING_ENABLED=true` and a `KINDLAST_BILLING_WEBHOOK_SECRET` in the compose environment, and give an organisation a `provider_customer_id` to resolve against."
+          }
         }
       ]
     }
