@@ -2,6 +2,7 @@ package oidc
 
 import (
 	"crypto"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
@@ -102,15 +103,27 @@ func (k jwk) rsaPublicKey() (*rsa.PublicKey, error) {
 	}, nil
 }
 
+// ecPublicKey validates an EC key from a JWKS and returns it for signature
+// verification.
+//
+// The on-curve check is a security boundary rather than input hygiene: it is
+// what stands between a JWKS endpoint and the key that verifies every token, so
+// a point that is not on the curve must never become a verification key.
+//
+// It is done by handing the uncompressed point to crypto/ecdh, which validates
+// on construction, rather than by elliptic.Curve.IsOnCurve, which is deprecated
+// as a low-level unsafe API (ENT-216). The same check, on a type whose whole
+// purpose is that an invalid point cannot be built in the first place.
 func (k jwk) ecPublicKey() (*ecdsa.PublicKey, error) {
 	var curve elliptic.Curve
+	var validating ecdh.Curve
 	switch k.Crv {
 	case "P-256":
-		curve = elliptic.P256()
+		curve, validating = elliptic.P256(), ecdh.P256()
 	case "P-384":
-		curve = elliptic.P384()
+		curve, validating = elliptic.P384(), ecdh.P384()
 	case "P-521":
-		curve = elliptic.P521()
+		curve, validating = elliptic.P521(), ecdh.P521()
 	default:
 		return nil, fmt.Errorf("oidc: unsupported curve %q", k.Crv)
 	}
@@ -124,20 +137,40 @@ func (k jwk) ecPublicKey() (*ecdsa.PublicKey, error) {
 		return nil, fmt.Errorf("oidc: ec y: %w", err)
 	}
 
-	key := &ecdsa.PublicKey{
+	// Derived rather than tabulated so it cannot drift from the curve. P-521 is
+	// 66 bytes, which is the one a hand-written table gets wrong.
+	size := (curve.Params().BitSize + 7) / 8
+	if len(x) > size || len(y) > size {
+		return nil, fmt.Errorf("oidc: ec coordinate for %q is longer than the curve", k.Crv)
+	}
+
+	// A SEC 1 uncompressed point, 0x04 || X || Y, each coordinate left-padded to
+	// the curve length.
+	//
+	// The padding is load-bearing. RFC 7518 §6.2.1.2 requires the full length
+	// with leading zeros preserved, and issuers exist that strip them anyway.
+	// The previous implementation read coordinates straight into big.Int, which
+	// does not care how many bytes it is given, whereas NewPublicKey requires
+	// exactly this length. Without the padding such an issuer would stop
+	// verifying entirely, and only for the roughly one key in 256 whose X starts
+	// with a zero byte: a failure nobody reproduces before a customer does.
+	point := make([]byte, 1+2*size)
+	point[0] = 4
+	copy(point[1+size-len(x):1+size], x)
+	copy(point[1+2*size-len(y):], y)
+
+	// The validation, and the only reason this conversion exists. Rejects a
+	// point off the curve and the point at infinity. The resulting ecdh key is
+	// deliberately discarded: what verifies a token is ecdsa.
+	if _, err := validating.NewPublicKey(point); err != nil {
+		return nil, fmt.Errorf("oidc: ec point for %q is not a valid public key: %w", k.Crv, err)
+	}
+
+	return &ecdsa.PublicKey{
 		Curve: curve,
 		X:     new(big.Int).SetBytes(x),
 		Y:     new(big.Int).SetBytes(y),
-	}
-	// Deprecated as a low-level unsafe API; crypto/ecdh's NewPublicKey does the
-	// same on-curve check from the same encoding. Swapping it is security
-	// relevant, since this is what rejects a bad key fetched from a JWKS
-	// endpoint before it verifies a token, so it gets its own test-first change
-	// in ENT-216 rather than a mechanical edit here.
-	if !curve.IsOnCurve(key.X, key.Y) { //nolint:staticcheck // SA1019, see ENT-216
-		return nil, fmt.Errorf("oidc: ec point for %q is not on the curve", k.Crv)
-	}
-	return key, nil
+	}, nil
 }
 
 // decodeSegment reads base64url without padding, which is what RFC 7515 §2

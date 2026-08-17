@@ -19,13 +19,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/net/http2"
-
-	// Deprecated in favour of http.Server.Protocols. Replacing it changes how
-	// this process negotiates HTTP/2 rather than renaming a call, so it needs
-	// the compose stack to prove gRPC still reaches core-api over plaintext.
-	// Tracked in ENT-216, not fixed inside a formatting chore.
-	"golang.org/x/net/http2/h2c" //nolint:staticcheck // SA1019, see ENT-216
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
@@ -206,15 +199,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	// h2c, so gRPC clients work over plaintext on the internal network. TLS is
-	// terminated at `edge` rather than here, which is a deployment choice
-	// about where the edge sits and not an assumption that this service only
-	// ever serves one client from inside one network.
-	httpServer := &http.Server{
-		Addr:              cfg.ListenAddr,
-		Handler:           h2c.NewHandler(handler, &http2.Server{}), //nolint:staticcheck // SA1019, see ENT-216
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	httpServer := newHTTPServer(cfg.ListenAddr, handler)
 
 	go func() {
 		<-ctx.Done()
@@ -229,6 +214,45 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// newHTTPServer builds the listener, serving HTTP/1.1 and unencrypted HTTP/2 on
+// the same port.
+//
+// Plaintext HTTP/2 is what lets gRPC clients reach this service on the internal
+// network. TLS is terminated at `edge` rather than here, which is a deployment
+// choice about where the edge sits, not an assumption that this service only
+// ever serves one client from inside one network.
+//
+// # WHY BOTH PROTOCOLS, AND WHY THIS IS A FUNCTION
+//
+// This replaced `h2c.NewHandler` from `golang.org/x/net`, deprecated in favour
+// of `http.Server.Protocols` (ENT-216). That is a change to how the process
+// negotiates HTTP/2, not a rename, and the two failure modes it can introduce
+// are both invisible to a compiler:
+//
+//   - Drop HTTP/1.1 and gRPC keeps working while everything else stops. Connect's
+//     own protocol, gRPC-Web and the health probe all speak HTTP/1.1, so a
+//     server with only the HTTP/2 bit set passes every gRPC test and takes the
+//     console offline.
+//   - Drop unencrypted HTTP/2 and the negotiation silently falls back to
+//     HTTP/1.1, where gRPC does not work at all.
+//
+// Neither shows up in a build, so the configuration is lifted out of `run` to
+// be reachable from a test that makes real requests over both. `run` needs a
+// database, an issuer and a Redis to reach the old inline version, which is
+// what kept this untested while it was three lines in the middle of wiring.
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	var protocols http.Protocols
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		Protocols:         &protocols,
+	}
 }
 
 // discoverWithRetry waits for the authorization server rather than crash
