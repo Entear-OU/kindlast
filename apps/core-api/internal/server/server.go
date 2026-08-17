@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/notifications"
@@ -140,6 +141,8 @@ func New(deps Dependencies) (http.Handler, error) {
 	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(), chain))
 	mux.Handle(corev1connect.NewNotificationServiceHandler(
 		notifications.New(deps.SMTPConfigured), chain))
+	mux.Handle(corev1connect.NewBillingServiceHandler(
+		billingservice.New(deps.BillingWebhook != nil, deps.BillingEnabled), chain))
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in

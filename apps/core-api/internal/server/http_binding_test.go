@@ -179,6 +179,18 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "GET", Path: "/api/v1/notification-capabilities",
 		},
 
+		// Billing (ENT-210). A singleton like the notification preferences
+		// above, and read-only: there is no PUT, because a plan changes when
+		// the signed webhook says so and never because a session asked.
+		//
+		// The webhook itself is deliberately absent from this table. It is not
+		// an RPC and carries no `google.api.http` annotation: it is a plain
+		// route on the mux, registered only when billing is configured, and
+		// routed at the edge by exactly one path rather than by a wildcard.
+		"kindlast.core.v1.BillingService.GetBilling": {
+			Method: "GET", Path: "/api/v1/billing",
+		},
+
 		"kindlast.core.v1.RecordsService.ListDsars": {
 			Method: "GET", Path: "/api/v1/records/dsars",
 		},
