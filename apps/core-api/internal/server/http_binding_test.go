@@ -263,6 +263,22 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.SweepService.RunSweep": {
 			Method: "POST", Path: "/internal/v1/sweep",
 		},
+
+		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
+		// a request from the console that could change the law would make the
+		// product's central claim, that a customer can check a finding against
+		// the regulation, mean nothing.
+		//
+		// The colon verb rather than `/internal/v1/corpus`, because this is an
+		// action rather than a resource. There is no corpus to PUT: the pack is
+		// a snapshot to apply, and applying it is an upsert over ten tables.
+		//
+		// And no {org_id} for the strongest available reason: the corpus has no
+		// `org_id` at all. It is the same law for every customer, so there is no
+		// organisation to name in a path or a header.
+		"kindlast.platform.v1.IngestService.IngestCorpus": {
+			Method: "POST", Path: "/internal/v1/corpus:ingest",
+		},
 	}
 
 	got := map[string]httprule.Binding{}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"connectrpc.com/connect"
@@ -13,6 +14,7 @@ import (
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
+	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/notifications"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/records"
@@ -96,6 +98,19 @@ type Dependencies struct {
 	// A handler rather than a store, so this package depends on neither a
 	// database driver nor a payment provider.
 	BillingWebhook http.HandlerFunc
+
+	// Corpus writes the regulatory corpus, on the kindlast_ingest pool
+	// (ENT-207).
+	//
+	// Nil when this deployment has not configured one, and then IngestService is
+	// not registered at all. An interface rather than the concrete store, so
+	// this package keeps depending on no database driver.
+	Corpus ingestservice.Writer
+
+	// Logger is what the internal handlers report to. An ingest that refused a
+	// pack has to say so somewhere a person will look, because its caller is a
+	// schedule rather than a browser.
+	Logger *slog.Logger
 }
 
 // CapabilityTokens redeems a link that acts without a session.
@@ -162,14 +177,29 @@ func New(deps Dependencies) (http.Handler, error) {
 	// What replaces it is not nothing: the `internal:ingest` scope is issued
 	// only to service clients, and the agent role's policies scope every write
 	// to the organisation the header names (00008).
+	internal := connect.WithInterceptors(
+		interceptor.Auth(deps.Verifier),
+		interceptor.JTI(deps.DenyList),
+		scopes.Interceptor(),
+	)
+
 	if deps.Producer != nil {
-		internal := connect.WithInterceptors(
-			interceptor.Auth(deps.Verifier),
-			interceptor.JTI(deps.DenyList),
-			scopes.Interceptor(),
-		)
 		mux.Handle(platformv1connect.NewSweepServiceHandler(
 			sweepservice.New(deps.Producer), internal))
+	}
+
+	// Writing the corpus (ENT-207). On the same shorter chain, for the same
+	// reason plus one of its own: the corpus has no `org_id` because it is the
+	// same law for every customer, so there is no organisation for a tenancy
+	// interceptor to resolve.
+	//
+	// Registered only when an ingest pool exists, so a deployment that has not
+	// configured one answers 404 rather than 500. The pool names
+	// `kindlast_ingest`, which holds grants on the ten regulatory tables and no
+	// others; see 00018 for why that is a sixth role and not the migrator.
+	if deps.Corpus != nil {
+		mux.Handle(platformv1connect.NewIngestServiceHandler(
+			ingestservice.New(deps.Corpus, deps.Logger), internal))
 	}
 
 	// Unauthenticated by design, and bound to the internal listener only.

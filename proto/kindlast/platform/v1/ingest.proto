@@ -1,0 +1,302 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Writing the corpus: the law itself, and the obligations derived from it
+// (§20.3, §10, §16.5; ENT-207).
+//
+// # WHY THIS IS ON THE PLATFORM SURFACE AND NOT THE CORE ONE
+//
+// Nothing here may ever be reachable by a person's token. These RPCs declare
+// `internal:ingest`, which the seed issues to service clients through client
+// credentials and never to the browser client, and the package separation makes
+// "is this reachable by a human" a question answered by the import path. See
+// sweep.proto's header for why the package is `platform` when the route says
+// `/internal/v1`.
+//
+// The reason is not that ingest is dangerous to a tenant. It is that the
+// product's whole claim is that a customer can check a finding against the law,
+// and that claim is worth exactly nothing if a request from the console could
+// change the law it is checked against.
+//
+// # IT TAKES A PACK, NOT A REGULATION IT KNOWS THE NAME OF
+//
+// Nothing in this file mentions GDPR or the AI Act. A pack is a document with
+// its articles, recitals and annexes, plus obligations, guidelines and
+// enforcement decisions, and the two regulations shipped today are two calls
+// with the same shape. §26 and ENT-233 build on this: a regulation pack is
+// corpus plus obligations plus skills plus evals plus record types, and the
+// pack boundary is not drawn here. What is settled here is the narrower thing,
+// that a third regulation is a third call rather than a code change.
+//
+// # THE CORPUS STORES NO VERBATIM TEXT
+//
+// Every article, recital, annex and paragraph carries a curated summary, not
+// the Official Journal wording. That predates this issue (it is why the schema
+// has a 1..2000 character bound on every summary column rather than a text
+// blob), and it survives for the same two reasons: the OJ text has its own
+// licensing and its own canonical location, and a summary is what a model
+// scans to decide which natural key to cite. Verbatim text is fetched from the
+// document's `official_url` at the point somebody wants to read it, so the
+// citation always resolves to the publisher rather than to our copy.
+//
+// # AND THE WRITE RUNS ON A ROLE THAT CAN REACH NOTHING ELSE
+//
+// `kindlast_ingest` (00018): NOSUPERUSER, NOBYPASSRLS, owns nothing, grants on
+// the ten regulatory tables and no others, insert and update but never delete.
+// Not the migrator, which 00002's comment named and which bypasses RLS
+// entirely.
+service IngestService {
+  // Writes a pack, or refuses it whole.
+  //
+  // # IDEMPOTENT, AND THAT IS THE HARD REQUIREMENT
+  //
+  // Every row upserts on its natural key: a document on its CELEX number, an
+  // article on `(document, number)`, an obligation on its slug. Running the
+  // same pack twice produces no duplicates and no drift, which matters because
+  // the caller is a schedule: §20.3 makes this a singleton with a fixed
+  // workflow id once Temporal lands at step 8, and a schedule that
+  // double-writes on retry would compound silently.
+  //
+  // # ONE TRANSACTION, SO A BAD PACK LEAVES NOTHING BEHIND
+  //
+  // A pack that fails validation halfway would otherwise leave a corpus that is
+  // partly the new snapshot and partly the old, which is the one state nobody
+  // can reason about: a finding citing Article 30 would resolve, and the recital
+  // beside it would not, with nothing to say which snapshot each came from.
+  //
+  // # A CITATION THAT DOES NOT RESOLVE IS A REFUSAL, NOT A WARNING
+  //
+  // Every obligation names an article, recital or annex, and ingest checks that
+  // the thing exists before committing. AGENTS.md opens by saying a fabricated
+  // citation is worse than nothing; an obligation pointing at an article that
+  // is not in the corpus is exactly that, and it would surface to a customer as
+  // a finding whose "check this against the law" link goes nowhere.
+  rpc IngestCorpus(IngestCorpusRequest) returns (IngestCorpusResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/corpus:ingest"
+      body: "*"
+    };
+  }
+}
+
+message IngestCorpusRequest {
+  RegulationPack pack = 1;
+
+  // Validate and report, write nothing.
+  //
+  // Worth having because the expensive failure here is a pack that is 90%
+  // right: a curator wants to know which citations dangle before deciding
+  // whether to fix the pack or ingest the corpus it depends on first. The
+  // response is identical either way apart from `applied`.
+  bool dry_run = 2;
+}
+
+// RegulationPack is one coherent unit of regulatory reference data.
+//
+// Every field is optional, which is deliberate rather than lax. A pack may
+// carry only a document (the law, no obligations derived from it yet), only
+// obligations (a revised interpretation of a regulation already ingested), or
+// only guidelines. Requiring all of them would mean re-sending 200KB of
+// unchanged articles to correct one obligation's severity.
+message RegulationPack {
+  // Names this pack for logs and for the response. Not a key: nothing is
+  // stored under it, because the natural keys inside the pack are what the
+  // corpus is addressed by. A pack renamed is not a new corpus.
+  string pack_id = 1;
+
+  RegulatoryDocument document = 2;
+  repeated Obligation obligations = 3;
+  repeated Guideline guidelines = 4;
+  repeated EnforcementDecision enforcement_decisions = 5;
+}
+
+message RegulatoryDocument {
+  // The natural key. A CELEX number identifies an EU legal act uniquely and
+  // permanently, which is why it is the key rather than a title or a slug we
+  // would have to invent and then keep stable ourselves.
+  string celex_number = 1;
+  string title = 2;
+  string short_title = 3;
+  // ISO date, `2016-05-04`.
+  string version_date = 4;
+  // Where the verbatim text lives. The corpus stores none, so this is what a
+  // citation ultimately resolves to.
+  string official_url = 5;
+
+  repeated Article articles = 6;
+  repeated Recital recitals = 7;
+  repeated Annex annexes = 8;
+  // Which recitals inform which articles. Additive across ingests: a link is
+  // inserted or already exists, and nothing removes one, because the junction
+  // has no natural way to tell a link somebody deleted from a link a smaller
+  // pack simply did not mention.
+  repeated ArticleRecitalLink article_recitals = 9;
+}
+
+message Article {
+  int32 article_number = 1;
+  string heading = 2;
+  // Curated, 1 to 2000 characters, enforced by a database constraint. Not the
+  // Official Journal wording; see the service comment.
+  string summary = 3;
+  // Empty falls back to the document's version date at query time. Present for
+  // the AI Act's staged schedule, where Article 4 applies from 2025-02-02 and
+  // most others from 2026-08-02.
+  string effective_date = 4;
+  repeated Paragraph paragraphs = 5;
+}
+
+message Paragraph {
+  // `1`, `2(a)`, and so on. Unique within the article, and the citation grain a
+  // finding can point at.
+  string label = 1;
+  string summary = 2;
+  int32 ordering = 3;
+}
+
+message Recital {
+  int32 recital_number = 1;
+  string summary = 2;
+}
+
+message Annex {
+  // `III`, and so on.
+  string label = 1;
+  string heading = 2;
+  string summary = 3;
+  string effective_date = 4;
+  repeated AnnexItem items = 5;
+}
+
+message AnnexItem {
+  string label = 1;
+  // Only top-level items have one in the Official Journal; sub-items do not.
+  string heading = 2;
+  string summary = 3;
+  string effective_date = 4;
+  int32 ordering = 5;
+}
+
+message ArticleRecitalLink {
+  int32 article_number = 1;
+  int32 recital_number = 2;
+}
+
+// Obligation is a duty derived from the law, and the thing a finding cites.
+message Obligation {
+  string slug = 1;
+  string title = 2;
+  // 100 to 2000 characters, enforced by a database constraint. Longer than the
+  // article bound on purpose: this is the text a person reads to decide whether
+  // a finding applies to them, so a one-line summary would push them to the
+  // regulation for every finding.
+  string summary = 3;
+
+  Citation citation = 4;
+
+  // The profile shape this obligation applies to, as JSON. Free-form because it
+  // is matching input rather than a stored schema, and the matcher is the thing
+  // that has an opinion about it.
+  string applies_when_json = 5;
+
+  // `low`, `medium` or `high`. Constrained in the database.
+  string severity = 6;
+  int32 due_within_days = 7;
+  string recurrence = 8;
+  string effective_date = 9;
+  repeated string topic_tags = 10;
+
+  // What approving a finding for this obligation creates, e.g. `create_ropa`.
+  //
+  // One of `review`, `create_ropa`, `create_dsar`, `create_ai_system`, matching
+  // `findings.action_type` and constrained in the database (00007). Empty is
+  // read as `review`, which is the honest answer for an obligation with no
+  // register behind it: approving records the decision and creates no row. That
+  // is a value rather than an absence, and the column is NOT NULL because of it.
+  string action_type = 11;
+}
+
+// Citation is what an obligation points at, and it must resolve.
+message Citation {
+  // `article`, `recital` or `annex`. Exactly one of the three targets below is
+  // set, matched by a database constraint as well as by ingest.
+  string kind = 1;
+  // Which document, by CELEX. Not assumed to be the pack's own document: an
+  // obligation may cite a regulation ingested by an earlier pack.
+  string celex = 2;
+
+  int32 article_number = 3;
+  int32 recital_number = 4;
+  string annex_label = 5;
+  // Narrows an article citation to one paragraph. Optional, and checked when
+  // present: a paragraph label that does not exist is as dangling as an article
+  // number that does not.
+  string paragraph_label = 6;
+}
+
+message Guideline {
+  string slug = 1;
+  string publisher = 2;
+  string title = 3;
+  string adopted_date = 4;
+  string version = 5;
+  string source_url = 6;
+  repeated string topic_tags = 7;
+}
+
+message EnforcementDecision {
+  string slug = 1;
+  // The supervisory authority that decided it.
+  string dpa = 2;
+  string title = 3;
+  string decision_date = 4;
+  // Absent where a decision carried no fine, which is common: a reprimand or a
+  // processing ban is an outcome too, and treating "no fine" as zero would make
+  // an enforcement register read as a list of free passes.
+  int64 fine_eur = 5;
+  bool has_fine = 6;
+  string summary = 7;
+  string source_url = 8;
+  repeated int32 gdpr_articles = 9;
+  repeated string topic_tags = 10;
+}
+
+message IngestCorpusResponse {
+  // False on a dry run, and on nothing else: a real run either applied the pack
+  // or returned an error.
+  bool applied = 1;
+
+  // What was written, by table. Counts an upsert once whether it inserted or
+  // updated: the useful question after a re-ingest is "did the pack land",
+  // which is answered by the total matching the pack, not by a split that
+  // changes every time somebody edits a summary.
+  IngestCounts counts = 2;
+
+  // Citations that did not resolve, in the order they appear in the pack.
+  //
+  // Populated on a dry run. On a real run the request fails instead and this is
+  // carried on the error detail, because a partially-good pack must not look
+  // like a success with a note attached.
+  repeated string unresolved_citations = 3;
+
+  google.protobuf.Timestamp ingested_at = 4;
+}
+
+message IngestCounts {
+  int32 documents = 1;
+  int32 articles = 2;
+  int32 paragraphs = 3;
+  int32 recitals = 4;
+  int32 annexes = 5;
+  int32 annex_items = 6;
+  int32 article_recital_links = 7;
+  int32 obligations = 8;
+  int32 guidelines = 9;
+  int32 enforcement_decisions = 10;
+}

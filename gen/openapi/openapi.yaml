@@ -1188,6 +1188,56 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/corpus:ingest:
+        post:
+            tags:
+                - IngestService
+            description: |-
+                Writes a pack, or refuses it whole.
+
+                 # IDEMPOTENT, AND THAT IS THE HARD REQUIREMENT
+
+                 Every row upserts on its natural key: a document on its CELEX number, an
+                 article on `(document, number)`, an obligation on its slug. Running the
+                 same pack twice produces no duplicates and no drift, which matters because
+                 the caller is a schedule: §20.3 makes this a singleton with a fixed
+                 workflow id once Temporal lands at step 8, and a schedule that
+                 double-writes on retry would compound silently.
+
+                 # ONE TRANSACTION, SO A BAD PACK LEAVES NOTHING BEHIND
+
+                 A pack that fails validation halfway would otherwise leave a corpus that is
+                 partly the new snapshot and partly the old, which is the one state nobody
+                 can reason about: a finding citing Article 30 would resolve, and the recital
+                 beside it would not, with nothing to say which snapshot each came from.
+
+                 # A CITATION THAT DOES NOT RESOLVE IS A REFUSAL, NOT A WARNING
+
+                 Every obligation names an article, recital or annex, and ingest checks that
+                 the thing exists before committing. AGENTS.md opens by saying a fabricated
+                 citation is worse than nothing; an obligation pointing at an article that
+                 is not in the corpus is exactly that, and it would surface to a customer as
+                 a finding whose "check this against the law" link goes nowhere.
+            operationId: IngestService_IngestCorpus
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/IngestCorpusRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/IngestCorpusResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/sweep:
         post:
             tags:
@@ -1352,6 +1402,37 @@ components:
                     type: string
                     description: missing, in_progress, or complete. Empty means `missing`.
             description: The fields of an AI system entry a human supplies.
+        Annex:
+            type: object
+            properties:
+                label:
+                    type: string
+                    description: '`III`, and so on.'
+                heading:
+                    type: string
+                summary:
+                    type: string
+                effectiveDate:
+                    type: string
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/AnnexItem'
+        AnnexItem:
+            type: object
+            properties:
+                label:
+                    type: string
+                heading:
+                    type: string
+                    description: Only top-level items have one in the Official Journal; sub-items do not.
+                summary:
+                    type: string
+                effectiveDate:
+                    type: string
+                ordering:
+                    type: integer
+                    format: int32
         ApproveFindingRequest:
             type: object
             properties:
@@ -1392,6 +1473,38 @@ components:
                     description: |-
                         Which table `created_record_id` names, e.g. processing_activities. Present
                          so a client can route without hard-coding the action-to-table mapping.
+        Article:
+            type: object
+            properties:
+                articleNumber:
+                    type: integer
+                    format: int32
+                heading:
+                    type: string
+                summary:
+                    type: string
+                    description: |-
+                        Curated, 1 to 2000 characters, enforced by a database constraint. Not the
+                         Official Journal wording; see the service comment.
+                effectiveDate:
+                    type: string
+                    description: |-
+                        Empty falls back to the document's version date at query time. Present for
+                         the AI Act's staged schedule, where Article 4 applies from 2025-02-02 and
+                         most others from 2026-08-02.
+                paragraphs:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Paragraph'
+        ArticleRecitalLink:
+            type: object
+            properties:
+                articleNumber:
+                    type: integer
+                    format: int32
+                recitalNumber:
+                    type: integer
+                    format: int32
         AuditEntry:
             type: object
             properties:
@@ -1634,6 +1747,39 @@ components:
                     type: string
                     format: date-time
             description: A data-subject access request, and the clock on it.
+        EnforcementDecision:
+            type: object
+            properties:
+                slug:
+                    type: string
+                dpa:
+                    type: string
+                    description: The supervisory authority that decided it.
+                title:
+                    type: string
+                decisionDate:
+                    type: string
+                fineEur:
+                    type: string
+                    description: |-
+                        Absent where a decision carried no fine, which is common: a reprimand or a
+                         processing ban is an outcome too, and treating "no fine" as zero would make
+                         an enforcement register read as a list of free passes.
+                hasFine:
+                    type: boolean
+                summary:
+                    type: string
+                sourceUrl:
+                    type: string
+                gdprArticles:
+                    type: array
+                    items:
+                        type: integer
+                        format: int32
+                topicTags:
+                    type: array
+                    items:
+                        type: string
         ExportAuditEntriesResponse:
             type: object
             properties:
@@ -1903,6 +2049,101 @@ components:
                     description: The type of the serialized message.
             additionalProperties: true
             description: Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.
+        Guideline:
+            type: object
+            properties:
+                slug:
+                    type: string
+                publisher:
+                    type: string
+                title:
+                    type: string
+                adoptedDate:
+                    type: string
+                version:
+                    type: string
+                sourceUrl:
+                    type: string
+                topicTags:
+                    type: array
+                    items:
+                        type: string
+        IngestCorpusRequest:
+            type: object
+            properties:
+                pack:
+                    $ref: '#/components/schemas/RegulationPack'
+                dryRun:
+                    type: boolean
+                    description: |-
+                        Validate and report, write nothing.
+
+                         Worth having because the expensive failure here is a pack that is 90%
+                         right: a curator wants to know which citations dangle before deciding
+                         whether to fix the pack or ingest the corpus it depends on first. The
+                         response is identical either way apart from `applied`.
+        IngestCorpusResponse:
+            type: object
+            properties:
+                applied:
+                    type: boolean
+                    description: |-
+                        False on a dry run, and on nothing else: a real run either applied the pack
+                         or returned an error.
+                counts:
+                    allOf:
+                        - $ref: '#/components/schemas/IngestCounts'
+                    description: |-
+                        What was written, by table. Counts an upsert once whether it inserted or
+                         updated: the useful question after a re-ingest is "did the pack land",
+                         which is answered by the total matching the pack, not by a split that
+                         changes every time somebody edits a summary.
+                unresolvedCitations:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Citations that did not resolve, in the order they appear in the pack.
+
+                         Populated on a dry run. On a real run the request fails instead and this is
+                         carried on the error detail, because a partially-good pack must not look
+                         like a success with a note attached.
+                ingestedAt:
+                    type: string
+                    format: date-time
+        IngestCounts:
+            type: object
+            properties:
+                documents:
+                    type: integer
+                    format: int32
+                articles:
+                    type: integer
+                    format: int32
+                paragraphs:
+                    type: integer
+                    format: int32
+                recitals:
+                    type: integer
+                    format: int32
+                annexes:
+                    type: integer
+                    format: int32
+                annexItems:
+                    type: integer
+                    format: int32
+                articleRecitalLinks:
+                    type: integer
+                    format: int32
+                obligations:
+                    type: integer
+                    format: int32
+                guidelines:
+                    type: integer
+                    format: int32
+                enforcementDecisions:
+                    type: integer
+                    format: int32
         InviteMemberRequest:
             type: object
             properties:
@@ -2193,6 +2434,62 @@ components:
                          during quiet hours is one nobody can trust with a statutory clock.
                 quietHoursEnd:
                     type: string
+        Obligation:
+            type: object
+            properties:
+                slug:
+                    type: string
+                title:
+                    type: string
+                summary:
+                    type: string
+                    description: |-
+                        100 to 2000 characters, enforced by a database constraint. Longer than the
+                         article bound on purpose: this is the text a person reads to decide whether
+                         a finding applies to them, so a one-line summary would push them to the
+                         regulation for every finding.
+                citation:
+                    $ref: '#/components/schemas/Citation'
+                appliesWhenJson:
+                    type: string
+                    description: |-
+                        The profile shape this obligation applies to, as JSON. Free-form because it
+                         is matching input rather than a stored schema, and the matcher is the thing
+                         that has an opinion about it.
+                severity:
+                    type: string
+                    description: '`low`, `medium` or `high`. Constrained in the database.'
+                dueWithinDays:
+                    type: integer
+                    format: int32
+                recurrence:
+                    type: string
+                effectiveDate:
+                    type: string
+                topicTags:
+                    type: array
+                    items:
+                        type: string
+                actionType:
+                    type: string
+                    description: |-
+                        What approving a finding for this obligation creates, e.g. `create_ropa`.
+                         Empty means approving records the decision and creates nothing, which is
+                         the honest answer for an obligation with no register behind it.
+            description: Obligation is a duty derived from the law, and the thing a finding cites.
+        Paragraph:
+            type: object
+            properties:
+                label:
+                    type: string
+                    description: |-
+                        `1`, `2(a)`, and so on. Unique within the article, and the citation grain a
+                         finding can point at.
+                summary:
+                    type: string
+                ordering:
+                    type: integer
+                    format: int32
         PipelineStatus:
             type: object
             properties:
@@ -2307,6 +2604,87 @@ components:
 
                  Shared by create and update so the two cannot drift into accepting different
                  things about the same record.
+        Recital:
+            type: object
+            properties:
+                recitalNumber:
+                    type: integer
+                    format: int32
+                summary:
+                    type: string
+        RegulationPack:
+            type: object
+            properties:
+                packId:
+                    type: string
+                    description: |-
+                        Names this pack for logs and for the response. Not a key: nothing is
+                         stored under it, because the natural keys inside the pack are what the
+                         corpus is addressed by. A pack renamed is not a new corpus.
+                document:
+                    $ref: '#/components/schemas/RegulatoryDocument'
+                obligations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Obligation'
+                guidelines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Guideline'
+                enforcementDecisions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/EnforcementDecision'
+            description: |-
+                RegulationPack is one coherent unit of regulatory reference data.
+
+                 Every field is optional, which is deliberate rather than lax. A pack may
+                 carry only a document (the law, no obligations derived from it yet), only
+                 obligations (a revised interpretation of a regulation already ingested), or
+                 only guidelines. Requiring all of them would mean re-sending 200KB of
+                 unchanged articles to correct one obligation's severity.
+        RegulatoryDocument:
+            type: object
+            properties:
+                celexNumber:
+                    type: string
+                    description: |-
+                        The natural key. A CELEX number identifies an EU legal act uniquely and
+                         permanently, which is why it is the key rather than a title or a slug we
+                         would have to invent and then keep stable ourselves.
+                title:
+                    type: string
+                shortTitle:
+                    type: string
+                versionDate:
+                    type: string
+                    description: ISO date, `2016-05-04`.
+                officialUrl:
+                    type: string
+                    description: |-
+                        Where the verbatim text lives. The corpus stores none, so this is what a
+                         citation ultimately resolves to.
+                articles:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Article'
+                recitals:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Recital'
+                annexes:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Annex'
+                articleRecitals:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ArticleRecitalLink'
+                    description: |-
+                        Which recitals inform which articles. Additive across ingests: a link is
+                         inserted or already exists, and nothing removes one, because the junction
+                         has no natural way to tell a link somebody deleted from a link a smaller
+                         pack simply did not mention.
         RejectFindingRequest:
             type: object
             properties:
@@ -2630,6 +3008,52 @@ tags:
          `label`; it must not build that string from `celex` and `article`, because a
          second assembler is a second thing that can be wrong, and the one that is
          wrong will be the one nobody tested.
+    - name: IngestService
+      description: |-
+        Writing the corpus: the law itself, and the obligations derived from it
+         (§20.3, §10, §16.5; ENT-207).
+
+         # WHY THIS IS ON THE PLATFORM SURFACE AND NOT THE CORE ONE
+
+         Nothing here may ever be reachable by a person's token. These RPCs declare
+         `internal:ingest`, which the seed issues to service clients through client
+         credentials and never to the browser client, and the package separation makes
+         "is this reachable by a human" a question answered by the import path. See
+         sweep.proto's header for why the package is `platform` when the route says
+         `/internal/v1`.
+
+         The reason is not that ingest is dangerous to a tenant. It is that the
+         product's whole claim is that a customer can check a finding against the law,
+         and that claim is worth exactly nothing if a request from the console could
+         change the law it is checked against.
+
+         # IT TAKES A PACK, NOT A REGULATION IT KNOWS THE NAME OF
+
+         Nothing in this file mentions GDPR or the AI Act. A pack is a document with
+         its articles, recitals and annexes, plus obligations, guidelines and
+         enforcement decisions, and the two regulations shipped today are two calls
+         with the same shape. §26 and ENT-233 build on this: a regulation pack is
+         corpus plus obligations plus skills plus evals plus record types, and the
+         pack boundary is not drawn here. What is settled here is the narrower thing,
+         that a third regulation is a third call rather than a code change.
+
+         # THE CORPUS STORES NO VERBATIM TEXT
+
+         Every article, recital, annex and paragraph carries a curated summary, not
+         the Official Journal wording. That predates this issue (it is why the schema
+         has a 1..2000 character bound on every summary column rather than a text
+         blob), and it survives for the same two reasons: the OJ text has its own
+         licensing and its own canonical location, and a summary is what a model
+         scans to decide which natural key to cite. Verbatim text is fetched from the
+         document's `official_url` at the point somebody wants to read it, so the
+         citation always resolves to the publisher rather than to our copy.
+
+         # AND THE WRITE RUNS ON A ROLE THAT CAN REACH NOTHING ELSE
+
+         `kindlast_ingest` (00018): NOSUPERUSER, NOBYPASSRLS, owns nothing, grants on
+         the ten regulatory tables and no others, insert and update but never delete.
+         Not the migrator, which 00002's comment named and which bypasses RLS
+         entirely.
     - name: NotificationService
       description: |-
         Notification preferences and the channels a deployment actually has
