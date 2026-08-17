@@ -205,6 +205,29 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		// The colon verb rather than `/api/v1/audit/export`, because this is an
 		// action on the collection and not a subresource. There is nothing at
 		// `/audit/export` to GET.
+		// The regulatory corpus (ENT-207). Plain GETs on a collection and a
+		// member, which is the whole shape: this is reference data and there is
+		// nothing to act on.
+		//
+		// Keyed by `slug` rather than by a uuid, and that is the one choice
+		// worth pinning. An obligation's slug is stable across rewordings of its
+		// text, so `/corpus/obligations/gdpr-art-30-ropa` is a URL somebody can
+		// put in a document and expect to still work; the row's id is generated
+		// per deployment and would differ between two installations reading the
+		// same law.
+		//
+		// Still no {org_id}, and here for a stronger reason than elsewhere: the
+		// corpus has none. It is the same regulation for every customer.
+		"kindlast.core.v1.CorpusService.ListObligations": {
+			Method: "GET", Path: "/api/v1/corpus/obligations",
+		},
+		"kindlast.core.v1.CorpusService.GetObligation": {
+			Method: "GET", Path: "/api/v1/corpus/obligations/{slug}",
+		},
+		"kindlast.core.v1.CorpusService.ListDocuments": {
+			Method: "GET", Path: "/api/v1/corpus/documents",
+		},
+
 		"kindlast.core.v1.AuditService.ListAuditEntries": {
 			Method: "GET", Path: "/api/v1/audit",
 		},
@@ -262,6 +285,22 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		// everything else.
 		"kindlast.platform.v1.SweepService.RunSweep": {
 			Method: "POST", Path: "/internal/v1/sweep",
+		},
+
+		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
+		// a request from the console that could change the law would make the
+		// product's central claim, that a customer can check a finding against
+		// the regulation, mean nothing.
+		//
+		// The colon verb rather than `/internal/v1/corpus`, because this is an
+		// action rather than a resource. There is no corpus to PUT: the pack is
+		// a snapshot to apply, and applying it is an upsert over ten tables.
+		//
+		// And no {org_id} for the strongest available reason: the corpus has no
+		// `org_id` at all. It is the same law for every customer, so there is no
+		// organisation to name in a path or a header.
+		"kindlast.platform.v1.IngestService.IngestCorpus": {
+			Method: "POST", Path: "/internal/v1/corpus:ingest",
 		},
 	}
 

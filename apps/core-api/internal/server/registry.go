@@ -46,11 +46,21 @@ func Services() []protoreflect.ServiceDescriptor {
 		// grant on it. Both RPCs carry `audit:read`, which was seeded before
 		// anything used it.
 		corev1.File_kindlast_core_v1_audit_proto,
+		// CorpusService (ENT-207). Read only, on `corpus:read`. The write side
+		// is IngestService on the platform surface, which is the separation the
+		// product's central claim rests on: a console request must not be able
+		// to change the law a finding is checked against.
+		corev1.File_kindlast_core_v1_corpus_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the
 		// vocabulary that can act across organisations.
 		platformv1.File_kindlast_platform_v1_sweep_proto,
+		// IngestService (ENT-207). Writing the corpus, on `internal:ingest`.
+		// Listed here for the same reason as the sweep: the internal surface is
+		// the last place an undeclared scope should be able to hide, because it
+		// is the vocabulary that acts outside any one organisation.
+		platformv1.File_kindlast_platform_v1_ingest_proto,
 	}
 
 	var services []protoreflect.ServiceDescriptor

@@ -56,6 +56,7 @@ services:
       KINDLAST_APP_PASSWORD: ${KINDLAST_APP_PASSWORD:-app-dev-password}
       KINDLAST_AGENT_PASSWORD: ${KINDLAST_AGENT_PASSWORD:-agent-dev-password}
       KINDLAST_BILLING_PASSWORD: ${KINDLAST_BILLING_PASSWORD:-billing-dev-password}
+      KINDLAST_INGEST_PASSWORD: ${KINDLAST_INGEST_PASSWORD:-ingest-dev-password}
       KINDLAST_VECTOR_RO_PASSWORD: ${KINDLAST_VECTOR_RO_PASSWORD:-vector-ro-dev-password}
     volumes:
       - postgres-app-data:/var/lib/postgresql/data
@@ -294,6 +295,10 @@ services:
       # stack that never created the role keeps working rather than answering
       # 500 to a provider that will retry for days.
       KINDLAST_BILLING_DATABASE_URL: postgres://kindlast_billing:${KINDLAST_BILLING_PASSWORD:-billing-dev-password}@postgres-app:5432/kindlast?sslmode=disable
+      # The corpus write path (ENT-207). Its own role, holding grants on the ten
+      # regulatory tables and nothing else, so the process that writes the law
+      # cannot reach a customer's findings.
+      KINDLAST_INGEST_DATABASE_URL: postgres://kindlast_ingest:${KINDLAST_INGEST_PASSWORD:-ingest-dev-password}@postgres-app:5432/kindlast?sslmode=disable
 
       # The provider's signing secret (ENT-210).
       #

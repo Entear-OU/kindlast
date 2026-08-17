@@ -135,6 +135,19 @@ type Config struct {
 	// EmailFrom is the envelope and header sender for dispatched messages.
 	EmailFrom string
 
+	// IngestDatabaseURL must connect as `kindlast_ingest`, the corpus writer's
+	// role (ENT-207).
+	//
+	// Optional. Without it IngestService is not served, which is the right
+	// default for a deployment whose corpus is already loaded: the ingest path
+	// exists to write the law, and most of the time nobody is writing the law.
+	//
+	// It must NOT name the migrator, which 00002's comment once did. The
+	// migrator bypasses RLS and owns the schema, so ingesting as it would mean
+	// the process writing the corpus could also rewrite any tenant's findings.
+	// `kindlast_ingest` holds grants on the ten regulatory tables and no others.
+	IngestDatabaseURL string
+
 	// BillingDatabaseURL must connect as `kindlast_billing`, the webhook's role
 	// (ENT-210).
 	//
@@ -170,6 +183,7 @@ func Load() (*Config, error) {
 		SMTPAddr:         strings.TrimSpace(os.Getenv("KINDLAST_SMTP_ADDR")),
 		EmailFrom:        valueOr("KINDLAST_EMAIL_FROM", "noreply@kindlast.localhost"),
 
+		IngestDatabaseURL:  os.Getenv("KINDLAST_INGEST_DATABASE_URL"),
 		BillingDatabaseURL: os.Getenv("KINDLAST_BILLING_DATABASE_URL"),
 		// Through fileOrValue, because a signing secret is exactly the sort of
 		// value an operator mounts as a file rather than putting in an

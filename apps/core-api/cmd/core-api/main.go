@@ -27,6 +27,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	"github.com/Entear-OU/kindlast/libs/chassis/denylist"
@@ -175,6 +176,27 @@ func run(logger *slog.Logger) error {
 		outbox = agent
 	}
 
+	// The corpus writer's pool, on its own role (ENT-207).
+	//
+	// Optional like the others, and its absence is the ordinary case: the
+	// ingest path exists to write the law, and most deployments are not writing
+	// the law. Without it IngestService is not registered, so an unconfigured
+	// deployment answers 404 rather than failing on the first call.
+	//
+	// Opened at boot so a DSN naming the wrong role, or a role the migration
+	// has not granted, is a startup failure rather than a surprise the first
+	// time a schedule fires.
+	var corpusWriter *postgres.CorpusStore
+	if cfg.IngestDatabaseURL != "" {
+		writer, ingestErr := postgres.NewCorpus(ctx, cfg.IngestDatabaseURL)
+		if ingestErr != nil {
+			return ingestErr
+		}
+		defer writer.Close()
+		corpusWriter = writer
+		logger.Info("corpus ingest enabled")
+	}
+
 	// The billing webhook's pool, on its own role (ENT-210).
 	//
 	// Optional, exactly like the producer pool above, and for the sharper
@@ -233,6 +255,12 @@ func run(logger *slog.Logger) error {
 		SMTPConfigured: cfg.SMTPAddr != "",
 		Tokens:         store,
 		BillingWebhook: billingWebhook,
+		// Nil when no ingest DSN is set, and then IngestService is not
+		// registered at all. A typed nil would not be: assigning a nil
+		// *CorpusStore to the interface makes it non-nil, so the guard has to
+		// stay on the concrete pointer.
+		Corpus: corpusDependency(corpusWriter),
+		Logger: logger,
 	})
 	if err != nil {
 		return err
@@ -407,4 +435,17 @@ func (o tenantOpener) BeginTenant(ctx context.Context, subject, orgID string) (i
 		return nil, err
 	}
 	return tenant, nil
+}
+
+// corpusDependency keeps a nil pool out of a non-nil interface.
+//
+// Assigning a nil *CorpusStore straight into an interface field produces an
+// interface that is not nil, so the registration guard in server.New would pass
+// and every ingest call would panic on a nil pool. This is the classic Go trap
+// and it is worth a named function rather than a clever inline conditional.
+func corpusDependency(store *postgres.CorpusStore) ingest.Writer {
+	if store == nil {
+		return nil
+	}
+	return store
 }

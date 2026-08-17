@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/core/v1/findings.proto";
+import "kindlast/options/v1/scope.proto";
+
+// The regulatory corpus, read (§10, §24; ENT-207).
+//
+// # THIS IS THE SURFACE THE PRODUCT'S CLAIM RESTS ON
+//
+// A finding says an organisation has an obligation, and cites the law it comes
+// from. The reason anybody should believe that is that they can go and look.
+// This service is the looking.
+//
+// # NOT TENANT DATA, AND THE ONLY SERVICE IN core.v1 THAT IS NOT
+//
+// The corpus has no `org_id`: it is the same regulation for every customer, and
+// ENT-207 says in terms not to give it one to make it look like the rest of the
+// schema. Ten public-read policies from ENT-192 carry that, so every member of
+// every organisation reads the same rows.
+//
+// The organisation header is still required, and that is deliberate rather than
+// an oversight. It keeps one shape for every request on this surface, and a
+// caller has to be a member of SOMETHING to read the corpus at all: the law is
+// public, but this deployment's copy of it is not a public API.
+//
+// # READ ONLY, AND THE WRITE LIVES SOMEWHERE A PERSON CANNOT REACH
+//
+// There is no write RPC here. Writing the corpus is `IngestService` on the
+// platform surface, behind `internal:ingest`, on a Postgres role that holds
+// grants on the ten regulatory tables and cannot read a finding. A request from
+// the console that could change the law would make this service's whole purpose
+// a formality.
+service CorpusService {
+  // What this deployment checks organisations against.
+  //
+  // Every obligation, with its citation resolved to a label and a URL that
+  // point at the publisher rather than at us. Not paged: there are fifteen of
+  // them, they change when a regulation changes, and a person reading this page
+  // wants the whole list rather than a window onto it.
+  rpc ListObligations(ListObligationsRequest) returns (ListObligationsResponse) {
+    option (kindlast.options.v1.required_scope) = "corpus:read";
+    option (google.api.http) = {get: "/api/v1/corpus/obligations"};
+  }
+
+  // One obligation, with the regulatory text behind it.
+  //
+  // The article or recital summary, and the paragraph when the citation names
+  // one. This is where somebody lands from a finding asking "says who".
+  rpc GetObligation(GetObligationRequest) returns (GetObligationResponse) {
+    option (kindlast.options.v1.required_scope) = "corpus:read";
+    option (google.api.http) = {get: "/api/v1/corpus/obligations/{slug}"};
+  }
+
+  // Which regulations this deployment holds, and how much of each.
+  //
+  // Exists so a console can say "the GDPR, 99 articles, as at 4 May 2016"
+  // rather than leaving a customer to wonder whether the corpus is current.
+  // A compliance product that cannot say which version of the law it is working
+  // from is asking for trust it has not earned.
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse) {
+    option (kindlast.options.v1.required_scope) = "corpus:read";
+    option (google.api.http) = {get: "/api/v1/corpus/documents"};
+  }
+}
+
+message ListObligationsRequest {}
+
+message ListObligationsResponse {
+  repeated CorpusObligation obligations = 1;
+}
+
+message GetObligationRequest {
+  string slug = 1;
+}
+
+message GetObligationResponse {
+  CorpusObligation obligation = 1;
+
+  // The regulatory text the citation points at: an article's summary, a
+  // recital's, or an annex's.
+  //
+  // Empty when the citation resolves to nothing, which ingest refuses to
+  // create. If it is ever empty here, something wrote the corpus without going
+  // through IngestService and that is worth knowing.
+  string cited_summary = 2;
+
+  // The heading of the cited article or annex. Recitals have none.
+  string cited_heading = 3;
+
+  // The paragraph's summary, when the citation names one.
+  string cited_paragraph_summary = 4;
+}
+
+message CorpusObligation {
+  string slug = 1;
+  string title = 2;
+  string summary = 3;
+
+  // `low`, `medium` or `high`.
+  string severity = 4;
+  string recurrence = 5;
+  int32 due_within_days = 6;
+  string effective_date = 7;
+  repeated string topic_tags = 8;
+
+  // What approving a finding for this creates: `review`, `create_ropa`,
+  // `create_dsar` or `create_ai_system`.
+  string action_type = 9;
+
+  // The SAME `Citation` message FindingsService returns, imported rather than
+  // redeclared.
+  //
+  // That is deliberate and it is the whole reason this file imports
+  // findings.proto. A finding cites an obligation; this is that obligation. Two
+  // citation shapes would let a console render the same provision two ways, and
+  // "GDPR Art. 30" on one page beside "32016R0679 Art. 30" on another is how a
+  // customer decides the product does not know what it is talking about.
+  //
+  // `obligation_slug` on it is redundant with `slug` above and is populated
+  // anyway, because a client filtering findings by obligation uses that field
+  // and should not have to know which message it came from.
+  Citation citation = 10;
+}
+
+message ListDocumentsRequest {}
+
+message ListDocumentsResponse {
+  repeated RegulatoryDocumentSummary documents = 1;
+}
+
+message RegulatoryDocumentSummary {
+  string celex_number = 1;
+  string title = 2;
+  string short_title = 3;
+  // The version of the text this corpus was built from, as an ISO date.
+  string version_date = 4;
+  string official_url = 5;
+
+  int32 article_count = 6;
+  int32 recital_count = 7;
+  int32 annex_count = 8;
+}

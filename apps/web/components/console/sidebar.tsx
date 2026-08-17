@@ -4,6 +4,7 @@ import {
   ListChecks,
   FolderOpen,
   ScrollText,
+  Scale,
   Settings,
 } from 'lucide-react'
 
@@ -85,6 +86,14 @@ export function ConsoleSidebar({
               one-line change per surface the list was built for. */}
           <NavLink href={orgPath(orgSlug, '/records')} label="Records">
             <FolderOpen aria-hidden="true" className="size-4" />
+          </NavLink>
+        </li>
+        <li>
+          {/* The corpus surface (ENT-207). Sits next to Records because the two
+              answer neighbouring questions: what the law says, and what this
+              organisation has on file about it. */}
+          <NavLink href={orgPath(orgSlug, '/regulation')} label="Regulation">
+            <Scale aria-hidden="true" className="size-4" />
           </NavLink>
         </li>
         <li>
