@@ -92,3 +92,15 @@ go.work.sum
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/blob-report/
+
+
+# Python (ENT-218).
+#
+# uv.lock IS committed, for the same reason bun.lock and go.sum are: the next
+# person's install must resolve what this one did. .venv is not; it is a local
+# by-product uv rebuilds from the lock in seconds.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/

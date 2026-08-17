@@ -1,0 +1,31 @@
+[project]
+name = "kindlast-intelligence"
+version = "0.1.0"
+description = "Kindlast Intelligence: the agent harness (ENT-218)"
+readme = "README.md"
+authors = [
+    { name = "eddieogola", email = "39475602+eddieogola@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography>=50.0.0",
+    "httpx>=0.28.1",
+    "pyjwt>=2.13.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+# `tests/` is on the path so the battery can import its own conftest helpers
+# by name, which keeps the fixture module readable as a module rather than as
+# a pile of fixtures.
+pythonpath = ["tests"]
+testpaths = ["tests"]

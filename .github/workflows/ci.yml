@@ -155,6 +155,39 @@ jobs:
         if: always()
         run: docker compose -f deploy/compose.yaml --profile model down
 
+  intelligence:
+    name: Intelligence (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned, for the same reason Bun, Go and buf are pinned above: a
+      # toolchain that moves on its own changes what the tests below are
+      # actually asserting, and the assertions here are security properties.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.3"
+
+      - name: Install dependencies
+        run: uv sync --locked
+        working-directory: apps/intelligence
+
+      # THIS JOB MUST FAIL RATHER THAN SKIP, and it can, because it needs
+      # nothing but a Python interpreter. The token battery runs a real
+      # authorization server on localhost and signs real tokens, so unlike
+      # test:db it has no stack to be unreachable and no reason to self-skip.
+      #
+      # What it asserts is the whole of this service's authority: that a user
+      # token cannot reach it, that a token for the other resource server
+      # cannot replay against it, that the algorithm allow-list holds only
+      # asymmetric algorithms, and that no database driver has appeared in its
+      # dependencies. Every one of those was verified able to fail by being
+      # broken on purpose.
+      - name: Token battery and service invariants
+        run: uv run pytest -q
+        working-directory: apps/intelligence
+
   go:
     name: Proto codegen & Go tests
     runs-on: ubuntu-latest
