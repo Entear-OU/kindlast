@@ -83,6 +83,17 @@ type Dependencies struct {
 	// panicking, which is the honest reply from a deployment that has not wired
 	// it, and keeps this dependency from being one every test has to supply.
 	Tokens CapabilityTokens
+
+	// BillingWebhook serves the payment provider's callback (ENT-210).
+	//
+	// Nil when this deployment has not configured billing, and then the route
+	// is not registered at all. That is billing-optional expressed at the
+	// routing layer rather than as a runtime refusal: a self-hoster who sells
+	// nothing has no endpoint for anybody to probe.
+	//
+	// A handler rather than a store, so this package depends on neither a
+	// database driver nor a payment provider.
+	BillingWebhook http.HandlerFunc
 }
 
 // CapabilityTokens redeems a link that acts without a session.
@@ -160,6 +171,19 @@ func New(deps Dependencies) (http.Handler, error) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
+
+	// The payment provider's webhook (§0.2's second justified exception,
+	// ENT-210).
+	//
+	// Served only when a deployment has configured billing. Absent, the route
+	// does not exist rather than existing and refusing, which is
+	// billing-optional (§18.1) expressed at the routing layer: a self-hoster who
+	// sells nothing has no endpoint for anybody to probe, and a provider
+	// misconfigured to point here gets a 404 rather than a 500 it will retry
+	// for days.
+	if deps.BillingWebhook != nil {
+		mux.HandleFunc("POST /api/v1/billing/webhook", deps.BillingWebhook)
+	}
 
 	// Unsubscribing, for somebody with no session at all (§8, ENT-209).
 	//

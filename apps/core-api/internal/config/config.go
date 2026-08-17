@@ -134,6 +134,22 @@ type Config struct {
 
 	// EmailFrom is the envelope and header sender for dispatched messages.
 	EmailFrom string
+
+	// BillingDatabaseURL must connect as `kindlast_billing`, the webhook's role
+	// (ENT-210).
+	//
+	// Optional, and its absence is the self-hosted default rather than a
+	// misconfiguration: a deployment that sells nothing does not serve the
+	// webhook at all. The role holds grants on exactly two tables and cannot
+	// reach a finding; see 00017.
+	BillingDatabaseURL string
+
+	// BillingWebhookSecret is the shared secret the provider signs with.
+	//
+	// Without it the webhook is not served, because the signature check is the
+	// entire authentication of an endpoint anybody can POST to. Serving it with
+	// no secret would mean accepting whatever arrived.
+	BillingWebhookSecret string
 }
 
 // Load reads the environment.
@@ -153,6 +169,12 @@ func Load() (*Config, error) {
 		AppBaseURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_APP_BASE_URL")), "/"),
 		SMTPAddr:         strings.TrimSpace(os.Getenv("KINDLAST_SMTP_ADDR")),
 		EmailFrom:        valueOr("KINDLAST_EMAIL_FROM", "noreply@kindlast.localhost"),
+
+		BillingDatabaseURL: os.Getenv("KINDLAST_BILLING_DATABASE_URL"),
+		// Through fileOrValue, because a signing secret is exactly the sort of
+		// value an operator mounts as a file rather than putting in an
+		// environment variable a `docker inspect` prints.
+		BillingWebhookSecret: fileOrValue("KINDLAST_BILLING_WEBHOOK_SECRET"),
 	}
 
 	// Zitadel names its roles claim after the project the roles belong to:

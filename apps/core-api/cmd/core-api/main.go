@@ -20,6 +20,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/billing"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/dispatch"
@@ -140,11 +141,16 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	// The billing flag is carried into the database as a session GUC, because
-	// `ropa_manual_activity_limit()` needs it and a function cannot read the
-	// environment. Without it a self-hosted deployment, which bills nobody,
-	// still capped manual Article 30 entries at three and then refused the
-	// fourth with a message about a plan it does not sell.
+	// The billing flag reaches the store as a field on every transaction, and
+	// decides whether the manual-record cap applies at all.
+	//
+	// It used to be carried as a third session GUC, because
+	// `ropa_manual_activity_limit()` needed the fact and a database function
+	// cannot read the environment. ENT-225 moved that decision into Go and
+	// 00016 dropped both. What the flag is for is unchanged: without it a
+	// self-hosted deployment, which bills nobody, capped manual Article 30
+	// entries at three and refused the fourth with a message about a plan it
+	// does not sell.
 	store, err := postgres.New(ctx, cfg.DatabaseURL, provider.Issuer,
 		postgres.WithBilling(cfg.BillingEnabled))
 	if err != nil {
@@ -167,6 +173,31 @@ func run(logger *slog.Logger) error {
 		defer agent.Close()
 		producer = agent
 		outbox = agent
+	}
+
+	// The billing webhook's pool, on its own role (ENT-210).
+	//
+	// Optional, exactly like the producer pool above, and for the sharper
+	// reason: a deployment that bills nobody has no provider, no secret and no
+	// reason to expose an unauthenticated endpoint. Both halves are required,
+	// because a webhook served without a signing secret would accept whatever
+	// arrived, and one served without a database could only fail.
+	var billingWebhook http.HandlerFunc
+	if cfg.BillingDatabaseURL != "" && cfg.BillingWebhookSecret != "" {
+		payments, payErr := postgres.NewBilling(ctx, cfg.BillingDatabaseURL)
+		if payErr != nil {
+			return payErr
+		}
+		defer payments.Close()
+		billingWebhook = billing.Handler(payments, cfg.BillingWebhookSecret, logger)
+		logger.Info("billing webhook enabled")
+	} else if cfg.BillingEnabled {
+		// Worth a line, because this combination is somebody halfway through
+		// configuring billing: gating is on, so customers can be refused for
+		// being on the free plan, while nothing can move them off it.
+		logger.Warn("billing gating is enabled but the webhook is not configured; " +
+			"plan changes cannot be applied. Set KINDLAST_BILLING_DATABASE_URL and " +
+			"KINDLAST_BILLING_WEBHOOK_SECRET, or turn KINDLAST_BILLING_ENABLED off")
 	}
 
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
@@ -201,6 +232,7 @@ func run(logger *slog.Logger) error {
 		AppBaseURL:     cfg.AppBaseURL,
 		SMTPConfigured: cfg.SMTPAddr != "",
 		Tokens:         store,
+		BillingWebhook: billingWebhook,
 	})
 	if err != nil {
 		return err
