@@ -588,7 +588,25 @@ type LogDsarRequest struct {
 	// text, for the reason Dsar.request_type gives.
 	RequestType string `protobuf:"bytes,2,opt,name=request_type,json=requestType,proto3" json:"request_type,omitempty"`
 	// Optional. Often a role or an external DPO rather than a member.
-	Handler       string `protobuf:"bytes,3,opt,name=handler,proto3" json:"handler,omitempty"`
+	Handler string `protobuf:"bytes,3,opt,name=handler,proto3" json:"handler,omitempty"`
+	// When the request actually arrived. Absent means today.
+	//
+	// ENT-224, and the reason this field exists at all. Without it the deadline
+	// was computed from the moment somebody got round to logging the request, so
+	// one that came by post on the 1st and was entered on the 8th was recorded as
+	// due a month from the 8th. Article 12(3) runs from receipt, so a clock
+	// started at data entry silently grants the organisation the days it took
+	// them to notice: the slower they are, the longer they appear to have.
+	//
+	// A future date is refused rather than clamped. A request cannot have arrived
+	// tomorrow, and the likeliest cause is a typo that would extend a statutory
+	// deadline nobody chose to extend.
+	//
+	// Absent is allowed and means today, unlike the executor path, where a
+	// missing date is a producer bug. Somebody logging a request that came in
+	// this morning has nothing to type, and requiring a date would produce a
+	// field everybody fills with today by reflex.
+	ReceivedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=received_at,json=receivedAt,proto3" json:"received_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -642,6 +660,13 @@ func (x *LogDsarRequest) GetHandler() string {
 		return x.Handler
 	}
 	return ""
+}
+
+func (x *LogDsarRequest) GetReceivedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ReceivedAt
+	}
+	return nil
 }
 
 type LogDsarResponse struct {
@@ -1970,11 +1995,13 @@ const file_kindlast_core_v1_records_proto_rawDesc = "" +
 	"\x06fields\x18\x02 \x01(\v2 .kindlast.core.v1.AiSystemFieldsR\x06fields\x12\x1a\n" +
 	"\breviewed\x18\x03 \x01(\bR\breviewed\"Q\n" +
 	"\x16UpdateAiSystemResponse\x127\n" +
-	"\tai_system\x18\x01 \x01(\v2\x1a.kindlast.core.v1.AiSystemR\baiSystem\"p\n" +
+	"\tai_system\x18\x01 \x01(\v2\x1a.kindlast.core.v1.AiSystemR\baiSystem\"\xad\x01\n" +
 	"\x0eLogDsarRequest\x12!\n" +
 	"\fsubject_name\x18\x01 \x01(\tR\vsubjectName\x12!\n" +
 	"\frequest_type\x18\x02 \x01(\tR\vrequestType\x12\x18\n" +
-	"\ahandler\x18\x03 \x01(\tR\ahandler\"=\n" +
+	"\ahandler\x18\x03 \x01(\tR\ahandler\x12;\n" +
+	"\vreceived_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"receivedAt\"=\n" +
 	"\x0fLogDsarResponse\x12*\n" +
 	"\x04dsar\x18\x01 \x01(\v2\x16.kindlast.core.v1.DsarR\x04dsar\"O\n" +
 	"\x18MarkDsarRespondedRequest\x12\x17\n" +
@@ -2144,54 +2171,55 @@ var file_kindlast_core_v1_records_proto_depIdxs = []int32{
 	22, // 5: kindlast.core.v1.CreateAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
 	5,  // 6: kindlast.core.v1.UpdateAiSystemRequest.fields:type_name -> kindlast.core.v1.AiSystemFields
 	22, // 7: kindlast.core.v1.UpdateAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
-	27, // 8: kindlast.core.v1.LogDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
-	27, // 9: kindlast.core.v1.MarkDsarRespondedResponse.dsar:type_name -> kindlast.core.v1.Dsar
-	17, // 10: kindlast.core.v1.ListProcessingActivitiesResponse.processing_activities:type_name -> kindlast.core.v1.ProcessingActivity
-	16, // 11: kindlast.core.v1.ListProcessingActivitiesResponse.manual_quota:type_name -> kindlast.core.v1.ManualQuota
-	30, // 12: kindlast.core.v1.ProcessingActivity.created_at:type_name -> google.protobuf.Timestamp
-	30, // 13: kindlast.core.v1.ProcessingActivity.updated_at:type_name -> google.protobuf.Timestamp
-	17, // 14: kindlast.core.v1.GetProcessingActivityResponse.processing_activity:type_name -> kindlast.core.v1.ProcessingActivity
-	22, // 15: kindlast.core.v1.ListAiSystemsResponse.ai_systems:type_name -> kindlast.core.v1.AiSystem
-	30, // 16: kindlast.core.v1.AiSystem.last_reviewed_at:type_name -> google.protobuf.Timestamp
-	30, // 17: kindlast.core.v1.AiSystem.created_at:type_name -> google.protobuf.Timestamp
-	30, // 18: kindlast.core.v1.AiSystem.updated_at:type_name -> google.protobuf.Timestamp
-	22, // 19: kindlast.core.v1.GetAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
-	27, // 20: kindlast.core.v1.ListDsarsResponse.dsars:type_name -> kindlast.core.v1.Dsar
-	30, // 21: kindlast.core.v1.Dsar.received_at:type_name -> google.protobuf.Timestamp
-	30, // 22: kindlast.core.v1.Dsar.response_due_at:type_name -> google.protobuf.Timestamp
-	30, // 23: kindlast.core.v1.Dsar.responded_at:type_name -> google.protobuf.Timestamp
-	30, // 24: kindlast.core.v1.Dsar.created_at:type_name -> google.protobuf.Timestamp
-	30, // 25: kindlast.core.v1.Dsar.updated_at:type_name -> google.protobuf.Timestamp
-	27, // 26: kindlast.core.v1.GetDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
-	14, // 27: kindlast.core.v1.RecordsService.ListProcessingActivities:input_type -> kindlast.core.v1.ListProcessingActivitiesRequest
-	18, // 28: kindlast.core.v1.RecordsService.GetProcessingActivity:input_type -> kindlast.core.v1.GetProcessingActivityRequest
-	20, // 29: kindlast.core.v1.RecordsService.ListAiSystems:input_type -> kindlast.core.v1.ListAiSystemsRequest
-	23, // 30: kindlast.core.v1.RecordsService.GetAiSystem:input_type -> kindlast.core.v1.GetAiSystemRequest
-	25, // 31: kindlast.core.v1.RecordsService.ListDsars:input_type -> kindlast.core.v1.ListDsarsRequest
-	28, // 32: kindlast.core.v1.RecordsService.GetDsar:input_type -> kindlast.core.v1.GetDsarRequest
-	1,  // 33: kindlast.core.v1.RecordsService.CreateProcessingActivity:input_type -> kindlast.core.v1.CreateProcessingActivityRequest
-	3,  // 34: kindlast.core.v1.RecordsService.UpdateProcessingActivity:input_type -> kindlast.core.v1.UpdateProcessingActivityRequest
-	6,  // 35: kindlast.core.v1.RecordsService.CreateAiSystem:input_type -> kindlast.core.v1.CreateAiSystemRequest
-	8,  // 36: kindlast.core.v1.RecordsService.UpdateAiSystem:input_type -> kindlast.core.v1.UpdateAiSystemRequest
-	10, // 37: kindlast.core.v1.RecordsService.LogDsar:input_type -> kindlast.core.v1.LogDsarRequest
-	12, // 38: kindlast.core.v1.RecordsService.MarkDsarResponded:input_type -> kindlast.core.v1.MarkDsarRespondedRequest
-	15, // 39: kindlast.core.v1.RecordsService.ListProcessingActivities:output_type -> kindlast.core.v1.ListProcessingActivitiesResponse
-	19, // 40: kindlast.core.v1.RecordsService.GetProcessingActivity:output_type -> kindlast.core.v1.GetProcessingActivityResponse
-	21, // 41: kindlast.core.v1.RecordsService.ListAiSystems:output_type -> kindlast.core.v1.ListAiSystemsResponse
-	24, // 42: kindlast.core.v1.RecordsService.GetAiSystem:output_type -> kindlast.core.v1.GetAiSystemResponse
-	26, // 43: kindlast.core.v1.RecordsService.ListDsars:output_type -> kindlast.core.v1.ListDsarsResponse
-	29, // 44: kindlast.core.v1.RecordsService.GetDsar:output_type -> kindlast.core.v1.GetDsarResponse
-	2,  // 45: kindlast.core.v1.RecordsService.CreateProcessingActivity:output_type -> kindlast.core.v1.CreateProcessingActivityResponse
-	4,  // 46: kindlast.core.v1.RecordsService.UpdateProcessingActivity:output_type -> kindlast.core.v1.UpdateProcessingActivityResponse
-	7,  // 47: kindlast.core.v1.RecordsService.CreateAiSystem:output_type -> kindlast.core.v1.CreateAiSystemResponse
-	9,  // 48: kindlast.core.v1.RecordsService.UpdateAiSystem:output_type -> kindlast.core.v1.UpdateAiSystemResponse
-	11, // 49: kindlast.core.v1.RecordsService.LogDsar:output_type -> kindlast.core.v1.LogDsarResponse
-	13, // 50: kindlast.core.v1.RecordsService.MarkDsarResponded:output_type -> kindlast.core.v1.MarkDsarRespondedResponse
-	39, // [39:51] is the sub-list for method output_type
-	27, // [27:39] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	30, // 8: kindlast.core.v1.LogDsarRequest.received_at:type_name -> google.protobuf.Timestamp
+	27, // 9: kindlast.core.v1.LogDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
+	27, // 10: kindlast.core.v1.MarkDsarRespondedResponse.dsar:type_name -> kindlast.core.v1.Dsar
+	17, // 11: kindlast.core.v1.ListProcessingActivitiesResponse.processing_activities:type_name -> kindlast.core.v1.ProcessingActivity
+	16, // 12: kindlast.core.v1.ListProcessingActivitiesResponse.manual_quota:type_name -> kindlast.core.v1.ManualQuota
+	30, // 13: kindlast.core.v1.ProcessingActivity.created_at:type_name -> google.protobuf.Timestamp
+	30, // 14: kindlast.core.v1.ProcessingActivity.updated_at:type_name -> google.protobuf.Timestamp
+	17, // 15: kindlast.core.v1.GetProcessingActivityResponse.processing_activity:type_name -> kindlast.core.v1.ProcessingActivity
+	22, // 16: kindlast.core.v1.ListAiSystemsResponse.ai_systems:type_name -> kindlast.core.v1.AiSystem
+	30, // 17: kindlast.core.v1.AiSystem.last_reviewed_at:type_name -> google.protobuf.Timestamp
+	30, // 18: kindlast.core.v1.AiSystem.created_at:type_name -> google.protobuf.Timestamp
+	30, // 19: kindlast.core.v1.AiSystem.updated_at:type_name -> google.protobuf.Timestamp
+	22, // 20: kindlast.core.v1.GetAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
+	27, // 21: kindlast.core.v1.ListDsarsResponse.dsars:type_name -> kindlast.core.v1.Dsar
+	30, // 22: kindlast.core.v1.Dsar.received_at:type_name -> google.protobuf.Timestamp
+	30, // 23: kindlast.core.v1.Dsar.response_due_at:type_name -> google.protobuf.Timestamp
+	30, // 24: kindlast.core.v1.Dsar.responded_at:type_name -> google.protobuf.Timestamp
+	30, // 25: kindlast.core.v1.Dsar.created_at:type_name -> google.protobuf.Timestamp
+	30, // 26: kindlast.core.v1.Dsar.updated_at:type_name -> google.protobuf.Timestamp
+	27, // 27: kindlast.core.v1.GetDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
+	14, // 28: kindlast.core.v1.RecordsService.ListProcessingActivities:input_type -> kindlast.core.v1.ListProcessingActivitiesRequest
+	18, // 29: kindlast.core.v1.RecordsService.GetProcessingActivity:input_type -> kindlast.core.v1.GetProcessingActivityRequest
+	20, // 30: kindlast.core.v1.RecordsService.ListAiSystems:input_type -> kindlast.core.v1.ListAiSystemsRequest
+	23, // 31: kindlast.core.v1.RecordsService.GetAiSystem:input_type -> kindlast.core.v1.GetAiSystemRequest
+	25, // 32: kindlast.core.v1.RecordsService.ListDsars:input_type -> kindlast.core.v1.ListDsarsRequest
+	28, // 33: kindlast.core.v1.RecordsService.GetDsar:input_type -> kindlast.core.v1.GetDsarRequest
+	1,  // 34: kindlast.core.v1.RecordsService.CreateProcessingActivity:input_type -> kindlast.core.v1.CreateProcessingActivityRequest
+	3,  // 35: kindlast.core.v1.RecordsService.UpdateProcessingActivity:input_type -> kindlast.core.v1.UpdateProcessingActivityRequest
+	6,  // 36: kindlast.core.v1.RecordsService.CreateAiSystem:input_type -> kindlast.core.v1.CreateAiSystemRequest
+	8,  // 37: kindlast.core.v1.RecordsService.UpdateAiSystem:input_type -> kindlast.core.v1.UpdateAiSystemRequest
+	10, // 38: kindlast.core.v1.RecordsService.LogDsar:input_type -> kindlast.core.v1.LogDsarRequest
+	12, // 39: kindlast.core.v1.RecordsService.MarkDsarResponded:input_type -> kindlast.core.v1.MarkDsarRespondedRequest
+	15, // 40: kindlast.core.v1.RecordsService.ListProcessingActivities:output_type -> kindlast.core.v1.ListProcessingActivitiesResponse
+	19, // 41: kindlast.core.v1.RecordsService.GetProcessingActivity:output_type -> kindlast.core.v1.GetProcessingActivityResponse
+	21, // 42: kindlast.core.v1.RecordsService.ListAiSystems:output_type -> kindlast.core.v1.ListAiSystemsResponse
+	24, // 43: kindlast.core.v1.RecordsService.GetAiSystem:output_type -> kindlast.core.v1.GetAiSystemResponse
+	26, // 44: kindlast.core.v1.RecordsService.ListDsars:output_type -> kindlast.core.v1.ListDsarsResponse
+	29, // 45: kindlast.core.v1.RecordsService.GetDsar:output_type -> kindlast.core.v1.GetDsarResponse
+	2,  // 46: kindlast.core.v1.RecordsService.CreateProcessingActivity:output_type -> kindlast.core.v1.CreateProcessingActivityResponse
+	4,  // 47: kindlast.core.v1.RecordsService.UpdateProcessingActivity:output_type -> kindlast.core.v1.UpdateProcessingActivityResponse
+	7,  // 48: kindlast.core.v1.RecordsService.CreateAiSystem:output_type -> kindlast.core.v1.CreateAiSystemResponse
+	9,  // 49: kindlast.core.v1.RecordsService.UpdateAiSystem:output_type -> kindlast.core.v1.UpdateAiSystemResponse
+	11, // 50: kindlast.core.v1.RecordsService.LogDsar:output_type -> kindlast.core.v1.LogDsarResponse
+	13, // 51: kindlast.core.v1.RecordsService.MarkDsarResponded:output_type -> kindlast.core.v1.MarkDsarRespondedResponse
+	40, // [40:52] is the sub-list for method output_type
+	28, // [28:40] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_core_v1_records_proto_init() }

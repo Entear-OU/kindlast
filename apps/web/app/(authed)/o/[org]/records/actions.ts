@@ -294,12 +294,24 @@ export async function addDsar(
     return { status: 'error', message: 'Say what was asked for.' }
   }
 
+  // A date input posts `YYYY-MM-DD`, which is not what the contract wants and
+  // is not a timestamp. Turned into one here rather than in the browser,
+  // because the browser's timezone would decide which day it meant.
+  //
+  // Interpreted as midnight UTC on that date, which can be a few hours before
+  // the request truly arrived and never after: erring earlier shortens the
+  // organisation's own deadline, and that is the safe direction for a statutory
+  // clock. Erring later would hand them time Article 12(3) does not give.
+  const receivedOn = text(form.get('receivedAt'))
+  const receivedAt = receivedOn ? `${receivedOn}T00:00:00Z` : undefined
+
   const result = await logDsar(
     resolved.accessToken,
     resolved.orgId,
     text(form.get('subjectName')),
     requestType,
     text(form.get('handler')),
+    receivedAt,
   )
   if (!result.ok) return say(result.error)
 

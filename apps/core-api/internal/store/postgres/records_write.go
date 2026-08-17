@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -49,6 +50,13 @@ var ErrReviewRequired = errors.New("postgres: this change requires a reviewed ap
 // is nothing for a record to hang off.
 var ErrNoProfile = errors.New("postgres: the organisation has no compliance profile")
 
+// ErrFutureReceipt is a data-subject request dated after now.
+//
+// A bad value rather than a rule the caller must satisfy first, which is why it
+// is its own error and not folded into ErrReviewRequired despite sharing the
+// SQLSTATE: the caller sends a different date, they do not confirm anything.
+var ErrFutureReceipt = errors.New("postgres: the request cannot have arrived in the future")
+
 // classify turns a raise from one of the write functions into the error the
 // handler layer maps to a Connect code.
 //
@@ -68,6 +76,10 @@ func classify(err error) error {
 	message := strings.ToLower(pg.Message)
 
 	switch {
+	// Checked before the reviewed-approval marker, because both are
+	// `check_violation` and this one's message is the more specific.
+	case strings.Contains(message, "in the future"):
+		return fmt.Errorf("%w: %s", ErrFutureReceipt, pg.Message)
 	case strings.Contains(message, "free tier limit"):
 		return fmt.Errorf("%w: %s", ErrQuotaExhausted, pg.Message)
 	case strings.Contains(message, "reviewed approval"):
@@ -156,11 +168,21 @@ func (t *Tenant) UpdateAiSystem(ctx context.Context, systemID string, f records.
 }
 
 // LogDsar records a request that arrived.
-func (t *Tenant) LogDsar(ctx context.Context, subjectName, requestType, handler string) (records.Dsar, error) {
+//
+// A zero `receivedAt` is passed as null, which the function reads as today
+// (ENT-224). Sending `now()` from here instead would look equivalent and is
+// not: the function is where the clock rule lives, and a caller that computes
+// its own "today" is a second implementation of it that drifts by a timezone.
+func (t *Tenant) LogDsar(ctx context.Context, subjectName, requestType, handler string, receivedAt time.Time) (records.Dsar, error) {
+	var received *time.Time
+	if !receivedAt.IsZero() {
+		received = &receivedAt
+	}
+
 	var id string
 	err := t.tx.QueryRow(ctx, `
-		select public.log_dsar($1, $2, $3)::text
-	`, nullIfEmpty(subjectName), nullIfEmpty(requestType), nullIfEmpty(handler)).Scan(&id)
+		select public.log_dsar($1, $2, $3, $4)::text
+	`, nullIfEmpty(subjectName), nullIfEmpty(requestType), nullIfEmpty(handler), received).Scan(&id)
 	if err != nil {
 		return records.Dsar{}, classify(err)
 	}

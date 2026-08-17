@@ -1496,6 +1496,27 @@ components:
                 handler:
                     type: string
                     description: Optional. Often a role or an external DPO rather than a member.
+                receivedAt:
+                    type: string
+                    description: |-
+                        When the request actually arrived. Absent means today.
+
+                         ENT-224, and the reason this field exists at all. Without it the deadline
+                         was computed from the moment somebody got round to logging the request, so
+                         one that came by post on the 1st and was entered on the 8th was recorded as
+                         due a month from the 8th. Article 12(3) runs from receipt, so a clock
+                         started at data entry silently grants the organisation the days it took
+                         them to notice: the slower they are, the longer they appear to have.
+
+                         A future date is refused rather than clamped. A request cannot have arrived
+                         tomorrow, and the likeliest cause is a typo that would extend a statutory
+                         deadline nobody chose to extend.
+
+                         Absent is allowed and means today, unlike the executor path, where a
+                         missing date is a producer bug. Somebody logging a request that came in
+                         this morning has nothing to type, and requiring a date would produce a
+                         field everybody fills with today by reflex.
+                    format: date-time
         LogDsarResponse:
             type: object
             properties:
