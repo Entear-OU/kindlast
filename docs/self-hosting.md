@@ -93,9 +93,21 @@ improvised on the day.
 default and it is the point: a deployment holding a compliance record can run
 with no outbound internet at all.
 
-`docker compose up -d` starts two services. `model-init` fetches the weights
-once, checks them against a pinned SHA256 and exits; `model` is llama.cpp's
-`llama-server`, OpenAI-compatible on port 8081.
+**It is opt-in, because it is gigabytes:**
+
+```bash
+docker compose -f deploy/compose.yaml --profile model up -d
+```
+
+That starts two more services. `model-init` fetches the weights once, checks
+them against a pinned SHA256 and exits; `model` is llama.cpp's `llama-server`,
+OpenAI-compatible on port 8081.
+
+Without `--profile model` you get the rest of the stack and no model, which is
+a supported configuration rather than a broken one: the console runs and
+onboarding degrades to a form. It is the right default for CI and for anyone
+who wants the database without a multi-gigabyte download, and the wrong one for
+an actual deployment, so a real install passes the flag.
 
 | Variable | Default | Why |
 |---|---|---|

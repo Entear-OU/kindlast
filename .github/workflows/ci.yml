@@ -95,6 +95,66 @@ jobs:
       - name: Unit tests
         run: bun run test:unit
 
+  model:
+    name: Local model service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # THE DIGEST IS THE CACHE KEY, WHICH IS THE WHOLE TRICK.
+      #
+      # A cache keyed by a branch or a lockfile would serve stale weights when
+      # the pin changes, and the checksum below would then fail confusingly. A
+      # cache keyed by the digest cannot: a different pin is a different key,
+      # which misses, which fetches. The bytes under a given key are the only
+      # bytes that key can ever name.
+      #
+      # This also turns the §25 fetch-versus-pin tension into its most
+      # defensible form. On a hit, `model-init` takes the fast path it already
+      # proves in its tests, verifies a file that is already present, and never
+      # opens a socket. CI is then exercising the airgapped path on nearly
+      # every run, which is the path a real deployment cares about most.
+      - name: Restore the model
+        uses: actions/cache@v4
+        with:
+          path: deploy/models
+          key: gguf-aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
+
+      # 2b, not the 4b default: 1.2 GB rather than 2.7 GB, and the mechanism
+      # under test is tier-independent. Only the filename and digest differ.
+      - name: Start the model
+        run: |
+          docker compose -f deploy/compose.yaml --profile model up -d model
+        env:
+          KINDLAST_MODEL_TIER: 2b
+          KINDLAST_MODEL_CTX: "4096"
+
+      # `up -d` returns once the container is started, not once the weights are
+      # loaded, so waiting on the healthcheck is waiting on a model that can
+      # actually answer.
+      - name: Wait for it to be healthy
+        run: |
+          for _ in $(seq 1 120); do
+            if curl -fsS -m 3 http://localhost:8081/health >/dev/null 2>&1; then
+              echo "model healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "model never became healthy" >&2
+          docker compose -f deploy/compose.yaml logs model || true
+          exit 1
+
+      # ENT-235's acceptance criterion, enforced rather than described. Asserts
+      # the shape only: the model is free to be wrong about the content, which
+      # it demonstrably is, and catching that is the citation validator's job
+      # rather than this one's (§26.3).
+      - name: Structured output returns schema-valid JSON
+        run: python3 scripts/model-smoke.py
+
+      - name: Stop
+        if: always()
+        run: docker compose -f deploy/compose.yaml --profile model down
+
   go:
     name: Proto codegen & Go tests
     runs-on: ubuntu-latest

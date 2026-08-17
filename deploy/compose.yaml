@@ -36,17 +36,23 @@
 #                      the bytes a model serves must be pinned, and a server
 #                      that pulls its own weights is the runtime fetch
 #                      AGENTS.md forbids. Idempotent; a re-run is a no-op.
+#                      IN THE `model` PROFILE, so it is opt-in; see below.
 #   model              llama.cpp `llama-server`, OpenAI-compatible on :8080.
 #                      Qwen3.5-4B Q4_K_M by default (§26.6). THE STACK NEEDS NO
 #                      API KEY: inference is local, which is what lets a
 #                      deployment holding a compliance record run with no
-#                      outbound internet at all (§18.1).
+#                      outbound internet at all (§18.1). Also in the `model`
+#                      profile.
 #   edge               Caddy. Terminates the stack's front door; today it
 #                      serves a health endpoint and reserves the routes web
 #                      and core-api will claim in build-order step 1.
 #
-# The model file lives at deploy/models/ on the host, deliberately not in a
-# named volume, so `down -v` does not cost a 2.7 GB re-download.
+# The model is opt-in, because it is gigabytes:
+#
+#     docker compose -f deploy/compose.yaml --profile model up -d
+#
+# Its file lives at deploy/models/ on the host, deliberately not in a named
+# volume, so `down -v` does not cost a 2.7 GB re-download.
 #
 # Passwords: every default below is a LOCAL DEVELOPMENT value. Override via
 # environment or an env file for anything that leaves a laptop.
@@ -431,6 +437,29 @@ services:
   model-init:
     container_name: kindlast-model-init
     image: curlimages/curl:8.21.0
+    # BEHIND A PROFILE, SO A PLAIN `up -d` DOES NOT FETCH GIGABYTES.
+    #
+    # This looks like it weakens "one command from a clean checkout", and it is
+    # worth saying why it does not. ENT-212 already establishes that an
+    # instance with no model degrades to a form rather than failing, so a
+    # modelless stack is a supported configuration rather than a broken one.
+    # What the profile changes is which supported configuration you get by
+    # default, and defaulting to the one that does not download 2.7 GB is the
+    # right way round for CI, for a developer who wants the database, and for
+    # anyone on a metered connection.
+    #
+    # Found the hard way: without this, the isolation suite's stack boot pulled
+    # the model on every CI run, which is minutes of wall clock and bandwidth
+    # spent on a service those tests never touch.
+    #
+    #     docker compose -f deploy/compose.yaml --profile model up -d
+    profiles: ["model"]
+    # Runs as root, which a job container writing one file to a bind mount can
+    # afford and this one needs: the image's own user is uid 100, the mounted
+    # host directory belongs to whoever checked the repository out, and the
+    # mismatch surfaces as curl exit 23, a write error several layers from its
+    # cause.
+    user: "0:0"
     volumes:
       # A BIND MOUNT, NOT A NAMED VOLUME, AND THIS IS DELIBERATE.
       #
@@ -533,6 +562,9 @@ services:
 
   model:
     container_name: kindlast-model
+    # Same profile as `model-init`. Starting a server with no weights would
+    # only produce a container that restarts forever.
+    profiles: ["model"]
     # Pinned by digest rather than by tag: `:server` moves, and the bytes that
     # serve a customer's compliance record should not change because a tag was
     # repointed. Resolved 2026-08-17 from ghcr.io/ggml-org/llama.cpp:server.
