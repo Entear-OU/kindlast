@@ -55,6 +55,7 @@ services:
       KINDLAST_MIGRATOR_PASSWORD: ${KINDLAST_MIGRATOR_PASSWORD:-migrator-dev-password}
       KINDLAST_APP_PASSWORD: ${KINDLAST_APP_PASSWORD:-app-dev-password}
       KINDLAST_AGENT_PASSWORD: ${KINDLAST_AGENT_PASSWORD:-agent-dev-password}
+      KINDLAST_BILLING_PASSWORD: ${KINDLAST_BILLING_PASSWORD:-billing-dev-password}
       KINDLAST_VECTOR_RO_PASSWORD: ${KINDLAST_VECTOR_RO_PASSWORD:-vector-ro-dev-password}
     volumes:
       - postgres-app-data:/var/lib/postgresql/data
@@ -283,6 +284,16 @@ services:
       # caller is read from granted scopes.
       KINDLAST_HUMAN_CLIENT_ID_FILE: /machinekey/web-client-id.txt
       KINDLAST_AGENT_DATABASE_URL: postgres://kindlast_agent:${KINDLAST_AGENT_PASSWORD:-agent-dev-password}@postgres-app:5432/kindlast?sslmode=disable
+
+      # The billing webhook's pool (ENT-210), on a role that holds grants on
+      # exactly two tables and cannot reach a finding.
+      #
+      # Optional, the same way the agent pool is: without it the webhook is not
+      # served at all rather than served and failing. That is billing-optional
+      # (§18.1) expressed at the connection layer, and it means a self-hosted
+      # stack that never created the role keeps working rather than answering
+      # 500 to a provider that will retry for days.
+      KINDLAST_BILLING_DATABASE_URL: postgres://kindlast_billing:${KINDLAST_BILLING_PASSWORD:-billing-dev-password}@postgres-app:5432/kindlast?sslmode=disable
       KINDLAST_REDIS_ADDR: redis:6379
 
       # Where a browser reaches the console, used to build the invitation link
