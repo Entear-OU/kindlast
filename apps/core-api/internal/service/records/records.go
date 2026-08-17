@@ -41,17 +41,19 @@ type reading interface {
 }
 
 // Service implements corev1connect.RecordsServiceHandler.
+//
+// Carries no billing flag, deliberately. It held one until the cap moved into
+// the database, where it belongs: the function that ENFORCES the cap is the one
+// that should decide it, and a copy of the flag here was how the shown cap and
+// the enforced cap came to disagree. See `quota`.
 type Service struct {
-	// billingEnabled is false for a self-hosted deployment, which is the
-	// default. See config.Config.BillingEnabled.
-	billingEnabled bool
 	// now is injectable so the urgency bands can be tested against a fixed
 	// clock. Nil means time.Now.
 	now func() time.Time
 }
 
-func New(billingEnabled bool) *Service {
-	return &Service{billingEnabled: billingEnabled}
+func New() *Service {
+	return &Service{}
 }
 
 func (s *Service) clock() time.Time {
@@ -95,18 +97,21 @@ func (s *Service) ListProcessingActivities(
 	return connect.NewResponse(out), nil
 }
 
-// quota reports the manual-entry cap, or no cap at all when billing is off.
+// quota reports the manual-entry cap, whatever the database says it is.
 //
-// The database function answers what the PLAN allows and knows nothing about
-// whether this deployment bills at all. A self-hosted stack with billing
-// disabled has no plans, so applying a free-tier cap there would invent a
-// restriction nobody sells and nobody can lift (§18.1). Same reasoning as the
-// act path's plan gate, and the same default: unenforced unless configured.
+// # NO BILLING CHECK HERE ANY MORE, AND THAT IS THE FIX
+//
+// This used to short-circuit to an empty quota when billing was disabled, which
+// looked right and was half a rule. The database function knew nothing about the
+// flag, so it kept returning three, and a self-hosted deployment got the worst
+// of both: the console showed no limit, and then the fourth activity was refused
+// with a message about a plan that deployment does not sell.
+//
+// The flag now reaches the database as a session GUC, so there is one answer to
+// the question and this layer reports it rather than second-guessing it. A cap
+// shown here and a cap enforced there cannot disagree, because they are the same
+// computation.
 func (s *Service) quota(ctx context.Context, store reading) (*corev1.ManualQuota, error) {
-	if !s.billingEnabled {
-		return &corev1.ManualQuota{}, nil
-	}
-
 	q, err := store.ManualActivityQuota(ctx)
 	if err != nil {
 		return nil, err

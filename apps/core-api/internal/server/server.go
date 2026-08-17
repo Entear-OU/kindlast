@@ -53,6 +53,11 @@ type Dependencies struct {
 	// value, is the self-hosted default and leaves the Executor ungated
 	// (§18.1). See config.Config.BillingEnabled for why this is configuration
 	// rather than something inferred from the subscriptions table.
+	//
+	// RecordsService does NOT take it. The manual-entry cap is decided by
+	// `ropa_manual_activity_limit()`, which reads the same flag from a session
+	// GUC the store sets: one answer to the question, so the cap a console shows
+	// and the cap a write meets cannot disagree.
 	BillingEnabled bool
 }
 
@@ -84,7 +89,7 @@ func New(deps Dependencies) (http.Handler, error) {
 	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(), chain))
 	mux.Handle(corev1connect.NewFindingsServiceHandler(findings.New(deps.BillingEnabled), chain))
 	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboard.New(), chain))
-	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(deps.BillingEnabled), chain))
+	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(), chain))
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in

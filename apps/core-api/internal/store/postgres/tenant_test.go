@@ -24,7 +24,13 @@ import (
 
 const testIssuer = "http://localhost:8300"
 
-func testStore(t *testing.T) *Store {
+// testStore opens the pool as `kindlast_app`.
+//
+// Billing is off unless a test asks for it, which mirrors the deployment
+// default: `KINDLAST_BILLING_ENABLED` unset means a self-hosted stack that bills
+// nobody and therefore caps nobody (00013). A test that wants to exercise a plan
+// limit has to say so, which is the right way round: the cap is the exception.
+func testStore(t *testing.T, options ...func(*Store)) *Store {
 	t.Helper()
 
 	dsn := os.Getenv("PG_APP_URL")
@@ -32,7 +38,7 @@ func testStore(t *testing.T) *Store {
 		dsn = "postgres://kindlast_app:app-dev-password@127.0.0.1:5433/kindlast"
 	}
 
-	store, err := New(t.Context(), dsn, testIssuer)
+	store, err := New(t.Context(), dsn, testIssuer, options...)
 	if err != nil {
 		// Skips on a laptop, fails in CI. A self-skipping suite that reports
 		// green while testing nothing is how a security boundary stops being
