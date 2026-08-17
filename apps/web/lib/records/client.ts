@@ -226,17 +226,30 @@ export function updateAiSystem(
   )
 }
 
+/**
+ * `receivedAt` is an RFC 3339 timestamp, or omitted to mean today.
+ *
+ * Not optional by accident: the deadline is computed from it, so a caller that
+ * forgets it gets today rather than 1970, and a caller that sends a future date
+ * is refused rather than granted a longer clock (ENT-224).
+ */
 export function logDsar(
   accessToken: string,
   orgId: string,
   subjectName: string,
   requestType: string,
   handler: string,
+  receivedAt?: string,
 ) {
   return call<{ dsar?: Dsar }>('kindlast.core.v1.RecordsService/LogDsar', {
     accessToken,
     orgId,
-    body: { subjectName, requestType, handler },
+    body: {
+      subjectName,
+      requestType,
+      handler,
+      ...(receivedAt ? { receivedAt } : {}),
+    },
   })
 }
 

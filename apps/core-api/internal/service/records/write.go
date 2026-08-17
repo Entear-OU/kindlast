@@ -3,6 +3,7 @@ package records
 import (
 	"context"
 	"errors"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
@@ -38,7 +39,7 @@ type writing interface {
 	UpdateProcessingActivity(ctx context.Context, activityID string, f domain.ProcessingActivityFields) (domain.ProcessingActivity, error)
 	CreateAiSystem(ctx context.Context, f domain.AiSystemFields, reviewed bool) (domain.AiSystem, error)
 	UpdateAiSystem(ctx context.Context, systemID string, f domain.AiSystemFields, reviewed bool) (domain.AiSystem, error)
-	LogDsar(ctx context.Context, subjectName, requestType, handler string) (domain.Dsar, error)
+	LogDsar(ctx context.Context, subjectName, requestType, handler string, receivedAt time.Time) (domain.Dsar, error)
 	MarkDsarResponded(ctx context.Context, dsarID string, reviewed bool) (domain.Dsar, bool, error)
 }
 
@@ -66,6 +67,14 @@ func writeError(err error, what string) error {
 	case errors.Is(err, postgres.ErrNoProfile):
 		return connect.NewError(connect.CodeFailedPrecondition,
 			errors.New("this organisation has no compliance profile yet, so there is nothing to attach a record to: finish onboarding first"))
+
+	case errors.Is(err, postgres.ErrFutureReceipt):
+		// invalid_argument rather than failed_precondition: the caller sends a
+		// different value, they do not satisfy a condition and retry the same
+		// one. A precondition code would tell a form to show a confirm step for
+		// a date that simply cannot be right.
+		return connect.NewError(connect.CodeInvalidArgument,
+			errors.New("a data-subject request cannot have been received in the future"))
 
 	case errors.Is(err, pgx.ErrNoRows):
 		return connect.NewError(connect.CodeNotFound, errors.New(what))
@@ -196,7 +205,10 @@ func (s *Service) LogDsar(
 	}
 
 	dsar, err := store.LogDsar(ctx,
-		req.Msg.GetSubjectName(), req.Msg.GetRequestType(), req.Msg.GetHandler())
+		req.Msg.GetSubjectName(), req.Msg.GetRequestType(), req.Msg.GetHandler(),
+		// Zero when absent, which the store passes as null and the function
+		// reads as today (ENT-224).
+		req.Msg.GetReceivedAt().AsTime())
 	if err != nil {
 		return nil, writeError(err, "no such data-subject request")
 	}
