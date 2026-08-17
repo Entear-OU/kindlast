@@ -2,8 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ActivityForm, AddDisclosure } from '@/components/records/activity-form'
-import { EditableRopa, RespondableDsars } from '@/components/records/editable'
+import { ActivityForm } from '@/components/records/activity-form'
+import {
+  AddActivity,
+  EditableRopa,
+  RespondableDsars,
+} from '@/components/records/editable'
 import { RopaTable } from '@/components/records/registers'
 import { SystemForm } from '@/components/records/system-form'
 import { idle, type RecordActionState } from '@/lib/records/action-state'
@@ -267,46 +271,69 @@ describe('recording that a response went out', () => {
 })
 
 describe('the add control', () => {
-  // A control that silently does nothing is worse than one that says why not.
+  // Exercised through AddActivity, the component the page actually renders,
+  // rather than through the AddDisclosure primitive underneath it.
+  //
+  // That distinction is not pedantry. The first version tested the primitive
+  // with a render-function child, which passes in a test file because a test is
+  // already a client context. The pages are server components, and a function
+  // cannot cross that boundary: the real render failed with "Functions are not
+  // valid as a child of Client Components" while these tests stayed green.
+  // Testing the composed control is what would have caught it.
   it('stays visible and says why when the plan cap is reached', () => {
+    const { action } = spyAction()
+
     render(
-      <AddDisclosure
-        label="Add activity"
-        title="Add a processing activity"
+      <AddActivity
+        slug="acme"
+        action={action}
         disabled
         disabledReason="Your plan allows 3 manually added activities."
-      >
-        {() => <p>the form</p>}
-      </AddDisclosure>,
+      />,
     )
 
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeDisabled()
     expect(screen.getByText(/plan allows 3/)).toBeInTheDocument()
-    expect(screen.queryByText('the form')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Activity')).not.toBeInTheDocument()
   })
 
   it('reveals the form when opened and hides it again on cancel', async () => {
     const user = userEvent.setup()
+    const { action } = spyAction()
 
-    render(
-      <AddDisclosure label="Add activity" title="Add a processing activity">
-        {(close) => (
-          <button type="button" onClick={close}>
-            close me
-          </button>
-        )}
-      </AddDisclosure>,
-    )
+    render(<AddActivity slug="acme" action={action} />)
+
+    expect(screen.queryByLabelText('Activity')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Add activity' }))
     expect(
       screen.getByRole('heading', { name: 'Add a processing activity' }),
     ).toBeInTheDocument()
+    expect(screen.getByLabelText('Activity')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'close me' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(
       screen.queryByRole('heading', { name: 'Add a processing activity' }),
     ).not.toBeInTheDocument()
+  })
+
+  // The disclosure closes itself once the action reports success, so somebody
+  // who added an entry sees the register with it in rather than the form they
+  // just submitted.
+  it('closes once the entry has been added', async () => {
+    const user = userEvent.setup()
+    const { action, calls } = spyAction()
+
+    render(<AddActivity slug="acme" action={action} />)
+
+    await user.click(screen.getByRole('button', { name: 'Add activity' }))
+    await user.type(screen.getByLabelText('Activity'), 'Payroll')
+    await user.click(screen.getByRole('button', { name: 'Add activity' }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Activity')).not.toBeInTheDocument(),
+    )
   })
 })
 

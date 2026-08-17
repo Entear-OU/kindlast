@@ -1,9 +1,8 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
-import { ActivityForm, AddDisclosure } from '@/components/records/activity-form'
 import { RegisterNav } from '@/components/records/register-nav'
-import { EditableRopa } from '@/components/records/editable'
+import { AddActivity, EditableRopa } from '@/components/records/editable'
 import { EmptyRegister, RegisterUnavailable } from '@/components/records/states'
 import { addProcessingActivity, editProcessingActivity } from './actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
@@ -43,7 +42,7 @@ export default async function RecordsPage({
 
   const resolved = await resolveOrg(session.accessToken, slug)
   if (resolved.status === 'not-a-member') notFound()
-  if (resolved.status === 'unavailable') return null
+  if (resolved.status === 'unavailable') return <WorkspaceUnavailable />
 
   const register = await listProcessingActivities(
     session.accessToken,
@@ -102,24 +101,16 @@ export default async function RecordsPage({
           and enforced again by the database, which is the one that matters. A
           browser check alone would be a suggestion. */}
       <div className="mt-4">
-        <AddDisclosure
-          label="Add activity"
-          title="Add a processing activity"
+        <AddActivity
+          slug={slug}
+          action={addProcessingActivity}
           disabled={atManualLimit(quota)}
           disabledReason={
             atManualLimit(quota)
               ? `Your plan allows ${quota?.limit} manually added activities. Entries created from approved findings do not count towards it.`
               : undefined
           }
-        >
-          {(close) => (
-            <ActivityForm
-              slug={slug}
-              action={addProcessingActivity}
-              onDone={close}
-            />
-          )}
-        </AddDisclosure>
+        />
       </div>
 
       {quota && quota.limit ? (
@@ -170,6 +161,36 @@ function NextPage({ slug, token }: { slug: string; token?: string }) {
       >
         More activities
       </Link>
+    </div>
+  )
+}
+
+/**
+ * When the caller's own memberships could not be read.
+ *
+ * Previously `return null`, which rendered the console shell around an empty
+ * page: no register, no explanation, nothing to do. Met in a browser after a
+ * session's token expired, which is the commonest way to reach this branch.
+ *
+ * Not a redirect to sign-in, deliberately. `unavailable` is also what a
+ * core-api outage produces, and redirecting on that would bounce somebody
+ * between the console and the sign-in page while nothing was wrong with their
+ * session. Naming both possibilities is more honest than guessing which.
+ */
+function WorkspaceUnavailable() {
+  return (
+    <div className="mx-auto w-full max-w-5xl px-4 py-8">
+      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">
+        Compliance record
+      </h1>
+      <p
+        data-testid="records-workspace-unavailable"
+        className="mt-4 rounded-xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground"
+      >
+        We could not load your workspace just now. Your session may have
+        expired, in which case signing in again will fix it; otherwise this is
+        usually temporary.
+      </p>
     </div>
   )
 }

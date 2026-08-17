@@ -2,7 +2,11 @@
 
 import { useState } from 'react'
 
-import { ActivityForm } from '@/components/records/activity-form'
+import {
+  ActivityForm,
+  AddDisclosure,
+} from '@/components/records/activity-form'
+import { DsarForm } from '@/components/records/dsar-form'
 import { DsarTable, RopaTable } from '@/components/records/registers'
 import { AiSystemsTable } from '@/components/records/registers'
 import { SystemForm } from '@/components/records/system-form'
@@ -135,4 +139,87 @@ export function RespondableDsars({
   action: Action
 }) {
   return <DsarTable items={items} slug={slug} respondAction={action} />
+}
+
+/**
+ * The add controls, composed here rather than in the pages.
+ *
+ * WHY THESE EXIST AT ALL, WHICH IS NOT OBVIOUS FROM READING THEM
+ *
+ * The first version had the pages pass the form to `AddDisclosure` as a render
+ * function, `{(close) => <ActivityForm onDone={close} />}`, so the disclosure
+ * could hand its own close function to the form. That is an ordinary React
+ * pattern and it cannot cross the server/client boundary: a function is not
+ * serialisable, and a server component passing one to a client component fails
+ * at request time with "Functions are not valid as a child of Client
+ * Components".
+ *
+ * It compiled, typechecked, linted and passed every unit test, because a test
+ * file is already a client context and a function child works there. Only a
+ * real server render fails, which is how it was found.
+ *
+ * So the composition moves to the client side. The pages now pass only things
+ * that survive the boundary: strings, booleans, and the server action itself,
+ * which is serialisable precisely because it is a `'use server'` export.
+ */
+
+export function AddActivity({
+  slug,
+  action,
+  disabled,
+  disabledReason,
+}: {
+  slug: string
+  action: Action
+  disabled?: boolean
+  disabledReason?: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <AddDisclosure
+      label="Add activity"
+      title="Add a processing activity"
+      open={open}
+      onOpenChange={setOpen}
+      disabled={disabled}
+      disabledReason={disabledReason}
+    >
+      <ActivityForm
+        slug={slug}
+        action={action}
+        onDone={() => setOpen(false)}
+      />
+    </AddDisclosure>
+  )
+}
+
+export function AddSystem({ slug, action }: { slug: string; action: Action }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <AddDisclosure
+      label="Register a system"
+      title="Register an AI system"
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <SystemForm slug={slug} action={action} onDone={() => setOpen(false)} />
+    </AddDisclosure>
+  )
+}
+
+export function AddDsar({ slug, action }: { slug: string; action: Action }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <AddDisclosure
+      label="Log a request"
+      title="Log a data-subject request"
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <DsarForm slug={slug} action={action} onDone={() => setOpen(false)} />
+    </AddDisclosure>
+  )
 }

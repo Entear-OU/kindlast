@@ -1,11 +1,9 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
-import { AddDisclosure } from '@/components/records/activity-form'
 import { RegisterNav } from '@/components/records/register-nav'
-import { EditableAiSystems } from '@/components/records/editable'
+import { AddSystem, EditableAiSystems } from '@/components/records/editable'
 import { EmptyRegister, RegisterUnavailable } from '@/components/records/states'
-import { SystemForm } from '@/components/records/system-form'
 import { addAiSystem, editAiSystem } from '../actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
@@ -38,7 +36,7 @@ export default async function AiSystemsPage({
 
   const resolved = await resolveOrg(session.accessToken, slug)
   if (resolved.status === 'not-a-member') notFound()
-  if (resolved.status === 'unavailable') return null
+  if (resolved.status === 'unavailable') return <WorkspaceUnavailable />
 
   const register = await listAiSystems(
     session.accessToken,
@@ -94,11 +92,7 @@ export default async function AiSystemsPage({
       {/* Useful mostly for shadow AI: the system somebody adopted without
           telling anyone is exactly the one no finding will ever raise. */}
       <div className="mt-4">
-        <AddDisclosure label="Register a system" title="Register an AI system">
-          {(close) => (
-            <SystemForm slug={slug} action={addAiSystem} onDone={close} />
-          )}
-        </AddDisclosure>
+        <AddSystem slug={slug} action={addAiSystem} />
       </div>
 
       {register.ok && register.value.nextPageToken ? (
@@ -111,6 +105,36 @@ export default async function AiSystemsPage({
           </Link>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * When the caller's own memberships could not be read.
+ *
+ * Previously `return null`, which rendered the console shell around an empty
+ * page: no register, no explanation, nothing to do. Met in a browser after a
+ * session's token expired, which is the commonest way to reach this branch.
+ *
+ * Not a redirect to sign-in, deliberately. `unavailable` is also what a
+ * core-api outage produces, and redirecting on that would bounce somebody
+ * between the console and the sign-in page while nothing was wrong with their
+ * session. Naming both possibilities is more honest than guessing which.
+ */
+function WorkspaceUnavailable() {
+  return (
+    <div className="mx-auto w-full max-w-5xl px-4 py-8">
+      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">
+        Compliance record
+      </h1>
+      <p
+        data-testid="records-workspace-unavailable"
+        className="mt-4 rounded-xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground"
+      >
+        We could not load your workspace just now. Your session may have
+        expired, in which case signing in again will fix it; otherwise this is
+        usually temporary.
+      </p>
     </div>
   )
 }

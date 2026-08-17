@@ -193,21 +193,41 @@ export function FormFooter({
   )
 }
 
-/** A disclosure that holds a form, so the page is a register and not a form. */
+/**
+ * A disclosure that holds a form, so the page is a register and not a form.
+ *
+ * CONTROLLED, AND THE CHILD IS AN ELEMENT RATHER THAN A RENDER FUNCTION
+ *
+ * The obvious shape is `children: (close) => ReactNode`, so the disclosure can
+ * hand its own close function to whatever it wraps. That works everywhere
+ * except across the server/client boundary, which is exactly where this is
+ * used: a function is not serialisable, and a server component passing one to a
+ * client component fails at request time with "Functions are not valid as a
+ * child of Client Components". It compiles, typechecks, lints and passes unit
+ * tests, because a test file is already a client context.
+ *
+ * So the open state is lifted to the caller, which is a client component that
+ * can therefore pass a real element and close it itself. See the add controls
+ * in `editable.tsx`.
+ */
 export function AddDisclosure({
   label,
   title,
+  open,
+  onOpenChange,
   disabled,
   disabledReason,
   children,
 }: {
   label: string
   title: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
   disabled?: boolean
   disabledReason?: string
-  children: (close: () => void) => React.ReactNode
+  children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(false)
+  const setOpen = onOpenChange
 
   if (disabled) {
     // Present and visibly unavailable, with the reason next to it. A control
@@ -235,7 +255,7 @@ export function AddDisclosure({
   return (
     <section className="rounded-xl border border-border/60 p-4">
       <h3 className="text-sm font-medium text-foreground">{title}</h3>
-      <div className="mt-4">{children(() => setOpen(false))}</div>
+      <div className="mt-4">{children}</div>
     </section>
   )
 }
