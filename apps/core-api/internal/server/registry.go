@@ -34,6 +34,10 @@ func Services() []protoreflect.ServiceDescriptor {
 		// checked now, and the day a handler is added it cannot arrive
 		// undeclared.
 		corev1.File_kindlast_core_v1_records_proto,
+		// NotificationService (ENT-209). Its three RPCs carry
+		// `notifications:read` and `notifications:write`, which were already in
+		// HumanScopes and in the Zitadel seed before anything used them.
+		corev1.File_kindlast_core_v1_notifications_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the

@@ -155,6 +155,30 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.RecordsService.GetAiSystem": {
 			Method: "GET", Path: "/api/v1/records/ai-systems/{ai_system_id}",
 		},
+		// Notifications (ENT-209). A singleton resource rather than a
+		// collection: the preferences being read and written are always the
+		// caller's own, for the organisation the header names, so there is
+		// nothing to identify in the path. A `/{user_id}` segment would offer a
+		// client somebody else's id to try, and make this handler the thing that
+		// refuses when the policy already does.
+		//
+		// PUT rather than PATCH, unlike the records surface above, because here
+		// the body genuinely IS the resource: every field is client-owned and
+		// the settings page renders all of them at once. There are no
+		// server-owned columns to preserve, so the promise PUT makes is one this
+		// endpoint can keep.
+		"kindlast.core.v1.NotificationService.GetNotificationPreferences": {
+			Method: "GET", Path: "/api/v1/notification-preferences",
+		},
+		"kindlast.core.v1.NotificationService.UpdateNotificationPreferences": {
+			Method: "PUT", Path: "/api/v1/notification-preferences",
+		},
+		// Deployment-wide rather than tenant-scoped: what this installation can
+		// deliver on is the same answer for every organisation in it.
+		"kindlast.core.v1.NotificationService.GetNotificationCapabilities": {
+			Method: "GET", Path: "/api/v1/notification-capabilities",
+		},
+
 		"kindlast.core.v1.RecordsService.ListDsars": {
 			Method: "GET", Path: "/api/v1/records/dsars",
 		},

@@ -199,6 +199,7 @@ func run(logger *slog.Logger) error {
 		Producer:       producer,
 		BillingEnabled: cfg.BillingEnabled,
 		AppBaseURL:     cfg.AppBaseURL,
+		SMTPConfigured: cfg.SMTPAddr != "",
 	})
 	if err != nil {
 		return err
@@ -265,6 +266,26 @@ func startDispatcher(ctx context.Context, logger *slog.Logger, cfg *config.Confi
 	}
 
 	go dispatch.New(outbox, channel, logger, 0, 0).Run(ctx)
+
+	// The doorbell path (ENT-209), on the same channel and a separate loop.
+	//
+	// Two loops rather than one, because the two queues resolve their recipient
+	// at different times: a transactional message carries one decided at mint,
+	// a notification's is worked out now from memberships and preferences.
+	// Sharing the channel is what keeps this one delivery mechanism rather than
+	// two (§23.6); sharing the drain would have meant forcing a recipient into
+	// the notification row at enqueue, which is precisely what ENT-192's
+	// as-built note warns against.
+	//
+	// Skipped without a base URL, because every notification carries a link
+	// into `/o/{slug}/` and an email whose only actionable content is broken is
+	// worse than one that has not been sent.
+	if cfg.AppBaseURL == "" {
+		logger.Warn("no doorbell dispatcher: KINDLAST_APP_BASE_URL is not set, " +
+			"so finding notifications will queue and not be delivered")
+		return
+	}
+	go dispatch.NewDoorbell(outbox, channel, logger, cfg.AppBaseURL, 0, 0).Run(ctx)
 }
 
 // newHTTPServer builds the listener, serving HTTP/1.1 and unencrypted HTTP/2 on

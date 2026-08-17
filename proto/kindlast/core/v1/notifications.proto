@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Notification preferences and the channels a deployment actually has
+// (core-api-surface §6, §17, §18.3, §18.5; ENT-209).
+//
+// PREFERENCES ARE PERSONAL WITHIN AN ORGANISATION, NOT PER PERSON
+//
+// `notification_preferences` is keyed `(org_id, user_id)`, and the policies on
+// it are the only ones in the schema that pin `user_id` to
+// `app.current_user_id`. So a consultant serving three clients can want a
+// weekly briefing from one and silence from another, and no member can read or
+// change a colleague's settings even though they share an organisation.
+//
+// That is why these RPCs take no user id. The caller is the subject, always,
+// and offering a parameter would invite a client to pass somebody else's and a
+// handler to be the thing that refuses. Authority stays in the policy.
+//
+// WHAT IS DELIBERATELY ABSENT
+//
+// No RPC to send a notification, and none to read the outbox. Dispatch is a
+// background duty of the agent role, not something a client asks for: a caller
+// that could trigger delivery could use this service to mail an arbitrary
+// address on a timer. The outbox is not readable here either, because a queue
+// of pending messages is operational detail rather than a customer surface.
+service NotificationService {
+  // The caller's own preferences for the active organisation.
+  //
+  // Returns defaults rather than an error when no row exists, because somebody
+  // who has never opened the settings page has no row and is nonetheless
+  // subscribed: the product default is that a member is told. An error here
+  // would make "I have not changed anything" indistinguishable from a fault.
+  rpc GetNotificationPreferences(GetNotificationPreferencesRequest)
+      returns (GetNotificationPreferencesResponse) {
+    option (kindlast.options.v1.required_scope) = "notifications:read";
+    option (google.api.http) = {get: "/api/v1/notification-preferences"};
+  }
+
+  // Replace the caller's preferences for the active organisation.
+  //
+  // A whole-object write rather than a patch. The settings surface renders every
+  // field at once, so a partial update would mean deciding what an absent field
+  // means, and "unset" and "set to false" are different intentions that a proto3
+  // scalar cannot tell apart.
+  rpc UpdateNotificationPreferences(UpdateNotificationPreferencesRequest)
+      returns (UpdateNotificationPreferencesResponse) {
+    option (kindlast.options.v1.required_scope) = "notifications:write";
+    option (google.api.http) = {
+      put: "/api/v1/notification-preferences"
+      body: "*"
+    };
+  }
+
+  // Which notification channels this deployment can actually use (§18.3).
+  //
+  // Exists so a console never renders a channel it cannot deliver on. Telegram,
+  // Slack and WhatsApp are in the design and are not built, and the failure
+  // this prevents is a settings page offering a switch that silently does
+  // nothing, which is indistinguishable from a broken integration and generates
+  // support instead of value.
+  //
+  // Read from configuration rather than from a hard-coded array, because
+  // "email" is only available on a deployment that has told core-api where to
+  // submit mail. A self-hoster with no SMTP has no channels at all, and saying
+  // so plainly is better than listing one that will queue forever.
+  rpc GetNotificationCapabilities(GetNotificationCapabilitiesRequest)
+      returns (GetNotificationCapabilitiesResponse) {
+    option (kindlast.options.v1.required_scope) = "notifications:read";
+    option (google.api.http) = {get: "/api/v1/notification-capabilities"};
+  }
+}
+
+message GetNotificationPreferencesRequest {}
+
+message GetNotificationPreferencesResponse {
+  NotificationPreferences preferences = 1;
+}
+
+message UpdateNotificationPreferencesRequest {
+  NotificationPreferences preferences = 1;
+}
+
+message UpdateNotificationPreferencesResponse {
+  // Re-read rather than echoed, so the response describes what the database
+  // holds rather than what was sent.
+  NotificationPreferences preferences = 1;
+}
+
+message NotificationPreferences {
+  // Where to send email, when it should not be the address the person signs in
+  // with. Empty means use the identity's own address.
+  //
+  // Its own field rather than an implicit default, because the two are
+  // different facts: a compliance contact is often a shared mailbox that nobody
+  // signs in as.
+  string email = 1;
+
+  // The floor for emailing about a finding. One of low, medium, high, critical.
+  //
+  // A floor rather than a switch, because "tell me about everything" and "tell
+  // me about nothing" are both wrong for a compliance product: the first trains
+  // people to ignore it, the second is how a critical finding goes unread.
+  string min_severity_for_email = 2;
+
+  bool weekly_briefing_enabled = 3;
+  bool deadline_alerts_enabled = 4;
+
+  // IANA name, e.g. Europe/Tallinn. Decides when a briefing and a quiet window
+  // fall for this person, so it is theirs rather than the organisation's: a
+  // consultant and their client are not always in the same country.
+  string timezone = 5;
+
+  // Local times, HH:MM, during which email is held rather than sent. Both empty
+  // means no quiet hours.
+  //
+  // Held rather than dropped. A deadline that passes overnight still has to be
+  // told about in the morning, and a notification system that silently discards
+  // during quiet hours is one nobody can trust with a statutory clock.
+  string quiet_hours_start = 6;
+  string quiet_hours_end = 7;
+}
+
+message GetNotificationCapabilitiesRequest {}
+
+message GetNotificationCapabilitiesResponse {
+  repeated NotificationChannel channels = 1;
+}
+
+message NotificationChannel {
+  // Stable identifier, e.g. `email`. Not a label.
+  string id = 1;
+  // What to call it in an interface.
+  string display_name = 2;
+  // Whether this deployment can deliver on it right now. A channel that is
+  // known but unconfigured is reported as unavailable rather than omitted, so a
+  // console can say why it is not offered instead of silently lacking it.
+  bool available = 3;
+  // Plain-language reason when it is not available, for the console to show.
+  // Empty when it is.
+  string unavailable_reason = 4;
+}

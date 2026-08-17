@@ -10,6 +10,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/notifications"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/records"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
@@ -65,6 +66,15 @@ type Dependencies struct {
 	// is empty, because an invitation whose link cannot be built is one nobody
 	// can ever accept or repair.
 	AppBaseURL string
+
+	// SMTPConfigured decides what the notification capabilities endpoint says
+	// about the email channel (§18.3, ENT-209).
+	//
+	// Configuration rather than a probe. A mail server that happens to be down
+	// is not the same as a deployment that has never been told where to submit
+	// mail, and only the second is worth telling a person about on a settings
+	// page: the first resolves itself and the queue survives it.
+	SMTPConfigured bool
 }
 
 // New builds the HTTP handler core-api serves.
@@ -96,6 +106,8 @@ func New(deps Dependencies) (http.Handler, error) {
 	mux.Handle(corev1connect.NewFindingsServiceHandler(findings.New(deps.BillingEnabled), chain))
 	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboard.New(), chain))
 	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(), chain))
+	mux.Handle(corev1connect.NewNotificationServiceHandler(
+		notifications.New(deps.SMTPConfigured), chain))
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in
