@@ -39,6 +39,30 @@
 		reverse_proxy core-api:8080
 	}
 
+	# The payment provider's webhook (ENT-210).
+	#
+	# Routed because it is the one endpoint on core-api that a third party on
+	# the internet has to reach. Everything else here is called by `web` or by a
+	# service client, both of which talk to core-api directly on the compose
+	# network; a provider cannot.
+	#
+	# ONE PATH, NOT THE WHOLE REST SURFACE
+	#
+	# core-api carries `google.api.http` annotations on every RPC, so
+	# `/api/v1/me`, `/api/v1/records/...` and the rest all exist as handlers
+	# already. They are deliberately NOT routed here. Opening the REST surface
+	# is ENT-193's decision, with a gateway, CORS policy and per-key rate
+	# limiting attached to it, and a wildcard added in passing for one webhook
+	# would make that decision by accident.
+	#
+	# What protects the endpoint is the signature over the body, checked before
+	# the body is parsed, plus a 64KB cap and idempotency on the provider's
+	# event id. Being routed is not what makes it safe, and hiding it would not
+	# have made it safe either.
+	handle /api/v1/billing/webhook {
+		reverse_proxy core-api:8080
+	}
+
 	handle {
 		respond "kindlast edge: no routes yet (web and core-api arrive at build-order step 1)" 404
 	}

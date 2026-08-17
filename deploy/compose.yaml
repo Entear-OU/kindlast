@@ -294,6 +294,26 @@ services:
       # stack that never created the role keeps working rather than answering
       # 500 to a provider that will retry for days.
       KINDLAST_BILLING_DATABASE_URL: postgres://kindlast_billing:${KINDLAST_BILLING_PASSWORD:-billing-dev-password}@postgres-app:5432/kindlast?sslmode=disable
+
+      # The provider's signing secret (ENT-210).
+      #
+      # Both this and the DSN above are required before the webhook route is
+      # registered at all, so a deployment that leaves either unset has no
+      # endpoint rather than one that refuses. The local default is a fixed
+      # development value so the route exists on the compose stack and can be
+      # exercised; it is not a secret and must not be reused anywhere real.
+      #
+      # A real deployment sets KINDLAST_BILLING_WEBHOOK_SECRET_FILE and mounts
+      # it, because a signing secret in an environment variable is one a
+      # `docker inspect` prints.
+      KINDLAST_BILLING_WEBHOOK_SECRET: ${KINDLAST_BILLING_WEBHOOK_SECRET:-whsec_local_development_only}
+
+      # Plan gating stays OFF on the bundled stack even though the webhook is
+      # wired, and the two are genuinely independent (§18.1). The webhook exists
+      # here so it can be tested; gating decides whether anybody is refused
+      # anything for being on the free plan, and a local stack that sells
+      # nothing should refuse nobody.
+      KINDLAST_BILLING_ENABLED: ${KINDLAST_BILLING_ENABLED:-false}
       KINDLAST_REDIS_ADDR: redis:6379
 
       # Where a browser reaches the console, used to build the invitation link
