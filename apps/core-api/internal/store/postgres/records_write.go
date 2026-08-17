@@ -102,6 +102,10 @@ func (t *Tenant) manualActivityLimit(ctx context.Context) (limit int32, capped b
 		return 0, false, nil
 	}
 
+	// Through `Plan`, which filters `status = 'active'`. Never a bare read of
+	// the plan column: the function 00016 dropped did exactly that, so a
+	// cancelled or past_due pro subscription kept an organisation uncapped
+	// indefinitely. See entitlement_test.go.
 	plan, err := t.Plan(ctx)
 	if err != nil {
 		return 0, false, err
