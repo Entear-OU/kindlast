@@ -5,20 +5,26 @@ import { useActionState, useState } from 'react'
 import { Field, FormFooter } from '@/components/records/activity-form'
 import { ReviewConfirmation } from '@/components/records/system-form'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { idle, type RecordActionState } from '@/lib/records/action-state'
 
 /**
  * Logging a request that arrived.
  *
- * No date field, and that is worth stopping on. `log_dsar` stamps `received_at`
- * as now and computes the deadline from it, so this form can only log a request
- * on the day it arrives. A request that came by post last week is currently
- * logged with this week's clock, which grants the organisation the days it took
- * them to notice: exactly the error ENT-224 fixed on the executor path.
+ * THE DATE FIELD IS THE POINT OF THIS FORM, NOT A CONVENIENCE
  *
- * Not fixed here because the fix is in the database function's signature rather
- * than in this form, and adding a date input that the API then ignores would be
- * worse than the gap. Tracked as the next piece of ENT-224.
+ * `log_dsar` computes the deadline from `received_at`, so what somebody types
+ * here decides when an Article 12(3) clock runs out. Before ENT-224's second
+ * half the function stamped `now()` and there was no field to offer: a request
+ * that came by post on the 1st and was logged on the 8th was recorded as due a
+ * month from the 8th, which quietly granted the organisation the days it took
+ * them to notice.
+ *
+ * Defaulted to today, which is the common case, and capped at today by `max`,
+ * because a request cannot have arrived tomorrow. The database refuses a future
+ * date too; the attribute is what stops somebody meeting that refusal after
+ * filling the rest of the form in.
  */
 export function DsarForm({
   slug,
@@ -42,8 +48,29 @@ export function DsarForm({
     idle,
   )
 
+  // Today in the browser's own timezone, which is the date the person means
+  // when they say "today". `toISOString` would give UTC and can be yesterday or
+  // tomorrow for them.
+  const today = new Date().toLocaleDateString('en-CA')
+
   return (
     <form action={submit} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="receivedAt">Received on</Label>
+        <Input
+          id="receivedAt"
+          name="receivedAt"
+          type="date"
+          defaultValue={today}
+          max={today}
+        />
+        <p className="text-xs text-muted-foreground">
+          The day it arrived, not the day you are logging it. The deadline is
+          counted from here, so backdating a request that sat in an inbox
+          shortens the time left rather than extending it.
+        </p>
+      </div>
+
       <Field
         label="Requester"
         name="subjectName"

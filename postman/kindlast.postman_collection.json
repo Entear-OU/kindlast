@@ -820,14 +820,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subjectName\": \"M. Laurent\",\n  \"requestType\": \"erasure\",\n  \"handler\": \"Privacy team\"\n}"
+              "raw": "{\n  \"subjectName\": \"M. Laurent\",\n  \"requestType\": \"erasure\",\n  \"handler\": \"Privacy team\",\n  \"receivedAt\": \"2026-08-01T00:00:00Z\"\n}"
             },
             "url": {
               "raw": "{{api_base_url}}/kindlast.core.v1.RecordsService/LogDsar",
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.RecordsService", "LogDsar"]
             },
-            "description": "Records a request that arrived. Required scope: `records:dsar:write`. **Served as of ENT-200.**\n\n**This is the only way a DSAR enters the register.** Nothing creates one from an approval: 00009 classified three obligations and mapped none to `create_dsar`, because a request comes from a person and an obligation that manufactured one would be inventing the requester.\n\nThe response carries the computed `responseDueAt`, which is the field the person who logged it actually needs to know.\n\n`subjectName` is optional: a request can arrive pseudonymously, through a form or an inbox, before anyone has identified the person behind it. `handler` is optional and free text, because it is often a role or an external DPO rather than a member of the workspace."
+            "description": "Records a request that arrived. Required scope: `records:dsar:write`. **Served as of ENT-200.**\n\n**This is the only way a DSAR enters the register.** Nothing creates one from an approval: 00009 classified three obligations and mapped none to `create_dsar`, because a request comes from a person and an obligation that manufactured one would be inventing the requester.\n\n**`receivedAt` decides the deadline, and omitting it means today (ENT-224).** Before migration 00012 there was no such field: `log_dsar` stamped `now()`, so a request that came by post on the 1st and was logged on the 8th was recorded as due a month from the 8th. Article 12(3) runs from receipt, so a clock started at data entry silently grants the organisation the days it took them to notice, and the slower they are the longer they appear to have.\n\nA **future date is refused** with `invalid_argument` rather than clamped: a request cannot have arrived tomorrow, and the likeliest cause is a typo that would extend a statutory deadline nobody chose to extend. `invalid_argument` rather than `failed_precondition` because the fix is a different value, not a condition to satisfy and retry.\n\nThe response carries the computed `responseDueAt`, which is the field the person who logged it actually needs to know.\n\n`subjectName` is optional: a request can arrive pseudonymously, through a form or an inbox, before anyone has identified the person behind it. `handler` is optional and free text, because it is often a role or an external DPO rather than a member of the workspace."
           }
         },
         {

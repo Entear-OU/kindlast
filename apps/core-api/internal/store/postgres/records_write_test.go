@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -297,7 +298,7 @@ func TestMarkingADsarRespondedIsGatedAndIdempotent(t *testing.T) {
 	}
 	defer tenant.Rollback(ctx)
 
-	logged, err := tenant.LogDsar(ctx, "M. Laurent", "erasure", "Privacy team")
+	logged, err := tenant.LogDsar(ctx, "M. Laurent", "erasure", "Privacy team", time.Time{})
 	if err != nil {
 		t.Fatalf("logging a dsar: %v", err)
 	}
@@ -341,6 +342,76 @@ func TestMarkingADsarRespondedIsGatedAndIdempotent(t *testing.T) {
 	if !again.RespondedAt.Equal(answered.RespondedAt) {
 		t.Fatalf("the response date moved on a repeat call: %v then %v",
 			answered.RespondedAt, again.RespondedAt)
+	}
+}
+
+// The statutory clock runs from receipt, through the store rather than only
+// through SQL (ENT-224). db/tests covers the function; this covers the seam
+// where a zero time has to become a null rather than the epoch.
+func TestLoggingADsarDatesTheClockFromReceipt(t *testing.T) {
+	store := testStore(t)
+	ctx := t.Context()
+
+	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	if err != nil {
+		t.Fatalf("Ada's transaction: %v", err)
+	}
+	defer tenant.Rollback(ctx)
+
+	arrived := time.Now().Add(-21 * 24 * time.Hour)
+	logged, err := tenant.LogDsar(ctx, "M. Laurent", "erasure", "Privacy team", arrived)
+	if err != nil {
+		t.Fatalf("logging a backdated request: %v", err)
+	}
+
+	if diff := logged.ReceivedAt.Sub(arrived); diff > time.Second || diff < -time.Second {
+		t.Fatalf("received_at is %v, want %v", logged.ReceivedAt, arrived)
+	}
+
+	// Nine days left, not thirty. This is the whole point: a slow log must not
+	// buy the organisation extra time.
+	daysLeft := int(time.Until(logged.ResponseDueAt).Hours() / 24)
+	if daysLeft != 8 && daysLeft != 9 {
+		t.Fatalf("deadline is %d days out, want 9 (8 accepted for the partial day): %v",
+			daysLeft, logged.ResponseDueAt)
+	}
+
+	// A zero time must reach the function as null and mean today, not 1970. An
+	// epoch date would compute a deadline fifty years overdue and read as a
+	// catastrophically late request.
+	today, err := tenant.LogDsar(ctx, "S. Okafor", "access", "", time.Time{})
+	if err != nil {
+		t.Fatalf("logging with no date: %v", err)
+	}
+	if time.Since(today.ReceivedAt) > time.Minute {
+		t.Fatalf("an absent date became %v rather than now", today.ReceivedAt)
+	}
+}
+
+// Refused rather than clamped, and reported as a bad value rather than as a
+// gate to satisfy: the caller sends a different date, they do not confirm.
+func TestADsarCannotHaveArrivedInTheFuture(t *testing.T) {
+	store := testStore(t)
+	ctx := t.Context()
+
+	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	if err != nil {
+		t.Fatalf("Ada's transaction: %v", err)
+	}
+	defer tenant.Rollback(ctx)
+
+	err = refused(t, tenant, ctx, func() error {
+		_, e := tenant.LogDsar(ctx, "M. Laurent", "erasure", "",
+			time.Now().Add(24*time.Hour))
+		return e
+	})
+
+	if !errors.Is(err, ErrFutureReceipt) {
+		t.Fatalf("future receipt: want ErrFutureReceipt, got %v", err)
+	}
+	// Both raise check_violation, so the classifier must not confuse them.
+	if errors.Is(err, ErrReviewRequired) || errors.Is(err, ErrQuotaExhausted) {
+		t.Fatal("the future-date refusal was classified as another gate")
 	}
 }
 

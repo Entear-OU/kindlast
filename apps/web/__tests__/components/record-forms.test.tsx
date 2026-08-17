@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ActivityForm } from '@/components/records/activity-form'
+import { DsarForm } from '@/components/records/dsar-form'
 import {
   AddActivity,
   EditableRopa,
@@ -267,6 +268,40 @@ describe('recording that a response went out', () => {
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0].get('dsarId')).toBe('d-1')
     expect(calls[0].get('reviewed')).toBe('on')
+  })
+})
+
+describe('the DSAR receipt date', () => {
+  const today = new Date().toLocaleDateString('en-CA')
+
+  // ENT-224's second half. The deadline is computed from this field, so a form
+  // that decides it wrong decides an Article 12(3) clock wrong.
+  it('defaults to today and cannot be set later than today', () => {
+    const { action } = spyAction()
+    render(<DsarForm slug="acme" action={action} />)
+
+    const received = screen.getByLabelText('Received on')
+    expect(received).toHaveValue(today)
+    // A request cannot have arrived tomorrow. The database refuses it too; this
+    // is what stops somebody meeting that refusal after filling the form in.
+    expect(received).toHaveAttribute('max', today)
+  })
+
+  it('posts the date somebody chose rather than today', async () => {
+    const user = userEvent.setup()
+    const { action, calls } = spyAction()
+
+    render(<DsarForm slug="acme" action={action} />)
+
+    const received = screen.getByLabelText('Received on')
+    await user.clear(received)
+    await user.type(received, '2026-08-01')
+    await user.type(screen.getByLabelText('What was asked for'), 'erasure')
+    await user.click(screen.getByRole('button', { name: 'Log request' }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0].get('receivedAt')).toBe('2026-08-01')
+    expect(calls[0].get('requestType')).toBe('erasure')
   })
 })
 
