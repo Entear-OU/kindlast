@@ -41,6 +41,11 @@ func Services() []protoreflect.ServiceDescriptor {
 		// BillingService (ENT-210). Read only: a plan changes because the signed
 		// webhook said so, never because a session asked.
 		corev1.File_kindlast_core_v1_billing_proto,
+		// AuditService (ENT-223). Read only, and structurally so: the table is
+		// append-only by trigger and `kindlast_app` holds no update or delete
+		// grant on it. Both RPCs carry `audit:read`, which was seeded before
+		// anything used it.
+		corev1.File_kindlast_core_v1_audit_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the

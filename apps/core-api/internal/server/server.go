@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	auditservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/audit"
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
@@ -143,6 +144,11 @@ func New(deps Dependencies) (http.Handler, error) {
 		notifications.New(deps.SMTPConfigured), chain))
 	mux.Handle(corev1connect.NewBillingServiceHandler(
 		billingservice.New(deps.BillingWebhook != nil, deps.BillingEnabled), chain))
+	// The audit log (ENT-223). On the same chain as everything else, and with
+	// no configuration switch: unlike billing, there is no deployment where
+	// this surface is absent. A compliance record whose audit view depends on
+	// how the operator configured the stack is not one an auditor can rely on.
+	mux.Handle(corev1connect.NewAuditServiceHandler(auditservice.New(), chain))
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in

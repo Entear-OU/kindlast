@@ -191,6 +191,27 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "GET", Path: "/api/v1/billing",
 		},
 
+		// The audit log (ENT-223). A GET on the collection, and an export that
+		// is a POST for two reasons rather than one.
+		//
+		// The first is the ordinary one: the filter is a structured object and
+		// belongs in a body. The second matters more here. An export of an
+		// audit log is a request for a file containing a whole organisation's
+		// decision history, and a GET is the method that gets logged in proxy
+		// access logs, retried by link scanners, and put in a browser's history
+		// with its query string intact. A filter naming a specific person and a
+		// date range is not a thing to leave in three intermediaries' logs.
+		//
+		// The colon verb rather than `/api/v1/audit/export`, because this is an
+		// action on the collection and not a subresource. There is nothing at
+		// `/audit/export` to GET.
+		"kindlast.core.v1.AuditService.ListAuditEntries": {
+			Method: "GET", Path: "/api/v1/audit",
+		},
+		"kindlast.core.v1.AuditService.ExportAuditEntries": {
+			Method: "POST", Path: "/api/v1/audit:export",
+		},
+
 		"kindlast.core.v1.RecordsService.ListDsars": {
 			Method: "GET", Path: "/api/v1/records/dsars",
 		},
