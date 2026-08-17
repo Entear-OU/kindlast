@@ -163,4 +163,72 @@ describe('proxy', () => {
 
     expect(response).toMatchObject({ type: 'next' })
   })
+
+  /**
+   * The lockout, and why it is the proxy that has to end it.
+   *
+   * A session id lives in Redis and the cookie carries only the id, so a cookie
+   * outlives its session whenever the session goes first: it expires, somebody
+   * signs out everywhere, Redis restarts, or a developer runs `down -v`. The
+   * browser then holds a cookie that resolves to nothing.
+   *
+   * That is the state where the proxy and the pages disagree. The proxy cannot
+   * read Redis from the edge, so it reasons about the cookie EXISTING. Every
+   * protected page reads the session and reasons about it RESOLVING. So:
+   *
+   *   /workspace  + dead cookie -> page finds no session -> /sign-in?returnTo=
+   *   /sign-in    + dead cookie -> proxy sees a cookie   -> /workspace
+   *
+   * which is ERR_TOO_MANY_REDIRECTS, and a person in it cannot reach any page
+   * of the product, including the one that would sign them in again. The only
+   * escape is clearing cookies by hand, which no customer will think to do.
+   *
+   * Found in a browser rather than by any test, because curl sends no cookies
+   * and Playwright starts every run with a fresh context. It needed a browser
+   * somebody had actually been signed into.
+   */
+  it('renders sign-in rather than bouncing back when a page sent the visitor here', async () => {
+    // `returnTo` is the signal, and it means "a protected surface sent me". A
+    // cookie holder arriving with it has just been rejected by the page that
+    // set it, so bouncing them back is the cycle.
+    const { proxy } = await import('@/proxy')
+    const response = await proxy(
+      requestFor('/sign-in?returnTo=%2Fworkspace', { session: true }),
+    )
+
+    expect(response).toMatchObject({ type: 'next' })
+  })
+
+  it('breaks the cycle for any protected surface, not just /workspace', async () => {
+    // The console is a growing list of pages and every one of them redirects
+    // to sign-in when the session does not resolve. Fixing this per page would
+    // be a fix that only works while every future page remembers, which is the
+    // same bug waiting; the cycle is broken once, here.
+    const { proxy } = await import('@/proxy')
+
+    for (const attempted of [
+      '/o/acme/logs',
+      '/o/acme/regulation',
+      '/o/acme/settings/billing',
+    ]) {
+      const response = await proxy(
+        requestFor(`/sign-in?returnTo=${encodeURIComponent(attempted)}`, {
+          session: true,
+        }),
+      )
+
+      expect(response, attempted).toMatchObject({ type: 'next' })
+    }
+  })
+
+  it('still sends a signed-in visitor who simply visited /sign-in to the workspace', async () => {
+    // The convenience the redirect exists for is kept. Someone who navigated
+    // to /sign-in of their own accord carries no `returnTo`, and nothing has
+    // just rejected them, so there is no cycle to break.
+    const { proxy } = await import('@/proxy')
+    const response = await proxy(requestFor('/sign-in', { session: true }))
+
+    expect(response).toMatchObject({ type: 'redirect' })
+    expect(response.url).toContain('/workspace')
+  })
 })
