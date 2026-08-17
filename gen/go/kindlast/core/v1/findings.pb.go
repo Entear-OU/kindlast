@@ -171,8 +171,17 @@ type Finding struct {
 	ProposedAction string `protobuf:"bytes,5,opt,name=proposed_action,json=proposedAction,proto3" json:"proposed_action,omitempty"`
 	// minutes, hours, days or weeks: how much work this is likely to be.
 	EffortEstimate string `protobuf:"bytes,6,opt,name=effort_estimate,json=effortEstimate,proto3" json:"effort_estimate,omitempty"`
-	// review, create_ropa, create_dsar or create_ai_system. Always `review`
-	// today (ENT-165), which is why approving a finding creates no record yet.
+	// review, create_ropa, create_dsar or create_ai_system.
+	//
+	// Tracks `obligations.action_type` (00007), which 00009 classified. Approving
+	// a finding whose action is `create_ropa` or `create_ai_system` creates the
+	// record; `review` records the decision and creates nothing, which is the
+	// right outcome for an obligation whose remedy is not a row.
+	//
+	// No obligation maps to `create_dsar`, and 00009 asserts that rather than
+	// leaving it to chance: a data-subject request arrives from a person, so an
+	// obligation that manufactured one would be inventing the requester.
+	//
 	// Carried so a client can say what approving will do rather than promising
 	// something generic.
 	ActionType string                 `protobuf:"bytes,7,opt,name=action_type,json=actionType,proto3" json:"action_type,omitempty"`
@@ -680,10 +689,15 @@ type ApproveFindingResponse struct {
 	// be able to tell an unknown finding from one in another tenant, because that
 	// difference is exactly what probing for tenancy leaks looks like.
 	Applied bool `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
-	// The record the Executor created, when it created one. Empty today, because
-	// `action_type` is always `review` (ENT-165) and no executor trigger fires.
-	// A client sends the founder to this record when it is set and stays on the
-	// finding when it is not.
+	// The record the Executor created, when it created one.
+	//
+	// Set when `action_type` was `create_ropa` or `create_ai_system`, empty when
+	// it was `review`. A client sends the founder to this record when it is set
+	// and stays on the finding when it is not.
+	//
+	// Empty on a repeat approval even though a record exists, because nothing was
+	// created by that call. This field reports what this request did, not what is
+	// on file; RecordsService answers the second question.
 	CreatedRecordId string `protobuf:"bytes,2,opt,name=created_record_id,json=createdRecordId,proto3" json:"created_record_id,omitempty"`
 	// Which table `created_record_id` names, e.g. processing_activities. Present
 	// so a client can route without hard-coding the action-to-table mapping.
