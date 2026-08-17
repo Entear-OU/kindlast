@@ -207,19 +207,26 @@ func (t *Tenant) ProcessingActivity(ctx context.Context, activityID string) (rec
 // the same fact, and a client that has to distinguish them will get it wrong.
 func (t *Tenant) ManualActivityQuota(ctx context.Context) (records.Quota, error) {
 	var q records.Quota
-	var limit *int32
 
-	err := t.tx.QueryRow(ctx, `
-		select
-			(select count(*) from processing_activities where finding_id is null),
-			public.ropa_manual_activity_limit()
-	`).Scan(&q.Used, &limit)
-	if err != nil {
-		return records.Quota{}, fmt.Errorf("postgres: reading the manual activity quota: %w", err)
+	if err := t.tx.QueryRow(ctx, `
+		select count(*) from processing_activities where finding_id is null
+	`).Scan(&q.Used); err != nil {
+		return records.Quota{}, fmt.Errorf("postgres: counting manual activities: %w", err)
 	}
 
-	if limit != nil {
-		q.Limit = *limit
+	// The same function the write path calls, which is the whole point
+	// (ENT-225). This used to be `ropa_manual_activity_limit()`, and the reason
+	// it was SQL was that the write path called it from inside a SQL function,
+	// so the console's cap and the cap a write met came from one place. Moving
+	// the decision to Go without moving this too would have recreated the
+	// problem in the other direction: a console reporting a cap nothing
+	// enforces, or enforcing one it never showed.
+	limit, capped, err := t.manualActivityLimit(ctx)
+	if err != nil {
+		return records.Quota{}, err
+	}
+	if capped {
+		q.Limit = limit
 	}
 	return q, nil
 }

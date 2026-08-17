@@ -35,6 +35,68 @@ import {
 
 const reachable = await isStackReachable()
 
+/**
+ * Approve a finding exactly as core-api does (ENT-225).
+ *
+ * `approve_finding` decided things, so it moved to Go and 00016 dropped it.
+ * This is the statement the Go store now issues.
+ *
+ * The subject of this file is unchanged: the three Executor triggers are still
+ * SQL, still fire on `after update of status`, and are still what is being
+ * tested. Only the thing pulling the trigger moved, and driving them with the
+ * real UPDATE is closer to production than calling a wrapper was.
+ */
+const APPROVE = `
+  update findings
+     set status = 'approved',
+         approved_by = current_setting('app.current_user_id')::uuid,
+         approval_reviewed = false
+   where id = $1
+     and org_id = current_setting('app.current_org_id')::uuid
+     and status <> 'approved'
+`
+
+/**
+ * The decision audit row, which the Go store writes after the UPDATE.
+ *
+ * Included in the helper below rather than dropped from these tests, because
+ * "two rows for two facts" is the property this file documents and it is still
+ * true; what changed is that the two facts are now written by two layers. The
+ * trigger's creation row is the half this file actually tests, and asserting it
+ * alongside a decision row the helper produced still proves the trigger fired.
+ */
+const RECORD_DECISION = `
+  select record_audit_log(
+    current_setting('app.current_org_id')::uuid,
+    current_setting('app.current_user_id')::uuid,
+    $1, $2, 'findings', $1, null, to_jsonb(f.*),
+    current_setting('app.current_user_id')::uuid
+  )
+  from findings f where f.id = $1
+`
+
+/** Approve, and record the decision, exactly as core-api does. */
+async function approve(finding: string) {
+  const r = await app.query(APPROVE, [finding])
+  if (r.rowCount === 0) return // already approved: Go writes nothing either
+  await app.query(RECORD_DECISION, [finding, 'approve_finding'])
+}
+
+/** Reject, and record the decision, exactly as core-api does. */
+async function reject(finding: string, reason: string) {
+  const r = await app.query(
+    `update findings
+        set status = 'rejected', rejection_reason = nullif(btrim($2), ''),
+            snoozed_until = null
+      where id = $1
+        and org_id = current_setting('app.current_org_id')::uuid
+        and status <> 'rejected'`,
+    [finding, reason],
+  )
+  if (r.rowCount === 0) return
+  await app.query(RECORD_DECISION, [finding, 'reject_finding'])
+}
+
 const org = randomUUID()
 const ada = randomUUID()
 
@@ -160,7 +222,7 @@ describe.skipIf(!reachable)('an obligation that creates a record', () => {
     const finding = await convertSignal(ropaSlug)
     await setTenant(app, org, ada)
 
-    await app.query(`select approve_finding($1)`, [finding])
+    await approve(finding)
 
     const r = await migrator.query(
       `select id, org_id, created_by, name from processing_activities where finding_id = $1`,
@@ -178,15 +240,29 @@ describe.skipIf(!reachable)('an obligation that creates a record', () => {
     const finding = await convertSignal(ropaSlug)
     await setTenant(app, org, ada)
 
-    const r = await app.query(`select approve_finding($1) as target`, [finding])
+    await approve(finding)
 
-    expect(r.rows[0].target).not.toBeNull()
+    // What `approve_finding` used to return, read the way the Go store now
+    // reads it (ENT-225): the audit row the Executor trigger wrote, found by
+    // excluding rows whose target is the finding itself.
+    //
+    // Not by recency. Both audit rows are written in the same transaction and
+    // `occurred_at` defaults to `now()`, the transaction timestamp, so they
+    // carry an identical value and ordering by it decides nothing. The filter
+    // is what makes this unambiguous.
+    const r = await app.query(
+      `select target_id from audit_log
+        where finding_id = $1 and target_id is not null and target_table <> 'findings'`,
+      [finding],
+    )
+    expect(r.rows).toHaveLength(1)
+    expect(r.rows[0].target_id).not.toBeNull()
 
     const pa = await migrator.query(
       `select id from processing_activities where finding_id = $1`,
       [finding],
     )
-    expect(r.rows[0].target).toBe(pa.rows[0].id)
+    expect(r.rows[0].target_id).toBe(pa.rows[0].id)
   })
 
   // Two rows is the correct reading of two facts, not a duplicate: a human
@@ -206,7 +282,7 @@ describe.skipIf(!reachable)('an obligation that creates a record', () => {
     const finding = await convertSignal(ropaSlug)
     await setTenant(app, org, ada)
 
-    await app.query(`select approve_finding($1)`, [finding])
+    await approve(finding)
 
     const actions = await auditActions(finding)
     expect(actions).toHaveLength(2)
@@ -218,8 +294,8 @@ describe.skipIf(!reachable)('an obligation that creates a record', () => {
     const finding = await convertSignal(ropaSlug)
     await setTenant(app, org, ada)
 
-    await app.query(`select approve_finding($1)`, [finding])
-    await app.query(`select approve_finding($1)`, [finding])
+    await approve(finding)
+    await approve(finding)
 
     const r = await migrator.query(
       `select count(*)::int as n from processing_activities where finding_id = $1`,
@@ -233,7 +309,7 @@ describe.skipIf(!reachable)('an obligation that creates a record', () => {
     const finding = await convertSignal(ropaSlug)
     await setTenant(app, org, ada)
 
-    await app.query(`select reject_finding($1, $2)`, [finding, 'Not us'])
+    await reject(finding, 'Not us')
 
     const r = await migrator.query(
       `select count(*)::int as n from processing_activities where finding_id = $1`,
@@ -251,12 +327,17 @@ describe.skipIf(!reachable)(
       const finding = await convertSignal(reviewSlug)
       await setTenant(app, org, ada)
 
-      const r = await app.query(`select approve_finding($1) as target`, [
-        finding,
-      ])
+      await approve(finding)
 
-      // Null, and correctly so: there is no record to navigate to.
-      expect(r.rows[0].target).toBeNull()
+      // No creation row, and correctly so: a `review` obligation has no record
+      // to navigate to. This is what the Go store reads to decide there is
+      // nothing to send the person to.
+      const created = await migrator.query(
+        `select target_id from audit_log
+          where finding_id = $1 and target_id is not null and target_table <> 'findings'`,
+        [finding],
+      )
+      expect(created.rows).toHaveLength(0)
       expect(await auditActions(finding)).toEqual(['approve_finding'])
 
       const pa = await migrator.query(

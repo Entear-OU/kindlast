@@ -34,14 +34,25 @@ future one nobody has written yet:
 - Check, unique and foreign key constraints
 - The append-only trigger on `audit_log`
 - Indexes
-- The handful of `SECURITY DEFINER` functions that exist because RLS
-  structurally cannot express the check: `app_org_role`,
-  `app_org_member_count`, `accept_invitation`, and
-  `notification_recipients`
+- The `SECURITY DEFINER` functions that exist because RLS structurally cannot
+  express the check. There are five:
 
-Each definer function carries its justification in the migration that creates
-it. A definer function is how RLS gets bypassed by accident, so adding a fifth
-means writing down why the fourth's reasoning does not cover you.
+  | Function | Why it cannot be a policy |
+  |---|---|
+  | `app_org_role` | Policies need it, so it cannot itself be gated by one |
+  | `app_org_member_count` | Same |
+  | `accept_invitation` | The invitee is not a member yet, so no policy can see their invitation |
+  | `notification_recipients` | The dispatcher holds no grants on memberships, preferences or identities, deliberately |
+  | `redeem_capability_token` | The caller has no session, so no tenancy GUC is set and every policy would refuse |
+
+Each carries its justification in the migration that creates it. A definer
+function is how RLS gets bypassed by accident, so adding a sixth means writing
+down why none of these five already covers you.
+
+Two of them arrived together in `00015` and neither was free: the first is
+narrowed to the minimum projection delivery needs, and the second answers
+identically for every unusable token so it cannot be used to discover which
+tokens are real.
 
 ### What belongs in Go
 

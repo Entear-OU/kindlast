@@ -87,6 +87,14 @@ type Tenant struct {
 	orgID  string
 	role   string
 	userID string
+	// billingEnabled decides whether the manual-record cap applies (ENT-225).
+	//
+	// A field rather than the `app.billing_enabled` session GUC it replaced.
+	// The GUC existed because `ropa_manual_activity_limit()` needed the fact and
+	// a database function cannot read an environment variable; with the cap
+	// decided in Go there is nothing in the database that needs telling, and
+	// 00013's third GUC was a correct fix in the wrong layer.
+	billingEnabled bool
 }
 
 func (t *Tenant) OrgID() string  { return t.orgID }
@@ -151,26 +159,16 @@ func (s *Store) resolve(ctx context.Context, tx pgx.Tx, userID uuid.UUID, reques
 		return nil, err
 	}
 
-	// Not a tenancy GUC and never read by a policy. It carries one fact the
-	// database cannot otherwise learn: whether this deployment bills anybody.
-	// Unset reads as off, so a transaction that somehow skipped this is
-	// uncapped rather than wrongly capped.
-	if err := setLocal(ctx, tx, "app.billing_enabled", billingGUC(s.billingEnabled)); err != nil {
-		return nil, err
-	}
-
-	return &Tenant{tx: tx, orgID: orgID, role: role, userID: userID.String()}, nil
-}
-
-// billingGUC renders the flag as the database reads it.
-//
-// A string because a GUC is always text, and the SQL side accepts on/true/1 so
-// that a value set by hand in psql behaves the same way as one set here.
-func billingGUC(enabled bool) string {
-	if enabled {
-		return "on"
-	}
-	return "off"
+	// There is no third GUC any more (ENT-225). `app.billing_enabled` existed
+	// only so `ropa_manual_activity_limit()` could learn a deployment fact a
+	// database function cannot read for itself, and 00013 called that out at the
+	// time as a correct fix in the wrong layer. The cap is decided in Go now, so
+	// the fact travels as a field on the transaction and nothing has to be
+	// spelled into the session.
+	return &Tenant{
+		tx: tx, orgID: orgID, role: role, userID: userID.String(),
+		billingEnabled: s.billingEnabled,
+	}, nil
 }
 
 func (s *Store) membership(ctx context.Context, tx pgx.Tx, userID uuid.UUID, requestedOrgID string) (orgID, role string, err error) {

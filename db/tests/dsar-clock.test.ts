@@ -32,6 +32,29 @@ import {
 
 const reachable = await isStackReachable()
 
+/**
+ * Approve a finding exactly as core-api does (ENT-225).
+ *
+ * This used to be `select approve_finding($1)`. That function decided things,
+ * so it moved to Go and 00016 dropped it, and the statement below is what the
+ * Go store now issues.
+ *
+ * The subject of this file did not move. The Executor triggers are still SQL,
+ * still fire on `after update of status`, and are still what is under test
+ * here; only the thing pulling the trigger changed. Driving them with the real
+ * UPDATE rather than through a function is arguably a better test than before,
+ * because it is the statement production actually runs.
+ */
+const APPROVE = `
+  update findings
+     set status = 'approved',
+         approved_by = current_setting('app.current_user_id')::uuid,
+         approval_reviewed = false
+   where id = $1
+     and org_id = current_setting('app.current_org_id')::uuid
+     and status <> 'approved'
+`
+
 const org = randomUUID()
 const ada = randomUUID()
 const obligationID = randomUUID()
@@ -134,7 +157,7 @@ describe.skipIf(!reachable)('the deadline runs from receipt', () => {
     })
 
     await setTenant(app, org, ada)
-    await app.query(`select approve_finding($1)`, [finding])
+    await app.query(APPROVE, [finding])
 
     const r = await migrator.query(
       `select received_at, response_due_at from dsars where finding_id = $1`,
@@ -166,7 +189,7 @@ describe.skipIf(!reachable)('the deadline runs from receipt', () => {
     })
 
     await setTenant(app, org, ada)
-    await app.query(`select approve_finding($1)`, [finding])
+    await app.query(APPROVE, [finding])
 
     const r = await migrator.query(
       `select response_due_at from dsars where finding_id = $1`,
@@ -186,18 +209,18 @@ describe.skipIf(!reachable)('and an unknown receipt date is refused', () => {
     const finding = await seedDsarFinding({ requester: 'C. Subject' })
     await setTenant(app, org, ada)
 
-    await expect(
-      app.query(`select approve_finding($1)`, [finding]),
-    ).rejects.toThrow(/no received_at/i)
+    await expect(app.query(APPROVE, [finding])).rejects.toThrow(
+      /no received_at/i,
+    )
   })
 
   it('refuses a received_at that is not a timestamp', async () => {
     const finding = await seedDsarFinding({ received_at: 'last Tuesday' })
     await setTenant(app, org, ada)
 
-    await expect(
-      app.query(`select approve_finding($1)`, [finding]),
-    ).rejects.toThrow(/not a timestamp/i)
+    await expect(app.query(APPROVE, [finding])).rejects.toThrow(
+      /not a timestamp/i,
+    )
   })
 
   it('refuses a receipt date in the future', async () => {
@@ -208,9 +231,9 @@ describe.skipIf(!reachable)('and an unknown receipt date is refused', () => {
     })
     await setTenant(app, org, ada)
 
-    await expect(
-      app.query(`select approve_finding($1)`, [finding]),
-    ).rejects.toThrow(/in the future/i)
+    await expect(app.query(APPROVE, [finding])).rejects.toThrow(
+      /in the future/i,
+    )
   })
 
   // The refusal is a refusal, not a partial write: the approval is aborted
@@ -219,9 +242,7 @@ describe.skipIf(!reachable)('and an unknown receipt date is refused', () => {
     const finding = await seedDsarFinding({ requester: 'D. Subject' })
     await setTenant(app, org, ada)
 
-    await expect(
-      app.query(`select approve_finding($1)`, [finding]),
-    ).rejects.toThrow()
+    await expect(app.query(APPROVE, [finding])).rejects.toThrow()
 
     const r = await migrator.query(
       `select status from findings where id = $1`,
