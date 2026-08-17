@@ -220,14 +220,42 @@ func (t *Tenant) Finding(ctx context.Context, findingID string) (findings.Findin
 	return f, chunks, nil
 }
 
+// The act path, in Go (ENT-225 phase 1).
+//
+// # WHAT MOVED AND WHAT DID NOT
+//
+// `approve_finding`, `reject_finding` and `snooze_finding` were plpgsql until
+// 00016. Each decided something: which status transition counts as a repeat,
+// how many rejections of the same obligation make a product-review flag, how
+// far a deferral may be pushed. Decisions are Go's (§14.5), so they are here.
+//
+// Three things deliberately did not move, and each would be a mistake to
+// "finish" later:
+//
+//   - The acting user is still never passed in. It is read from
+//     `app.current_user_id`, the GUC this transaction set, so a caller cannot
+//     name somebody else as the approver. Adding a parameter would make the
+//     handler the thing that refuses, when the session already does.
+//   - Visibility is still RLS. Every statement below is org-scoped by policy,
+//     not by a `where org_id = ?` this code could forget. The explicit org
+//     predicates that remain are belt and braces, not the boundary.
+//   - `record_audit_log` stays a database function and is called from here. It
+//     snapshots the actor's role at the time of the action and writes an
+//     append-only row, which is an invariant rather than a decision, and the
+//     three Executor triggers call it too, from inside the UPDATE below. A Go
+//     reimplementation would be a second writer of the same regulatory record.
+//
+// # THE ORDER OF THE TWO AUDIT ROWS
+//
+// Approving a finding whose action creates a record writes two rows: the
+// Executor's creation row, from an `after update of status` trigger, and this
+// decision row. The trigger fires during the UPDATE, so the creation row lands
+// first and the decision row second, exactly as it did when the function did
+// this. The tests assert set membership rather than order because nothing
+// should depend on it, but the sequence here is chosen to keep the observed
+// behaviour unchanged rather than to alter it silently.
+
 // ApproveFinding approves, and reports what the Executor created.
-//
-// The acting user is never passed: approve_finding reads it from the GUC this
-// transaction set, which is why the function lost its acting-user parameter in
-// the ENT-192 rewrite. A caller cannot name someone else as the approver.
-//
-// The audit row is written by the database (00006). Writing one here too would
-// duplicate it.
 func (t *Tenant) ApproveFinding(ctx context.Context, findingID string, reviewed bool) (findings.Acted, error) {
 	id, ok := parseID(findingID)
 	if !ok {
@@ -256,24 +284,125 @@ func (t *Tenant) ApproveFinding(ctx context.Context, findingID string, reviewed 
 		return t.withCreatedRecord(ctx, id, findings.Acted{Applied: false})
 	}
 
-	var target *string
-	if err := t.tx.QueryRow(ctx,
-		`select approve_finding($1, $2)::text`, id, reviewed,
-	).Scan(&target); err != nil {
-		return findings.Acted{}, fmt.Errorf("postgres: approving a finding: %w", err)
-	}
-
-	acted := findings.Acted{Applied: true}
-	if target == nil {
-		return acted, nil
-	}
-	acted.CreatedRecordID = *target
-	table, err := t.createdRecordTable(ctx, id)
+	snapshot, err := t.findingSnapshot(ctx, id)
 	if err != nil {
 		return findings.Acted{}, err
 	}
-	acted.CreatedRecordTable = table
+
+	// `status <> 'approved'` and the read above are two guards, and measuring
+	// which one the tests exercise was worth doing.
+	//
+	// Disabling either alone leaves `TestApprovingTwiceThroughTheAPIWritesNoSecondRow`
+	// green; disabling both turns it red. So the test proves the behaviour and
+	// not this line, and the redundancy is real rather than belt-and-braces
+	// phrasing.
+	//
+	// They are kept because they cover different cases. The read decides what to
+	// report, and it is what makes a second approval return the created record
+	// rather than nothing. This decides what to write, and it is the only one
+	// that survives two callers racing, where both pass the read and one must
+	// still lose. Nothing tests that race, which is worth knowing rather than
+	// implying otherwise.
+	var updated *string
+	if err := t.tx.QueryRow(ctx, `
+		update findings
+		   set status = 'approved',
+		       approved_by = $2,
+		       approval_reviewed = $3
+		 where id = $1
+		   and org_id = $4
+		   and status <> 'approved'
+		returning id::text
+	`, id, t.userID, reviewed, t.orgID).Scan(&updated); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Lost the race, or already approved. Nothing written, and the
+			// created record is still reported so a double submit navigates
+			// where the first call did.
+			return t.withCreatedRecord(ctx, id, findings.Acted{Applied: false})
+		}
+		return findings.Acted{}, fmt.Errorf("postgres: approving a finding: %w", err)
+	}
+
+	// Read after the UPDATE, so the Executor trigger's creation row is already
+	// there. This is the same ordering the function had.
+	acted := findings.Acted{Applied: true}
+	acted, err = t.withCreatedRecord(ctx, id, acted)
+	if err != nil {
+		return findings.Acted{}, err
+	}
+
+	if err := t.recordAudit(ctx, auditEntry{
+		FindingID:   &id,
+		ActionType:  "approve_finding",
+		TargetTable: "findings",
+		TargetID:    &id,
+		Before:      snapshot,
+		After:       nil, // read below, after the write
+	}); err != nil {
+		return findings.Acted{}, err
+	}
 	return acted, nil
+}
+
+// findingSnapshot reads a finding as JSON, for the `before` half of an audit
+// row.
+//
+// Org-scoped by policy. A finding in another organisation reads as nothing
+// here, and the UPDATE that follows matches nothing either, so the two agree
+// without this function needing to know why.
+func (t *Tenant) findingSnapshot(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	var snapshot []byte
+	err := t.tx.QueryRow(ctx,
+		`select to_jsonb(f.*) from findings f where f.id = $1`, id).Scan(&snapshot)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("postgres: reading a finding snapshot: %w", err)
+	}
+	return snapshot, nil
+}
+
+// auditEntry is one row for `record_audit_log`.
+type auditEntry struct {
+	FindingID   *uuid.UUID
+	ActionType  string
+	TargetTable string
+	TargetID    *uuid.UUID
+	Before      []byte
+	After       []byte
+}
+
+// recordAudit writes the decision row.
+//
+// Through the database function rather than a direct insert, deliberately. It
+// snapshots the actor's role at the time of the action, which the regulatory
+// record needs because roles change, and the three Executor triggers call the
+// same function from inside the UPDATE that precedes this. Reimplementing it in
+// Go would give one audit trail two writers that could disagree about what a
+// row means.
+//
+// `After` is read here rather than by the caller, so it is always the state as
+// at the moment the row is written and cannot be a stale value the caller
+// happened to fetch earlier.
+func (t *Tenant) recordAudit(ctx context.Context, entry auditEntry) error {
+	after := entry.After
+	if after == nil && entry.TargetTable == "findings" && entry.TargetID != nil {
+		var err error
+		after, err = t.findingSnapshot(ctx, *entry.TargetID)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err := t.tx.Exec(ctx, `
+		select record_audit_log($1, $2, $3, $4, $5, $6, $7, $8, $2)
+	`, t.orgID, t.userID, entry.FindingID, entry.ActionType,
+		entry.TargetTable, entry.TargetID, entry.Before, after)
+	if err != nil {
+		return fmt.Errorf("postgres: recording the audit row: %w", err)
+	}
+	return nil
 }
 
 // withCreatedRecord fills in the Executor's record for a finding that was
@@ -307,13 +436,102 @@ func (t *Tenant) RejectFinding(ctx context.Context, findingID, reason string) (f
 		return findings.Acted{}, nil
 	}
 
-	var applied bool
-	if err := t.tx.QueryRow(ctx,
-		`select reject_finding($1, $2)`, id, nullIfEmpty(reason),
-	).Scan(&applied); err != nil {
+	before, err := t.findingSnapshot(ctx, id)
+	if err != nil {
+		return findings.Acted{}, err
+	}
+
+	var (
+		updated string
+		profile *uuid.UUID
+		slug    *string
+	)
+	err = t.tx.QueryRow(ctx, `
+		update findings
+		   set status = 'rejected',
+		       rejection_reason = nullif(btrim($2), ''),
+		       snoozed_until = null
+		 where id = $1
+		   and org_id = $3
+		   and status <> 'rejected'
+		returning id::text, profile_id, obligation_slug
+	`, id, reason, t.orgID).Scan(&updated, &profile, &slug)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Unknown, another organisation's, or already rejected. One answer for
+		// all three, as before.
+		return findings.Acted{Applied: false}, nil
+	}
+	if err != nil {
 		return findings.Acted{}, fmt.Errorf("postgres: rejecting a finding: %w", err)
 	}
-	return findings.Acted{Applied: applied}, nil
+
+	if slug != nil && profile != nil {
+		if err := t.flagForProductReview(ctx, *profile, *slug, id); err != nil {
+			return findings.Acted{}, err
+		}
+	}
+
+	if err := t.recordAudit(ctx, auditEntry{
+		FindingID:   &id,
+		ActionType:  "reject_finding",
+		TargetTable: "findings",
+		TargetID:    &id,
+		Before:      before,
+	}); err != nil {
+		return findings.Acted{}, err
+	}
+	return findings.Acted{Applied: true}, nil
+}
+
+// RejectionsBeforeProductReview is how many times the same obligation has to be
+// rejected by one organisation before the product should look at it.
+//
+// Three, carried over from the SQL unchanged. It is a product decision and it
+// now reads as one: a threshold in Go that somebody can argue with, rather than
+// a `c_threshold constant int := 3` inside a function body nobody opens.
+//
+// What it means is worth stating, because the number alone does not. A customer
+// rejecting the same obligation three times is not a customer making mistakes.
+// It is the product being wrong about them in a way it will keep being wrong
+// about, and the flag exists so somebody reads the reasons rather than the
+// count.
+const RejectionsBeforeProductReview = 3
+
+// flagForProductReview raises a flag when an obligation keeps being rejected.
+//
+// `on conflict do nothing` because `product_review_flags_no_update` forbids
+// changing a flag once written: the row records what was true when it was
+// raised, and a later rejection is not a correction to it.
+func (t *Tenant) flagForProductReview(ctx context.Context, profile uuid.UUID, slug string, finding uuid.UUID) error {
+	var count int
+	if err := t.tx.QueryRow(ctx, `
+		select count(*) from findings
+		 where profile_id = $1 and obligation_slug = $2 and status = 'rejected'
+	`, profile, slug).Scan(&count); err != nil {
+		return fmt.Errorf("postgres: counting rejections: %w", err)
+	}
+
+	if count < RejectionsBeforeProductReview {
+		return nil
+	}
+
+	_, err := t.tx.Exec(ctx, `
+		insert into product_review_flags (
+			org_id, created_by, profile_id, obligation_slug, finding_id,
+			rejection_count, reasons
+		)
+		values ($1, $2, $3, $4, $5, $6, (
+			select array_remove(array_agg(distinct rejection_reason), null)
+			  from findings
+			 where profile_id = $3 and obligation_slug = $4 and status = 'rejected'
+		))
+		on conflict (profile_id, obligation_slug) do nothing
+	`, t.orgID, t.userID, profile, slug, finding, count)
+	if err != nil {
+		return fmt.Errorf("postgres: flagging an obligation for product review: %w", err)
+	}
+	return nil
 }
 
 // SnoozeFinding defers a finding.
@@ -327,14 +545,71 @@ func (t *Tenant) SnoozeFinding(ctx context.Context, findingID string, days int32
 		return findings.Acted{}, nil
 	}
 
+	before, err := t.findingSnapshot(ctx, id)
+	if err != nil {
+		return findings.Acted{}, err
+	}
+
 	var until *time.Time
-	if err := t.tx.QueryRow(ctx,
-		`select snooze_finding($1, $2)`, id, days,
-	).Scan(&until); err != nil {
+	err = t.tx.QueryRow(ctx, `
+		update findings
+		   set status = 'snoozed',
+		       snoozed_until = now() + make_interval(days => $2)
+		 where id = $1 and org_id = $3
+		returning snoozed_until
+	`, id, clampSnoozeDays(days), t.orgID).Scan(&until)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Unknown, or another organisation's. Note there is no status guard
+		// above: a finding already snoozed is snoozed again, on purpose.
+		return findings.Acted{Applied: false}, nil
+	}
+	if err != nil {
 		return findings.Acted{}, fmt.Errorf("postgres: snoozing a finding: %w", err)
 	}
 
+	if err := t.recordAudit(ctx, auditEntry{
+		FindingID:   &id,
+		ActionType:  "snooze_finding",
+		TargetTable: "findings",
+		TargetID:    &id,
+		Before:      before,
+	}); err != nil {
+		return findings.Acted{}, err
+	}
+
 	return findings.Acted{Applied: until != nil, SnoozedUntil: until}, nil
+}
+
+// Snooze bounds, carried over from the SQL unchanged.
+//
+// A floor of one day because "snooze until now" is not a deferral, and a
+// ceiling of a year because a compliance finding deferred indefinitely is a
+// finding quietly deleted, which is the outcome the register exists to prevent.
+const (
+	MinSnoozeDays     = 1
+	MaxSnoozeDays     = 365
+	DefaultSnoozeDays = 7
+)
+
+// clampSnoozeDays bounds a requested deferral.
+//
+// Clamped rather than refused, which is the one place in this file where that
+// is the right trade: the caller asked to defer, the exact number of days is
+// not a regulatory fact, and refusing a slider that went to 400 would fail an
+// action whose intent was unambiguous. Contrast `log_dsar`'s future receipt
+// date, which is refused precisely because the date IS the regulatory fact.
+func clampSnoozeDays(days int32) int32 {
+	if days <= 0 {
+		return DefaultSnoozeDays
+	}
+	if days < MinSnoozeDays {
+		return MinSnoozeDays
+	}
+	if days > MaxSnoozeDays {
+		return MaxSnoozeDays
+	}
+	return days
 }
 
 // status reads a finding's status, and reports whether the caller can see it
@@ -354,31 +629,20 @@ func (t *Tenant) status(ctx context.Context, id uuid.UUID) (status string, visib
 	return status, true, nil
 }
 
-// createdRecordTable names the table the Executor wrote into.
+// createdRecordTable is gone (ENT-225).
 //
-// Selected by excluding rows whose target is the finding itself rather than by
-// recency. The decision row and the creation row are both written inside one
-// transaction and their order is trigger timing rather than a promise, so
-// "newest row" would be coupling to something the schema does not guarantee.
-func (t *Tenant) createdRecordTable(ctx context.Context, id uuid.UUID) (string, error) {
-	var table string
-	err := t.tx.QueryRow(ctx, `
-		select target_table
-		from audit_log
-		where finding_id = $1
-		  and target_id is not null
-		  and target_table <> 'findings'
-		order by occurred_at desc
-		limit 1
-	`, id).Scan(&table)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("postgres: reading the created record's table: %w", err)
-	}
-	return table, nil
-}
+// It read the Executor's created record's table, and `withCreatedRecord` reads
+// the id and the table together from the same row. The two existed separately
+// because the id came back from `approve_finding` and only the table needed a
+// second query; with the approval in Go there is one lookup, so the "exclude
+// rows whose target is the finding itself" rule now exists once instead of
+// three times (here, in `withCreatedRecord`, and in the SQL function).
+//
+// That rule is the load-bearing part and it is worth restating where it now
+// lives: the decision row and the creation row are written in the same
+// transaction, so `occurred_at` is identical on both, because `now()` is the
+// transaction timestamp. Ordering by it is not a tiebreak. The filter is what
+// makes the lookup unambiguous.
 
 // Dashboard reads the posture inputs, the open counts and the pipeline state.
 //
