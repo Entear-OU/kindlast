@@ -182,6 +182,12 @@ func (s *Service) GetCurrentUser(
 			Email:         subject.Email,
 			DisplayName:   subject.DisplayName,
 			EmailVerified: claims.EmailVerified,
+			// This system's own key for the same human, so a client can find
+			// itself in a member list without a second call and without
+			// reversing a one-way derivation (ENT-220). Read from the tenant
+			// rather than re-derived here, so it is by construction the value
+			// the policies matched and the value `created_by` records.
+			UserId: tenant.UserID(),
 		},
 		Memberships: toProto(memberships),
 		ActiveOrgId: activeOrg,

@@ -136,16 +136,41 @@ func (x *GetCurrentUserResponse) GetPlan() string {
 	return ""
 }
 
+// TWO IDENTIFIERS, AND WHY THEY ARE NOT ONE (ENT-220)
+//
+// This message carries the same human twice, deliberately, and the next reader
+// should not simplify them into one field.
+//
+// `id` is the identifier the authorization server uses: a Zitadel snowflake
+// like `386250729179840515`, or `auth0|abc123`. Its shape is the IdP's to
+// choose and it changes if the deployment changes IdP.
+//
+// `user_id` is this system's own key for that person, a version 5 uuid derived
+// from (issuer, subject) by `libs/chassis/subject`. It is what `memberships`,
+// `created_by` and `approved_by` actually store, and it is what `Member.user_id`
+// returns.
+//
+// The derivation is one-way on purpose, so a client holding `id` cannot compute
+// `user_id`, and `user_identities` is the only way back. Before this field
+// existed a console could list an organisation's members and not work out which
+// row was the person reading the page, which is why an owner could not leave an
+// organisation the API was perfectly willing to let them leave.
 type User struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The IdP subject claim. The tenancy key is org_id; this identifies the
-	// human, and is what created_by and approved_by record.
+	// The IdP subject claim. Identifies the human to the authorization server,
+	// and is NOT what this system stores against their actions: see `user_id`.
 	Id          string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Email       string `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
 	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	// Gates finding approval: an unverified address must not be able to sign
 	// off a regulatory decision (§1.7).
 	EmailVerified bool `protobuf:"varint,4,opt,name=email_verified,json=emailVerified,proto3" json:"email_verified,omitempty"`
+	// This system's own identifier for the same human, matching
+	// `Member.user_id`, `created_by` and `approved_by`.
+	//
+	// Added rather than replacing `id`, which keeps the change additive: an
+	// existing client reading `id` is unaffected, and `buf breaking` stays quiet.
+	UserId        string `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -206,6 +231,13 @@ func (x *User) GetEmailVerified() bool {
 		return x.EmailVerified
 	}
 	return false
+}
+
+func (x *User) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
 }
 
 type Membership struct {
@@ -296,12 +328,13 @@ const file_kindlast_core_v1_session_proto_rawDesc = "" +
 	"\x04user\x18\x01 \x01(\v2\x16.kindlast.core.v1.UserR\x04user\x12>\n" +
 	"\vmemberships\x18\x02 \x03(\v2\x1c.kindlast.core.v1.MembershipR\vmemberships\x12\"\n" +
 	"\ractive_org_id\x18\x03 \x01(\tR\vactiveOrgId\x12\x12\n" +
-	"\x04plan\x18\x04 \x01(\tR\x04plan\"v\n" +
+	"\x04plan\x18\x04 \x01(\tR\x04plan\"\x8f\x01\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12%\n" +
-	"\x0eemail_verified\x18\x04 \x01(\bR\remailVerified\"m\n" +
+	"\x0eemail_verified\x18\x04 \x01(\bR\remailVerified\x12\x17\n" +
+	"\auser_id\x18\x05 \x01(\tR\x06userId\"m\n" +
 	"\n" +
 	"Membership\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x19\n" +

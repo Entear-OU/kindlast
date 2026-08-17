@@ -217,6 +217,99 @@ func TestTheLastOwnerCanBeNeitherRemovedNorDemoted(t *testing.T) {
 	}
 }
 
+// A client can find itself in a member list from one call (ENT-220).
+//
+// The gap this closes: GetCurrentUser returned the IdP subject claim, ListMembers
+// returns the version 5 uuid derived from it, and the derivation is one-way, so a
+// console could render an organisation's members and not know which row was the
+// person reading the page. The visible cost was that an owner could not leave an
+// organisation the API was perfectly willing to let them leave.
+//
+// Asserted by matching, not by shape. A test that only checked `user_id` was a
+// uuid would pass against any uuid, including the wrong person's.
+func TestACallerCanRecogniseItselfInTheMemberList(t *testing.T) {
+	a := newAuthServer(t)
+	sessionClient, orgClient, _ := buildOrgChain(t, a)
+
+	ada := signIn(t, a, sessionClient, "selfid-ada", "Ada Lovelace")
+
+	me, err := sessionClient.GetCurrentUser(t.Context(), withHeaders(
+		connect.NewRequest(&corev1.GetCurrentUserRequest{}), ada.headers))
+	if err != nil {
+		t.Fatalf("GetCurrentUser: %v", err)
+	}
+
+	user := me.Msg.GetUser()
+	if user.GetUserId() == "" {
+		t.Fatal("user_id is empty, so a client still cannot identify itself")
+	}
+	// The two identifiers are different things and must stay so. If a later
+	// change "simplifies" them into one, this is what fails.
+	if user.GetUserId() == user.GetId() {
+		t.Fatalf("user_id and id are both %q; they are the derived key and the "+
+			"IdP subject claim and are not interchangeable", user.GetId())
+	}
+	if want := userIDFor(t, a, ada.claim); user.GetUserId() != want {
+		t.Fatalf("user_id = %q, want the derived id %q", user.GetUserId(), want)
+	}
+
+	members, err := orgClient.ListMembers(t.Context(), withHeaders(
+		connect.NewRequest(&corev1.ListMembersRequest{}), ada.headers))
+	if err != nil {
+		t.Fatalf("listing members: %v", err)
+	}
+
+	var found bool
+	for _, m := range members.Msg.GetMembers() {
+		if m.GetUserId() == user.GetUserId() {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no member row matches the caller's user_id, so the console " +
+			"still cannot mark which row is you")
+	}
+}
+
+// The capability ENT-220 unlocks: leaving.
+//
+// `memberships_delete_owner_or_self` has always permitted removing yourself, so
+// this was never a policy gap. It was unreachable because the console could not
+// name your row. Asserted through the RPC layer, with a second owner present so
+// the last-owner rule is not what is being measured.
+func TestAnOwnerWhoIsNotTheLastCanRemoveThemselves(t *testing.T) {
+	a := newAuthServer(t)
+	sessionClient, orgClient, live := buildOrgChain(t, a)
+
+	ada := signIn(t, a, sessionClient, "leaver-ada", "Ada Leaver")
+	adaID := userIDFor(t, a, ada.claim)
+
+	// A second owner, so the last-owner rule is not what is being measured.
+	bob := joinAs(t, a, live, orgClient, ada, "leaver-bob", "owner")
+
+	if _, err := orgClient.RemoveMember(t.Context(), withHeaders(
+		connect.NewRequest(&corev1.RemoveMemberRequest{UserId: adaID}),
+		ada.headers)); err != nil {
+		t.Fatalf("an owner could not remove themselves: %v", err)
+	}
+
+	// Actually gone. A remove that returned OK and deleted nothing would pass
+	// the assertion above, which is the failure mode an RLS refusal produces.
+	members, err := orgClient.ListMembers(t.Context(), withHeaders(
+		connect.NewRequest(&corev1.ListMembersRequest{}), bob.headers))
+	if err != nil {
+		t.Fatalf("listing members as the remaining owner: %v", err)
+	}
+	for _, m := range members.Msg.GetMembers() {
+		if m.GetUserId() == adaID {
+			t.Fatal("the owner who left is still a member")
+		}
+	}
+	if len(members.Msg.GetMembers()) != 1 {
+		t.Fatalf("members = %d, want 1", len(members.Msg.GetMembers()))
+	}
+}
+
 // The members list is what the settings page renders, and a page of uuids is
 // not a page. This is the visible half of 00005's policy reversal.
 func TestTheMembersListNamesPeopleRatherThanUuids(t *testing.T) {

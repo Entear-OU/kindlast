@@ -80,3 +80,105 @@ describe('a member with nothing to show', () => {
     expect(screen.getByText('u-3')).toBeInTheDocument()
   })
 })
+
+/**
+ * Knowing which row is you (ENT-220).
+ *
+ * The identifier passed in has to be core-api's derived `userId`, not the IdP
+ * subject claim `id`. Getting that wrong fails silently: nothing matches, no
+ * row is marked, and leaving disappears without an error anywhere. So these
+ * assertions are about the match, and about what happens when it does not
+ * happen at all.
+ */
+describe('marking the viewer own row', () => {
+  it('marks exactly one row as you', () => {
+    render(
+      <MembersTable
+        slug="acme"
+        members={members}
+        viewerRole="owner"
+        viewerUserId="u-2"
+      />,
+    )
+
+    expect(screen.getAllByText('You')).toHaveLength(1)
+  })
+
+  it('marks nothing when the id is missing, rather than guessing', () => {
+    // The state a deployment is in if `user_id` does not arrive. Marking the
+    // first row, or any row, would tell somebody they are looking at
+    // themselves when they are not, and offer to remove a stranger.
+    render(<MembersTable slug="acme" members={members} viewerRole="owner" />)
+
+    expect(screen.queryByText('You')).not.toBeInTheDocument()
+  })
+
+  it('marks nothing when the id matches nobody', () => {
+    render(
+      <MembersTable
+        slug="acme"
+        members={members}
+        viewerRole="owner"
+        viewerUserId="386250729179840515"
+      />,
+    )
+
+    // What passing the IdP subject claim instead of the derived id looks like.
+    expect(screen.queryByText('You')).not.toBeInTheDocument()
+  })
+})
+
+describe('leaving', () => {
+  it('offers leave on your own row and remove on everyone else', () => {
+    render(
+      <MembersTable
+        slug="acme"
+        members={members}
+        viewerRole="owner"
+        viewerUserId="u-2"
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /^leave$/i })).toBeInTheDocument()
+    // Two others, and crucially not a third: an owner must not be offered
+    // "Remove" on themselves, because that is the action that needs a stop.
+    expect(screen.getAllByRole('button', { name: /remove/i })).toHaveLength(2)
+  })
+
+  it('offers leave to a viewer, who can manage nobody else', () => {
+    // Every role may leave: memberships_delete_owner_or_self has always
+    // allowed it. Before ENT-220 the page could not offer it to anybody.
+    render(
+      <MembersTable
+        slug="acme"
+        members={members}
+        viewerRole="viewer"
+        viewerUserId="u-2"
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /^leave$/i })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /remove/i }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  })
+
+  it('does not submit the removal until it is confirmed', () => {
+    // The confirmation is the point. Leaving takes your own access away
+    // immediately and may not be undoable without another owner, so the
+    // destructive control must not be reachable in one click.
+    render(
+      <MembersTable
+        slug="acme"
+        members={members}
+        viewerRole="owner"
+        viewerUserId="u-2"
+      />,
+    )
+
+    expect(
+      screen.queryByRole('button', { name: /leave organisation/i }),
+    ).not.toBeInTheDocument()
+  })
+})

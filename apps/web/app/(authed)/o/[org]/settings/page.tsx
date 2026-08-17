@@ -39,7 +39,7 @@ export default async function SettingsPage({
   if (resolved.status === 'unavailable')
     return <WorkspaceUnavailable title="Settings" />
 
-  const { membership } = resolved
+  const { membership, me } = resolved
   const canManage = membership.role === 'owner'
 
   // Null means the call failed, which is not the same as an organisation with
@@ -88,23 +88,16 @@ export default async function SettingsPage({
               Could not load the member list. Reload to try again.
             </p>
           ) : (
-            /* No "which row is you" marker, and its absence is a finding
-               rather than an omission. GetCurrentUser returns the IdP's
-               subject claim; ListMembers returns the version-5 uuid derived
-               from it by libs/chassis/subject. The derivation is one-way, so
-               a client holding one cannot recognise the other, and web has no
-               way to identify itself in this list.
-
-               That costs more than a label. An owner leaving an organisation
-               is a legitimate act, and without knowing which row is theirs the
-               page can neither offer it as "leave" nor warn before a
-               self-removal. ENT-220 fixes it in the contract rather than
-               here, because a client-side join through user_identities would
-               be the console answering a question the API should. */
+            /* `me.user.userId`, not `me.user.id` (ENT-220). The first is
+               core-api's derived key and is what `Member.userId` carries; the
+               second is the IdP's subject claim, which matches no row here.
+               Passing the wrong one is silent: nothing matches, no row is
+               marked, and leaving quietly disappears again. */
             <MembersTable
               slug={slug}
               members={members}
               viewerRole={membership.role ?? ''}
+              viewerUserId={me.user?.userId}
             />
           )}
         </div>
