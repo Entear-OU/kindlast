@@ -2,10 +2,7 @@
 
 import { useState } from 'react'
 
-import {
-  ActivityForm,
-  AddDisclosure,
-} from '@/components/records/activity-form'
+import { ActivityForm, AddDisclosure } from '@/components/records/activity-form'
 import { DsarForm } from '@/components/records/dsar-form'
 import { DsarTable, RopaTable } from '@/components/records/registers'
 import { AiSystemsTable } from '@/components/records/registers'
@@ -185,11 +182,7 @@ export function AddActivity({
       disabled={disabled}
       disabledReason={disabledReason}
     >
-      <ActivityForm
-        slug={slug}
-        action={action}
-        onDone={() => setOpen(false)}
-      />
+      <ActivityForm slug={slug} action={action} onDone={() => setOpen(false)} />
     </AddDisclosure>
   )
 }
