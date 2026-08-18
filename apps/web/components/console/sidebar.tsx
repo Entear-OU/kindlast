@@ -7,6 +7,7 @@ import {
   Scale,
   Settings,
   BookUser,
+  Plug,
 } from 'lucide-react'
 
 import { SignOutForm } from '@/components/auth/sign-out-form'
@@ -116,6 +117,19 @@ export function ConsoleSidebar({
             label="What we know"
           >
             <BookUser aria-hidden="true" className="size-4" />
+          </NavLink>
+        </li>
+        <li>
+          {/* Integrations (ENT-231). Its own entry rather than a tab inside
+              Settings, and for the same reason "What we know" has one: this is
+              where a customer sees which of their own systems Kindlast can
+              reach and what it has fetched from them, which is not a
+              preference to be filed under configuration. */}
+          <NavLink
+            href={orgPath(orgSlug, '/integrations')}
+            label="Integrations"
+          >
+            <Plug aria-hidden="true" className="size-4" />
           </NavLink>
         </li>
         <li>
