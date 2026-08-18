@@ -16,12 +16,18 @@ import sys
 
 from kindlast.platform.v1 import intelligence_connect
 
-from .auth.jwks import KeySet, discover
+from .auth.jwks import KeySet, _rewrite_host, discover
+from .auth.tokens import ClientCredentialsToken
 from .auth.verifier import Verifier
 from .coreapi import CoreAPI
 from .harness.budget import Budget
 from .harness.model import ModelClient
-from .service import IntelligenceService, config_from_env
+from .service import (
+    IntelligenceService,
+    _client_from_file,
+    _from_file,
+    config_from_env,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,40 +51,87 @@ def build_app():
     # reaches it. Same split-horizon shape core-api uses: the document must
     # still declare the issuer, so this changes the address and never the
     # trust.
-    document = discover(config["discovery_url"] or config["issuer"])
+    document = discover(
+        config["issuer"],
+        reachable_at=config["discovery_url"],
+        host_header=config["host_header"],
+    )
     if document["issuer"] != config["issuer"]:
         # Only reachable when a discovery URL was configured separately, which
         # is exactly the case where getting it wrong is easy and silent.
         logger.warning(
-            "the discovery document names a different issuer than configured",
-            extra={"document": document["issuer"], "configured": config["issuer"]},
+            "the discovery document names issuer %s, configured %s",
+            document["issuer"],
+            config["issuer"],
         )
 
-    keys = KeySet(document["jwks_uri"])
+    keys = KeySet(
+        document["jwks_uri"],
+        reachable_at=config["discovery_url"],
+        host_header=config["host_header"],
+    )
     keys.warm()
+
+    # Environment first, then the volume the seed writes into, because the
+    # project id and the client secret are generated per environment and have
+    # no host-side path to bake into a compose file. core-api reads its
+    # audience the same way.
+    file_id, file_secret = _client_from_file()
+    client_id = os.getenv("KINDLAST_INTERNAL_CLIENT_ID", "") or file_id
+    client_secret = os.getenv("KINDLAST_INTERNAL_CLIENT_SECRET", "") or file_secret
+    project_id = (
+        os.getenv("KINDLAST_OIDC_PROJECT_ID", "")
+        or _from_file("KINDLAST_OIDC_AUDIENCE_FILE")
+        or config["audience"]
+    )
+    if not client_id or not client_secret:
+        raise RuntimeError(
+            "KINDLAST_INTERNAL_CLIENT_ID and KINDLAST_INTERNAL_CLIENT_SECRET "
+            "are required: this service records every run through core-api, "
+            "and a deployment that cannot do that would produce findings with "
+            "no provenance"
+        )
 
     # The vendor claim, when one is configured. See config_from_env for why
     # this is not optional on a Zitadel deployment.
     scope_claims = (config["scope_claim"],) if config["scope_claim"] else ()
+    # THE AUDIENCE IS THE PROJECT ID ON THIS STACK, measured rather than
+    # assumed. §1.4 names `kindlast-intelligence` as the audience a dedicated
+    # Intelligence application would carry, and Zitadel stamps the project id
+    # until one exists. Configuring it rather than hard-coding either keeps
+    # §18.2's promise that a self-hoster on another IdP needs no code change.
+    audience = config["audience"]
+    if audience == "kindlast-intelligence" and project_id:
+        audience = project_id
+
     verifier = Verifier(
         keys,
         issuer=config["issuer"],
-        audience=config["audience"],
+        audience=audience,
         scope_claims=scope_claims,
     )
 
-    core_api_token = os.getenv("KINDLAST_INTERNAL_TOKEN", "")
-    if not core_api_token:
-        raise RuntimeError(
-            "KINDLAST_INTERNAL_TOKEN is required: this service records every "
-            "run through core-api, and a deployment that cannot do that would "
-            "produce findings with no provenance"
-        )
+    # Client credentials rather than a token, because §1.2 makes access tokens
+    # live ten minutes. See auth/tokens.py for why an environment variable
+    # cannot work here.
+    tokens = ClientCredentialsToken(
+        # Rewritten to where this container can reach it, for the third time in
+        # this function. See auth/tokens.py.
+        token_endpoint=_rewrite_host(
+            document.get("token_endpoint")
+            or f"{config['issuer'].rstrip('/')}/oauth/v2/token",
+            config["discovery_url"],
+        ),
+        client_id=client_id,
+        client_secret=client_secret,
+        project_id=project_id,
+        host_header=config["host_header"],
+    )
 
     service = IntelligenceService(
         verifier=verifier,
         model=ModelClient(config["model_url"]),
-        core_api=CoreAPI(config["core_api_url"], token=core_api_token),
+        core_api=CoreAPI(config["core_api_url"], tokens=tokens),
         model_name=os.getenv("KINDLAST_MODEL_NAME", "unknown"),
         model_version=os.getenv("KINDLAST_MODEL_VERSION", "unknown"),
         budget=Budget(),
@@ -97,7 +150,7 @@ def main() -> int:
     from waitress import serve
 
     port = int(os.getenv("KINDLAST_INTELLIGENCE_PORT", "8090"))
-    logger.info("intelligence listening", extra={"port": port})
+    logger.info("intelligence listening on port %s", port)
 
     # WAITRESS, NOT wsgiref.simple_server, AND THE REFERENCE SERVER WAS TRIED.
     #

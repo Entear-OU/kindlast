@@ -20,8 +20,10 @@ token, a malformed request, an unreachable model.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+from pathlib import Path
 
 from connectrpc.errors import ConnectError
 from connectrpc.code import Code
@@ -115,7 +117,13 @@ class IntelligenceService:
         try:
             agent_run_id = self._core_api.record_run(request.org_id, run)
         except CoreAPIError as exc:
-            logger.error("recording the run failed", extra={"error": str(exc)})
+            # INTERPOLATED, NOT `extra=`. A dict passed as `extra` is only
+            # rendered if the formatter names its keys, and the default format
+            # does not, so the first version of this line logged "recording the
+            # run failed" and threw the reason away. An error message that
+            # omits the error is worse than no log line, because it looks like
+            # you already looked.
+            logger.error("recording the run failed: %s", exc)
             raise ConnectError(
                 Code.INTERNAL,
                 "the run completed but could not be recorded, so it is being "
@@ -158,7 +166,7 @@ class IntelligenceService:
             # say they are, and may not do this.
             raise ConnectError(Code.PERMISSION_DENIED, str(exc)) from exc
         except VerificationError as exc:
-            logger.warning("refusing a token", extra={"reason": str(exc)})
+            logger.warning("refusing a token: %s", exc)
             raise ConnectError(Code.UNAUTHENTICATED, "the token was refused") from exc
 
 
@@ -183,6 +191,53 @@ def _first_header(ctx: RequestContext, name: str) -> str | None:
     return value
 
 
+def _from_file(env_name: str) -> str:
+    """Read a value the seed wrote into a shared volume.
+
+    Zitadel generates the project id and the service client's secret per
+    environment, into a docker volume, so neither can be baked into a compose
+    file or an image. core-api reads its audience the same way, and this
+    follows that shape rather than inventing a second one.
+
+    Missing is not an error here: the caller decides whether the value was
+    required, so a deployment configuring things by environment variable
+    instead does not have to satisfy a file it never wrote.
+    """
+    path = os.getenv(env_name, "").strip()
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return ""
+
+
+def _client_from_file() -> tuple[str, str]:
+    """The seed writes `{clientId, clientSecret}` as JSON."""
+    raw = _from_file("KINDLAST_INTERNAL_CLIENT_FILE")
+    if not raw:
+        return "", ""
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return "", ""
+    return str(payload.get("clientId", "")), str(payload.get("clientSecret", ""))
+
+
+def _expand_audience(template: str, audience: str) -> str:
+    if not template or "{audience}" not in template:
+        return template
+    if not audience:
+        raise RuntimeError(
+            "KINDLAST_OIDC_SCOPE_CLAIM names {audience} but no project id is "
+            "available; set KINDLAST_OIDC_AUDIENCE_FILE or "
+            "KINDLAST_OIDC_PROJECT_ID. Left unexpanded, the claim name would "
+            "match nothing and every genuine caller would be refused for "
+            "holding no authority."
+        )
+    return template.replace("{audience}", audience)
+
+
 def config_from_env() -> dict[str, str]:
     """What a deployment must set.
 
@@ -203,6 +258,11 @@ def config_from_env() -> dict[str, str]:
     return {
         "issuer": os.environ["KINDLAST_OIDC_ISSUER"],
         "discovery_url": os.getenv("KINDLAST_OIDC_DISCOVERY_URL", ""),
+        # Zitadel routes by Host, so reaching it at a container address needs
+        # the public one in the header or the request lands on the wrong
+        # virtual server and 404s. core-api carries the same setting for the
+        # same measured reason.
+        "host_header": os.getenv("KINDLAST_OIDC_HOST_HEADER", ""),
         "audience": os.getenv("KINDLAST_OIDC_AUDIENCE", "kindlast-intelligence"),
         # WHERE THE CALLER'S GRANTED AUTHORITY ACTUALLY LIVES.
         #
@@ -221,7 +281,17 @@ def config_from_env() -> dict[str, str]:
         # Configurable rather than hard-coded, for the §18.2 reason: a
         # self-hoster pointing at their own IdP must not need a code change,
         # and this service must not grow a table of vendor quirks.
-        "scope_claim": os.getenv("KINDLAST_OIDC_SCOPE_CLAIM", ""),
+        # `{audience}` is expanded from the audience file, because Zitadel
+        # names its roles claim after the project the roles belong to and that
+        # id is generated per environment. core-api makes the same
+        # substitution for the same reason (ENT-221); without it the claim name
+        # is a literal nothing matches, and every genuine caller is refused for
+        # holding no authority.
+        "scope_claim": _expand_audience(
+            os.getenv("KINDLAST_OIDC_SCOPE_CLAIM", ""),
+            _from_file("KINDLAST_OIDC_AUDIENCE_FILE")
+            or os.getenv("KINDLAST_OIDC_PROJECT_ID", ""),
+        ),
         "core_api_url": os.environ["KINDLAST_CORE_API_URL"],
         "model_url": os.getenv("KINDLAST_MODEL_URL", "http://model:8080"),
     }

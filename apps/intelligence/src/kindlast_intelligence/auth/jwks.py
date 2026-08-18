@@ -30,10 +30,26 @@ REFETCH_COOLDOWN_SECONDS = 60.0
 class KeySet:
     """A cached JWKS, refetched when a token names a key it does not hold."""
 
-    def __init__(self, jwks_uri: str, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        jwks_uri: str,
+        client: httpx.Client | None = None,
+        reachable_at: str = "",
+        host_header: str = "",
+    ) -> None:
+        """`reachable_at` and `host_header` are the split-horizon pair.
+
+        Discovery returns a `jwks_uri` naming the issuer's PUBLIC address,
+        which in compose is not where this container can reach it. So the
+        address is rewritten and the Host header carries the original.
+
+        That changes how we get there and never who we trust: the document
+        still had to declare the issuer we expected before we got this far.
+        """
         if not jwks_uri:
             raise ValueError("a key set needs a jwks_uri")
-        self._jwks_uri = jwks_uri
+        self._jwks_uri = _rewrite_host(jwks_uri, reachable_at)
+        self._host_header = host_header
         self._client = client or httpx.Client(timeout=10.0)
         self._keys: dict[str, PyJWK] = {}
         self._last_fetch = 0.0
@@ -83,7 +99,8 @@ class KeySet:
 
     def _fetch_locked(self) -> None:
         self._last_fetch = time.monotonic()
-        response = self._client.get(self._jwks_uri)
+        headers = {"Host": self._host_header} if self._host_header else None
+        response = self._client.get(self._jwks_uri, headers=headers)
         response.raise_for_status()
         document: dict[str, Any] = response.json()
 
@@ -115,7 +132,33 @@ class KeySet:
         self._keys = keys
 
 
-def discover(issuer: str, client: httpx.Client | None = None) -> dict[str, Any]:
+def _rewrite_host(url: str, reachable_at: str) -> str:
+    """Point a URL at where it can actually be reached.
+
+    ZITADEL ROUTES BY Host, AND WITHOUT THIS THE REQUEST REACHES THE WRONG
+    VIRTUAL SERVER RATHER THAN FAILING CLEANLY. Measured, and the same fact
+    core-api's configuration already carries: in compose, tokens name
+    `http://localhost:8300` while the container reaches `http://auth:8080`, and
+    asking the second for the first's documents returns a plain 404 that
+    suggests the path is wrong when the path is fine.
+    """
+    if not reachable_at:
+        return url
+
+    from urllib.parse import urlparse, urlunparse
+
+    target = urlparse(reachable_at)
+    if not target.netloc:
+        return url
+    return urlunparse(urlparse(url)._replace(scheme=target.scheme, netloc=target.netloc))
+
+
+def discover(
+    issuer: str,
+    client: httpx.Client | None = None,
+    reachable_at: str = "",
+    host_header: str = "",
+) -> dict[str, Any]:
     """Read the OpenID configuration and check it names the issuer we asked for.
 
     The `jwks_uri` comes from the document rather than from an assumed path
@@ -128,15 +171,31 @@ def discover(issuer: str, client: httpx.Client | None = None) -> dict[str, Any]:
     trusting them to mint tokens for this deployment.
     """
     http = client or httpx.Client(timeout=10.0)
-    url = issuer.rstrip("/") + "/.well-known/openid-configuration"
-    response = http.get(url)
+
+    # ACCEPTS AN ISSUER OR A FULL DOCUMENT URL, and appending blindly is how
+    # this first failed: core-api's KINDLAST_OIDC_DISCOVERY_URL convention is
+    # the complete document URL, so the container asked for
+    # `/.well-known/openid-configuration/.well-known/openid-configuration` and
+    # got a 404 that says nothing about the real mistake.
+    #
+    # Tolerating both is right rather than merely convenient: one setting names
+    # the issuer and another names where to fetch its document, and a caller
+    # should not have to know which half of that this function wanted.
+    suffix = "/.well-known/openid-configuration"
+    base = issuer.rstrip("/")
+    url = base if base.endswith(suffix) else base + suffix
+    expected_issuer = base[: -len(suffix)] if base.endswith(suffix) else base
+
+    url = _rewrite_host(url, reachable_at)
+    headers = {"Host": host_header} if host_header else None
+    response = http.get(url, headers=headers)
     response.raise_for_status()
     document: dict[str, Any] = response.json()
 
-    if document.get("issuer") != issuer:
+    if document.get("issuer") not in (issuer, expected_issuer):
         raise ValueError(
             f"discovery document names issuer {document.get('issuer')!r}, "
-            f"expected {issuer!r}"
+            f"expected {expected_issuer!r}"
         )
     if not document.get("jwks_uri"):
         raise ValueError("discovery document has no jwks_uri")

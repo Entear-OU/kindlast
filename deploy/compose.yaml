@@ -659,6 +659,72 @@ services:
       # published for `bun run dev`, the Postman collection, and debugging.
       - "127.0.0.1:${KINDLAST_MODEL_PORT:-8081}:8080"
 
+  intelligence:
+    container_name: kindlast-intelligence
+    build:
+      context: ..
+      dockerfile: apps/intelligence/Dockerfile
+    # IN THE `model` PROFILE, because without a model it has nothing to do.
+    # A running Intelligence pointed at no endpoint would accept requests and
+    # fail every one of them, which is a worse answer than not being there.
+    profiles: ["model"]
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      core-api:
+        condition: service_healthy
+      model:
+        condition: service_healthy
+    environment:
+      # The issuer as tokens carry it, and separately where to fetch that
+      # document from, because no `localhost:8300` exists on this network. The
+      # document must still declare the issuer, so this changes the address
+      # and never the trust. Same split core-api makes.
+      KINDLAST_OIDC_ISSUER: http://localhost:${KINDLAST_AUTH_PORT:-8300}
+      KINDLAST_OIDC_DISCOVERY_URL: http://auth:8080
+      # Zitadel routes by Host: without this the request reaches the wrong
+      # virtual server rather than failing cleanly, and presents as a 404 on a
+      # path that is perfectly correct. Same setting core-api carries.
+      KINDLAST_OIDC_HOST_HEADER: "localhost:${KINDLAST_AUTH_PORT:-8300}"
+
+      # WHERE THE CALLER'S AUTHORITY ACTUALLY LIVES, measured rather than
+      # assumed. Zitadel emits neither `scope` nor `scp` on an access token,
+      # whatever is requested, and asserts project roles under this URN with an
+      # object value. A verifier reading only RFC 9068's `scope` finds no
+      # authority at all and refuses every genuine caller, which is exactly
+      # what happened the first time this service was driven end to end.
+      #
+      # The project id is not known until the seed has run, so `{audience}` is
+      # expanded at load from the audience file below, the same substitution
+      # core-api makes for the same reason (ENT-221).
+      KINDLAST_OIDC_SCOPE_CLAIM: "urn:zitadel:iam:org:project:{audience}:roles"
+
+      # Written by the seed, because both are Zitadel's and neither is known
+      # until the project exists.
+      KINDLAST_OIDC_AUDIENCE_FILE: /machinekey/core-api-audience.txt
+      KINDLAST_INTERNAL_CLIENT_FILE: /machinekey/core-api-client.json
+
+      # Through the edge, the same door a host caller uses, so there is no
+      # development-only shortcut.
+      KINDLAST_CORE_API_URL: http://edge:80
+      KINDLAST_MODEL_URL: http://model:8080
+
+      # Recorded on every run, so a stored finding names the weights that
+      # produced it rather than "a 4B".
+      # NOT `KINDLAST_MODEL_SHA256`, which is `model-init`'s, and reusing it
+      # here set one third of that job's matched triple and made it refuse the
+      # whole stack with "refusing a partial model override". The guard was
+      # right and the name was wrong: one variable meaning both "the digest to
+      # fetch" and "the version to record" is two settings wearing one name.
+      KINDLAST_MODEL_NAME: ${KINDLAST_MODEL_NAME:-Qwen3.5-4B-Q4_K_M}
+      KINDLAST_MODEL_VERSION: ${KINDLAST_MODEL_VERSION:-00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4}
+
+      KINDLAST_INTELLIGENCE_PORT: "8090"
+    volumes:
+      - zitadel-machinekey:/machinekey:ro
+    ports:
+      - "127.0.0.1:${KINDLAST_INTELLIGENCE_PORT:-8090}:8090"
+
   edge:
     container_name: kindlast-edge
     image: caddy:2-alpine
