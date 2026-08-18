@@ -36,6 +36,9 @@ const (
 	// IngestServiceIngestCorpusProcedure is the fully-qualified name of the IngestService's
 	// IngestCorpus RPC.
 	IngestServiceIngestCorpusProcedure = "/kindlast.platform.v1.IngestService/IngestCorpus"
+	// IngestServiceRecordAgentRunProcedure is the fully-qualified name of the IngestService's
+	// RecordAgentRun RPC.
+	IngestServiceRecordAgentRunProcedure = "/kindlast.platform.v1.IngestService/RecordAgentRun"
 )
 
 // IngestServiceClient is a client for the kindlast.platform.v1.IngestService service.
@@ -66,6 +69,42 @@ type IngestServiceClient interface {
 	// is not in the corpus is exactly that, and it would surface to a customer as
 	// a finding whose "check this against the law" link goes nowhere.
 	IngestCorpus(context.Context, *connect.Request[v1.IngestCorpusRequest]) (*connect.Response[v1.IngestCorpusResponse], error)
+	// Records one agent run: what was asked, what answered, what it consulted,
+	// what it cost, and how it ended (ENT-218, §26.3).
+	//
+	// # WHY THE SCOPE IS DIFFERENT FROM THE RPC ABOVE
+	//
+	// `internal:intelligence`, not `internal:ingest`, and the difference is the
+	// point rather than an inconsistency. The scope option is per method
+	// precisely so one internal surface can hold writes that different platform
+	// callers make. The corpus loader may not record agent runs and the
+	// Intelligence service may not rewrite the law, and neither holds the
+	// other's scope.
+	//
+	// What the two share, and the reason they sit on one service, is the
+	// property in this file's header: no person's token reaches either. The
+	// package boundary answers "is this reachable by a human" and the scope
+	// answers "by which of us".
+	//
+	// # WHY INTELLIGENCE DOES NOT WRITE THIS ITSELF
+	//
+	// It holds no database credential (§1.6). Go persists; Python drafts and
+	// returns. So the run record travels back over this RPC rather than being
+	// written where it was produced, which also means the record is written by
+	// something that can be trusted to write the org_id honestly.
+	//
+	// # ONE CALL, AT THE END
+	//
+	// A run is recorded once, when it finishes, carrying both timestamps. There
+	// is no start call to pair with. A record a producer can amend after the
+	// fact is worth less than one it cannot, which is the same argument
+	// `audit_log` rests on, and 00019 enforces it by granting no update to
+	// anybody.
+	//
+	// A refusal is a run and is recorded. A run that failed to record is not a
+	// run that did not happen, so the caller must treat a failure here as
+	// serious rather than as best-effort telemetry.
+	RecordAgentRun(context.Context, *connect.Request[v1.RecordAgentRunRequest]) (*connect.Response[v1.RecordAgentRunResponse], error)
 }
 
 // NewIngestServiceClient constructs a client for the kindlast.platform.v1.IngestService service. By
@@ -85,17 +124,29 @@ func NewIngestServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(ingestServiceMethods.ByName("IngestCorpus")),
 			connect.WithClientOptions(opts...),
 		),
+		recordAgentRun: connect.NewClient[v1.RecordAgentRunRequest, v1.RecordAgentRunResponse](
+			httpClient,
+			baseURL+IngestServiceRecordAgentRunProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("RecordAgentRun")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // ingestServiceClient implements IngestServiceClient.
 type ingestServiceClient struct {
-	ingestCorpus *connect.Client[v1.IngestCorpusRequest, v1.IngestCorpusResponse]
+	ingestCorpus   *connect.Client[v1.IngestCorpusRequest, v1.IngestCorpusResponse]
+	recordAgentRun *connect.Client[v1.RecordAgentRunRequest, v1.RecordAgentRunResponse]
 }
 
 // IngestCorpus calls kindlast.platform.v1.IngestService.IngestCorpus.
 func (c *ingestServiceClient) IngestCorpus(ctx context.Context, req *connect.Request[v1.IngestCorpusRequest]) (*connect.Response[v1.IngestCorpusResponse], error) {
 	return c.ingestCorpus.CallUnary(ctx, req)
+}
+
+// RecordAgentRun calls kindlast.platform.v1.IngestService.RecordAgentRun.
+func (c *ingestServiceClient) RecordAgentRun(ctx context.Context, req *connect.Request[v1.RecordAgentRunRequest]) (*connect.Response[v1.RecordAgentRunResponse], error) {
+	return c.recordAgentRun.CallUnary(ctx, req)
 }
 
 // IngestServiceHandler is an implementation of the kindlast.platform.v1.IngestService service.
@@ -126,6 +177,42 @@ type IngestServiceHandler interface {
 	// is not in the corpus is exactly that, and it would surface to a customer as
 	// a finding whose "check this against the law" link goes nowhere.
 	IngestCorpus(context.Context, *connect.Request[v1.IngestCorpusRequest]) (*connect.Response[v1.IngestCorpusResponse], error)
+	// Records one agent run: what was asked, what answered, what it consulted,
+	// what it cost, and how it ended (ENT-218, §26.3).
+	//
+	// # WHY THE SCOPE IS DIFFERENT FROM THE RPC ABOVE
+	//
+	// `internal:intelligence`, not `internal:ingest`, and the difference is the
+	// point rather than an inconsistency. The scope option is per method
+	// precisely so one internal surface can hold writes that different platform
+	// callers make. The corpus loader may not record agent runs and the
+	// Intelligence service may not rewrite the law, and neither holds the
+	// other's scope.
+	//
+	// What the two share, and the reason they sit on one service, is the
+	// property in this file's header: no person's token reaches either. The
+	// package boundary answers "is this reachable by a human" and the scope
+	// answers "by which of us".
+	//
+	// # WHY INTELLIGENCE DOES NOT WRITE THIS ITSELF
+	//
+	// It holds no database credential (§1.6). Go persists; Python drafts and
+	// returns. So the run record travels back over this RPC rather than being
+	// written where it was produced, which also means the record is written by
+	// something that can be trusted to write the org_id honestly.
+	//
+	// # ONE CALL, AT THE END
+	//
+	// A run is recorded once, when it finishes, carrying both timestamps. There
+	// is no start call to pair with. A record a producer can amend after the
+	// fact is worth less than one it cannot, which is the same argument
+	// `audit_log` rests on, and 00019 enforces it by granting no update to
+	// anybody.
+	//
+	// A refusal is a run and is recorded. A run that failed to record is not a
+	// run that did not happen, so the caller must treat a failure here as
+	// serious rather than as best-effort telemetry.
+	RecordAgentRun(context.Context, *connect.Request[v1.RecordAgentRunRequest]) (*connect.Response[v1.RecordAgentRunResponse], error)
 }
 
 // NewIngestServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -141,10 +228,18 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(ingestServiceMethods.ByName("IngestCorpus")),
 		connect.WithHandlerOptions(opts...),
 	)
+	ingestServiceRecordAgentRunHandler := connect.NewUnaryHandler(
+		IngestServiceRecordAgentRunProcedure,
+		svc.RecordAgentRun,
+		connect.WithSchema(ingestServiceMethods.ByName("RecordAgentRun")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.IngestService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IngestServiceIngestCorpusProcedure:
 			ingestServiceIngestCorpusHandler.ServeHTTP(w, r)
+		case IngestServiceRecordAgentRunProcedure:
+			ingestServiceRecordAgentRunHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -156,4 +251,8 @@ type UnimplementedIngestServiceHandler struct{}
 
 func (UnimplementedIngestServiceHandler) IngestCorpus(context.Context, *connect.Request[v1.IngestCorpusRequest]) (*connect.Response[v1.IngestCorpusResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IngestService.IngestCorpus is not implemented"))
+}
+
+func (UnimplementedIngestServiceHandler) RecordAgentRun(context.Context, *connect.Request[v1.RecordAgentRunRequest]) (*connect.Response[v1.RecordAgentRunResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IngestService.RecordAgentRun is not implemented"))
 }

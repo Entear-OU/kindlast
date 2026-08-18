@@ -75,6 +75,81 @@
               }
             }
           ]
+        },
+        {
+          "name": "Model health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{model_base_url}}/health",
+              "host": [
+                "{{model_base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "llama.cpp `llama-server`, the local model (ENT-235, §26.6). Returns 200 only once the weights are loaded, which is why the compose healthcheck uses it: a dependant waiting on this is waiting on a model that can answer, not on a process that has started.\n\nNo Authorization header, deliberately. Inference is local and the endpoint is bound to loopback, so there is no key to send. That is the point rather than an omission: a deployment holding a compliance record can run with no outbound internet at all."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('model is up', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Model structured output",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"You extract a regulation citation. Reply with JSON having exactly two fields: `regulation` (a string, one of GDPR or EU AI Act) and `article` (an integer).\"},\n    {\"role\": \"user\", \"content\": \"Which article of the GDPR requires a record of processing activities?\"}\n  ],\n  \"response_format\": {\n    \"type\": \"json_schema\",\n    \"json_schema\": {\n      \"name\": \"citation\",\n      \"schema\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"regulation\": {\"type\": \"string\"},\n          \"article\": {\"type\": \"integer\"}\n        },\n        \"required\": [\"regulation\", \"article\"],\n        \"additionalProperties\": false\n      }\n    }\n  },\n  \"temperature\": 0.7\n}"
+            },
+            "url": {
+              "raw": "{{model_base_url}}/v1/chat/completions",
+              "host": [
+                "{{model_base_url}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "The typed-output path §26.3 depends on. `llama-server` converts the JSON Schema to a GBNF grammar and constrains decoding, so the shape is guaranteed by the runtime rather than by the model choosing to comply.\n\nTHE TRAP, WHICH COSTS AN AFTERNOON IF YOU HIT IT BLIND: the schema constrains decoding and is NOT injected into the prompt. Notice the system message above describes the fields in words as well. Remove that description and you still get schema-valid JSON, with the wrong values in the right shape. Passing a Pydantic schema and assuming the model has seen it is the bug this request exists to demonstrate."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('completion returns 200', () => pm.response.to.have.status(200));",
+                  "const content = pm.response.json().choices[0].message.content;",
+                  "pm.test('content parses as JSON', () => { JSON.parse(content); });",
+                  "pm.test('matches the schema it was given', () => {",
+                  "  const o = JSON.parse(content);",
+                  "  pm.expect(o).to.have.property('regulation');",
+                  "  pm.expect(o).to.have.property('article');",
+                  "  pm.expect(o.article).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1059,6 +1134,46 @@
               "path": ["kindlast.platform.v1.IngestService", "IngestCorpus"]
             },
             "description": "Writes the regulatory corpus. Required scope: `internal:ingest`. **Served as of ENT-207.**\n\n**Use the client-credentials token, not a human one.** This is the platform surface: `internal:*` scopes are issued to service clients and never to the browser client, so a console token is refused before any handler runs. `internal:ingest` is the same scope RunSweep carries.\n\n**No organisation header, and that is not an omission.** The corpus has no `org_id`, so there is no organisation for a tenancy interceptor to resolve. This runs on the shorter interceptor chain, like the sweep.\n\n**It takes a pack, and nothing in the contract names GDPR or the AI Act.** A pack is a document with its articles, recitals and annexes, plus obligations, guidelines and enforcement decisions. Every field is optional, so correcting one obligation's severity does not mean re-sending 200KB of unchanged articles. A third regulation is a third call rather than a code change.\n\n**Start with `dryRun: true`.** It validates everything and writes nothing, and it reports every dangling citation at once rather than failing on the first, so a curator can see whether to fix the pack or ingest the regulation it depends on. A real run with an unresolved citation fails with `failed_precondition` instead, because a partially-good pack must not look like a success with a note attached.\n\n**Idempotent.** Every row upserts on its natural key: a document on CELEX, an article on (document, number), an obligation on slug. Running the same pack twice produces no duplicates and no drift, which matters because §20.3 makes this a scheduled singleton once Temporal lands. An unchanged re-ingest does not even bump `updated_at`, so \"what changed last Tuesday\" stays answerable.\n\n**One transaction, and nothing is ever deleted.** A pack that fails leaves nothing behind. The `kindlast_ingest` role holds insert and update and no delete grant, because a finding cites an obligation and an obligation cites an article, and removing either out from under a stored finding turns a claim a customer could check into a dangling reference, retroactively.\n\n**Ordering matters when you send several packs**: obligations cite articles, so the regulations go first. A run that sent obligations first would have every one of them refused against an empty corpus, entirely correctly.\n\nThe practical way to load `data/corpus/` is the command rather than this request:\n\n```\ngo run ./apps/core-api/cmd/corpus-load \\\n  -api http://localhost:8000 -token \"$TOKEN\" -dry-run\n```\n\nOne wire detail that fails silently if you hand-write a pack: proto3 JSON carries **int64 as a string**, so `fineEur` on an enforcement decision must be quoted. `hasFine` rides alongside it because proto3 JSON omits a zero, and a penalty of nothing is a different fact from no penalty."
+          }
+        },
+        {
+          "name": "Record an agent run (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"skill\": \"analyst.narrative\",\n  \"skillVersion\": \"1.0.0\",\n  \"model\": \"Qwen3.5-4B-Q4_K_M\",\n  \"modelVersion\": \"00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4\",\n  \"requestJson\": \"{\\\"finding_id\\\":\\\"abc\\\"}\",\n  \"toolCallsJson\": \"[{\\\"tool\\\":\\\"get_obligation\\\",\\\"args\\\":{\\\"slug\\\":\\\"gdpr-art-30-ropa\\\"}}]\",\n  \"citationsJson\": \"{\\\"resolved\\\":[\\\"gdpr-art-30-ropa\\\"],\\\"rejected\\\":[]}\",\n  \"outcome\": \"AGENT_RUN_OUTCOME_SUCCEEDED\",\n  \"usage\": {\n    \"inputTokens\": 44,\n    \"cachedInputTokens\": 40,\n    \"outputTokens\": 34,\n    \"costMicros\": \"0\"\n  },\n  \"queuedAt\": \"2026-08-18T00:00:00Z\",\n  \"startedAt\": \"2026-08-18T00:00:01Z\",\n  \"finishedAt\": \"2026-08-18T00:00:04Z\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.IngestService/RecordAgentRun",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.IngestService", "RecordAgentRun"]
+            },
+            "description": "One agent run: what was asked, what answered, what it consulted, what it cost, how it ended. Required scope: `internal:intelligence`. **Served as of ENT-218.**\n\n**A different scope from its neighbour above, and that is the point rather than an inconsistency.** The scope option is per method precisely so one internal surface can hold writes that different platform callers make: the corpus loader may not record agent runs and Intelligence may not rewrite the law. What they share is that no person's token reaches either. The package answers \"is this reachable by a human\"; the scope answers \"by which of us\".\n\n**`orgId` is in the body, not a header, and this is the only write on the platform surface where a caller names its own tenant.** Intelligence holds no session, so it has no active organisation to derive; a run happens for whichever tenant the work belonged to. That is safe only because `internal:intelligence` is issued to one service principal through client credentials and never to a browser client, so \"the caller could name any organisation\" describes a component we ship rather than an input a person controls. **If that scope ever reaches something a customer can drive, this becomes a tenancy hole.**\n\n**Intelligence does not write this itself** because it holds no database credential (§1.6). Go persists; Python drafts and returns. The record travels back over this RPC, which also means it is written by something that can be trusted to report the org honestly.\n\n**Called once, at the end.** There is no start call to pair with. A record its producer can amend afterwards is worth less than one it cannot, which is the argument `audit_log` rests on, and 00019 enforces it by granting update to nobody at all. The cost is that an in-flight run is invisible until it finishes; `queuedAt` is here from the start so ENT-238's queue wait is a subtraction rather than a migration.\n\n**`AGENT_RUN_OUTCOME_REFUSED` is first class and is not a kind of failure.** §26.3 makes refusal what a working guardrail produces: a budget exhausted, a citation that did not resolve, a tool outside the skill's allow-list. An enum with only success and failure would push refusals into one of them and lose the distinction that matters most for trust, which is \"the harness stopped this\" versus \"the harness broke\". `AGENT_RUN_OUTCOME_UNSPECIFIED` is refused rather than defaulted, because guessing would put a definite-looking value in the column a customer reads to decide whether to trust a finding.\n\n**`citationsJson` carries both halves, and the rejected half is the important one.** A validator that silently dropped a bad citation would leave a record indistinguishable from a run where the model never tried to cite anything. The customer's question is \"what did it get wrong\", and an omission cannot answer it. This is not theoretical: asked three times which GDPR article requires a record of processing activities, the 2B tier answered 50, then 34, then 54. The answer is 30, and every response was schema-valid.\n\n**`cachedInputTokens` is separate from `inputTokens`** because every provider offering prompt caching prices it separately, and because with a local model it is the measurement showing the corpus prefix is reused rather than reprocessed.\n\n**`costMicros` is quoted**, being an int64 in proto3 JSON. Zero is the honest value for a local model rather than a missing one.\n\n**Skill and model versions are required and refused when empty.** A run recorded without them answers \"what produced this\" with \"something\", which is worse than no row because it looks like an answer. For a local model, `modelVersion` is the weights' digest.\n\nThe write runs on `kindlast_agent`, which holds insert and select on `agent_runs` and no update or delete. Minimal on purpose: §26.4's versioned profile reference and normalised evidence rows are ENT-228's, and `toolCallsJson` and `citationsJson` are jsonb precisely so that issue can normalise them without these columns changing meaning."
+          }
+        },
+        {
+          "name": "Draft a narrative (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"signal\": \"We are a 40 person recruitment agency. We hold candidate CVs and employee payroll records, and we have never written down what we do with them.\",\n  \"obligations\": [\n    {\n      \"slug\": \"gdpr-art-30-ropa\",\n      \"title\": \"Records of Processing Activities\",\n      \"summary\": \"Article 30 GDPR requires a written record of what you do with personal data, why, and for how long.\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{intelligence_base_url}}/kindlast.platform.v1.IntelligenceService/DraftNarrative",
+              "host": ["{{intelligence_base_url}}"],
+              "path": ["kindlast.platform.v1.IntelligenceService", "DraftNarrative"]
+            },
+            "description": "The Analyst, as an RPC. Required scope: `internal:intelligence`. **Served as of ENT-218.**\n\n**A DIFFERENT SERVICE FROM EVERYTHING ELSE IN THIS COLLECTION.** This is Python, not core-api, which is why it has its own base URL. \u00a71.6 splits the languages so Go loads and Go persists while Python drafts and returns, and this sits on the far side of that line: it holds no database credential, sets no tenancy GUC, and has no way to write a finding. The one thing it writes, it writes through core-api's `RecordAgentRun`.\n\n**Use the client-credentials token.** No user token reaches this on any path. Two independent things enforce it: the audience is `kindlast-intelligence` and a human's console token carries a different one, and `internal:intelligence` is granted only to the machine user. That is not belt and braces: Intelligence has no tenancy GUCs and no RLS session, so it cannot check whether a human should see what it is processing. It never needs to, because a human cannot reach it.\n\n**THE CALLER PASSES THE OBLIGATIONS, AND THEY ARE THE ONLY ONES THAT MAY BE CITED.** There is no fetch-them-yourself here and the absence is deliberate (\u00a726.2). Inputs are what a skill needs before it starts and there is no decision in fetching them, so the caller assembles them in Go where the corpus is already readable. That keeps a run a pure function of its inputs, which is what makes it activity-shaped for Temporal at step 8.\n\nThe validator checks citations against **this list**, not against the corpus, and that is stronger than it sounds. A citation to an obligation that genuinely exists but is not in the list is still a fabrication: the model produced it from somewhere other than its context. Asking the corpus \"does this exist\" would have accepted it.\n\n**A REFUSAL IS A 200, NOT AN ERROR.** \u00a726.3 makes refusal what a working guardrail produces: a budget exhausted, a citation that did not resolve, a tool outside the allow-list. Returning `internal` for those would tell you the harness broke when it did exactly what it was built to do. Check `outcome`, not the status code.\n\n**A refused narrative is not returned at all**, not even with a warning attached. `AGENTS.md` calls a fabricated citation worse than nothing, and handing a caller prose plus a note is how that prose reaches a customer.\n\n**`rejectedCitations` is the field to read when something looks wrong.** A response carrying only the good citations would be indistinguishable from a run where the model never tried to cite anything. This is not theoretical: asked three times which GDPR article requires a record of processing activities, the 2B tier answered 50, then 34, then 54. It is 30, and every answer was schema-valid.\n\n**`agentRunId` is the row in `agent_runs`**, so a finding can point at the record of how it was made. Empty only when recording failed, and that case comes back as an error rather than a success: a narrative whose provenance was never stored is a finding nobody can check.\n\n**`signal` is treated as data and never as instruction.** It reaches the model inside a fenced user message and never in the system prompt, because a compliance profile concatenated into a system prompt is a way to reprogram the Analyst."
           }
         },
         {

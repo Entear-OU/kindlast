@@ -1267,6 +1267,66 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/agent-runs:
+        post:
+            tags:
+                - IngestService
+            description: |-
+                Records one agent run: what was asked, what answered, what it consulted,
+                 what it cost, and how it ended (ENT-218, §26.3).
+
+                 # WHY THE SCOPE IS DIFFERENT FROM THE RPC ABOVE
+
+                 `internal:intelligence`, not `internal:ingest`, and the difference is the
+                 point rather than an inconsistency. The scope option is per method
+                 precisely so one internal surface can hold writes that different platform
+                 callers make. The corpus loader may not record agent runs and the
+                 Intelligence service may not rewrite the law, and neither holds the
+                 other's scope.
+
+                 What the two share, and the reason they sit on one service, is the
+                 property in this file's header: no person's token reaches either. The
+                 package boundary answers "is this reachable by a human" and the scope
+                 answers "by which of us".
+
+                 # WHY INTELLIGENCE DOES NOT WRITE THIS ITSELF
+
+                 It holds no database credential (§1.6). Go persists; Python drafts and
+                 returns. So the run record travels back over this RPC rather than being
+                 written where it was produced, which also means the record is written by
+                 something that can be trusted to write the org_id honestly.
+
+                 # ONE CALL, AT THE END
+
+                 A run is recorded once, when it finishes, carrying both timestamps. There
+                 is no start call to pair with. A record a producer can amend after the
+                 fact is worth less than one it cannot, which is the same argument
+                 `audit_log` rests on, and 00019 enforces it by granting no update to
+                 anybody.
+
+                 A refusal is a run and is recorded. A run that failed to record is not a
+                 run that did not happen, so the caller must treat a failure here as
+                 serious rather than as best-effort telemetry.
+            operationId: IngestService_RecordAgentRun
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RecordAgentRunRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecordAgentRunResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/corpus:ingest:
         post:
             tags:
@@ -1311,6 +1371,51 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/IngestCorpusResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/narratives:draft:
+        post:
+            tags:
+                - IntelligenceService
+            description: |-
+                Draft the plain-language narrative for one finding.
+
+                 # WHAT COMES BACK IS ALWAYS AN OUTCOME, NEVER AN ERROR FOR A REFUSAL
+
+                 A refusal is not a failure and does not arrive as one. §26.3 makes refusal
+                 what a working guardrail produces: a budget exhausted, a citation that did
+                 not resolve, a tool outside the allow-list. Returning `unavailable` or
+                 `internal` for those would tell the caller the harness broke when in fact
+                 it worked exactly as designed, and would put that in the column a customer
+                 reads to decide whether to trust a finding.
+
+                 So a refused run is a 200 with `outcome: REFUSED` and an empty narrative.
+                 A transport error means something genuinely went wrong.
+
+                 # AND A REFUSED NARRATIVE IS NOT RETURNED ANYWAY
+
+                 When a citation does not resolve, the drafted text is withheld rather than
+                 returned with a warning attached. `AGENTS.md` calls a fabricated citation
+                 worse than nothing, and handing a caller prose plus a note is how that
+                 prose ends up in front of a customer.
+            operationId: IntelligenceService_DraftNarrative
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DraftNarrativeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DraftNarrativeResponse'
                 default:
                     description: Default error response
                     content:
@@ -1417,6 +1522,28 @@ components:
                  It is one today, and §26 has agents producing acts that reference their run
                  record. `kind` exists so that day adds a value rather than a field, and so a
                  console is never written around "the actor's name" being a human's name.
+        AgentRunUsage:
+            type: object
+            properties:
+                inputTokens:
+                    type: integer
+                    format: int32
+                cachedInputTokens:
+                    type: integer
+                    description: |-
+                        Separate because every provider that offers prompt caching prices it
+                         separately, and because with a local model it is the measurement showing
+                         the corpus prefix is reused rather than reprocessed (§26).
+                    format: int32
+                outputTokens:
+                    type: integer
+                    format: int32
+                costMicros:
+                    type: string
+                    description: |-
+                        Micros, not a float. Money in a float is a bug waiting for a
+                         reconciliation. Zero for a local model, which is a true statement about
+                         marginal cost rather than a missing value.
         AiSystem:
             type: object
             properties:
@@ -1782,6 +1909,88 @@ components:
                     allOf:
                         - $ref: '#/components/schemas/ProcessingActivity'
                     description: The created record, so a client renders it without a second call.
+        DraftNarrativeRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                    description: |-
+                        The organisation this run is for.
+
+                         Carried in the message rather than a header because this caller holds no
+                         session and no active organisation: a run happens for whichever tenant the
+                         work belonged to. Used to record the run, never to decide what may be
+                         read, because this service reads nothing.
+                signal:
+                    type: string
+                    description: |-
+                        What the Watcher found, in the organisation's own words where it has them.
+
+                         TREATED AS DATA AND NEVER AS INSTRUCTION. It reaches the model inside a
+                         fenced user message and never in the system prompt, because `AGENTS.md` is
+                         unambiguous that anything a customer typed is data, and concatenating a
+                         compliance profile into a system prompt is how that profile becomes a way
+                         to reprogram the Analyst.
+                obligations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ObligationContext'
+                    description: |-
+                        The obligations this run may cite, and the ONLY ones it may cite.
+
+                         The validator checks the model's citations against this list rather than
+                         against the corpus, which is a stronger check than it looks. A citation to
+                         an obligation that genuinely exists but is not in this list is still a
+                         fabrication: the model produced it from somewhere other than its context,
+                         which is exactly what the validator exists to catch.
+                onBehalfOfUserId:
+                    type: string
+                    description: |-
+                        The person this was drafted for, when there was one. Empty for a scheduled
+                         sweep, which runs for the organisation and for nobody in particular.
+        DraftNarrativeResponse:
+            type: object
+            properties:
+                outcome:
+                    enum:
+                        - DRAFT_OUTCOME_UNSPECIFIED
+                        - DRAFT_OUTCOME_SUCCEEDED
+                        - DRAFT_OUTCOME_REFUSED
+                        - DRAFT_OUTCOME_FAILED
+                    type: string
+                    format: enum
+                narrative:
+                    type: string
+                    description: |-
+                        Empty unless the outcome is SUCCEEDED. See the RPC's comment: a refused
+                         narrative is withheld rather than returned with a warning attached.
+                outcomeDetail:
+                    type: string
+                    description: Why, when the outcome was not success. For a human to read.
+                resolvedCitations:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        The citations that resolved, and the ones refused.
+
+                         BOTH, AND THE REFUSED HALF IS THE IMPORTANT ONE. A response carrying only
+                         the good citations would be indistinguishable from a run where the model
+                         never tried to cite anything, and "what did it get wrong" is the question
+                         a customer is actually asking.
+                rejectedCitations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/RejectedCitation'
+                agentRunId:
+                    type: string
+                    description: |-
+                        The `agent_runs` row this produced, so the caller can point a finding at
+                         the record of how it was made.
+
+                         Empty only when recording itself failed, which the caller should treat as
+                         serious rather than cosmetic: a finding whose provenance was never stored
+                         is a finding nobody can check.
         Dsar:
             type: object
             properties:
@@ -2638,6 +2847,20 @@ components:
                          register behind it: approving records the decision and creates no row. That
                          is a value rather than an absence, and the column is NOT NULL because of it.
             description: Obligation is a duty derived from the law, and the thing a finding cites.
+        ObligationContext:
+            type: object
+            properties:
+                slug:
+                    type: string
+                title:
+                    type: string
+                summary:
+                    type: string
+            description: |-
+                ObligationContext is one obligation as the model sees it.
+
+                 A summary, never the Official Journal wording. The corpus stores no verbatim
+                 text, and the citation resolves to the publisher rather than to our copy.
         Paragraph:
             type: object
             properties:
@@ -2773,6 +2996,96 @@ components:
                     format: int32
                 summary:
                     type: string
+        RecordAgentRunRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                    description: |-
+                        The organisation the run was for. Required, and carried in the message
+                         rather than a header because this caller has no active organisation: it
+                         runs for whichever tenant the work belonged to, and says so per call.
+                skill:
+                    type: string
+                    description: |-
+                        What ran, with versions. A bare name would record that "the analyst skill"
+                         ran, which is not a fact anybody can act on a year later.
+                skillVersion:
+                    type: string
+                model:
+                    type: string
+                modelVersion:
+                    type: string
+                    description: For a local model this is the weights' digest, not a marketing version.
+                onBehalfOfUserId:
+                    type: string
+                    description: |-
+                        The person this ran for, when there was one.
+
+                         Empty for a scheduled sweep, which runs for the organisation and for
+                         nobody in particular. Setting it there would be a lie that later reads as
+                         "this person asked for this".
+                requestJson:
+                    type: string
+                    description: |-
+                        The input the run was given, as JSON. Not the assembled prompt: that
+                         includes the corpus prefix and is reconstructible from the skill version,
+                         so storing it per run would copy the corpus into every row.
+                toolCallsJson:
+                    type: string
+                    description: Ordered tool calls with arguments and result summaries, as JSON.
+                citationsJson:
+                    type: string
+                    description: |-
+                        Citations, split into those that resolved to a stored obligation and those
+                         the validator refused, as JSON.
+
+                         BOTH HALVES, AND THE REJECTED HALF IS THE IMPORTANT ONE. A validator that
+                         silently dropped a bad citation would leave a record indistinguishable
+                         from a run where the model never tried to cite anything. The customer's
+                         question is "what did it get wrong", and an omission cannot answer it.
+                outcome:
+                    enum:
+                        - AGENT_RUN_OUTCOME_UNSPECIFIED
+                        - AGENT_RUN_OUTCOME_SUCCEEDED
+                        - AGENT_RUN_OUTCOME_REFUSED
+                        - AGENT_RUN_OUTCOME_FAILED
+                    type: string
+                    format: enum
+                outcomeDetail:
+                    type: string
+                    description: |-
+                        Why, when the outcome was not success. For a human to read, not a code to
+                         branch on.
+                usage:
+                    $ref: '#/components/schemas/AgentRunUsage'
+                queuedAt:
+                    type: string
+                    description: |-
+                        Queued, started, finished. Three rather than two because ENT-238 needs to
+                         tell "slow because the model is slow" from "slow because it waited", and
+                         those are different problems with different fixes.
+                    format: date-time
+                startedAt:
+                    type: string
+                    format: date-time
+                finishedAt:
+                    type: string
+                    format: date-time
+            description: |-
+                RecordAgentRunRequest is one finished run.
+
+                 Minimal on purpose. §26.4 gives this a versioned profile reference and
+                 normalised evidence, and ENT-228 adds them. The shape here is what those
+                 grow into rather than something they replace.
+        RecordAgentRunResponse:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: |-
+                        The stored run's id, so a caller can reference it from whatever it goes on
+                         to write.
         RegulationPack:
             type: object
             properties:
@@ -2882,6 +3195,13 @@ components:
             properties:
                 applied:
                     type: boolean
+        RejectedCitation:
+            type: object
+            properties:
+                slug:
+                    type: string
+                reason:
+                    type: string
         RemoveMemberResponse:
             type: object
             properties: {}
@@ -3267,6 +3587,46 @@ tags:
          the ten regulatory tables and no others, insert and update but never delete.
          Not the migrator, which 00002's comment named and which bypasses RLS
          entirely.
+    - name: IntelligenceService
+      description: |-
+        The Intelligence service: the agent harness, as an RPC surface (ENT-218,
+         §1.6, §10, §26).
+
+         # THE DIRECTION OF THIS CALL IS THE POINT
+
+         core-api calls Intelligence, never the other way round for anything that
+         decides. §1.6 splits the languages so that Go loads and Go persists while
+         Python drafts and returns, and this service exists on the far side of that
+         line: it holds no database credential, sets no tenancy GUC, and has no way
+         to write a finding.
+
+         It writes exactly one thing, and through core-api rather than itself: the
+         `agent_runs` record, over `IngestService.RecordAgentRun`. Everything else it
+         produces comes back in a response for the caller to decide about.
+
+         # NO USER TOKEN REACHES THIS, EVER
+
+         `internal:intelligence`, issued to one service principal through client
+         credentials and never to the browser client. Two independent things enforce
+         it: the audience is `kindlast-intelligence` and a human's console token
+         carries a different one, and this scope is granted only to the machine user.
+
+         That is not belt and braces for its own sake. Intelligence has no tenancy
+         GUCs and no RLS session, so it cannot check whether a human should see what
+         it is processing. It never needs to, because a human cannot reach it.
+
+         # THE CALLER PASSES EVERYTHING
+
+         There is no "fetch the obligations yourself" here, and its absence is
+         deliberate (§26.2). Inputs are what a skill needs before it starts, and
+         fetching them is a decision nobody is making, so the caller assembles them
+         in Go where the corpus is already readable. That keeps a run a pure function
+         of its inputs, which is what makes it activity-shaped for Temporal at step
+         8, and what lets its tests run without a stack.
+
+         Tools, meaning what the model may decide to call DURING a run, are a
+         different thing and are dispatched inside the harness under the skill's
+         allow-list. The Analyst declares none.
     - name: NotificationService
       description: |-
         Notification preferences and the channels a deployment actually has

@@ -1,0 +1,223 @@
+"""The agent run: one skill, budgeted, validated, recorded (§26.3, ENT-218).
+
+# ACTIVITY-SHAPED, THOUGH TEMPORAL IS NOT HERE YET
+
+`draft_narrative` is idempotent given the same input, takes its budget as an
+argument rather than reading a clock somewhere global, and produces exactly one
+`AgentRun` describing what happened. That is the shape a Temporal activity
+needs, so wrapping it at build-order step 8 is mechanical rather than a
+rewrite. Nothing here imports Temporal, and nothing should until then.
+
+# WHAT COMES BACK IS ALWAYS AN AgentRun
+
+Success, refusal and failure are all outcomes of the same function, and none of
+them is an exception escaping to a caller. §26.3 makes refusal what a working
+guardrail produces, so a harness that raised on a spent budget would be
+reporting its own correct behaviour as a crash, in the column a customer reads
+to decide whether to trust a finding.
+
+# THE MODEL'S OUTPUT IS PARSED BY ITS OWN CONTRACT
+
+There is no hand-written parser here. `Narrative.model_validate_json` is the
+same declaration the grammar was generated from, so the thing that constrains
+the model and the thing that reads it cannot drift apart. The first draft had
+both, written separately, which is the shape of bug this codebase keeps paying
+for elsewhere.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from ..skills import analyst
+from ..skills.analyst import Narrative
+from .budget import Budget, BudgetExhausted
+from .citations import Citation, CitationValidator
+from .model import Completion, ModelClient, ModelError
+
+
+class Outcome(StrEnum):
+    """The three ways a run ends.
+
+    An enum rather than strings, so a typo is an error where it is written
+    rather than a value the database's check constraint refuses much later.
+    """
+
+    SUCCEEDED = "succeeded"
+    # A guardrail stopped it. NOT a kind of failure: §26.3 makes this what a
+    # working ring produces, and the distinction is the one that matters most
+    # for trust.
+    REFUSED = "refused"
+    FAILED = "failed"
+
+
+class ToolCall(BaseModel):
+    """One tool invocation, recorded in order."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tool: str
+    arguments: dict[str, object] = Field(default_factory=dict)
+    # A summary rather than the whole result. The record is for a person to
+    # read, and pasting a full corpus row into every run would make the useful
+    # part unfindable.
+    result_summary: str = ""
+
+
+class AgentRun(BaseModel):
+    """Everything `RecordAgentRun` needs, and nothing it does not."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    skill: str
+    skill_version: str
+    model: str
+    model_version: str
+    outcome: Outcome
+    outcome_detail: str = ""
+    narrative: str = ""
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    resolved_citations: list[str] = Field(default_factory=list)
+    rejected_citations: list[dict[str, str]] = Field(default_factory=list)
+    input_tokens: int = Field(default=0, ge=0)
+    cached_input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    queued_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    finished_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def citations_json(self) -> str:
+        return json.dumps(
+            {"resolved": self.resolved_citations, "rejected": self.rejected_citations}
+        )
+
+    def tool_calls_json(self) -> str:
+        return json.dumps(
+            [
+                {"tool": c.tool, "args": c.arguments, "result": c.result_summary}
+                for c in self.tool_calls
+            ]
+        )
+
+
+def draft_narrative(
+    *,
+    signal: str,
+    obligations: list[dict[str, str]],
+    model: ModelClient,
+    validator: CitationValidator,
+    model_name: str,
+    model_version: str,
+    budget: Budget | None = None,
+    queued_at: datetime | None = None,
+) -> AgentRun:
+    """Draft one narrative, or refuse.
+
+    The whole guardrail ring in the order it fires: clock, then the model call
+    against its budget, then typed output, then citations. Cheapest checks
+    first, and the one that can invent a claim last.
+    """
+    budget = budget or Budget()
+    started = datetime.now(timezone.utc)
+    run = AgentRun(
+        skill=analyst.NAME,
+        skill_version=analyst.VERSION,
+        model=model_name,
+        model_version=model_version,
+        outcome=Outcome.FAILED,
+        queued_at=queued_at or started,
+        started_at=started,
+    )
+
+    try:
+        budget.check_clock()
+
+        messages = analyst.build_messages(signal, obligations)
+        completion = _call_model(model, messages, budget, run)
+        parsed = _parse(completion)
+
+        result = validator.validate(
+            [Citation(slug=s, claim=parsed.narrative) for s in parsed.citations]
+        )
+
+        run.resolved_citations = [c.slug for c in result.resolved]
+        run.rejected_citations = [
+            {"slug": r.citation.slug, "reason": r.reason} for r in result.rejected
+        ]
+
+        # ONE BAD CITATION REFUSES THE WHOLE NARRATIVE.
+        #
+        # Not "keep the good ones". A narrative citing one real obligation and
+        # one invented one is not partially trustworthy: it is a document a
+        # customer checks, finds wrong, and then stops believing the rest of.
+        # `AGENTS.md` calls a fabricated citation worse than nothing, and the
+        # cheapest way to honour that is to refuse rather than to curate.
+        if not result.ok:
+            run.outcome = Outcome.REFUSED
+            run.outcome_detail = (
+                f"{len(result.rejected)} citation(s) did not resolve: "
+                + ", ".join(r.citation.slug for r in result.rejected)
+            )
+            return _finish(run)
+
+        run.narrative = parsed.narrative
+        run.outcome = Outcome.SUCCEEDED
+        return _finish(run)
+
+    except BudgetExhausted as exc:
+        # The guardrail worked. Refusal, not failure.
+        run.outcome = Outcome.REFUSED
+        run.outcome_detail = str(exc)
+        return _finish(run)
+
+    except (ModelError, ValidationError, ValueError) as exc:
+        # Something went wrong that was nobody's policy: the endpoint was
+        # unreachable, or answered something that is not the contract.
+        run.outcome = Outcome.FAILED
+        run.outcome_detail = str(exc)
+        return _finish(run)
+
+
+def _call_model(
+    model: ModelClient, messages: list[dict[str, str]], budget: Budget, run: AgentRun
+) -> Completion:
+    completion = model.complete(messages, schema=analyst.output_schema())
+
+    # Charged after the call, because the cost is not knowable before it. This
+    # raises BudgetExhausted when the run has now spent too much, which stops
+    # the NEXT call rather than un-making this one.
+    budget.spend_model_call(completion.total_tokens)
+
+    run.input_tokens += completion.input_tokens
+    run.cached_input_tokens += completion.cached_input_tokens
+    run.output_tokens += completion.output_tokens
+    return completion
+
+
+def _parse(completion: Completion) -> Narrative:
+    """Turn the response into the contract, or refuse to.
+
+    `finish_reason` is checked before the content, because a truncated response
+    can still be parseable: the grammar keeps it well-formed right up to the
+    cut, so a length-stopped answer looks like a short one. Reading it as a
+    complete narrative would store half a sentence as a finished claim.
+
+    Everything after that is `Narrative`'s own validation, which is the same
+    declaration the grammar came from.
+    """
+    if completion.finish_reason == "length":
+        raise ValueError(
+            "the model hit its token limit mid-answer, so the narrative is "
+            "truncated rather than short"
+        )
+
+    return Narrative.model_validate_json(completion.content)
+
+
+def _finish(run: AgentRun) -> AgentRun:
+    run.finished_at = datetime.now(timezone.utc)
+    return run

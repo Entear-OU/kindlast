@@ -1,0 +1,45 @@
+[project]
+name = "kindlast-intelligence"
+version = "0.1.0"
+description = "Kindlast Intelligence: the agent harness (ENT-218)"
+readme = "README.md"
+authors = [
+    { name = "eddieogola", email = "39475602+eddieogola@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "connect-python>=0.9.0",
+    "cryptography>=50.0.0",
+    "googleapis-common-protos>=1.75.1",
+    "httpx>=0.28.1",
+    "protobuf==7.35.1",
+    "pydantic>=2.13.4",
+    "pyjwt>=2.13.0",
+    "waitress>=3.0.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+# `tests/` is on the path so the battery can import its own conftest helpers
+# by name, which keeps the fixture module readable as a module rather than as
+# a pile of fixtures.
+#
+# `gen/python` is on it because the core-api client is generated there and
+# committed, the same way gen/go is. It is a PATH rather than a dependency
+# deliberately: making it installable would mean putting a pyproject.toml
+# inside a generated tree, and gen/ holds contract and nothing else. The
+# service sets the same path at runtime, which the Dockerfile will carry when
+# it lands; until then a caller outside pytest needs
+# PYTHONPATH=gen/python, and that is stated in the README rather than left to
+# be discovered by an ImportError.
+pythonpath = ["tests", "../../gen/python"]
+testpaths = ["tests"]

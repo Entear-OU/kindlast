@@ -1,0 +1,14 @@
+# Model weights, fetched and verified by the `model-init` job (ENT-235).
+#
+# Ignored rather than committed for the obvious reason, and the directory is
+# tracked rather than created on demand for a less obvious one: the compose
+# file bind-mounts this path, and Docker creates a missing bind source as a
+# root-owned directory, which then cannot be written by the job container.
+# Keeping the directory in git means it exists with the right ownership before
+# anything mounts it.
+#
+# This is deliberately NOT a named volume. `docs/self-hosting.md` tells people
+# to tear down with `down -v`, and that would otherwise cost a 2.7 GB
+# re-download every time.
+*
+!.gitignore

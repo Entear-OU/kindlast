@@ -46,5 +46,44 @@ plugins:
       - version=1.0.0
       - title=Kindlast Core API
       - enum_type=string
+  # Python, for the Intelligence service's core-api client (ENT-218).
+  #
+  # GENERATED RATHER THAN HAND-WRITTEN, and the reason is the failure this
+  # repository has paid for most often: a hand-written client is another place
+  # a contract change fails silently. Committed here, so the CI drift check
+  # covers it the way it covers gen/go, and a reviewer reads the bytes the
+  # service imports.
+  #
+  # Connect rather than gRPC, so the transport matches web and Go. One wire
+  # format across three languages means one set of behaviours to reason about
+  # at a boundary, rather than a third that is nearly the same.
+  #
+  # BOTH VERSIONS BELOW ARE A MATCHED PAIR WITH A RUNTIME, per AGENTS.md.
+  # protocolbuffers/python:v35.1 emits code that calls
+  # `ValidateProtobufRuntimeVersion` and refuses to load against a runtime it
+  # was not generated for, so `protobuf` in apps/intelligence/pyproject.toml
+  # moves with this line or the service will not import its own client.
+  # connectrpc/python is paired with `connect-python` the same way.
+  #
+  # THE CONNECT PLUGIN IS PINNED BEHIND ITS OWN LATEST, DELIBERATELY.
+  #
+  # Three versions were in play and only one combination works. GitHub calls
+  # v0.11.1 latest; the BSR's latest is v0.10.1 and refuses v0.11.1 outright
+  # with `not_found`, so the registry rather than a release page is the
+  # authority for what a `remote:` plugin resolves to. And PyPI's latest
+  # `connect-python` is 0.9.0, so the plugin is a minor ahead of the runtime
+  # anyone can install.
+  #
+  # Generating with v0.10.1 produces imports the 0.9.0 runtime does not have
+  # (`No module named 'connectrpc.codec'`), which fails at import time rather
+  # than at a call, so nothing that used the client would start. Pinned to
+  # v0.9.0 to match the runtime, which is the pair that actually loads.
+  #
+  # Raise both together when PyPI catches up, and check by importing the
+  # generated client rather than by reading the changelog.
+  - remote: buf.build/protocolbuffers/python:v35.1
+    out: gen/python
+  - remote: buf.build/connectrpc/python:v0.9.0
+    out: gen/python
 inputs:
   - directory: proto

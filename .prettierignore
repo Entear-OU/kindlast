@@ -65,3 +65,19 @@ apps/web/test-results/
 apps/web/playwright-report/
 apps/web/blob-report/
 next-env.d.ts
+
+# The Python workspace's virtualenv (ENT-218). uv rebuilds it from uv.lock in
+# seconds, and Prettier would otherwise walk several thousand vendored JSON
+# files inside it. The failure is developer-only and therefore the confusing
+# way round: CI never runs `uv sync` in the job that checks formatting, so a
+# green pipeline sits alongside a red `format:check` on the machine of anyone
+# who has run the tests.
+apps/intelligence/.venv/
+
+# Model weights (ENT-235). Gigabytes of binary that Prettier tries to read as
+# a string and then fails on, with "Invalid string length", before reporting
+# that everything it could read was fine. The directory is tracked (for its
+# .gitignore) and its contents are not, so without this entry a developer who
+# has run the stack has a `format:check` that errors on their own machine and
+# not in CI, which is the confusing way round.
+deploy/models/
