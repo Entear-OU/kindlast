@@ -68,12 +68,23 @@ afterAll(async () => {
 /**
  * Grants that no policy admits, one row per role, table and command.
  *
- * Read out of `column_privileges` rather than `role_table_grants` because a
- * column-level grant is a grant: ENT-228 gave the app `update (valid_to)` on
- * `org_profile_facts` and nothing else, and a column grant with no update
- * policy would be the same silent trap as a table grant with none.
- * `column_privileges` expands table-level grants across every column, so it is
- * a superset of both.
+ * Both catalogues, and the union is not belt and braces. It is the whole
+ * correctness of this function, and the first draft got it wrong:
+ *
+ *   - `role_table_grants` holds table-level grants and is the only place a
+ *     `delete` appears at all. **`delete` is not a column-level privilege in
+ *     Postgres**, so `column_privileges` cannot express one. A sweep reading
+ *     only that view is structurally blind to every delete grant, which is the
+ *     one privilege this whole issue is about. That draft passed, and it could
+ *     not have failed.
+ *   - `column_privileges` holds the column-level grants, which are grants:
+ *     ENT-228 gave the app `update (valid_to)` on `org_profile_facts` and
+ *     nothing else, and a column grant with no update policy is the same silent
+ *     trap as a table grant with none. It carries no `delete` and no
+ *     `truncate`, so it is asked only for the three commands it can hold.
+ *
+ * Neither view is a superset of the other, and reading one is a test that
+ * reports safety it never checked.
  *
  * A policy on PUBLIC (`polroles = '{0}'`, which `pg_policies` renders as the
  * role name `public`) covers every role, and `cmd = 'ALL'` covers every
@@ -85,14 +96,23 @@ async function grantsWithoutAPolicy(): Promise<
   const r = await superuser.query(
     `
       with granted as (
-        select distinct
-               grantee     as role,
-               table_name  as tbl,
+        -- Table-level, and the only view carrying DELETE.
+        select grantee        as role,
+               table_name     as tbl,
+               privilege_type as priv
+          from information_schema.role_table_grants
+         where table_schema = 'public'
+           and grantee = any($1::text[])
+           and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+        union
+        -- Column-level. This view holds no DELETE, by construction.
+        select grantee        as role,
+               table_name     as tbl,
                privilege_type as priv
           from information_schema.column_privileges
          where table_schema = 'public'
            and grantee = any($1::text[])
-           and privilege_type in ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+           and privilege_type in ('SELECT', 'INSERT', 'UPDATE')
       ),
       allowed as (
         select tablename as tbl, unnest(roles)::text as role, cmd
