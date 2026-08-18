@@ -27,10 +27,20 @@ convenient audience accepts tokens minted for a different service.
 | `KINDLAST_APP_BASE_URL` | no† | Where a browser reaches the console, used to build invitation links. |
 | `KINDLAST_SMTP_ADDR` | no | Mail submission address, `host:port`. Without it, transactional messages queue and are not delivered. |
 | `KINDLAST_EMAIL_FROM` | no | Sender address, default `noreply@kindlast.localhost`. |
+| `KINDLAST_GATEWAY_URL` | no‡ | Where the integrations policy gateway answers. Without it, `IntegrationsService` is not served at all. |
+| `KINDLAST_GATEWAY_TOKEN` | no‡ | The shared secret core-api presents to the gateway. Required alongside the URL. |
+| `KINDLAST_GATEWAY_TOKEN_FILE` | no | Read that secret from a file instead, which is what a real deployment does. |
+| `KINDLAST_INTEGRATION_KEY` | no | Seals third-party credentials at rest, written `id:base64key`, AES-256. Absent, a connection needing a credential is refused rather than stored unencrypted. |
+| `KINDLAST_INTEGRATION_KEY_FILE` | no | Read that key from a file instead. |
+| `KINDLAST_INTEGRATION_KEYS_OLD` | no | Retired keys, comma separated, same form. They still open what they sealed. |
 
 \* one of `KINDLAST_OIDC_AUDIENCE` or `KINDLAST_OIDC_AUDIENCE_FILE`.
 
 † not required to start, but **required to invite anybody**. See below.
+
+‡ both or neither. A gateway address with no secret would mean every call
+refused, and a secret with no address would mean nothing at all, so core-api
+serves the integrations surface only when it has both. See below.
 
 ## Sending invitations: `KINDLAST_APP_BASE_URL` and `KINDLAST_SMTP_ADDR`
 
@@ -96,6 +106,64 @@ This is configuration rather than something inferred from whether a
 subscription row exists. That inference is wrong in the direction that costs
 money: a hosted customer between provisioning and their first row is
 indistinguishable from a self-hoster under it.
+
+## Integrations: the gateway, and the key that seals a credential
+
+Two settings turn the Integrations surface on and one protects what it
+stores. All three are optional, and a deployment that connects nothing needs
+none of them.
+
+### `KINDLAST_GATEWAY_URL` and `KINDLAST_GATEWAY_TOKEN`
+
+The gateway is a separate service, `apps/workers`, and it is the only process
+in this system that opens a connection to an address a customer supplied.
+core-api never dials one itself: it holds the database credential and the key
+below, and an HTTP client pointed at a URL somebody typed into a form would
+put server-side request forgery where it has the most to reach.
+
+Without both settings, `IntegrationsService` is **not registered at all**, so
+the console gets a 404 rather than a page whose every button fails. Those two
+look identical to a customer and very different to an operator: one reads as a
+broken product, the other as an unconfigured one, and only the second sends
+somebody to this document.
+
+The token is a shared secret rather than an OAuth credential. The gateway has
+exactly one caller, on the internal network, with no person and no organisation
+of its own, so there is nothing for a token's subject, audience or tenancy to
+mean; a client-credentials round trip would mean core-api holding an OAuth
+client it uses for this hop alone. It is compared in constant time, and
+`KINDLAST_GATEWAY_TOKEN_FILE` exists because a shared secret in an environment
+variable is one a `docker inspect` prints.
+
+The gateway has settings of its own, and the one to read carefully is
+`KINDLAST_GATEWAY_EGRESS_ALLOWLIST`. It is empty by default and empty permits
+nothing. An operator who has not decided which hosts their gateway may reach
+gets a gateway that reaches none, which is a support question; the other
+default is a request forgery available to anybody with an account.
+
+### `KINDLAST_INTEGRATION_KEY`
+
+AES-256, written `id:base64key`. Generate one with:
+
+```bash
+echo "$(date +%Y-%m):$(openssl rand -base64 32)"
+```
+
+The id is recorded on every row, so rotation is adding a new primary key and
+restarting: rows sealed with the old one still open, because retired keys go in
+`KINDLAST_INTEGRATION_KEYS_OLD` and are kept for decryption. Re-sealing rows
+onto the new key is then a background job that can take as long as it likes. A
+scheme with one key and no id is one where rotation means downtime, which is
+why rotation does not happen.
+
+The connection's own row id is bound in as additional authenticated data, so a
+ciphertext lifted from one row does not open in another: a credential moved
+between organisations fails rather than working as somebody else's secret.
+
+**Without a key, a connection that needs a credential is refused**, with a
+message naming this setting. It is not stored in plaintext. A connection to an
+endpoint that needs no credential, which is the ordinary case for an MCP server
+on a customer's own network, is made either way.
 
 ## The `kindlast_agent` role
 

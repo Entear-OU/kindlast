@@ -72,12 +72,19 @@ type Delegations interface {
 type Service struct {
 	store       Writer
 	runs        RunRecorder
+	evidence    EvidenceRecorder
 	delegations Delegations
 	logger      *slog.Logger
 	now         func() time.Time
 }
 
-func New(store Writer, runs RunRecorder, delegations Delegations, logger *slog.Logger) *Service {
+func New(
+	store Writer,
+	runs RunRecorder,
+	evidence EvidenceRecorder,
+	delegations Delegations,
+	logger *slog.Logger,
+) *Service {
 	if logger == nil {
 		// A discarding logger rather than a nil dereference. This handler's
 		// caller is a schedule, so the one place it must not fail is while
@@ -85,7 +92,7 @@ func New(store Writer, runs RunRecorder, delegations Delegations, logger *slog.L
 		logger = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
-		store: store, runs: runs, delegations: delegations,
+		store: store, runs: runs, evidence: evidence, delegations: delegations,
 		logger: logger, now: time.Now,
 	}
 }

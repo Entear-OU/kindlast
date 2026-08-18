@@ -1279,7 +1279,216 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.MemoryService", "ListEvidence"]
             },
-            "description": "What we observed, and where each observation came from. Required scope: `memory:read`. **Served as of ENT-228.**\n\nEvidence and profile facts are separate on purpose. **\"What do you think our lawful basis is\" and \"what did the tool actually return in March\" are different questions**, and a schema answering both with the same rows answers the first one badly. Evidence grows forever and is never edited; the profile is small and changes.\n\n`observedAt` is when it was true at the source; `fetchedAt` is when we learned it. Both, because they are routinely far apart and **the gap is the interesting part**: a record of processing activities last edited in March and first read by us in August is a five-month blind spot that one timestamp would hide.\n\n**Paged**, unlike the profile, because every sweep of every connected tool adds rows. Keyset over `observedAt` descending: pass the `nextPageToken` back as `pageToken`. An offset would drift as observations arrive during paging, which on an append-only table is the normal case rather than a rare one. **A token is issued only when the page was full**, so an absent token means there is no more rather than that there might not be.\n\n`body` is JSON as a string and is deliberately untyped, unlike a fact. An observation from a helpdesk and one from a cloud provider share nothing but their stamps, and a schema pretending otherwise would be a schema per integration.\n\n`supersededBy` names the observation that replaced this one. Supersession is recorded rather than implied, and **dedup is an explicit operation rather than a unique constraint**: `contentHash` is indexed and not unique, because \"the tool still says this in August\" is a fact rather than a duplicate.\n\n**Nothing writes here yet.** `kindlast_app` holds the grant, so a console can record a human's upload, and the integrations gateway (ENT-231) will write through core-api like everything else rather than getting a database role of its own. `connectionId` is a column with no foreign key until that table exists."
+            "description": "What we observed, and where each observation came from. Required scope: `memory:read`. **Served as of ENT-228.**\n\nEvidence and profile facts are separate on purpose. **\"What do you think our lawful basis is\" and \"what did the tool actually return in March\" are different questions**, and a schema answering both with the same rows answers the first one badly. Evidence grows forever and is never edited; the profile is small and changes.\n\n`observedAt` is when it was true at the source; `fetchedAt` is when we learned it. Both, because they are routinely far apart and **the gap is the interesting part**: a record of processing activities last edited in March and first read by us in August is a five-month blind spot that one timestamp would hide.\n\n**Paged**, unlike the profile, because every sweep of every connected tool adds rows. Keyset over `observedAt` descending: pass the `nextPageToken` back as `pageToken`. An offset would drift as observations arrive during paging, which on an append-only table is the normal case rather than a rare one. **A token is issued only when the page was full**, so an absent token means there is no more rather than that there might not be.\n\n`body` is JSON as a string and is deliberately untyped, unlike a fact. An observation from a helpdesk and one from a cloud provider share nothing but their stamps, and a schema pretending otherwise would be a schema per integration.\n\n`supersededBy` names the observation that replaced this one. Supersession is recorded rather than implied, and **dedup is an explicit operation rather than a unique constraint**: `contentHash` is indexed and not unique, because \"the tool still says this in August\" is a fact rather than a duplicate.\n\n**Written by the integrations gateway as of ENT-231**, and by two doors rather than one. A live fetch a person asked for goes through `IntegrationsService.FetchNow` on `kindlast_app`, under RLS and their own membership; a machine's fetch goes through `IngestService.IngestEvidence` on `kindlast_agent`. Both write the same row with the same stamps, and neither is reachable by the other's caller, because a user token can never carry an `internal:*` scope. The gateway itself still holds no database role, exactly as this description said it would not.\n\n`connectionId` now carries a real foreign key to `integrations`, deferrable so that erasing an organisation, which cascades into both tables, is checked once at commit rather than in an order Postgres does not promise."
+          }
+        },
+        {
+          "name": "What we can reach (ListIntegrations)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.IntegrationsService/ListIntegrations",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.IntegrationsService", "ListIntegrations"]
+            },
+            "description": "Every connection this organisation has, with its tools. Required scope: `integrations:read`. **Served as of ENT-231**, and only when this deployment has a gateway: without `KINDLAST_GATEWAY_URL` and `KINDLAST_GATEWAY_TOKEN` the service is not registered at all, so you get a 404 rather than a 500. That is deliberate. A console showing an Integrations page whose every button fails looks broken; one showing no page looks unconfigured, and only the second sends an operator to the right place.\\n\\n**Revoked connections stay in the list.** A customer asking what Kindlast has been able to reach is asking about the past as well as the present, and a list that quietly forgot a revoked connection could not answer them.\\n\\n**No credential comes back, in any field, ever.** There is no accessor on this surface that returns one; the sealed value is read by exactly one query, at the moment a fetch is dispatched, and handed straight to the gateway.\\n\\nEach tool carries `writeCapable` and `granted` separately, and the pair is the whole point: the first is what the endpoint can do, the second is what a human agreed Kindlast may do."
+          }
+        },
+        {
+          "name": "See what an endpoint offers (DiscoverIntegration)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"INTEGRATION_KIND_MCP\",\n  \"endpointUrl\": \"https://tools.example.com/mcp\",\n  \"credential\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.IntegrationsService/DiscoverIntegration",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.IntegrationsService", "DiscoverIntegration"]
+            },
+            "description": "Asks an endpoint what tools it has, and **stores nothing**. Required scope: `integrations:write`. **Served as of ENT-231.**\\n\\n**A separate call from connecting, on purpose.** Connecting in one step would mean a customer agreeing to a tool list they have not seen. This returns the list the consent screen renders; `ConnectIntegration` then records the connection along with the tools as they were shown.\\n\\n**Every tool comes back with `granted: false`, without exception**, including read-only ones. A screen that arrives with boxes already ticked is a screen people click past, and the value of this one is entirely in it being read.\\n\\n**`writeCapable` is the gateway's reading, and an unannotated tool reads as writing.** MCP servers may set `readOnlyHint`; many do not. The friendlier default would let a `delete_everything` tool from a server that annotates nothing through the gate marked safe, so the answer is read-only when and only when the endpoint said so.\\n\\n**This is where an endpoint outside the deployment's egress allow-list is refused**, with `permission_denied` and with nothing sent to it: no DNS lookup, no TCP connection, no bytes. Discovery goes through the gateway rather than being a check core-api could make itself, so the allow-list has exactly one home and the consent screen's data comes through the same door every later fetch uses.\\n\\nThe credential travels in the body and is never returned. Leave it empty for an endpoint on your own network that wants none, which is a real configuration rather than a missing value."
+          }
+        },
+        {
+          "name": "Connect an endpoint (ConnectIntegration)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"INTEGRATION_KIND_MCP\",\n  \"displayName\": \"Helpdesk\",\n  \"endpointUrl\": \"https://tools.example.com/mcp\",\n  \"credential\": \"\",\n  \"offeredTools\": [\n    {\n      \"name\": \"search_tickets\",\n      \"description\": \"Search the helpdesk\",\n      \"writeCapable\": false\n    },\n    {\n      \"name\": \"close_ticket\",\n      \"description\": \"Close a ticket\",\n      \"writeCapable\": true\n    }\n  ],\n  \"grantedTools\": [\n    \"search_tickets\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.IntegrationsService/ConnectIntegration",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.IntegrationsService", "ConnectIntegration"]
+            },
+            "description": "Records the connection, its tools and the consent, in one transaction. Required scope: `integrations:write`. **Served as of ENT-231.**\\n\\n**A write-capable tool is not granted by this call being made.** Every discovered tool is stored; only the ones named in `grantedTools` are callable. A tool arriving with `granted: true` already set does not become granted, which closes the obvious way to grant one without ticking it: round-tripping the discovery response.\\n\\nThat is three separate refusals rather than one. The column defaults to false, so a discovery insert that says nothing produces a tool nobody may call. `kindlast_app` holds `update (granted, granted_at, granted_by)` and **not** `write_capable`, so a caller cannot relabel a write tool as read-only and walk it past the gate. And the gateway refuses independently on every call, checking the endpoint's own annotation again.\\n\\n**`offeredTools` is sent back rather than rediscovered**, so what is stored as consent is what the human actually saw. A second discovery between the screen and the click could return a different list, and the consent record would then describe a screen nobody looked at. A tampered `writeCapable` here changes the label a tool is stored under and not what it may do, because the gateway takes the stricter of the two readings before every call.\\n\\n**A credential is refused rather than stored in plaintext when this deployment has no key.** `KINDLAST_INTEGRATION_KEY` is written `id:base64key`, AES-256; the id is recorded on every row so a key can be rotated without downtime, and the connection's own row id is bound in as additional authenticated data so a ciphertext cannot be moved between rows. A connection to an endpoint needing no credential is made whether or not a key is configured.\\n\\nA grant naming a tool the endpoint did not offer is `invalid_argument` rather than being ignored: silently dropping it is how a console that has drifted out of step grants nothing while showing a tick."
+          }
+        },
+        {
+          "name": "Change what Kindlast may call (UpdateToolGrants)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"integrationId\": \"{{integration_id}}\",\n  \"grantedTools\": [\n    \"search_tickets\",\n    \"close_ticket\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.IntegrationsService/UpdateToolGrants",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.IntegrationsService", "UpdateToolGrants"]
+            },
+            "description": "Replaces which tools one connection may call. Required scope: `integrations:write`. **Served as of ENT-231.**\\n\\n**A replace rather than an add-and-remove pair**, because two operations invite a client to send one of them and leave the other for later.\\n\\n**Writes a new consent row rather than editing the old one.** `integration_consents` holds no update grant for anybody, so this is enforced rather than intended: widening what a product may do inside somebody's systems is exactly the change somebody will later need to reconstruct, and a table where the current state overwrote the previous one could not show it.\\n\\nRefused with `failed_precondition` on a revoked connection. Revocation is terminal by design."
+          }
+        },
+        {
+          "name": "Revoke a connection (RevokeIntegration)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"integrationId\": \"{{integration_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.IntegrationsService/RevokeIntegration",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.IntegrationsService", "RevokeIntegration"]
+            },
+            "description": "Stops future fetches, permanently. Required scope: `integrations:write`. **Served as of ENT-231.**\\n\\n**Terminal, and reconnecting is a new connection with a new consent.** That is a deliberate refusal to make un-revoke a button: permission to reach a customer's systems should not be resurrectable by somebody who did not know why it was withdrawn. The database agrees, holding `update (status, revoked_at, revoked_by)` and a constraint pairing the status with the timestamp, so a revocation that does not say when is refused.\\n\\n**Idempotent.** A second call changes nothing and returns the connection, rather than erroring or moving `revokedAt`, which would claim the connection was live until the second click.\\n\\n**What survives is the evidence already collected and the fetch log.** Deleting those would rewrite the compliance record. Erasure is a different gesture with a different name: deleting the organisation, which cascades.\\n\\n`FetchNow` checks this before anything else it does, so \"revoking stops future fetches\" is an ordering property rather than a promise, and it is asserted by a test that watches the gateway never being reached."
+          }
+        },
+        {
+          "name": "What we fetched (ListFetches)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"integrationId\": \"\",\n  \"pageSize\": 50\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.IntegrationsService/ListFetches",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.IntegrationsService", "ListFetches"]
+            },
+            "description": "Every attempt, including the ones policy refused. Required scope: `integrations:read`. **Served as of ENT-231.**\\n\\n**The refusals are the half worth reading.** A log showing only successful fetches is indistinguishable from a deployment where the gateway does nothing, and the customer's question is what Kindlast tried to do rather than only what it managed. `outcome` is `succeeded`, `refused` or `failed`; three rather than two, because a refusal is what a working control produces and not a kind of failure.\\n\\n`detail` carries the sentence a person reads: \"the tool is not granted on this connection\" is a policy working, and the console renders it as \"Declined\" rather than as an error.\\n\\n`redactions` is how many values were replaced before anything was stored. **Zero is a fact rather than a missing value**: it says the redactor ran and found nothing.\\n\\n`evidenceId` links a successful fetch to the observation it produced, so \"what we fetched\" and \"what we believe\" are one story. Leave `integrationId` empty for the organisation-wide view. Keyset paged over `requestedAt` descending, like every other unbounded listing here; a token is issued only when the page was full."
+          }
+        },
+        {
+          "name": "Fetch now (FetchNow)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"integrationId\": \"{{integration_id}}\",\n  \"tool\": \"search_tickets\",\n  \"argumentsJson\": \"{\\\"status\\\":\\\"open\\\"}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.IntegrationsService/FetchNow",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.IntegrationsService", "FetchNow"]
+            },
+            "description": "The live request from the rail: fetch synchronously and store what comes back as evidence. Required scope: `integrations:write`. **Served as of ENT-231.**\\n\\n**A refusal comes back as a successful RPC carrying a `refused` fetch record**, not as an error, and this is the choice most likely to look wrong at first glance. A refusal returned as an error would show the customer a red box and leave \"what we fetched\" empty, so they would see a product that failed rather than one that declined. The record is the feature.\\n\\n**The order of the checks is the behaviour.** Revoked first, because \"revoking stops future fetches\" is an acceptance criterion and a check placed after the call would satisfy its letter with the fetch already made. Then the tool grant. Then the credential is unsealed. Only then does anything leave, and the gateway checks the egress allow-list and the policy again before it dials.\\n\\n**Bounded rather than durable.** At build-order step 8 this becomes a Temporal activity with a retry policy and a heartbeat. Temporal is not here, so the bounds are explicit: a context deadline, a capped retry with backoff inside the gateway that never retries a refusal, and exactly one fetch row written per call whatever the outcome. That last part is what will make a replayed activity merely noisy rather than wrong.\\n\\nThe response carries the stored fetch, including `evidenceId` and `redactions`, so a caller can go straight from what it asked for to what was kept."
+          }
+        },
+        {
+          "name": "Ingest what a machine fetched (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"connectionId\": \"{{integration_id}}\",\n  \"tool\": \"search_tickets\",\n  \"argumentsJson\": \"{\\\"status\\\":\\\"open\\\"}\",\n  \"outcome\": \"succeeded\",\n  \"detail\": \"\",\n  \"contentJson\": \"{\\\"tickets\\\":3}\",\n  \"redactions\": 2,\n  \"observedAt\": \"2026-08-18T00:00:00Z\",\n  \"requestedAt\": \"2026-08-18T00:00:03Z\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.IngestService/IngestEvidence",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.IngestService", "IngestEvidence"]
+            },
+            "description": "What a machine fetched from a customer's own system. Required scope: `internal:ingest`. **Served as of ENT-231**, on the `kindlast_agent` pool.\\n\\n**The door evidence comes in by when nobody is signed in**: the scheduled Watcher at build-order step 8, and any gateway-initiated fetch running for an organisation with no session behind it.\\n\\n**And there is a second door on the core surface, which is deliberate rather than a duplication.** A live fetch a person asked for arrives on a user token, and a user token by design can never carry an `internal:*` scope. Routing it through here would mean either issuing internal scopes to people, which undoes what ENT-207 built, or writing without the person's identity, which loses `requestedBy` on the one record where \"which human asked\" matters most. So a machine ingests here and a person's fetch goes through `IntegrationsService.FetchNow`. Both write the same two rows; neither is reachable by the other's caller.\\n\\n**`orgId` is in the body**, for the reason `RecordAgentRun`'s is: this caller holds no session and names its tenant per call. Safe only because `internal:ingest` is issued to service principals through client credentials and never to a browser.\\n\\n**What this does NOT do**: no egress allow-list, no tool-grant decision, no redaction. All three happened in the gateway before the content crossed the network, and each needs something this process does not hold. **A second redaction pass here would be the worst of them**, because a second implementation is free to disagree with the first and the one that decides what a customer's data looks like has already run.\\n\\nWhat it does enforce is the shape: real uuids, an outcome from the closed set, a reason for anything that was not a success, no content on a refusal, and JSON that parses. Send `outcome: \"refused\"` with a `detail` and no `contentJson` to record a fetch that policy stopped; the response then carries a `fetchId` and an empty `evidenceId`."
+          }
+        },
+        {
+          "name": "Gateway: what does this endpoint offer (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": {\n    \"url\": \"https://tools.example.com/mcp\",\n    \"credential\": \"\"\n  },\n  \"orgId\": \"{{org_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.GatewayService/ListTools",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.GatewayService", "ListTools"]
+            },
+            "description": "**Served by `apps/workers`, not by core-api**, on `{{gateway_base_url}}`. Required scope: `internal:gateway`. **Served as of ENT-231.**\\n\\nThis is the only service in the repository implemented somewhere other than core-api, and the boundary is the point. core-api holds the database credential and the key that seals third-party credentials; giving it an HTTP client pointed at a URL a customer typed would put request forgery in the process with the most to reach. The gateway holds neither, is handed one fetch at a time, and returns what it found.\\n\\n**Authentication is a shared secret presented as a bearer token, not an OIDC access token, and that is a deliberate narrowing.** This service has one caller, inside the compose network, with no person and no organisation of its own, so there is nothing for a subject, an audience or a tenancy to mean. A client-credentials round trip would mean core-api acquiring and refreshing an OAuth client it uses for nothing else. The secret is compared in constant time and is mountable from a file. Set `gateway_token` in your environment; the compose default is `gateway-dev-shared-secret-value` and is development-only.\\n\\n**No published port.** Reachable only on the compose network, which is why this request will not work from a host shell unless you publish one; the secret is defence in depth behind that rather than instead of it.\\n\\nThe endpoint is checked against the egress allow-list **before any packet leaves**: no DNS lookup, no TCP connection, no bytes. The dialer then resolves the name once, refuses if any returned address is private, loopback, link-local or unspecified, and connects to a literal address from that same answer, so a DNS rebind cannot move the target between the check and the connection. Redirects are refused outright, because following one would send the customer's credential to whatever address the response named."
+          }
+        },
+        {
+          "name": "Gateway: call one tool (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{gateway_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": {\n    \"url\": \"https://tools.example.com/mcp\",\n    \"credential\": \"\"\n  },\n  \"orgId\": \"{{org_id}}\",\n  \"connectionId\": \"{{integration_id}}\",\n  \"tool\": \"close_ticket\",\n  \"argumentsJson\": \"{\\\"id\\\":4821}\",\n  \"writeCapable\": true,\n  \"policy\": {\n    \"grantedTools\": [\n      \"search_tickets\",\n      \"close_ticket\"\n    ],\n    \"writeGrantedTools\": [\n      \"close_ticket\"\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{gateway_base_url}}/kindlast.platform.v1.GatewayService/CallTool",
+              "host": ["{{gateway_base_url}}"],
+              "path": ["kindlast.platform.v1.GatewayService", "CallTool"]
+            },
+            "description": "**Served by `apps/workers`**, on `{{gateway_base_url}}`. Required scope: `internal:gateway`. **Served as of ENT-231.**\\n\\n**The policy travels in the request rather than being looked up here, because the gateway holds no database handle.** That makes the caller responsible for sending the truth and the gateway responsible for refusing anything the policy does not permit, which is the right split: core-api cannot be relied on to be free of bugs, so the gateway checks what it was sent rather than assuming it was filtered.\\n\\n**`grantedTools` and `writeGrantedTools` are two lists rather than one list with a flag per entry.** With a flag, a caller that forgets to populate it sends a request where every tool reads as read-only and a write goes through on a message that was merely incomplete. With two lists, forgetting the second refuses every write, which is the direction a mistake should fail in.\\n\\n**Try this request with `writeGrantedTools` emptied.** It comes back `permission_denied` with \"close_ticket can change data in that system and this connection has not granted it write access\", and nothing was dialled.\\n\\n**`writeCapable` is the caller's belief and is checked against the endpoint's own annotation**, with the union taken: either side calling it a write makes it a write. That is what catches a tool which has STARTED writing since discovery, where core-api's stored flag is months old and the server's annotation is current.\\n\\n**The order is egress, then policy, then the rate limit, then the dial.** Every refusal happens with zero bytes on the wire, which is what makes \"refused before any request leaves\" a property a test can assert rather than a sentence in a document.\\n\\n**The response is already redacted.** The redactor runs here, before this crosses back, so the process that writes the row never holds the unredacted form and there is no ordering available in which storage happens first. `redactions` counts what it replaced; `fetchedAt` is the gateway's own clock, because a customer's server is free to have a wrong one and `observedAt` has to mean something."
           }
         },
         {

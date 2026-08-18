@@ -332,6 +332,45 @@ is more honest than implying otherwise.
 
 **The audit log, subject to the question below.**
 
+## Evidence retention, decided rather than deferred (ENT-231)
+
+Integrations fetch from a customer's own systems, so `org_evidence` now holds
+content that came from a helpdesk, a document store or a cloud account. That
+raises a retention question, and ENT-231 asks for it to be decided before the
+first connector ships rather than after.
+
+**The decision is: for the life of the organisation, and no timer.**
+
+The argument is that an observation is what a finding was derived from. A
+compliance record whose evidence expired on a schedule is one where last year's
+finding can no longer be checked, and "you can check the claim against the
+source" is the thing this product sells. A ninety-day expiry would quietly turn
+every finding older than ninety days into an assertion.
+
+What bounds the exposure instead is three things that are already true:
+
+- **Redaction runs before storage**, in the gateway, so the unredacted form
+  never reaches the process that writes the row. Bearer tokens, API keys,
+  private key blocks, email addresses, IBANs and card-shaped digit runs are
+  replaced with a marker. Names and prose are deliberately not, because a
+  redactor keen enough to remove those would remove the sentences a finding is
+  derived from.
+- **Erasure is complete and is one gesture.** `org_evidence`,
+  `integration_fetches`, `integration_consents`, `integration_tools` and
+  `integrations` all cascade from `organisations`, and none of them grants
+  `delete` to anybody, so there is no per-row delete button that could make
+  "correct this" and "erase this" the same click. The erasure procedure above
+  therefore covers evidence with no extra step.
+- **Revocation stops collection without destroying the record.** Revoking a
+  connection is terminal and stops every future fetch; what was already read
+  stays, because deleting it would rewrite the compliance record rather than
+  narrow it.
+
+**What is NOT decided here** is a per-class expiry that a customer could set
+themselves, which is the fuller answer §25 wants and which needs a
+customer-visible setting rather than a constant in a Go package. Recorded as
+open, in the same spirit as the question below.
+
 ## The open question, stated rather than answered
 
 `audit_log.before` and `audit_log.after` hold whatever the acted-on row

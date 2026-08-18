@@ -25,13 +25,17 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/dispatch"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/gateway"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
+	integrationsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/integrations"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
+	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1/platformv1connect"
 	"github.com/Entear-OU/kindlast/libs/chassis/denylist"
 	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
@@ -245,6 +249,40 @@ func run(logger *slog.Logger) error {
 			"KINDLAST_BILLING_WEBHOOK_SECRET, or turn KINDLAST_BILLING_ENABLED off")
 	}
 
+	// The key that seals third-party credentials (ENT-231, §25).
+	//
+	// Built before anything is served, so a malformed key is a startup failure
+	// rather than a surprise the first time somebody connects a system. An
+	// ABSENT key is not a failure: connections to endpoints that need no
+	// credential still work, and one that needs a credential is refused with a
+	// message naming the setting.
+	integrationKeys, err := secrets.NewKeyring(cfg.IntegrationKey, cfg.IntegrationKeysOld...)
+	if err != nil {
+		return err
+	}
+
+	// The policy gateway, when this deployment has one (ENT-231).
+	//
+	// NIL IS A SUPPORTED DEPLOYMENT and then IntegrationsService is not served
+	// at all. core-api opens no connection to a customer-supplied address, so
+	// without a gateway there is nothing behind that surface: registering it
+	// anyway would give a console an Integrations page whose every button
+	// fails, which reads as a broken product rather than an unconfigured one.
+	gatewayClient := gateway.New(cfg.GatewayURL, cfg.GatewaySecret, 0)
+	switch {
+	case gatewayClient != nil && !integrationKeys.Configured():
+		// Worth a line, because this combination works for endpoints that need
+		// no credential and refuses every one that does, which is a confusing
+		// half-state to meet for the first time in a browser.
+		logger.Warn("the integrations gateway is configured but KINDLAST_INTEGRATION_KEY is not; " +
+			"connections to endpoints that need a credential will be refused rather than stored unencrypted")
+	case gatewayClient == nil && cfg.GatewayURL != "":
+		logger.Warn("KINDLAST_GATEWAY_URL is set but KINDLAST_GATEWAY_TOKEN is not, " +
+			"so the integrations surface is not served; the gateway accepts no call without the shared secret")
+	case gatewayClient != nil:
+		logger.Info("integrations enabled", "gateway_url", cfg.GatewayURL)
+	}
+
 	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	defer func() { _ = redisClient.Close() }()
 
@@ -296,12 +334,20 @@ func run(logger *slog.Logger) error {
 		// deployment that runs no agents should answer Unimplemented here
 		// rather than accept a run record it cannot store.
 		AgentRuns: agentRunsDependency(outbox),
+		// What a machine fetched from a customer's system (ENT-231), on the
+		// same agent pool and behind the same typed-nil guard.
+		Evidence: evidenceDependency(outbox),
 		// Findings to narrate, on the same agent pool, and the drafter that
 		// explains them. The second is nil for a deployment with no model,
 		// which is supported rather than broken (ENT-245).
 		Narratives: narrativesDependency(outbox),
 		Drafter:    drafterDependency(cfg.IntelligenceURL, intelligenceCredentials),
-		Logger:     logger,
+		// Same typed-nil trap as Corpus above, and the same shape of guard: a
+		// nil *gateway.Client assigned straight into the interface field would
+		// produce an interface that is not nil, the registration guard would
+		// pass, and every call would panic.
+		Integrations: integrationsDependency(gatewayClient, integrationKeys),
+		Logger:       logger,
 	})
 	if err != nil {
 		return err
@@ -518,6 +564,13 @@ func agentRunsDependency(store *postgres.AgentStore) ingest.RunRecorder {
 
 // The same typed-nil guard, for the narrator's read and write of findings
 // (ENT-245).
+func evidenceDependency(store *postgres.AgentStore) ingest.EvidenceRecorder {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
 func narrativesDependency(store *postgres.AgentStore) narrative.Findings {
 	if store == nil {
 		return nil
@@ -596,4 +649,20 @@ func intelligenceTokens(cfg *config.Config, provider *oidc.Provider, transport *
 		},
 		Transport: transport,
 	})
+}
+
+// integrationsDependency keeps a nil gateway out of a non-nil interface.
+//
+// The same typed-nil guard as corpusDependency above, and it is the reason
+// this is a named function rather than a clever inline conditional: assigning
+// a nil *gateway.Client straight into the interface field produces an
+// interface that is not nil, so the registration guard in server.New would
+// pass and every integrations call would panic on a nil client.
+func integrationsDependency(
+	client *gateway.Client, keys *secrets.Keyring,
+) corev1connect.IntegrationsServiceHandler {
+	if client == nil {
+		return nil
+	}
+	return integrationsservice.New(client, keys)
 }

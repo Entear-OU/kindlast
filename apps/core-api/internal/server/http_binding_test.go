@@ -294,6 +294,61 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "POST", Path: "/api/v1/onboarding/session:confirm",
 		},
 
+		// Connecting a customer's own systems (ENT-231).
+		//
+		// Still no {org_id}, for the reason every binding above has none: the
+		// organisation comes from the header and is checked against
+		// membership, so a path that named one would be a second answer to the
+		// same question.
+		//
+		// The reviewable choices here are the three colon verbs, and each is a
+		// different argument.
+		//
+		// `:discover` is an action performed against a third party that stores
+		// nothing. There is no resource to GET at
+		// `/api/v1/integrations/discover`, and a GET would be wrong anyway
+		// because the request carries a credential in its body, which is not a
+		// thing to put in a query string that proxies and browser history keep.
+		//
+		// `:revoke` follows `findings:approve` and `invitations:accept`: one
+		// gated transition rather than an arbitrary field change. A PATCH
+		// setting `status` would describe a field somebody can put back, and
+		// revocation is deliberately terminal.
+		//
+		// `:fetch` is the live request from the rail. A POST because it makes
+		// something happen in somebody else's system and writes an evidence
+		// row, and a colon verb because there is no `/fetches` subresource of a
+		// connection to create: the fetch log is a collection of the
+		// organisation's, filtered by connection, which is why ListFetches
+		// sits at `/api/v1/integrations/fetches` rather than under a
+		// connection id.
+		//
+		// `/tools:grant` is the one nested path, and it is nested because a
+		// grant is genuinely a property of the connection's tools rather than
+		// of the connection. PUT on `/tools` would read as replacing the tool
+		// list, which is discovery's job and not the customer's.
+		"kindlast.core.v1.IntegrationsService.ListIntegrations": {
+			Method: "GET", Path: "/api/v1/integrations",
+		},
+		"kindlast.core.v1.IntegrationsService.DiscoverIntegration": {
+			Method: "POST", Path: "/api/v1/integrations:discover",
+		},
+		"kindlast.core.v1.IntegrationsService.ConnectIntegration": {
+			Method: "POST", Path: "/api/v1/integrations",
+		},
+		"kindlast.core.v1.IntegrationsService.UpdateToolGrants": {
+			Method: "POST", Path: "/api/v1/integrations/{integration_id}/tools:grant",
+		},
+		"kindlast.core.v1.IntegrationsService.RevokeIntegration": {
+			Method: "POST", Path: "/api/v1/integrations/{integration_id}:revoke",
+		},
+		"kindlast.core.v1.IntegrationsService.ListFetches": {
+			Method: "GET", Path: "/api/v1/integrations/fetches",
+		},
+		"kindlast.core.v1.IntegrationsService.FetchNow": {
+			Method: "POST", Path: "/api/v1/integrations/{integration_id}:fetch",
+		},
+
 		"kindlast.core.v1.AuditService.ListAuditEntries": {
 			Method: "GET", Path: "/api/v1/audit",
 		},
@@ -405,6 +460,25 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		// and what would stop it being so.
 		"kindlast.platform.v1.IngestService.RecordAgentRun": {
 			Method: "POST", Path: "/internal/v1/agent-runs",
+		},
+
+		// What a machine fetched from a customer's own system (ENT-231).
+		//
+		// A plural collection and a plain POST, like the agent runs above and
+		// unlike the corpus verb beside them, because this really is creating a
+		// resource: one fetch happened and one row records it.
+		//
+		// On /internal/v1 and it has to be. A person's live fetch from the
+		// console goes to `/api/v1/integrations/{id}:fetch` instead, because a
+		// user token can never carry an `internal:*` scope; the two paths write
+		// the same rows and neither is reachable by the other's caller. See the
+		// RPC's comment for why that asymmetry is deliberate.
+		//
+		// No {org_id}, and for the same reason RecordAgentRun has none: a fetch
+		// has exactly one organisation and it travels in the body, because this
+		// caller holds no session to derive an active organisation from.
+		"kindlast.platform.v1.IngestService.IngestEvidence": {
+			Method: "POST", Path: "/internal/v1/evidence",
 		},
 
 		// A colon verb over the findings collection, because narrating is an

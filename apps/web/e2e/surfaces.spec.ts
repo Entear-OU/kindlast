@@ -311,6 +311,10 @@ test.describe('the console surfaces', () => {
       'Records',
       'Regulation',
       'Logs',
+      // ENT-231. Listed here rather than only in the sidebar, so a surface
+      // that stops being linked fails a test rather than quietly disappearing
+      // from the console.
+      'Integrations',
       'Settings',
     ]) {
       await expect(nav.getByRole('link', { name: label })).toBeVisible()
