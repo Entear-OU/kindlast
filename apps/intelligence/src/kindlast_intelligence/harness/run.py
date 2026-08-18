@@ -86,9 +86,23 @@ class AgentRun(BaseModel):
     input_tokens: int = Field(default=0, ge=0)
     cached_input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
+    # WHY THREE STAMPS AND NOT A DURATION (ENT-238)
+    #
+    # `agent_runs` has all three columns, and the reason is that "it took four
+    # seconds" cannot explain a customer who watched a spinner for six minutes.
+    # Queued to started is capacity. Started to finished is the run. They have
+    # different remedies, and a single latency number loses the difference.
     queued_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     finished_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def queue_seconds(self) -> float:
+        return (self.started_at - self.queued_at).total_seconds()
+
+    @property
+    def work_seconds(self) -> float:
+        return (self.finished_at - self.started_at).total_seconds()
 
     def citations_json(self) -> str:
         return json.dumps(
@@ -117,9 +131,16 @@ def draft_narrative(
 ) -> AgentRun:
     """Draft one narrative, or refuse.
 
-    The whole guardrail ring in the order it fires: clock, then the model call
-    against its budget, then typed output, then citations. Cheapest checks
-    first, and the one that can invent a claim last.
+    The whole guardrail ring in the order it fires: admission, then the clock,
+    then the model call against its budget, then typed output, then citations.
+    Cheapest checks first, and the one that can invent a claim last.
+
+    Admission is first for a reason that is not tidiness. A run dispatched after
+    a long wait is one whose asker has probably given up, and running it anyway
+    means holding a slot that belongs to somebody still waiting. Refusing before
+    `_call_model` is what makes that true rather than merely recorded, and
+    `test_a_run_that_waited_too_long_refuses_before_calling_the_model` asserts
+    the model was never called.
     """
     budget = budget or Budget()
     started = datetime.now(timezone.utc)
@@ -134,6 +155,7 @@ def draft_narrative(
     )
 
     try:
+        budget.admit(queued_at=queued_at)
         budget.check_clock()
 
         messages = analyst.build_messages(signal, obligations)
@@ -191,6 +213,20 @@ def _call_model(
     # raises BudgetExhausted when the run has now spent too much, which stops
     # the NEXT call rather than un-making this one.
     budget.spend_model_call(completion.total_tokens)
+
+    # AND THE CLOCK IS CHARGED THE SAME WAY (ENT-238).
+    #
+    # Checked before the call as well, where it stops work from starting. Here it
+    # catches the generation that alone outlasted the budget, which on a
+    # saturated box is the normal way to blow it and is invisible to a check that
+    # only runs at the loop head.
+    #
+    # This discards a completed answer, which looks wasteful and is the
+    # established stance: `spend_model_call` above already throws away a
+    # narrative whose tokens went over. A run that finished after everybody
+    # stopped waiting should not be recorded as a success, because the record is
+    # what a customer reads to understand what they experienced.
+    budget.check_clock()
 
     run.input_tokens += completion.input_tokens
     run.cached_input_tokens += completion.cached_input_tokens

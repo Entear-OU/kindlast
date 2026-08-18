@@ -102,10 +102,12 @@ class IntelligenceService:
             model_version=self._model_version,
             # A fresh budget per run, from the template. Sharing one across
             # requests would let a busy morning refuse an afternoon's work.
-            budget=Budget(**self._budget_template.model_dump(
-                include={"max_total_tokens", "max_model_calls", "max_tool_calls",
-                         "max_depth", "max_seconds"}
-            )) if self._budget_template else None,
+            #
+            # `renew` rather than a field list written out here: the list this
+            # replaced would have silently dropped `max_queue_seconds` when
+            # ENT-238 added it, and the run would have used the default while
+            # the operator's configured value sat in the template unread.
+            budget=self._budget_template.renew() if self._budget_template else None,
         )
 
         # RECORDED BEFORE THE RESPONSE IS BUILT, AND A FAILURE HERE IS FATAL.

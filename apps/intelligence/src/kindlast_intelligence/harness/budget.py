@@ -1,14 +1,29 @@
 """Per-run budgets, and refusing when one is spent (§26.3, ENT-218, ENT-238).
 
-Five limits, not four. The design names token budget, model calls, tool calls
+Six limits, not four. The design names token budget, model calls, tool calls
 and recursion; all four are cost controls, and they are the right ones when
 inference is somebody else's API and concurrency is their problem.
 
 ENT-235 made inference local, which changes what is scarce. One `llama-server`
 serves one or two requests at a time, so a run can sit inside every token limit
-and still hold a slot for eleven minutes while another tenant waits. Hence the
-fifth, wall clock. ENT-238 covers the queue in front of the model; this covers
-the run in front of the queue.
+and still hold a slot for eleven minutes while another tenant waits. Hence wall
+clock, and hence queue wait beside it.
+
+# TIME WAITED AND TIME WORKED ARE TWO BUDGETS, NOT ONE
+
+The obvious implementation is a single clock started when the run is created,
+and it is wrong in a way that only shows up under load. Started at enqueue, the
+queue spends the model's budget: the run waits, is finally dispatched, and
+refuses partway through having already taken a slot from somebody still
+waiting. Started at dispatch, the wait is not measured at all, and a record that
+says a run took four seconds cannot explain why the customer watched a spinner
+for six minutes.
+
+So there are two. `max_queue_seconds` is how long an answer is still worth
+having, checked once at admission. `max_seconds` is how long the work itself may
+take, and its clock starts when the work does. They have different remedies too:
+a queue-wait refusal means buy capacity, a wall-clock refusal means this run is
+too big for this model.
 
 # EXHAUSTION IS A REFUSAL, NOT AN ERROR
 
@@ -21,6 +36,8 @@ the column a customer reads to decide whether to trust a finding.
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -56,6 +73,11 @@ class Budget(BaseModel):
     # Sized for a 4B on CPU answering a handful of times rather than for a
     # hosted API. On local inference this is the limit that actually fires.
     max_seconds: float = Field(default=120.0, gt=0)
+    # Sixty seconds, because that is roughly where a person waiting on a page
+    # stops waiting. A batch caller that genuinely wants a long queue should
+    # raise this deliberately rather than inherit an interactive default it
+    # never thought about.
+    max_queue_seconds: float = Field(default=60.0, gt=0)
 
     # Spent so far. Public because `agent_runs` records these, and the run
     # summary is assembled from the same numbers the limits are checked
@@ -63,7 +85,74 @@ class Budget(BaseModel):
     total_tokens: int = Field(default=0, ge=0)
     model_calls: int = Field(default=0, ge=0)
     tool_calls: int = Field(default=0, ge=0)
-    started_monotonic: float = Field(default_factory=time.monotonic)
+    # How long this run waited before the work started. Measured once at
+    # admission and then kept, rather than recomputed, so the number in the
+    # record is the number the limit was checked against.
+    queue_seconds: float = Field(default=0.0, ge=0)
+    # When the budget was made, and the fallback the work clock measures from
+    # when nothing ever queued this run. A budget constructed at the point of
+    # work HAS started working, and reading its work clock as zero would leave
+    # the wall-clock limit silently disabled for every caller that does not
+    # queue, which is most of them.
+    created_monotonic: float = Field(default_factory=time.monotonic)
+    # None until `admit` is called, and set to that moment rather than to
+    # construction. A budget built at enqueue would otherwise start its work
+    # clock in the queue, which is the exact conflation this class exists to
+    # avoid.
+    started_monotonic: float | None = None
+
+    # The set of fields that describe what a run MAY spend, as opposed to what
+    # it HAS spent. Derived once here so `renew` cannot drift from the fields;
+    # the hand-written copy this replaced silently dropped any limit added
+    # after it was written, and the run then ran on the default.
+    LIMITS: ClassVar[tuple[str, ...]] = (
+        "max_total_tokens",
+        "max_model_calls",
+        "max_tool_calls",
+        "max_depth",
+        "max_seconds",
+        "max_queue_seconds",
+    )
+
+    def renew(self) -> Budget:
+        """A fresh budget with these limits and none of the spend.
+
+        One per run, from a template held by the service. Sharing a budget
+        across requests would let a busy morning refuse an afternoon's work.
+        """
+        return Budget(**self.model_dump(include=set(self.LIMITS)))
+
+    def admit(self, queued_at: datetime | None = None) -> None:
+        """Leave the queue and start the work, or refuse to.
+
+        # WALL CLOCK HERE, MONOTONIC EVERYWHERE ELSE
+
+        Monotonic is the right clock for a duration inside one process and is
+        useless for this one, because the enqueue may have happened in another
+        process on another host. `queued_at` is a UTC instant precisely so it can
+        cross that boundary, which is also why the wait is clamped at zero: two
+        machines whose clocks differ by a few seconds would otherwise hand the
+        caller with the fast clock a longer queue tolerance than everybody else,
+        by accident and invisibly.
+
+        Called with nothing when there was no queue, which is the truthful
+        reading of a run created at the moment it starts.
+        """
+        if queued_at is not None:
+            waited = (datetime.now(timezone.utc) - queued_at).total_seconds()
+            self.queue_seconds = max(0.0, waited)
+
+        # Stamped BEFORE the check, so a refused run still reports what it
+        # waited. A refusal that hid the number would be a refusal nobody can
+        # size capacity from.
+        self.started_monotonic = time.monotonic()
+
+        if self.queue_seconds > self.max_queue_seconds:
+            raise BudgetExhausted(
+                "queue_wait",
+                f"waited {self.queue_seconds:.0f}s of {self.max_queue_seconds:.0f}s "
+                "allowed before the work started",
+            )
 
     def spend_model_call(self, tokens: int) -> None:
         # Checked BEFORE incrementing, so the limit is the number of calls
@@ -101,13 +190,25 @@ class Budget(BaseModel):
         This cannot interrupt a call already in flight, which is the honest
         limit of doing it in-process. What it guarantees is that no further
         work starts.
+
+        Measures work only. Time spent queued was already accounted for by
+        `admit`, and charging it twice would refuse runs that have done nothing
+        wrong on a deployment that is merely busy.
         """
-        elapsed = time.monotonic() - self.started_monotonic
+        elapsed = self.work_seconds
         if elapsed > self.max_seconds:
             raise BudgetExhausted(
                 "wall_clock", f"{elapsed:.1f}s of {self.max_seconds:.0f}s used"
             )
 
     @property
-    def elapsed_seconds(self) -> float:
-        return time.monotonic() - self.started_monotonic
+    def work_seconds(self) -> float:
+        """Time since the work started.
+
+        Falls back to construction for a budget that was never admitted, which
+        is the truthful reading: nothing queued it, so the work began when it
+        was made. The alternative, reporting zero, would turn a caller that
+        never queues into a caller with no wall-clock limit.
+        """
+        since = self.created_monotonic if self.started_monotonic is None else self.started_monotonic
+        return time.monotonic() - since
