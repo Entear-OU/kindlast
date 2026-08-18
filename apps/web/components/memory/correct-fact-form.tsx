@@ -47,6 +47,9 @@ const TRI_STATE_FACTS: ReadonlySet<string> = new Set([
   'PROFILE_FACT_KEY_HAS_DPO',
   'PROFILE_FACT_KEY_HAS_ROPA',
   'PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU',
+  'PROFILE_FACT_KEY_HIGH_RISK_PROCESSING',
+  'PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM',
+  'PROFILE_FACT_KEY_LARGE_SCALE_MONITORING',
 ])
 
 const LIST_FACTS: ReadonlySet<string> = new Set([
@@ -55,6 +58,7 @@ const LIST_FACTS: ReadonlySet<string> = new Set([
   'PROFILE_FACT_KEY_DATA_SUBJECTS',
   'PROFILE_FACT_KEY_AI_SYSTEMS',
   'PROFILE_FACT_KEY_TRANSFER_DESTINATIONS',
+  'PROFILE_FACT_KEY_LAWFUL_BASES',
 ])
 
 type Action = (
@@ -185,6 +189,18 @@ function ValueField({ fact }: { fact: ProfileFact }) {
 }
 
 function FieldHint({ factKey }: { factKey: ProfileFactKey }) {
+  // The one list whose members are matched rather than displayed. Article 7's
+  // conditions apply where consent is among the bases, and the server compares
+  // these strings, so a free-text "Consent (marketing)" would be refused. The
+  // six are named here rather than left to the error message.
+  if (factKey === 'PROFILE_FACT_KEY_LAWFUL_BASES') {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Separate several with commas. One or more of: consent, contract,
+        legal_obligation, vital_interests, public_task, legitimate_interests.
+      </p>
+    )
+  }
   if (LIST_FACTS.has(factKey)) {
     return (
       <p className="text-xs text-muted-foreground">

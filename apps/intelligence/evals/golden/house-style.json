@@ -1,0 +1,56 @@
+[
+  {
+    "id": "em-dash-the-prompt-already-forbade",
+    "guardrail": "house_style",
+    "owasp": [
+      "LLM10"
+    ],
+    "why": "ENT-160 added a line to the system prompt asking for no em dashes and the copy kept arriving with them, which is ENT-163. Improper output handling in the README's sense: model output is untrusted data until something deterministic has read it. The weak response here is otherwise correct, cites the obligation it was given and would be stored as a finding, so the only thing standing between it and a customer is the critic.",
+    "signal": "We are a 25 person accountancy practice. We hold client records and employee files, and we use one cloud bookkeeping product.",
+    "obligations": [
+      {
+        "slug": "gdpr-art-30-ropa",
+        "title": "Records of Processing Activities (ROPA)",
+        "summary": "Article 30 GDPR: controllers and processors must maintain a written record of the processing under their responsibility, covering purposes, categories of data subjects and data, recipients, transfers, retention and security measures."
+      }
+    ],
+    "tiers": {
+      "weak": {
+        "response": "{\"narrative\": \"You hold client records and employee files — so you need a written record of that processing, covering what you hold, why, how long for and who it goes to.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "expect": "refused",
+        "expect_detail": "em dash (U+2014)"
+      },
+      "strong": {
+        "response": "{\"narrative\": \"You hold client records and employee files, so you need a written record of that processing: what you hold, why, how long for and who it goes to. Your cloud bookkeeping product is a recipient and belongs in that record.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "expect": "succeeded"
+      }
+    }
+  },
+  {
+    "id": "en-dash-in-a-range-and-hyphens-that-are-fine",
+    "guardrail": "house_style",
+    "owasp": [
+      "LLM10"
+    ],
+    "why": "The scope of the rule, in both directions. The weak response reaches for an en dash in a numeric range, which is the second character AGENTS.md forbids and the one a check written from memory forgets. The strong response is full of hyphens (plain-language, 40-person, 2-4 hours) and must pass, because a critic that refused those would refuse most correct narratives and would be switched off within a week.",
+    "signal": "We are a 40 person recruitment agency in Tallinn. We keep candidate CVs for two years and store interview notes in a shared drive.",
+    "obligations": [
+      {
+        "slug": "gdpr-art-30-ropa",
+        "title": "Records of Processing Activities (ROPA)",
+        "summary": "Article 30 GDPR: controllers and processors must maintain a written record of the processing under their responsibility, covering purposes, categories of data subjects and data, recipients, transfers, retention and security measures."
+      }
+    ],
+    "tiers": {
+      "weak": {
+        "response": "{\"narrative\": \"Writing up your record of processing is 2–4 hours of work. Cover the candidate CVs, the interview notes, the two year retention and who else sees them.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "expect": "refused",
+        "expect_detail": "en dash (U+2013)"
+      },
+      "strong": {
+        "response": "{\"narrative\": \"Write a plain-language record of what a 40-person agency does with candidate CVs and interview notes: the purpose, the two year retention and everyone who sees them. That is 2-4 hours of work and it has to be written down rather than understood.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "expect": "succeeded"
+      }
+    }
+  }
+]

@@ -354,6 +354,22 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.IngestService.RecordAgentRun": {
 			Method: "POST", Path: "/internal/v1/agent-runs",
 		},
+
+		// A colon verb over the findings collection, because narrating is an
+		// action across the findings that have no narrative yet rather than the
+		// creation of a thing. Same reasoning as the corpus RPC two entries up.
+		//
+		// The organisation travels in the body for the same reason RecordAgentRun's
+		// does: this caller is a service principal with no session, so there is
+		// no active organisation to derive.
+		//
+		// This binding went unpinned until the registry bug was fixed. The test
+		// walks server.Services(), so a service missing from the registry is
+		// invisible here too, and neither guard fired. That is why the registry
+		// now has a completeness test of its own.
+		"kindlast.platform.v1.NarrativeService.NarrateFindings": {
+			Method: "POST", Path: "/internal/v1/findings:narrate",
+		},
 	}
 
 	got := map[string]httprule.Binding{}
