@@ -25,6 +25,7 @@ from kindlast_intelligence.harness.citations import (
     ObligationLookup,
 )
 from kindlast_intelligence.harness.model import Completion
+from kindlast_intelligence.harness.prose import review_prose
 from kindlast_intelligence.harness.run import Outcome, draft_narrative
 from kindlast_intelligence.skills import analyst
 
@@ -386,3 +387,182 @@ def test_the_analyst_is_given_its_inputs_rather_than_fetching_them():
     a capability it does not use.
     """
     assert analyst.ALLOWED_TOOLS == ()
+
+
+# --- House style, which the prompt asks for and only the code enforces ------
+#
+# The forbidden characters appear literally in the fixtures below, and only
+# there. They are what a model said, which is the input under test, so writing
+# them as escapes would hide the one thing a reader of these cases needs to
+# see. Everything this repository authors keeps to the rule, which is why
+# `harness/prose.py` holds the two characters as escapes.
+
+
+def test_an_em_dash_is_refused_even_though_the_prompt_already_asked():
+    """ENT-163. The prompt says not to, and asking is not a control.
+
+    `AGENTS.md`: the model may ask, only code refuses. This model ignores the
+    system prompt's last line entirely, which is the case a deterministic check
+    exists for, and the one ENT-160 left open by fixing only the wording of the
+    request.
+    """
+    assert "em dash" in analyst.SYSTEM_PROMPT, (
+        "the prompt should still nudge; this test is about what happens when "
+        "the model ignores the nudge"
+    )
+
+    disobedient = {
+        "narrative": "You keep candidate CVs for two years — so you need a "
+        "written record of that processing.",
+        "citations": ["gdpr-art-30-ropa"],
+        "confident": True,
+    }
+
+    run = draft_narrative(
+        signal="We keep candidate CVs.",
+        obligations=OBLIGATIONS,
+        model=FakeModel(disobedient),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.REFUSED, "a guardrail firing is not a crash"
+    assert run.narrative == "", "a refused narrative must not be returned anyway"
+    assert "em dash" in run.outcome_detail
+    assert "U+2014" in run.outcome_detail
+
+
+def test_an_en_dash_is_refused_too():
+    """The other half of the rule, and the one a model reaches for in a range.
+
+    `AGENTS.md` forbids both characters, so a check catching only the
+    conspicuous one would leave this half fixed in the same way ENT-160 did.
+    """
+    run = draft_narrative(
+        signal="x",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "narrative": "Expect this to take 2–4 hours of work.",
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.REFUSED
+    assert "en dash" in run.outcome_detail
+    assert "U+2013" in run.outcome_detail
+
+
+def test_a_hyphen_is_not_a_dash():
+    """The scope of the rule, asserted so a later tightening has to be
+    deliberate.
+
+    `AGENTS.md` allows hyphens in compound words and in numeric ranges. A check
+    refusing `plain-language` or `2-4 hours` would refuse most correct
+    narratives, which is the shape of guardrail that gets switched off.
+    """
+    run = draft_narrative(
+        signal="x",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "narrative": "Write a plain-language record of this processing, "
+                "which is 2-4 hours of work for a 40-person firm.",
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.SUCCEEDED
+    assert "2-4 hours" in run.narrative
+
+
+def test_the_detail_says_where_the_dash_was():
+    """A refusal a customer cannot act on reads to them as a fault.
+
+    The record is what somebody opens to understand why they have no
+    narrative, so the detail names the character and quotes the words around it
+    rather than reporting that the run was refused on style.
+    """
+    run = draft_narrative(
+        signal="x",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "narrative": "Your bookkeeping product is a recipient — and "
+                "belongs in the record.",
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert "recipient" in run.outcome_detail, "the excerpt should locate the dash"
+    assert "—" not in run.outcome_detail, (
+        "the detail is stored and read back, so re-emitting the character it "
+        "is refusing would put it into the very text a customer reads"
+    )
+
+
+def test_a_fabricated_citation_outranks_a_dash_in_the_refusal():
+    """Both wrong, and the record has to name the important one.
+
+    A narrative that invents an article AND uses an em dash is refused for the
+    invented article. A detail reporting the typography would send somebody to
+    fix the wrong thing, and the citation is the one `AGENTS.md` calls worse
+    than nothing.
+    """
+    run = draft_narrative(
+        signal="x",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "narrative": "Article 99 applies — so you must act.",
+                "citations": ["gdpr-art-99-invented"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.REFUSED
+    assert "did not resolve" in run.outcome_detail
+    assert "em dash" not in run.outcome_detail
+
+
+def test_every_dash_is_reported_rather_than_only_the_first():
+    """So that one rewrite fixes the narrative.
+
+    Reporting only the first would have somebody re-run, get refused again on
+    the second, and pay a model call per character.
+    """
+    result = review_prose("One — two — three – four.")
+
+    assert not result.ok
+    assert [f.name for f in result.found] == [
+        "em dash (U+2014)",
+        "em dash (U+2014)",
+        "en dash (U+2013)",
+    ]
+
+
+def test_clean_prose_passes_the_critic():
+    result = review_prose("A plain sentence, with a comma, and 2-4 hours of work.")
+
+    assert result.ok
+    assert result.detail == ""

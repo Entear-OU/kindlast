@@ -22,6 +22,8 @@ package memory
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -50,6 +52,23 @@ const (
 	KeyTransfersOutsideEU  = "transfers_outside_eu"
 	KeyTransferDestination = "transfer_destinations"
 	KeyStaffCount          = "staff_count"
+
+	// The four the corpus needed and nobody had asked (ENT-246).
+	//
+	// Each one is a condition an obligation already narrows itself by, so
+	// until these existed the Watcher could not evaluate the condition and the
+	// obligation applied to everybody. `docs/regulation-packs.md` has the
+	// table of who wrote what and who read it.
+	//
+	// The two high-risk keys are deliberately two. Article 35's "likely to
+	// result in a high risk to the rights and freedoms of natural persons" is
+	// a test on the PROCESSING; the AI Act's is a classification of a SYSTEM
+	// under Annex III. One key for both would mean answering a GDPR question
+	// decided an AI Act obligation.
+	KeyHighRiskProcessing   = "high_risk_processing"
+	KeyHighRiskAISystem     = "high_risk_ai_system"
+	KeyLargeScaleMonitoring = "large_scale_monitoring"
+	KeyLawfulBases          = "lawful_bases"
 )
 
 // Kinds is the closed vocabulary: which facts exist, and what each one holds.
@@ -64,6 +83,40 @@ var Kinds = map[string]Kind{
 	KeyTransfersOutsideEU:  KindTriState,
 	KeyTransferDestination: KindList,
 	KeyStaffCount:          KindNumber,
+
+	KeyHighRiskProcessing:   KindTriState,
+	KeyHighRiskAISystem:     KindTriState,
+	KeyLargeScaleMonitoring: KindTriState,
+	KeyLawfulBases:          KindList,
+}
+
+// LawfulBases is the Article 6(1) closed set, in the spelling stored.
+//
+// # WHY THIS ONE LIST IS CONSTRAINED AND `industry` IS NOT
+//
+// A list of jurisdictions or data categories is descriptive: a value nobody
+// recognises is untidy, and nothing downstream changes its mind because of it.
+// The lawful bases are not descriptive. `gdpr-art-7-consent-conditions`
+// narrows itself with `lawful_basis_includes: "consent"`, and the Watcher
+// decides whether Article 7 binds an organisation by asking whether that exact
+// string is in this list. A fact recorded as "Consent" or "consent (marketing)"
+// would answer no, silently, and the obligation would stop applying to an
+// organisation that relies on consent.
+//
+// So the two halves are matched against one vocabulary: this one. The corpus
+// side is checked in `domain/corpus`, which reads this map rather than
+// repeating it.
+//
+// Article 6(1) is the six bases, and it has not moved since 2016. If a Member
+// State derogation ever needs a seventh, it is a line here and a line in the
+// pack, which is the unit this vocabulary is meant to change in.
+var LawfulBases = map[string]bool{
+	"consent":              true,
+	"contract":             true,
+	"legal_obligation":     true,
+	"vital_interests":      true,
+	"public_task":          true,
+	"legitimate_interests": true,
 }
 
 // Sources a fact or an observation may come from. Mirrors the database's check
@@ -152,8 +205,17 @@ func ValidateValue(key, valueJSON string) error {
 			return fmt.Errorf("memory: %q holds a list of text", key)
 		}
 		for _, item := range items {
-			if _, ok := item.(string); !ok {
+			text, ok := item.(string)
+			if !ok {
 				return fmt.Errorf("memory: %q holds a list of text", key)
+			}
+			// The one list whose members are matched rather than displayed.
+			// See LawfulBases: an unrecognised spelling here is not untidy
+			// data, it is Article 7 silently ceasing to apply.
+			if key == KeyLawfulBases && !LawfulBases[text] {
+				return fmt.Errorf(
+					"memory: %q is not an Article 6(1) lawful basis (%s)",
+					text, vocabulary(LawfulBases))
 			}
 		}
 	}
@@ -166,4 +228,15 @@ func ValidateSource(source string) error {
 		return fmt.Errorf("memory: %q is not a source", source)
 	}
 	return nil
+}
+
+// vocabulary renders a token set for an error message, sorted so two runs read
+// identically.
+func vocabulary(set map[string]bool) string {
+	names := make([]string, 0, len(set))
+	for name := range set {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }

@@ -120,6 +120,33 @@ enum ProfileFactKey {
   PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU = 8;
   PROFILE_FACT_KEY_TRANSFER_DESTINATIONS = 9;
   PROFILE_FACT_KEY_STAFF_COUNT = 10;
+
+  // The four the corpus was already asking for and nothing could answer
+  // (ENT-246).
+  //
+  // Four obligations narrow themselves to high-risk processing or to
+  // large-scale monitoring, and one to controllers relying on consent. Every
+  // one of those conditions is a property of what an organisation DOES, and
+  // the legacy `compliance_profiles` records only properties of what it IS, so
+  // the Watcher read none of them and the obligations bound everybody. Article
+  // 35's DPIA reached every controller.
+  //
+  // They are here rather than as columns for the reason at the top of this
+  // enum: a question the product learns to ask should not be a migration.
+  //
+  // HIGH RISK IS TWO QUESTIONS, NOT ONE. GDPR Article 35 asks whether the
+  // PROCESSING is likely to result in a high risk to people. The AI Act asks
+  // whether an AI SYSTEM falls in Annex III. They are different tests under
+  // different regulations, and one answer standing for both would mean a
+  // bakery's answer about profiling decided whether Annex III bound it.
+  PROFILE_FACT_KEY_HIGH_RISK_PROCESSING = 11;
+  PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM = 12;
+  PROFILE_FACT_KEY_LARGE_SCALE_MONITORING = 13;
+
+  // Which Article 6 bases the organisation relies on. A list, because almost
+  // every controller relies on more than one, and Article 7's conditions bind
+  // whenever consent is among them.
+  PROFILE_FACT_KEY_LAWFUL_BASES = 14;
 }
 
 // Yes, no, or we asked and they did not know.

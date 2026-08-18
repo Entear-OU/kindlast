@@ -27,7 +27,7 @@
       },
       "appliesWhen": {
         "role": "controller",
-        "thresholds": { "high_risk": true }
+        "thresholds": { "high_risk_processing": true }
       },
       "severity": "high",
       "recurrence": "ad-hoc",
@@ -61,7 +61,7 @@
       },
       "appliesWhen": {
         "role": "controller",
-        "thresholds": { "high_risk": true }
+        "thresholds": { "high_risk_processing": true }
       },
       "severity": "high",
       "recurrence": "on-event",
@@ -214,7 +214,7 @@
       },
       "appliesWhen": {
         "role": "deployer",
-        "thresholds": { "high_risk": true }
+        "thresholds": { "high_risk_ai_system": true }
       },
       "severity": "high",
       "recurrence": "continuous",
@@ -233,7 +233,7 @@
       },
       "appliesWhen": {
         "role": "provider",
-        "thresholds": { "high_risk": true }
+        "thresholds": { "high_risk_ai_system": true }
       },
       "severity": "high",
       "recurrence": "continuous",
