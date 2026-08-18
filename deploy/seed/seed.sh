@@ -51,7 +51,7 @@ fi
 for role in \
   findings:read findings:act \
   records:read records:ropa:write records:dsar:write records:ai-systems:write \
-  dashboard:read onboarding:write \
+  dashboard:read onboarding:read onboarding:write \
   notifications:read notifications:write \
   billing:read billing:manage \
   audit:read org:read org:manage \

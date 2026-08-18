@@ -85,6 +85,12 @@ var HumanScopes = []string{
 	"memory:write",
 	"notifications:read",
 	"notifications:write",
+	// The first conversation (ENT-212). The read is separate from the write
+	// because every authenticated route asks where a person has got to before
+	// deciding whether to route them into onboarding, and making that question
+	// require the write scope would grant a scope for asking rather than for
+	// acting.
+	"onboarding:read",
 	"onboarding:write",
 	"org:manage",
 	"org:read",

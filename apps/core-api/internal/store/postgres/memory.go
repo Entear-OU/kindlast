@@ -189,6 +189,24 @@ func (t *Tenant) CorrectFact(
 		return memory.Fact{}, false, fmt.Errorf("recording the new value of %q: %w", key, err)
 	}
 
+	// THE WATCHER STILL READS THE OTHER TABLE (ENT-212).
+	//
+	// `run_watcher()` decides which obligations apply from
+	// `compliance_profiles`, in plpgsql, and knows nothing about this one.
+	// Without this line a customer could correct "do you keep a record of
+	// processing activities" from unsure to yes, watch the console agree, and
+	// watch the Watcher go on raising the same gap forever, which is the worst
+	// possible outcome for a feature whose entire promise is that the
+	// correction is what the next run reads.
+	//
+	// Here rather than in the handler because there is exactly one place a
+	// fact changes, and a projection maintained by whoever remembers to call it
+	// is one that eventually is not. It is a no-op for an organisation with no
+	// profile row, which is every organisation until onboarding confirms one.
+	if err := t.refreshProfileProjection(ctx); err != nil {
+		return memory.Fact{}, false, err
+	}
+
 	stored, err := t.currentFact(ctx, key)
 	return stored, true, err
 }
