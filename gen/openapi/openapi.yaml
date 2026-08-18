@@ -699,6 +699,142 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /api/v1/memory/evidence:
+        get:
+            tags:
+                - MemoryService
+            description: |-
+                What we observed, and where each observation came from.
+
+                 Paged, because unlike the profile this grows without bound: every sweep of
+                 every connected tool adds rows.
+            operationId: MemoryService_ListEvidence
+            parameters:
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageToken
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListEvidenceResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/memory/facts:
+        get:
+            tags:
+                - MemoryService
+            description: |-
+                What we currently believe, one row per fact.
+
+                 Not paged. The profile is a few dozen facts by construction, and a person
+                 asking what a product knows about them wants the answer rather than a
+                 window onto it.
+            operationId: MemoryService_ListProfileFacts
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListProfileFactsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/memory/facts/{key}/history:
+        get:
+            tags:
+                - MemoryService
+            description: |-
+                Every value one fact has ever had, newest first.
+
+                 THE READ THAT MAKES CORRECTION MEANINGFUL. Without it, correcting a fact
+                 is indistinguishable from us having always thought the new thing, and the
+                 question somebody checking an old finding is asking is precisely what we
+                 believed at the time.
+            operationId: MemoryService_GetFactHistory
+            parameters:
+                - name: key
+                  in: path
+                  required: true
+                  schema:
+                    enum:
+                        - PROFILE_FACT_KEY_UNSPECIFIED
+                        - PROFILE_FACT_KEY_INDUSTRY
+                        - PROFILE_FACT_KEY_EU_JURISDICTIONS
+                        - PROFILE_FACT_KEY_DATA_CATEGORIES
+                        - PROFILE_FACT_KEY_DATA_SUBJECTS
+                        - PROFILE_FACT_KEY_AI_SYSTEMS
+                        - PROFILE_FACT_KEY_HAS_DPO
+                        - PROFILE_FACT_KEY_HAS_ROPA
+                        - PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU
+                        - PROFILE_FACT_KEY_TRANSFER_DESTINATIONS
+                        - PROFILE_FACT_KEY_STAFF_COUNT
+                    type: string
+                    format: enum
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetFactHistoryResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/memory/facts:correct:
+        post:
+            tags:
+                - MemoryService
+            description: |-
+                Correct a fact, as a typed patch.
+
+                 Closes the current value and records a new one, in one transaction. It is
+                 never an update in place: `kindlast_app` holds `update (valid_to)` and not
+                 `update (value)`, so an in-place rewrite is refused by the database rather
+                 than avoided by convention.
+
+                 Idempotent in the way that matters: correcting a fact to the value it
+                 already holds is a no-op rather than a second identical row, because a
+                 history full of "changed from yes to yes" is a history nobody reads.
+            operationId: MemoryService_CorrectFact
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CorrectFactRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CorrectFactResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/notification-capabilities:
         get:
             tags:
@@ -1861,6 +1997,46 @@ components:
                          `obligation_slug` on it is redundant with `slug` above and is populated
                          anyway, because a client filtering findings by obligation uses that field
                          and should not have to know which message it came from.
+        CorrectFactRequest:
+            type: object
+            properties:
+                key:
+                    enum:
+                        - PROFILE_FACT_KEY_UNSPECIFIED
+                        - PROFILE_FACT_KEY_INDUSTRY
+                        - PROFILE_FACT_KEY_EU_JURISDICTIONS
+                        - PROFILE_FACT_KEY_DATA_CATEGORIES
+                        - PROFILE_FACT_KEY_DATA_SUBJECTS
+                        - PROFILE_FACT_KEY_AI_SYSTEMS
+                        - PROFILE_FACT_KEY_HAS_DPO
+                        - PROFILE_FACT_KEY_HAS_ROPA
+                        - PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU
+                        - PROFILE_FACT_KEY_TRANSFER_DESTINATIONS
+                        - PROFILE_FACT_KEY_STAFF_COUNT
+                    type: string
+                    format: enum
+                value:
+                    $ref: '#/components/schemas/FactValue'
+                note:
+                    type: string
+                    description: |-
+                        Why, in the correcting human's words. Optional, stored against the new
+                         value, and worth asking for: "we appointed a DPO in June" is the sentence
+                         that makes a profile change legible a year later.
+        CorrectFactResponse:
+            type: object
+            properties:
+                fact:
+                    allOf:
+                        - $ref: '#/components/schemas/ProfileFact'
+                    description: |-
+                        What we now believe, as stored. Returned rather than assumed, so a console
+                         renders what the database holds rather than what it just sent.
+                changed:
+                    type: boolean
+                    description: |-
+                        False when the value was already what it is, in which case nothing was
+                         written and no history row was created.
         CreateAiSystemRequest:
             type: object
             properties:
@@ -2112,6 +2288,39 @@ components:
                     type: array
                     items:
                         type: string
+        Evidence:
+            type: object
+            properties:
+                id:
+                    type: string
+                source:
+                    type: string
+                kind:
+                    type: string
+                connectionId:
+                    type: string
+                observedAt:
+                    type: string
+                    description: |-
+                        When it was true at the source, and when we learned it. Both, because they
+                         are routinely far apart and the gap is the interesting part.
+                fetchedAt:
+                    type: string
+                bodyJson:
+                    type: string
+                    description: |-
+                        The observation, as JSON. A string rather than a Struct, because this
+                         crosses to a console that renders it and never to code that branches on
+                         it, and a Struct would invite the second thing.
+                supersededBy:
+                    type: string
+                    description: The observation that replaced this one, when one did.
+            description: |-
+                One observation.
+
+                 The body is deliberately not typed the way a fact is. An observation from a
+                 helpdesk and one from a cloud provider share nothing but their stamps, and a
+                 schema pretending otherwise would be a schema per integration.
         ExportAuditEntriesResponse:
             type: object
             properties:
@@ -2160,6 +2369,31 @@ components:
                 expiresAt:
                     type: string
                     format: date-time
+        FactValue:
+            type: object
+            properties:
+                text:
+                    type: string
+                list:
+                    $ref: '#/components/schemas/StringList'
+                number:
+                    type: string
+                triState:
+                    enum:
+                        - TRI_STATE_UNSPECIFIED
+                        - TRI_STATE_YES
+                        - TRI_STATE_NO
+                        - TRI_STATE_UNSURE
+                    type: string
+                    format: enum
+            description: |-
+                The value of one fact.
+
+                 A oneof rather than a string, so "how many staff" cannot arrive as prose and
+                 "which jurisdictions" cannot arrive as a comma-separated line somebody has
+                 to parse. Which arm a key takes is validated in Go, because pairing a key
+                 with a type is a rule that could reasonably change and is therefore a
+                 decision rather than an invariant.
         Finding:
             type: object
             properties:
@@ -2340,6 +2574,14 @@ components:
             properties:
                 dsar:
                     $ref: '#/components/schemas/Dsar'
+        GetFactHistoryResponse:
+            type: object
+            properties:
+                facts:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ProfileFact'
+                    description: Newest first, including the open value if there is one.
         GetFindingResponse:
             type: object
             properties:
@@ -2564,6 +2806,15 @@ components:
                     description: Soonest deadline first. See ListDsars.
                 nextPageToken:
                     type: string
+        ListEvidenceResponse:
+            type: object
+            properties:
+                evidence:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Evidence'
+                nextPageToken:
+                    type: string
         ListFindingsResponse:
             type: object
             properties:
@@ -2614,6 +2865,14 @@ components:
                          not otherwise have. The limit counts only rows with no `source_finding_id`:
                          a record the Executor created on an approved finding is part of the
                          compliance record and is never withheld behind a plan (ENT-84).
+        ListProfileFactsResponse:
+            type: object
+            properties:
+                facts:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ProfileFact'
+                    description: Only the open values. History is one RPC away and is a different question.
         LogDsarRequest:
             type: object
             properties:
@@ -2988,6 +3247,51 @@ components:
 
                  Shared by create and update so the two cannot drift into accepting different
                  things about the same record.
+        ProfileFact:
+            type: object
+            properties:
+                key:
+                    enum:
+                        - PROFILE_FACT_KEY_UNSPECIFIED
+                        - PROFILE_FACT_KEY_INDUSTRY
+                        - PROFILE_FACT_KEY_EU_JURISDICTIONS
+                        - PROFILE_FACT_KEY_DATA_CATEGORIES
+                        - PROFILE_FACT_KEY_DATA_SUBJECTS
+                        - PROFILE_FACT_KEY_AI_SYSTEMS
+                        - PROFILE_FACT_KEY_HAS_DPO
+                        - PROFILE_FACT_KEY_HAS_ROPA
+                        - PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU
+                        - PROFILE_FACT_KEY_TRANSFER_DESTINATIONS
+                        - PROFILE_FACT_KEY_STAFF_COUNT
+                    type: string
+                    format: enum
+                value:
+                    $ref: '#/components/schemas/FactValue'
+                source:
+                    type: string
+                    description: |-
+                        Where it came from: onboarding, an integration, a human, an agent, an
+                         import. Shown against each value rather than against the profile as a
+                         whole, because a profile where one field came from a connected tool and
+                         another from a guess in a form is the normal case.
+                evidenceId:
+                    type: string
+                    description: |-
+                        The observation behind it, when there was one. Empty for a fact a human
+                         simply stated, which is most of onboarding.
+                validFrom:
+                    type: string
+                    description: |-
+                        When we started believing it, and when we stopped. `valid_to` empty means
+                         this is what we believe now.
+                validTo:
+                    type: string
+                recordedBy:
+                    type: string
+                    description: |-
+                        Which human recorded it, when a human did. Records who acted; never used
+                         to decide what may be read.
+            description: One fact as it was believed over one interval.
         Recital:
             type: object
             properties:
@@ -3288,6 +3592,13 @@ components:
                         $ref: '#/components/schemas/GoogleProtobufAny'
                     description: A list of messages that carry the error details.  There is a common set of message types for APIs to use.
             description: 'The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).'
+        StringList:
+            type: object
+            properties:
+                values:
+                    type: array
+                    items:
+                        type: string
         SupportingChunk:
             type: object
             properties:
@@ -3627,6 +3938,50 @@ tags:
          Tools, meaning what the model may decide to call DURING a run, are a
          different thing and are dispatched inside the harness under the skill's
          allow-list. The Analyst declares none.
+    - name: MemoryService
+      description: |-
+        What Kindlast knows about an organisation (ENT-228, §26.4, §26.5).
+
+         # THIS IS THE SURFACE THAT MAKES THE MEMORY THE CUSTOMER'S
+
+         §26.5 puts memory in Postgres under RLS rather than in an agent framework's
+         store so that a customer can see it, correct it, export it and have it
+         erased. A schema alone does not deliver that. This service is the seeing and
+         the correcting; export is these same reads; erasure is deleting the
+         organisation, which cascades.
+
+         # WHY CORRECTION IS HERE AND NOT ON `IngestService`
+
+         ENT-228 says profile facts are updated "by typed patches through
+         IngestService". The typed-patch half is right and is what `CorrectFact`
+         below is. The routing half cannot be, and the reason is the scope model
+         rather than a preference.
+
+         `IngestService` is behind `internal:ingest`, issued to service principals
+         through client credentials and never to a browser. A human correcting a fact
+         about their own organisation holds a user token, which by design can never
+         carry an internal scope. Routing the console's correction through
+         `IngestService` would mean either issuing internal scopes to people, which
+         undoes the separation ENT-207 built, or a service that acts on a person's
+         behalf without their identity, which loses `recorded_by` on the one write
+         where "which human said so" matters most.
+
+         So: a human corrects through here, under `memory:write` and RLS. When the
+         integrations gateway (ENT-231) and onboarding (ENT-212) need to write facts
+         without a human, they get their own typed patch on the platform surface.
+         Neither exists yet, and inventing the RPC before its caller would be
+         guessing at the shape.
+
+         # THE VALUES ARE TYPED, WHICH IS THE POINT RATHER THAN THE STYLE
+
+         A fact is a key from a closed enum and a value from a closed oneof. There is
+         no field on this surface that accepts a blob of prose to be stored as the
+         organisation's profile.
+
+         That is what "never free-text rewrite" means in practice. A profile a model
+         or a form could overwrite with a paragraph would be a profile nobody could
+         diff, correct field by field, or show a provenance for, and every downstream
+         claim about "what Kindlast knows" would be a claim about a paragraph.
     - name: NotificationService
       description: |-
         Notification preferences and the channels a deployment actually has

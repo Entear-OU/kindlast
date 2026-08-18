@@ -77,6 +77,12 @@ var HumanScopes = []string{
 	"dashboard:read",
 	"findings:act",
 	"findings:read",
+	// What Kindlast knows about the organisation (ENT-228). Both halves are
+	// human scopes, and the write one deliberately so: correcting a fact about
+	// yourself is the customer exercising rectification, which is the thing
+	// this product exists to make possible rather than a privileged operation.
+	"memory:read",
+	"memory:write",
 	"notifications:read",
 	"notifications:write",
 	"onboarding:write",

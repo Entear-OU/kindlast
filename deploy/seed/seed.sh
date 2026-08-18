@@ -56,6 +56,7 @@ for role in \
   billing:read billing:manage \
   audit:read org:read org:manage \
   corpus:read \
+  memory:read memory:write \
   internal:ingest internal:intelligence internal:act-on-behalf
 do
   api POST "/management/v1/projects/${PROJECT_ID}/roles" \

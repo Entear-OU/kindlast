@@ -51,6 +51,11 @@ func Services() []protoreflect.ServiceDescriptor {
 		// product's central claim rests on: a console request must not be able
 		// to change the law a finding is checked against.
 		corev1.File_kindlast_core_v1_corpus_proto,
+		// MemoryService (ENT-228). What Kindlast knows about the organisation:
+		// three reads on `memory:read` and one typed patch on `memory:write`.
+		// The patch is a human scope on purpose, because correcting a fact
+		// about yourself is rectification rather than a privileged operation.
+		corev1.File_kindlast_core_v1_memory_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the

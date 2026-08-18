@@ -228,6 +228,43 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "GET", Path: "/api/v1/corpus/documents",
 		},
 
+		// What Kindlast knows about the organisation (ENT-228).
+		//
+		// Still no {org_id} in the path, for the reason every other binding
+		// here has none: the organisation comes from the header on every
+		// request and is checked against membership, so a URL that named one
+		// would be a second answer to the same question and the two could
+		// disagree.
+		//
+		// `facts` and `evidence` are separate collections rather than one
+		// `/memory` with a filter, because they are different things: what we
+		// believe is a small correctable set, what we observed is an unbounded
+		// append-only log. A single collection would have to page the first
+		// and would invite correcting the second.
+		//
+		// The history path is keyed by the fact key rather than by a row id,
+		// and that is the one choice worth pinning. A key is stable and
+		// meaningful, so `/memory/facts/PROFILE_FACT_KEY_HAS_DPO/history` is a
+		// URL somebody can hold onto; the id of the currently open row changes
+		// every time the fact is corrected, which is precisely when somebody
+		// would want to look at its history.
+		"kindlast.core.v1.MemoryService.ListProfileFacts": {
+			Method: "GET", Path: "/api/v1/memory/facts",
+		},
+		"kindlast.core.v1.MemoryService.GetFactHistory": {
+			Method: "GET", Path: "/api/v1/memory/facts/{key}/history",
+		},
+		// A colon verb, matching `audit:export` and `findings:act`. Correcting
+		// a fact is not a REST update of a resource at a URL: it closes one row
+		// and opens another, and PUT on `/memory/facts/{key}` would describe an
+		// overwrite, which is the one thing this surface cannot do.
+		"kindlast.core.v1.MemoryService.CorrectFact": {
+			Method: "POST", Path: "/api/v1/memory/facts:correct",
+		},
+		"kindlast.core.v1.MemoryService.ListEvidence": {
+			Method: "GET", Path: "/api/v1/memory/evidence",
+		},
+
 		"kindlast.core.v1.AuditService.ListAuditEntries": {
 			Method: "GET", Path: "/api/v1/audit",
 		},
