@@ -50,6 +50,12 @@ class RecordsService(Protocol):
     async def log_dsar(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.LogDsarRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.LogDsarResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def list_dsar_trail(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def add_dsar_trail_entry(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
     async def mark_dsar_responded(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.MarkDsarRespondedRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.MarkDsarRespondedResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
@@ -168,6 +174,26 @@ class RecordsServiceASGIApplication(ConnectASGIApplication[RecordsService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.log_dsar,
+                ),
+                "/kindlast.core.v1.RecordsService/ListDsarTrail": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ListDsarTrail",
+                        service_name="kindlast.core.v1.RecordsService",
+                        input=kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailRequest,
+                        output=kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.list_dsar_trail,
+                ),
+                "/kindlast.core.v1.RecordsService/AddDsarTrailEntry": Endpoint.unary(
+                    method=MethodInfo(
+                        name="AddDsarTrailEntry",
+                        service_name="kindlast.core.v1.RecordsService",
+                        input=kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryRequest,
+                        output=kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.add_dsar_trail_entry,
                 ),
                 "/kindlast.core.v1.RecordsService/MarkDsarResponded": Endpoint.unary(
                     method=MethodInfo(
@@ -412,6 +438,46 @@ class RecordsServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def list_dsar_trail(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListDsarTrail",
+                service_name="kindlast.core.v1.RecordsService",
+                input=kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailRequest,
+                output=kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def add_dsar_trail_entry(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="AddDsarTrailEntry",
+                service_name="kindlast.core.v1.RecordsService",
+                input=kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryRequest,
+                output=kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
     async def mark_dsar_responded(
         self,
         request: kindlast_dot_core_dot_v1_dot_records__pb2.MarkDsarRespondedRequest,
@@ -455,6 +521,10 @@ class RecordsServiceSync(Protocol):
     def update_ai_system(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.UpdateAiSystemRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.UpdateAiSystemResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def log_dsar(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.LogDsarRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.LogDsarResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def list_dsar_trail(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def add_dsar_trail_entry(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def mark_dsar_responded(self, request: kindlast_dot_core_dot_v1_dot_records__pb2.MarkDsarRespondedRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_records__pb2.MarkDsarRespondedResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
@@ -573,6 +643,26 @@ class RecordsServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.log_dsar,
+                ),
+                "/kindlast.core.v1.RecordsService/ListDsarTrail": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ListDsarTrail",
+                        service_name="kindlast.core.v1.RecordsService",
+                        input=kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailRequest,
+                        output=kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.list_dsar_trail,
+                ),
+                "/kindlast.core.v1.RecordsService/AddDsarTrailEntry": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="AddDsarTrailEntry",
+                        service_name="kindlast.core.v1.RecordsService",
+                        input=kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryRequest,
+                        output=kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.add_dsar_trail_entry,
                 ),
                 "/kindlast.core.v1.RecordsService/MarkDsarResponded": EndpointSync.unary(
                     method=MethodInfo(
@@ -811,6 +901,46 @@ class RecordsServiceClientSync(ConnectClientSync):
                 service_name="kindlast.core.v1.RecordsService",
                 input=kindlast_dot_core_dot_v1_dot_records__pb2.LogDsarRequest,
                 output=kindlast_dot_core_dot_v1_dot_records__pb2.LogDsarResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def list_dsar_trail(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListDsarTrail",
+                service_name="kindlast.core.v1.RecordsService",
+                input=kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailRequest,
+                output=kindlast_dot_core_dot_v1_dot_records__pb2.ListDsarTrailResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def add_dsar_trail_entry(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="AddDsarTrailEntry",
+                service_name="kindlast.core.v1.RecordsService",
+                input=kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryRequest,
+                output=kindlast_dot_core_dot_v1_dot_records__pb2.AddDsarTrailEntryResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

@@ -64,6 +64,12 @@ const (
 	RecordsServiceUpdateAiSystemProcedure = "/kindlast.core.v1.RecordsService/UpdateAiSystem"
 	// RecordsServiceLogDsarProcedure is the fully-qualified name of the RecordsService's LogDsar RPC.
 	RecordsServiceLogDsarProcedure = "/kindlast.core.v1.RecordsService/LogDsar"
+	// RecordsServiceListDsarTrailProcedure is the fully-qualified name of the RecordsService's
+	// ListDsarTrail RPC.
+	RecordsServiceListDsarTrailProcedure = "/kindlast.core.v1.RecordsService/ListDsarTrail"
+	// RecordsServiceAddDsarTrailEntryProcedure is the fully-qualified name of the RecordsService's
+	// AddDsarTrailEntry RPC.
+	RecordsServiceAddDsarTrailEntryProcedure = "/kindlast.core.v1.RecordsService/AddDsarTrailEntry"
 	// RecordsServiceMarkDsarRespondedProcedure is the fully-qualified name of the RecordsService's
 	// MarkDsarResponded RPC.
 	RecordsServiceMarkDsarRespondedProcedure = "/kindlast.core.v1.RecordsService/MarkDsarResponded"
@@ -158,6 +164,37 @@ type RecordsServiceClient interface {
 	// approval, because a request comes from a person and an obligation that
 	// manufactured one would be inventing the requester.
 	LogDsar(context.Context, *connect.Request[v1.LogDsarRequest]) (*connect.Response[v1.LogDsarResponse], error)
+	// The trail a response was assembled from: which store was searched, when,
+	// and what came back (ENT-226).
+	//
+	// Chronological, oldest first, which is the opposite of every other list on
+	// this service. The other registers answer "what is outstanding" and lead
+	// with the most pressing row; a trail answers "what did you do", and that
+	// reads forward. A page token from this list is not interchangeable with any
+	// other here.
+	//
+	// Ordered by `occurred_at` and not by when somebody typed it in, for the
+	// reason DsarTrailEntry.occurred_at gives.
+	ListDsarTrail(context.Context, *connect.Request[v1.ListDsarTrailRequest]) (*connect.Response[v1.ListDsarTrailResponse], error)
+	// Adds one entry to that trail.
+	//
+	// # APPEND ONLY, AND THERE IS NO UPDATE OR DELETE RPC TO GO WITH IT
+	//
+	// Not an unfinished surface. An entry is evidence about how a response to a
+	// statutory request was built, and evidence a producer can revise after the
+	// fact is worth less than evidence it cannot. The database refuses an UPDATE
+	// with a trigger that binds even the migrator, so an RPC to do it could not
+	// be served whatever this contract said.
+	//
+	// Correcting a mistake means adding an entry that says so, which is how a
+	// paper file works. `withheld` and `none_found` exist so that the correction
+	// has somewhere honest to go.
+	//
+	// No `reviewed` gate, unlike MarkDsarResponded. Recording that you searched
+	// the CRM is not an assertion a regulator reads as compliance; it is the
+	// working note that makes the assertion checkable, and a confirm step on
+	// every note would mean fewer notes.
+	AddDsarTrailEntry(context.Context, *connect.Request[v1.AddDsarTrailEntryRequest]) (*connect.Response[v1.AddDsarTrailEntryResponse], error)
 	// Records that a response went out, which stops the statutory clock.
 	//
 	// Requires `reviewed`, for the same class of reason UpdateAiSystem does: this
@@ -251,6 +288,18 @@ func NewRecordsServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(recordsServiceMethods.ByName("LogDsar")),
 			connect.WithClientOptions(opts...),
 		),
+		listDsarTrail: connect.NewClient[v1.ListDsarTrailRequest, v1.ListDsarTrailResponse](
+			httpClient,
+			baseURL+RecordsServiceListDsarTrailProcedure,
+			connect.WithSchema(recordsServiceMethods.ByName("ListDsarTrail")),
+			connect.WithClientOptions(opts...),
+		),
+		addDsarTrailEntry: connect.NewClient[v1.AddDsarTrailEntryRequest, v1.AddDsarTrailEntryResponse](
+			httpClient,
+			baseURL+RecordsServiceAddDsarTrailEntryProcedure,
+			connect.WithSchema(recordsServiceMethods.ByName("AddDsarTrailEntry")),
+			connect.WithClientOptions(opts...),
+		),
 		markDsarResponded: connect.NewClient[v1.MarkDsarRespondedRequest, v1.MarkDsarRespondedResponse](
 			httpClient,
 			baseURL+RecordsServiceMarkDsarRespondedProcedure,
@@ -273,6 +322,8 @@ type recordsServiceClient struct {
 	createAiSystem           *connect.Client[v1.CreateAiSystemRequest, v1.CreateAiSystemResponse]
 	updateAiSystem           *connect.Client[v1.UpdateAiSystemRequest, v1.UpdateAiSystemResponse]
 	logDsar                  *connect.Client[v1.LogDsarRequest, v1.LogDsarResponse]
+	listDsarTrail            *connect.Client[v1.ListDsarTrailRequest, v1.ListDsarTrailResponse]
+	addDsarTrailEntry        *connect.Client[v1.AddDsarTrailEntryRequest, v1.AddDsarTrailEntryResponse]
 	markDsarResponded        *connect.Client[v1.MarkDsarRespondedRequest, v1.MarkDsarRespondedResponse]
 }
 
@@ -329,6 +380,16 @@ func (c *recordsServiceClient) UpdateAiSystem(ctx context.Context, req *connect.
 // LogDsar calls kindlast.core.v1.RecordsService.LogDsar.
 func (c *recordsServiceClient) LogDsar(ctx context.Context, req *connect.Request[v1.LogDsarRequest]) (*connect.Response[v1.LogDsarResponse], error) {
 	return c.logDsar.CallUnary(ctx, req)
+}
+
+// ListDsarTrail calls kindlast.core.v1.RecordsService.ListDsarTrail.
+func (c *recordsServiceClient) ListDsarTrail(ctx context.Context, req *connect.Request[v1.ListDsarTrailRequest]) (*connect.Response[v1.ListDsarTrailResponse], error) {
+	return c.listDsarTrail.CallUnary(ctx, req)
+}
+
+// AddDsarTrailEntry calls kindlast.core.v1.RecordsService.AddDsarTrailEntry.
+func (c *recordsServiceClient) AddDsarTrailEntry(ctx context.Context, req *connect.Request[v1.AddDsarTrailEntryRequest]) (*connect.Response[v1.AddDsarTrailEntryResponse], error) {
+	return c.addDsarTrailEntry.CallUnary(ctx, req)
 }
 
 // MarkDsarResponded calls kindlast.core.v1.RecordsService.MarkDsarResponded.
@@ -425,6 +486,37 @@ type RecordsServiceHandler interface {
 	// approval, because a request comes from a person and an obligation that
 	// manufactured one would be inventing the requester.
 	LogDsar(context.Context, *connect.Request[v1.LogDsarRequest]) (*connect.Response[v1.LogDsarResponse], error)
+	// The trail a response was assembled from: which store was searched, when,
+	// and what came back (ENT-226).
+	//
+	// Chronological, oldest first, which is the opposite of every other list on
+	// this service. The other registers answer "what is outstanding" and lead
+	// with the most pressing row; a trail answers "what did you do", and that
+	// reads forward. A page token from this list is not interchangeable with any
+	// other here.
+	//
+	// Ordered by `occurred_at` and not by when somebody typed it in, for the
+	// reason DsarTrailEntry.occurred_at gives.
+	ListDsarTrail(context.Context, *connect.Request[v1.ListDsarTrailRequest]) (*connect.Response[v1.ListDsarTrailResponse], error)
+	// Adds one entry to that trail.
+	//
+	// # APPEND ONLY, AND THERE IS NO UPDATE OR DELETE RPC TO GO WITH IT
+	//
+	// Not an unfinished surface. An entry is evidence about how a response to a
+	// statutory request was built, and evidence a producer can revise after the
+	// fact is worth less than evidence it cannot. The database refuses an UPDATE
+	// with a trigger that binds even the migrator, so an RPC to do it could not
+	// be served whatever this contract said.
+	//
+	// Correcting a mistake means adding an entry that says so, which is how a
+	// paper file works. `withheld` and `none_found` exist so that the correction
+	// has somewhere honest to go.
+	//
+	// No `reviewed` gate, unlike MarkDsarResponded. Recording that you searched
+	// the CRM is not an assertion a regulator reads as compliance; it is the
+	// working note that makes the assertion checkable, and a confirm step on
+	// every note would mean fewer notes.
+	AddDsarTrailEntry(context.Context, *connect.Request[v1.AddDsarTrailEntryRequest]) (*connect.Response[v1.AddDsarTrailEntryResponse], error)
 	// Records that a response went out, which stops the statutory clock.
 	//
 	// Requires `reviewed`, for the same class of reason UpdateAiSystem does: this
@@ -514,6 +606,18 @@ func NewRecordsServiceHandler(svc RecordsServiceHandler, opts ...connect.Handler
 		connect.WithSchema(recordsServiceMethods.ByName("LogDsar")),
 		connect.WithHandlerOptions(opts...),
 	)
+	recordsServiceListDsarTrailHandler := connect.NewUnaryHandler(
+		RecordsServiceListDsarTrailProcedure,
+		svc.ListDsarTrail,
+		connect.WithSchema(recordsServiceMethods.ByName("ListDsarTrail")),
+		connect.WithHandlerOptions(opts...),
+	)
+	recordsServiceAddDsarTrailEntryHandler := connect.NewUnaryHandler(
+		RecordsServiceAddDsarTrailEntryProcedure,
+		svc.AddDsarTrailEntry,
+		connect.WithSchema(recordsServiceMethods.ByName("AddDsarTrailEntry")),
+		connect.WithHandlerOptions(opts...),
+	)
 	recordsServiceMarkDsarRespondedHandler := connect.NewUnaryHandler(
 		RecordsServiceMarkDsarRespondedProcedure,
 		svc.MarkDsarResponded,
@@ -544,6 +648,10 @@ func NewRecordsServiceHandler(svc RecordsServiceHandler, opts ...connect.Handler
 			recordsServiceUpdateAiSystemHandler.ServeHTTP(w, r)
 		case RecordsServiceLogDsarProcedure:
 			recordsServiceLogDsarHandler.ServeHTTP(w, r)
+		case RecordsServiceListDsarTrailProcedure:
+			recordsServiceListDsarTrailHandler.ServeHTTP(w, r)
+		case RecordsServiceAddDsarTrailEntryProcedure:
+			recordsServiceAddDsarTrailEntryHandler.ServeHTTP(w, r)
 		case RecordsServiceMarkDsarRespondedProcedure:
 			recordsServiceMarkDsarRespondedHandler.ServeHTTP(w, r)
 		default:
@@ -597,6 +705,14 @@ func (UnimplementedRecordsServiceHandler) UpdateAiSystem(context.Context, *conne
 
 func (UnimplementedRecordsServiceHandler) LogDsar(context.Context, *connect.Request[v1.LogDsarRequest]) (*connect.Response[v1.LogDsarResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.LogDsar is not implemented"))
+}
+
+func (UnimplementedRecordsServiceHandler) ListDsarTrail(context.Context, *connect.Request[v1.ListDsarTrailRequest]) (*connect.Response[v1.ListDsarTrailResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.ListDsarTrail is not implemented"))
+}
+
+func (UnimplementedRecordsServiceHandler) AddDsarTrailEntry(context.Context, *connect.Request[v1.AddDsarTrailEntryRequest]) (*connect.Response[v1.AddDsarTrailEntryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.RecordsService.AddDsarTrailEntry is not implemented"))
 }
 
 func (UnimplementedRecordsServiceHandler) MarkDsarResponded(context.Context, *connect.Request[v1.MarkDsarRespondedRequest]) (*connect.Response[v1.MarkDsarRespondedResponse], error) {

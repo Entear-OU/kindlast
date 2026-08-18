@@ -1741,6 +1741,22 @@ type Dsar struct {
 	SourceFindingId string                 `protobuf:"bytes,11,opt,name=source_finding_id,json=sourceFindingId,proto3" json:"source_finding_id,omitempty"`
 	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// How many trail entries this request has (ENT-226).
+	//
+	// Carried on the list as well as the read, because it is the number that
+	// makes `responded_at` checkable at a glance: a request marked answered with
+	// an empty trail is an assertion with nothing behind it, and that is a state
+	// the register should show rather than hide.
+	//
+	// A count and not the entries themselves. A trail can be long, it holds free
+	// text about a named person, and a list of every request has no business
+	// carrying all of it; ListDsarTrail is the call that does.
+	//
+	// NOT A GATE. Nothing refuses MarkDsarResponded on a zero here, deliberately:
+	// a customer who assembled the response somewhere else has still met the
+	// deadline, and inventing a rule that Article 12(3) requires a Kindlast trail
+	// would be the product asserting an obligation the law does not contain.
+	TrailEntryCount int32 `protobuf:"varint,14,opt,name=trail_entry_count,json=trailEntryCount,proto3" json:"trail_entry_count,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1866,6 +1882,13 @@ func (x *Dsar) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *Dsar) GetTrailEntryCount() int32 {
+	if x != nil {
+		return x.TrailEntryCount
+	}
+	return 0
+}
+
 type GetDsarRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DsarId        string                 `protobuf:"bytes,1,opt,name=dsar_id,json=dsarId,proto3" json:"dsar_id,omitempty"`
@@ -1952,6 +1975,424 @@ func (x *GetDsarResponse) GetDsar() *Dsar {
 		return x.Dsar
 	}
 	return nil
+}
+
+type ListDsarTrailRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DsarId        string                 `protobuf:"bytes,1,opt,name=dsar_id,json=dsarId,proto3" json:"dsar_id,omitempty"`
+	PageToken     string                 `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDsarTrailRequest) Reset() {
+	*x = ListDsarTrailRequest{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDsarTrailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDsarTrailRequest) ProtoMessage() {}
+
+func (x *ListDsarTrailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDsarTrailRequest.ProtoReflect.Descriptor instead.
+func (*ListDsarTrailRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ListDsarTrailRequest) GetDsarId() string {
+	if x != nil {
+		return x.DsarId
+	}
+	return ""
+}
+
+func (x *ListDsarTrailRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+func (x *ListDsarTrailRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type ListDsarTrailResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Oldest first. See ListDsarTrail.
+	Entries       []*DsarTrailEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	NextPageToken string            `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDsarTrailResponse) Reset() {
+	*x = ListDsarTrailResponse{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDsarTrailResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDsarTrailResponse) ProtoMessage() {}
+
+func (x *ListDsarTrailResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDsarTrailResponse.ProtoReflect.Descriptor instead.
+func (*ListDsarTrailResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ListDsarTrailResponse) GetEntries() []*DsarTrailEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *ListDsarTrailResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+type AddDsarTrailEntryRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	DsarId string                 `protobuf:"bytes,1,opt,name=dsar_id,json=dsarId,proto3" json:"dsar_id,omitempty"`
+	// The store that was searched. Required, and free text: see
+	// DsarTrailEntry.source.
+	Source string `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	// searched, found, none_found, disclosed, or withheld. Required.
+	Action string `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
+	// Optional. What was looked for, what came back, or why something was
+	// withheld.
+	Detail string `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	// When the search or the disclosure actually happened. Absent means now.
+	//
+	// Same field and the same reasoning as LogDsarRequest.received_at: a handler
+	// who searched the CRM on Tuesday and writes it up on Friday did one thing,
+	// and a trail that only knows Friday cannot show the search happened inside
+	// the statutory month. A future date is refused rather than clamped.
+	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	// The agent run that produced this entry, when one did (ENT-218, ENT-245).
+	//
+	// Refused unless it names a run in the caller's own organisation, so an entry
+	// can never be attributed to another tenant's run. `created_by` is recorded
+	// alongside it regardless and is taken from the session rather than the
+	// request, so an entry always says which human filed it whatever it claims
+	// about a run.
+	//
+	// Empty today from every caller that exists. It is in the contract because
+	// §26.4's gateway writes through this RPC, and provenance that has to be
+	// added afterwards is provenance nobody recorded.
+	AgentRunId    string `protobuf:"bytes,6,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddDsarTrailEntryRequest) Reset() {
+	*x = AddDsarTrailEntryRequest{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddDsarTrailEntryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddDsarTrailEntryRequest) ProtoMessage() {}
+
+func (x *AddDsarTrailEntryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddDsarTrailEntryRequest.ProtoReflect.Descriptor instead.
+func (*AddDsarTrailEntryRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *AddDsarTrailEntryRequest) GetDsarId() string {
+	if x != nil {
+		return x.DsarId
+	}
+	return ""
+}
+
+func (x *AddDsarTrailEntryRequest) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *AddDsarTrailEntryRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *AddDsarTrailEntryRequest) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *AddDsarTrailEntryRequest) GetOccurredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return nil
+}
+
+func (x *AddDsarTrailEntryRequest) GetAgentRunId() string {
+	if x != nil {
+		return x.AgentRunId
+	}
+	return ""
+}
+
+type AddDsarTrailEntryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entry         *DsarTrailEntry        `protobuf:"bytes,1,opt,name=entry,proto3" json:"entry,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddDsarTrailEntryResponse) Reset() {
+	*x = AddDsarTrailEntryResponse{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddDsarTrailEntryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddDsarTrailEntryResponse) ProtoMessage() {}
+
+func (x *AddDsarTrailEntryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddDsarTrailEntryResponse.ProtoReflect.Descriptor instead.
+func (*AddDsarTrailEntryResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *AddDsarTrailEntryResponse) GetEntry() *DsarTrailEntry {
+	if x != nil {
+		return x.Entry
+	}
+	return nil
+}
+
+// One step in assembling a response to a data-subject request.
+//
+// WHY THIS EXISTS: `Dsar.responded_at` says a response went out. On its own it
+// is an assertion with nothing behind it, and a regulator reading the register
+// cannot see what was searched, what was found, or what was returned. These
+// entries are that record, and they are the customer's evidence rather than an
+// internal trace: they are exportable, they are readable in the console, and
+// nothing in the product can edit or delete one.
+type DsarTrailEntry struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	EntryId string                 `protobuf:"bytes,1,opt,name=entry_id,json=entryId,proto3" json:"entry_id,omitempty"`
+	DsarId  string                 `protobuf:"bytes,2,opt,name=dsar_id,json=dsarId,proto3" json:"dsar_id,omitempty"`
+	// The store that was searched, in the customer's own words: "Salesforce",
+	// "the HR system", "our payroll export".
+	//
+	// Free text rather than an enum, and deliberately. The stores are the
+	// customer's estate, so an enum here would be Kindlast enumerating somebody
+	// else's systems: the same mistake `request_type` avoids by not forcing an
+	// Article 15-22 request into a closed list at intake. Where a request reaches
+	// data Kindlast itself holds, the three stores in
+	// `docs/personal-data-runbook.md` are the names to use, and the console
+	// offers them as suggestions rather than as the only options.
+	Source string `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
+	// searched, found, none_found, disclosed, or withheld.
+	//
+	// A closed vocabulary, unlike `source`, because these are Kindlast's own and
+	// a reader has to be able to count them. `none_found` is not the same as the
+	// absence of an entry: "we looked in the CRM and there was nothing" and
+	// "nobody has looked in the CRM" are different facts, and a record that
+	// conflates them tells a customer they are covered when they are not.
+	//
+	// `withheld` is a first-class outcome for the reason `refused` is one on an
+	// agent run. Article 15(4) and the Member State exemptions are real, so a
+	// response that leaves something out for a stated reason is lawful, and one
+	// that leaves something out silently is evidence of nothing.
+	Action string `protobuf:"bytes,4,opt,name=action,proto3" json:"action,omitempty"`
+	// What was looked for, what came back, or why something was withheld.
+	//
+	// Not a place to put the personal data itself. The handler writes
+	// "employment record, 2019-2024", not the record: this table is read by
+	// everyone in the organisation who can read the register, and copying a data
+	// subject's data into it would widen who can see it.
+	Detail string `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
+	// When it happened in the world.
+	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	// When it entered the record. Never supplied by a caller, and it cannot move
+	// afterwards.
+	//
+	// Carried beside `occurred_at` rather than instead of it because the gap
+	// between them is itself meaningful: a trail written up entirely on the last
+	// day looks different from one kept as the work was done, and both are honest
+	// records of different behaviour.
+	RecordedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=recorded_at,json=recordedAt,proto3" json:"recorded_at,omitempty"`
+	// Which human filed it. Always set for an entry written through the console.
+	CreatedBy string `protobuf:"bytes,8,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	// The agent run that produced it, when one did. Empty otherwise, which today
+	// is every entry.
+	AgentRunId    string `protobuf:"bytes,9,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DsarTrailEntry) Reset() {
+	*x = DsarTrailEntry{}
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DsarTrailEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DsarTrailEntry) ProtoMessage() {}
+
+func (x *DsarTrailEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_records_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DsarTrailEntry.ProtoReflect.Descriptor instead.
+func (*DsarTrailEntry) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_records_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *DsarTrailEntry) GetEntryId() string {
+	if x != nil {
+		return x.EntryId
+	}
+	return ""
+}
+
+func (x *DsarTrailEntry) GetDsarId() string {
+	if x != nil {
+		return x.DsarId
+	}
+	return ""
+}
+
+func (x *DsarTrailEntry) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *DsarTrailEntry) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *DsarTrailEntry) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *DsarTrailEntry) GetOccurredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return nil
+}
+
+func (x *DsarTrailEntry) GetRecordedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RecordedAt
+	}
+	return nil
+}
+
+func (x *DsarTrailEntry) GetCreatedBy() string {
+	if x != nil {
+		return x.CreatedBy
+	}
+	return ""
+}
+
+func (x *DsarTrailEntry) GetAgentRunId() string {
+	if x != nil {
+		return x.AgentRunId
+	}
+	return ""
 }
 
 var File_kindlast_core_v1_records_proto protoreflect.FileDescriptor
@@ -2078,7 +2519,7 @@ const file_kindlast_core_v1_records_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\tR\x06status\"i\n" +
 	"\x11ListDsarsResponse\x12,\n" +
 	"\x05dsars\x18\x01 \x03(\v2\x16.kindlast.core.v1.DsarR\x05dsars\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xb9\x04\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xe5\x04\n" +
 	"\x04Dsar\x12\x17\n" +
 	"\adsar_id\x18\x01 \x01(\tR\x06dsarId\x12!\n" +
 	"\fsubject_name\x18\x02 \x01(\tR\vsubjectName\x12!\n" +
@@ -2096,11 +2537,45 @@ const file_kindlast_core_v1_records_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\")\n" +
+	"updated_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12*\n" +
+	"\x11trail_entry_count\x18\x0e \x01(\x05R\x0ftrailEntryCount\")\n" +
 	"\x0eGetDsarRequest\x12\x17\n" +
 	"\adsar_id\x18\x01 \x01(\tR\x06dsarId\"=\n" +
 	"\x0fGetDsarResponse\x12*\n" +
-	"\x04dsar\x18\x01 \x01(\v2\x16.kindlast.core.v1.DsarR\x04dsar2\xc1\x10\n" +
+	"\x04dsar\x18\x01 \x01(\v2\x16.kindlast.core.v1.DsarR\x04dsar\"k\n" +
+	"\x14ListDsarTrailRequest\x12\x17\n" +
+	"\adsar_id\x18\x01 \x01(\tR\x06dsarId\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\"{\n" +
+	"\x15ListDsarTrailResponse\x12:\n" +
+	"\aentries\x18\x01 \x03(\v2 .kindlast.core.v1.DsarTrailEntryR\aentries\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xda\x01\n" +
+	"\x18AddDsarTrailEntryRequest\x12\x17\n" +
+	"\adsar_id\x18\x01 \x01(\tR\x06dsarId\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x16\n" +
+	"\x06action\x18\x03 \x01(\tR\x06action\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\x12;\n" +
+	"\voccurred_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"occurredAt\x12 \n" +
+	"\fagent_run_id\x18\x06 \x01(\tR\n" +
+	"agentRunId\"S\n" +
+	"\x19AddDsarTrailEntryResponse\x126\n" +
+	"\x05entry\x18\x01 \x01(\v2 .kindlast.core.v1.DsarTrailEntryR\x05entry\"\xc7\x02\n" +
+	"\x0eDsarTrailEntry\x12\x19\n" +
+	"\bentry_id\x18\x01 \x01(\tR\aentryId\x12\x17\n" +
+	"\adsar_id\x18\x02 \x01(\tR\x06dsarId\x12\x16\n" +
+	"\x06source\x18\x03 \x01(\tR\x06source\x12\x16\n" +
+	"\x06action\x18\x04 \x01(\tR\x06action\x12\x16\n" +
+	"\x06detail\x18\x05 \x01(\tR\x06detail\x12;\n" +
+	"\voccurred_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"occurredAt\x12;\n" +
+	"\vrecorded_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"recordedAt\x12\x1d\n" +
+	"\n" +
+	"created_by\x18\b \x01(\tR\tcreatedBy\x12 \n" +
+	"\fagent_run_id\x18\t \x01(\tR\n" +
+	"agentRunId2\x9a\x13\n" +
 	"\x0eRecordsService\x12\xc0\x01\n" +
 	"\x18ListProcessingActivities\x121.kindlast.core.v1.ListProcessingActivitiesRequest\x1a2.kindlast.core.v1.ListProcessingActivitiesResponse\"=\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02'\x12%/api/v1/records/processing-activities\x12\xd0\x01\n" +
 	"\x15GetProcessingActivity\x12..kindlast.core.v1.GetProcessingActivityRequest\x1a/.kindlast.core.v1.GetProcessingActivityResponse\"V\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02@\x12>/api/v1/records/processing-activities/{processing_activity_id}\x12\x94\x01\n" +
@@ -2112,7 +2587,9 @@ const file_kindlast_core_v1_records_proto_rawDesc = "" +
 	"\x18UpdateProcessingActivity\x121.kindlast.core.v1.UpdateProcessingActivityRequest\x1a2.kindlast.core.v1.UpdateProcessingActivityResponse\"_\x8a\xb5\x18\x12records:ropa:write\x82\xd3\xe4\x93\x02C:\x01*2>/api/v1/records/processing-activities/{processing_activity_id}\x12\xa6\x01\n" +
 	"\x0eCreateAiSystem\x12'.kindlast.core.v1.CreateAiSystemRequest\x1a(.kindlast.core.v1.CreateAiSystemResponse\"A\x8a\xb5\x18\x18records:ai-systems:write\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/api/v1/records/ai-systems\x12\xb5\x01\n" +
 	"\x0eUpdateAiSystem\x12'.kindlast.core.v1.UpdateAiSystemRequest\x1a(.kindlast.core.v1.UpdateAiSystemResponse\"P\x8a\xb5\x18\x18records:ai-systems:write\x82\xd3\xe4\x93\x02.:\x01*2)/api/v1/records/ai-systems/{ai_system_id}\x12\x86\x01\n" +
-	"\aLogDsar\x12 .kindlast.core.v1.LogDsarRequest\x1a!.kindlast.core.v1.LogDsarResponse\"6\x8a\xb5\x18\x12records:dsar:write\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/v1/records/dsars\x12\xb6\x01\n" +
+	"\aLogDsar\x12 .kindlast.core.v1.LogDsarRequest\x1a!.kindlast.core.v1.LogDsarResponse\"6\x8a\xb5\x18\x12records:dsar:write\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/v1/records/dsars\x12\x9f\x01\n" +
+	"\rListDsarTrail\x12&.kindlast.core.v1.ListDsarTrailRequest\x1a'.kindlast.core.v1.ListDsarTrailResponse\"=\x8a\xb5\x18\frecords:read\x82\xd3\xe4\x93\x02'\x12%/api/v1/records/dsars/{dsar_id}/trail\x12\xb4\x01\n" +
+	"\x11AddDsarTrailEntry\x12*.kindlast.core.v1.AddDsarTrailEntryRequest\x1a+.kindlast.core.v1.AddDsarTrailEntryResponse\"F\x8a\xb5\x18\x12records:dsar:write\x82\xd3\xe4\x93\x02*:\x01*\"%/api/v1/records/dsars/{dsar_id}/trail\x12\xb6\x01\n" +
 	"\x11MarkDsarResponded\x12*.kindlast.core.v1.MarkDsarRespondedRequest\x1a+.kindlast.core.v1.MarkDsarRespondedResponse\"H\x8a\xb5\x18\x12records:dsar:write\x82\xd3\xe4\x93\x02,:\x01*\"'/api/v1/records/dsars/{dsar_id}:respondB\xc4\x01\n" +
 	"\x14com.kindlast.core.v1B\fRecordsProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3"
 
@@ -2128,7 +2605,7 @@ func file_kindlast_core_v1_records_proto_rawDescGZIP() []byte {
 	return file_kindlast_core_v1_records_proto_rawDescData
 }
 
-var file_kindlast_core_v1_records_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_kindlast_core_v1_records_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_kindlast_core_v1_records_proto_goTypes = []any{
 	(*ProcessingActivityFields)(nil),         // 0: kindlast.core.v1.ProcessingActivityFields
 	(*CreateProcessingActivityRequest)(nil),  // 1: kindlast.core.v1.CreateProcessingActivityRequest
@@ -2160,7 +2637,12 @@ var file_kindlast_core_v1_records_proto_goTypes = []any{
 	(*Dsar)(nil),                             // 27: kindlast.core.v1.Dsar
 	(*GetDsarRequest)(nil),                   // 28: kindlast.core.v1.GetDsarRequest
 	(*GetDsarResponse)(nil),                  // 29: kindlast.core.v1.GetDsarResponse
-	(*timestamppb.Timestamp)(nil),            // 30: google.protobuf.Timestamp
+	(*ListDsarTrailRequest)(nil),             // 30: kindlast.core.v1.ListDsarTrailRequest
+	(*ListDsarTrailResponse)(nil),            // 31: kindlast.core.v1.ListDsarTrailResponse
+	(*AddDsarTrailEntryRequest)(nil),         // 32: kindlast.core.v1.AddDsarTrailEntryRequest
+	(*AddDsarTrailEntryResponse)(nil),        // 33: kindlast.core.v1.AddDsarTrailEntryResponse
+	(*DsarTrailEntry)(nil),                   // 34: kindlast.core.v1.DsarTrailEntry
+	(*timestamppb.Timestamp)(nil),            // 35: google.protobuf.Timestamp
 }
 var file_kindlast_core_v1_records_proto_depIdxs = []int32{
 	0,  // 0: kindlast.core.v1.CreateProcessingActivityRequest.fields:type_name -> kindlast.core.v1.ProcessingActivityFields
@@ -2171,55 +2653,64 @@ var file_kindlast_core_v1_records_proto_depIdxs = []int32{
 	22, // 5: kindlast.core.v1.CreateAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
 	5,  // 6: kindlast.core.v1.UpdateAiSystemRequest.fields:type_name -> kindlast.core.v1.AiSystemFields
 	22, // 7: kindlast.core.v1.UpdateAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
-	30, // 8: kindlast.core.v1.LogDsarRequest.received_at:type_name -> google.protobuf.Timestamp
+	35, // 8: kindlast.core.v1.LogDsarRequest.received_at:type_name -> google.protobuf.Timestamp
 	27, // 9: kindlast.core.v1.LogDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
 	27, // 10: kindlast.core.v1.MarkDsarRespondedResponse.dsar:type_name -> kindlast.core.v1.Dsar
 	17, // 11: kindlast.core.v1.ListProcessingActivitiesResponse.processing_activities:type_name -> kindlast.core.v1.ProcessingActivity
 	16, // 12: kindlast.core.v1.ListProcessingActivitiesResponse.manual_quota:type_name -> kindlast.core.v1.ManualQuota
-	30, // 13: kindlast.core.v1.ProcessingActivity.created_at:type_name -> google.protobuf.Timestamp
-	30, // 14: kindlast.core.v1.ProcessingActivity.updated_at:type_name -> google.protobuf.Timestamp
+	35, // 13: kindlast.core.v1.ProcessingActivity.created_at:type_name -> google.protobuf.Timestamp
+	35, // 14: kindlast.core.v1.ProcessingActivity.updated_at:type_name -> google.protobuf.Timestamp
 	17, // 15: kindlast.core.v1.GetProcessingActivityResponse.processing_activity:type_name -> kindlast.core.v1.ProcessingActivity
 	22, // 16: kindlast.core.v1.ListAiSystemsResponse.ai_systems:type_name -> kindlast.core.v1.AiSystem
-	30, // 17: kindlast.core.v1.AiSystem.last_reviewed_at:type_name -> google.protobuf.Timestamp
-	30, // 18: kindlast.core.v1.AiSystem.created_at:type_name -> google.protobuf.Timestamp
-	30, // 19: kindlast.core.v1.AiSystem.updated_at:type_name -> google.protobuf.Timestamp
+	35, // 17: kindlast.core.v1.AiSystem.last_reviewed_at:type_name -> google.protobuf.Timestamp
+	35, // 18: kindlast.core.v1.AiSystem.created_at:type_name -> google.protobuf.Timestamp
+	35, // 19: kindlast.core.v1.AiSystem.updated_at:type_name -> google.protobuf.Timestamp
 	22, // 20: kindlast.core.v1.GetAiSystemResponse.ai_system:type_name -> kindlast.core.v1.AiSystem
 	27, // 21: kindlast.core.v1.ListDsarsResponse.dsars:type_name -> kindlast.core.v1.Dsar
-	30, // 22: kindlast.core.v1.Dsar.received_at:type_name -> google.protobuf.Timestamp
-	30, // 23: kindlast.core.v1.Dsar.response_due_at:type_name -> google.protobuf.Timestamp
-	30, // 24: kindlast.core.v1.Dsar.responded_at:type_name -> google.protobuf.Timestamp
-	30, // 25: kindlast.core.v1.Dsar.created_at:type_name -> google.protobuf.Timestamp
-	30, // 26: kindlast.core.v1.Dsar.updated_at:type_name -> google.protobuf.Timestamp
+	35, // 22: kindlast.core.v1.Dsar.received_at:type_name -> google.protobuf.Timestamp
+	35, // 23: kindlast.core.v1.Dsar.response_due_at:type_name -> google.protobuf.Timestamp
+	35, // 24: kindlast.core.v1.Dsar.responded_at:type_name -> google.protobuf.Timestamp
+	35, // 25: kindlast.core.v1.Dsar.created_at:type_name -> google.protobuf.Timestamp
+	35, // 26: kindlast.core.v1.Dsar.updated_at:type_name -> google.protobuf.Timestamp
 	27, // 27: kindlast.core.v1.GetDsarResponse.dsar:type_name -> kindlast.core.v1.Dsar
-	14, // 28: kindlast.core.v1.RecordsService.ListProcessingActivities:input_type -> kindlast.core.v1.ListProcessingActivitiesRequest
-	18, // 29: kindlast.core.v1.RecordsService.GetProcessingActivity:input_type -> kindlast.core.v1.GetProcessingActivityRequest
-	20, // 30: kindlast.core.v1.RecordsService.ListAiSystems:input_type -> kindlast.core.v1.ListAiSystemsRequest
-	23, // 31: kindlast.core.v1.RecordsService.GetAiSystem:input_type -> kindlast.core.v1.GetAiSystemRequest
-	25, // 32: kindlast.core.v1.RecordsService.ListDsars:input_type -> kindlast.core.v1.ListDsarsRequest
-	28, // 33: kindlast.core.v1.RecordsService.GetDsar:input_type -> kindlast.core.v1.GetDsarRequest
-	1,  // 34: kindlast.core.v1.RecordsService.CreateProcessingActivity:input_type -> kindlast.core.v1.CreateProcessingActivityRequest
-	3,  // 35: kindlast.core.v1.RecordsService.UpdateProcessingActivity:input_type -> kindlast.core.v1.UpdateProcessingActivityRequest
-	6,  // 36: kindlast.core.v1.RecordsService.CreateAiSystem:input_type -> kindlast.core.v1.CreateAiSystemRequest
-	8,  // 37: kindlast.core.v1.RecordsService.UpdateAiSystem:input_type -> kindlast.core.v1.UpdateAiSystemRequest
-	10, // 38: kindlast.core.v1.RecordsService.LogDsar:input_type -> kindlast.core.v1.LogDsarRequest
-	12, // 39: kindlast.core.v1.RecordsService.MarkDsarResponded:input_type -> kindlast.core.v1.MarkDsarRespondedRequest
-	15, // 40: kindlast.core.v1.RecordsService.ListProcessingActivities:output_type -> kindlast.core.v1.ListProcessingActivitiesResponse
-	19, // 41: kindlast.core.v1.RecordsService.GetProcessingActivity:output_type -> kindlast.core.v1.GetProcessingActivityResponse
-	21, // 42: kindlast.core.v1.RecordsService.ListAiSystems:output_type -> kindlast.core.v1.ListAiSystemsResponse
-	24, // 43: kindlast.core.v1.RecordsService.GetAiSystem:output_type -> kindlast.core.v1.GetAiSystemResponse
-	26, // 44: kindlast.core.v1.RecordsService.ListDsars:output_type -> kindlast.core.v1.ListDsarsResponse
-	29, // 45: kindlast.core.v1.RecordsService.GetDsar:output_type -> kindlast.core.v1.GetDsarResponse
-	2,  // 46: kindlast.core.v1.RecordsService.CreateProcessingActivity:output_type -> kindlast.core.v1.CreateProcessingActivityResponse
-	4,  // 47: kindlast.core.v1.RecordsService.UpdateProcessingActivity:output_type -> kindlast.core.v1.UpdateProcessingActivityResponse
-	7,  // 48: kindlast.core.v1.RecordsService.CreateAiSystem:output_type -> kindlast.core.v1.CreateAiSystemResponse
-	9,  // 49: kindlast.core.v1.RecordsService.UpdateAiSystem:output_type -> kindlast.core.v1.UpdateAiSystemResponse
-	11, // 50: kindlast.core.v1.RecordsService.LogDsar:output_type -> kindlast.core.v1.LogDsarResponse
-	13, // 51: kindlast.core.v1.RecordsService.MarkDsarResponded:output_type -> kindlast.core.v1.MarkDsarRespondedResponse
-	40, // [40:52] is the sub-list for method output_type
-	28, // [28:40] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	34, // 28: kindlast.core.v1.ListDsarTrailResponse.entries:type_name -> kindlast.core.v1.DsarTrailEntry
+	35, // 29: kindlast.core.v1.AddDsarTrailEntryRequest.occurred_at:type_name -> google.protobuf.Timestamp
+	34, // 30: kindlast.core.v1.AddDsarTrailEntryResponse.entry:type_name -> kindlast.core.v1.DsarTrailEntry
+	35, // 31: kindlast.core.v1.DsarTrailEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	35, // 32: kindlast.core.v1.DsarTrailEntry.recorded_at:type_name -> google.protobuf.Timestamp
+	14, // 33: kindlast.core.v1.RecordsService.ListProcessingActivities:input_type -> kindlast.core.v1.ListProcessingActivitiesRequest
+	18, // 34: kindlast.core.v1.RecordsService.GetProcessingActivity:input_type -> kindlast.core.v1.GetProcessingActivityRequest
+	20, // 35: kindlast.core.v1.RecordsService.ListAiSystems:input_type -> kindlast.core.v1.ListAiSystemsRequest
+	23, // 36: kindlast.core.v1.RecordsService.GetAiSystem:input_type -> kindlast.core.v1.GetAiSystemRequest
+	25, // 37: kindlast.core.v1.RecordsService.ListDsars:input_type -> kindlast.core.v1.ListDsarsRequest
+	28, // 38: kindlast.core.v1.RecordsService.GetDsar:input_type -> kindlast.core.v1.GetDsarRequest
+	1,  // 39: kindlast.core.v1.RecordsService.CreateProcessingActivity:input_type -> kindlast.core.v1.CreateProcessingActivityRequest
+	3,  // 40: kindlast.core.v1.RecordsService.UpdateProcessingActivity:input_type -> kindlast.core.v1.UpdateProcessingActivityRequest
+	6,  // 41: kindlast.core.v1.RecordsService.CreateAiSystem:input_type -> kindlast.core.v1.CreateAiSystemRequest
+	8,  // 42: kindlast.core.v1.RecordsService.UpdateAiSystem:input_type -> kindlast.core.v1.UpdateAiSystemRequest
+	10, // 43: kindlast.core.v1.RecordsService.LogDsar:input_type -> kindlast.core.v1.LogDsarRequest
+	30, // 44: kindlast.core.v1.RecordsService.ListDsarTrail:input_type -> kindlast.core.v1.ListDsarTrailRequest
+	32, // 45: kindlast.core.v1.RecordsService.AddDsarTrailEntry:input_type -> kindlast.core.v1.AddDsarTrailEntryRequest
+	12, // 46: kindlast.core.v1.RecordsService.MarkDsarResponded:input_type -> kindlast.core.v1.MarkDsarRespondedRequest
+	15, // 47: kindlast.core.v1.RecordsService.ListProcessingActivities:output_type -> kindlast.core.v1.ListProcessingActivitiesResponse
+	19, // 48: kindlast.core.v1.RecordsService.GetProcessingActivity:output_type -> kindlast.core.v1.GetProcessingActivityResponse
+	21, // 49: kindlast.core.v1.RecordsService.ListAiSystems:output_type -> kindlast.core.v1.ListAiSystemsResponse
+	24, // 50: kindlast.core.v1.RecordsService.GetAiSystem:output_type -> kindlast.core.v1.GetAiSystemResponse
+	26, // 51: kindlast.core.v1.RecordsService.ListDsars:output_type -> kindlast.core.v1.ListDsarsResponse
+	29, // 52: kindlast.core.v1.RecordsService.GetDsar:output_type -> kindlast.core.v1.GetDsarResponse
+	2,  // 53: kindlast.core.v1.RecordsService.CreateProcessingActivity:output_type -> kindlast.core.v1.CreateProcessingActivityResponse
+	4,  // 54: kindlast.core.v1.RecordsService.UpdateProcessingActivity:output_type -> kindlast.core.v1.UpdateProcessingActivityResponse
+	7,  // 55: kindlast.core.v1.RecordsService.CreateAiSystem:output_type -> kindlast.core.v1.CreateAiSystemResponse
+	9,  // 56: kindlast.core.v1.RecordsService.UpdateAiSystem:output_type -> kindlast.core.v1.UpdateAiSystemResponse
+	11, // 57: kindlast.core.v1.RecordsService.LogDsar:output_type -> kindlast.core.v1.LogDsarResponse
+	31, // 58: kindlast.core.v1.RecordsService.ListDsarTrail:output_type -> kindlast.core.v1.ListDsarTrailResponse
+	33, // 59: kindlast.core.v1.RecordsService.AddDsarTrailEntry:output_type -> kindlast.core.v1.AddDsarTrailEntryResponse
+	13, // 60: kindlast.core.v1.RecordsService.MarkDsarResponded:output_type -> kindlast.core.v1.MarkDsarRespondedResponse
+	47, // [47:61] is the sub-list for method output_type
+	33, // [33:47] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_core_v1_records_proto_init() }
@@ -2233,7 +2724,7 @@ func file_kindlast_core_v1_records_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_core_v1_records_proto_rawDesc), len(file_kindlast_core_v1_records_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -124,6 +124,7 @@ export function Field({
   placeholder,
   hint,
   required,
+  list,
 }: {
   label: string
   name: string
@@ -131,6 +132,14 @@ export function Field({
   placeholder?: string
   hint?: string
   required?: boolean
+  /**
+   * The id of a `datalist` to suggest from (ENT-226).
+   *
+   * Suggestions and not a closed list, which is the distinction it exists for:
+   * the DSAR trail's store field takes the customer's own system names, and the
+   * few Kindlast can usefully offer are a starting point rather than the set.
+   */
+  list?: string
 }) {
   return (
     <div className="space-y-1.5">
@@ -141,6 +150,7 @@ export function Field({
         defaultValue={defaultValue ?? ''}
         placeholder={placeholder}
         required={required}
+        list={list}
       />
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>

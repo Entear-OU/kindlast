@@ -9,7 +9,8 @@ you act.
 
 It is not the customer's DSAR register. That is a product surface, it lives at
 `/o/{slug}/records`, and the trail a customer's response gets built from is
-ENT-226, which is sequenced after the integrations gateway.
+`dsar_trail_entries` (ENT-226, migration 00024), readable at
+`/o/{slug}/records/dsars/{id}`.
 
 The difference matters because the two answer different questions. A customer's
 DSAR concerns their data subjects and their own systems. This document concerns
@@ -53,6 +54,7 @@ reasoning about who could have touched something.
 | `invitations` | `email`, `token_hash` | `kindlast_app` |
 | `audit_log` | `user_id`, `approving_user_id`, `actor_role`, and the `before` / `after` jsonb | `kindlast_app` (no delete grant) |
 | `dsars` | **`subject_name`**, `handler`, `created_by` | `kindlast_app` |
+| `dsar_trail_entries` | **`detail`**, free text a handler wrote about a data subject, plus `source` and `created_by` | `kindlast_app` (select and insert only) |
 | `onboarding_messages` | `content`, free text written by a person, plus `created_by` | `kindlast_app` |
 | `onboarding_sessions` | `created_by` | `kindlast_app` |
 | `compliance_profiles` | `data_subjects`, `created_by` | `kindlast_app`, `kindlast_agent` (select, update) |
@@ -88,6 +90,9 @@ operator uses for the procedures below, and the only one that can.
 **Personal data about people who are not users.** `invitations.email` is the
 address of somebody who may never have accepted, and `dsars.subject_name` is a
 data subject named by a customer, who has no relationship with Kindlast at all.
+`dsar_trail_entries.detail` is about that same person: it is meant to describe
+what was found rather than to hold it ("employment record, 2019-2024", not the
+record), and nothing enforces that, so treat it as though it does hold it.
 Neither has an account. So "delete my account" does not reach them, and a
 request *from* one of them cannot be answered by finding their user record,
 because there is not one. Search by value, not by `user_id`.
@@ -119,6 +124,18 @@ So the order in the erasure procedure is not a stylistic preference. It is the
 only thing standing between you and quiet corruption.
 
 ### 2. The append-only guarantee covers UPDATE, not DELETE
+
+This now applies to three tables, not one: `audit_log` (00001), `agent_runs`
+(00019) and `dsar_trail_entries` (00024). All three carry a `BEFORE UPDATE`
+trigger that refuses even `kindlast_migrator`, none has a delete trigger, and
+`kindlast_app` holds no DELETE grant on any of them. The paragraphs below are
+written about `audit_log` because that is where the shape was established, and
+every word of them is true of the other two.
+
+The absence of a delete trigger is deliberate on all three and it is what makes
+the erasure procedure below possible: a `BEFORE DELETE` trigger would raise
+inside the cascade from `organisations` and turn a single erasure statement into
+an incident.
 
 `db/README.md` says nothing deletes from `audit_log`, and that it is enforced
 rather than observed. Both halves are true, and the enforcement is narrower
@@ -199,7 +216,15 @@ select * from findings              where approved_by = '<user_id>';
 select * from processing_activities where created_by = '<user_id>';
 select * from ai_systems            where created_by = '<user_id>';
 select * from dsars                 where created_by = '<user_id>';
+select * from dsar_trail_entries    where created_by = '<user_id>';
 ```
+
+The last of those is worth a sentence. A trail entry is evidence about how a
+response to somebody else's request was assembled, so `created_by` on it names
+the handler and `detail` may describe the data subject. An access request from a
+handler reaches the first; an access request from a data subject reaches the
+second, and there is no id to search by, so search `detail` and `source` by value
+the way step 4 does for addresses.
 
 **4. Search by address as well as by id**, because of the not-a-user category
 above. This is the step most likely to be skipped:
@@ -251,6 +276,15 @@ records because of who authored them would remove a customer's compliance data,
 which is not what was asked. Anonymising in place is usually right, and it is a
 deliberate decision either way.
 
+**`dsar_trail_entries` cannot be anonymised in place.** Its UPDATE trigger
+refuses the migrator, so the option available on every other table is not
+available here: the row is evidence about a statutory response, and the whole
+point of the trigger is that nobody can revise one after the fact. The choices
+are to leave it, or to delete the DSAR it belongs to and take the trail with it,
+which removes a customer's compliance evidence. That is the same Article 17(3)
+question the open one below asks about `audit_log`, so escalate it the same way
+rather than choosing on the day.
+
 **5. Remove membership, then identity, in that order:**
 
 ```sql
@@ -301,7 +335,11 @@ is more honest than implying otherwise.
 ## The open question, stated rather than answered
 
 `audit_log.before` and `audit_log.after` hold whatever the acted-on row
-contained. For a DSAR that can include a data subject's name.
+contained. For a DSAR that can include a data subject's name, and for a trail
+entry it can include whatever a handler wrote in `detail`. The same question
+therefore reaches `dsar_trail_entries` itself, which is append-only for exactly
+the reason that makes the question hard: the record is worth having because
+nobody can revise it.
 
 An erasure request reaching those payloads needs a decision about whether an
 accountability record is exempt under **Article 17(3)**. That is a legal call,
@@ -339,3 +377,13 @@ trigger turned out to bind the migrator too, not only the application role.
 
 Re-verify after any migration that adds a tenant table, and extend the role
 table above at the same time.
+
+**ENT-226 (migration 00024) added `dsar_trail_entries`**, and the table above was
+extended with it. What was verified against the running schema for that table:
+its grants (`select` and `insert` to `kindlast_app`, nothing else, nothing to any
+other role), that `UPDATE` on it is refused as `kindlast_migrator` with the
+trigger's own message, and that deleting the request or the organisation takes
+its entries with it. The two full procedures above were **not** re-walked
+end to end for it; the queries added to them are the same shape as the ones
+beside them and have not been run against a synthetic organisation the way the
+2026-08-17 walk was.

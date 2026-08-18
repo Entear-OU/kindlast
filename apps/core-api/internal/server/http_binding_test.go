@@ -311,6 +311,29 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "POST", Path: "/api/v1/records/dsars/{dsar_id}:respond",
 		},
 
+		// ENT-226. The trail is a nested COLLECTION, so it is `/trail` and not
+		// `:trail`, which is the other side of the rule `:respond` illustrates.
+		// A custom verb names an action on a resource; this names a set of
+		// subordinate resources that genuinely exist, each with its own id, and
+		// AIP-122 spells a subcollection as a path segment.
+		//
+		// `{dsar_id}` names the request the entries belong to and, as everywhere
+		// else on this service, is meaningless without the organisation header.
+		//
+		// POST and GET on the same path, and no PATCH or DELETE beside them.
+		// That absence is the reviewable part: a trail entry is evidence about
+		// how a response to a statutory request was assembled, the database
+		// refuses an UPDATE with a trigger binding even the migrator, and
+		// `kindlast_app` holds no DELETE grant. A binding for either could not
+		// be served, so the contract does not offer one. Correcting an entry
+		// means appending one that says so.
+		"kindlast.core.v1.RecordsService.ListDsarTrail": {
+			Method: "GET", Path: "/api/v1/records/dsars/{dsar_id}/trail",
+		},
+		"kindlast.core.v1.RecordsService.AddDsarTrailEntry": {
+			Method: "POST", Path: "/api/v1/records/dsars/{dsar_id}/trail",
+		},
+
 		// ENT-203. The only binding outside /api/v1, and the prefix is the
 		// reviewable part: /internal/v1 is not reachable through the edge's
 		// public routes and is not served to a browser client. The proto

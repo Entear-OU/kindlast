@@ -89,6 +89,78 @@ type Dsar struct {
 	SourceFindingID string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	// How many trail entries stand behind this request (ENT-226). Zero means
+	// `responded_at`, if it is set at all, is an assertion with nothing under
+	// it, which is a state the register shows rather than hides.
+	TrailEntryCount int32
+}
+
+// TrailEntry is one step in assembling a response to a data-subject request.
+//
+// The record that makes `Dsar.RespondedAt` checkable: which store was searched,
+// when, what came back, and what went into the answer. Append-only in the
+// database, so there is no update shape here and there is not meant to be one.
+type TrailEntry struct {
+	ID     string
+	DsarID string
+	// The store that was searched, in the customer's own words. Free text: the
+	// stores are the customer's estate, not Kindlast's.
+	Source string
+	// One of the TrailAction constants below.
+	Action string
+	Detail string
+	// When it happened in the world, which is not when it was written down.
+	OccurredAt time.Time
+	RecordedAt time.Time
+	// Which human filed it. Never used for isolation.
+	CreatedBy string
+	// The agent run that produced it, when one did. Empty otherwise.
+	AgentRunID string
+}
+
+// What happened at a store, as the trail records it.
+//
+// A closed vocabulary, unlike the store names, because these are Kindlast's own
+// and a reader has to be able to count them. The database carries the same five
+// as a check constraint: the set must hold whoever writes, and this is where a
+// caller gets a message written for a person rather than for a DBA.
+const (
+	// TrailSearched: somebody looked here.
+	TrailSearched = "searched"
+	// TrailFound: personal data about the subject was here.
+	TrailFound = "found"
+	// TrailNoneFound: somebody looked here and there was nothing.
+	//
+	// Deliberately a value rather than the absence of an entry. "We looked in
+	// the CRM and there was nothing" and "nobody has looked in the CRM" are
+	// different facts, and a record that conflates them tells a customer they
+	// are covered when they are not.
+	TrailNoneFound = "none_found"
+	// TrailDisclosed: what was found went into the response.
+	TrailDisclosed = "disclosed"
+	// TrailWithheld: what was found was deliberately not disclosed, for a
+	// reason recorded in Detail. Article 15(4) and the Member State exemptions
+	// are real, and a response that leaves something out silently is evidence of
+	// nothing.
+	TrailWithheld = "withheld"
+)
+
+// TrailActions is the vocabulary, in the order a response is usually assembled.
+//
+// Exported as a slice so a caller can render a chooser and an error can name
+// the set, rather than each doing so from memory and drifting apart.
+var TrailActions = []string{
+	TrailSearched, TrailFound, TrailNoneFound, TrailDisclosed, TrailWithheld,
+}
+
+// ValidTrailAction reports whether an action is one the trail records.
+func ValidTrailAction(action string) bool {
+	for _, a := range TrailActions {
+		if a == action {
+			return true
+		}
+	}
+	return false
 }
 
 // Page is one page of any register, with the cursor for the next.

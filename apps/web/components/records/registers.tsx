@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 import {
   CompletenessBadge,
   DateValue,
@@ -9,6 +11,7 @@ import {
 import { RespondButton } from '@/components/records/dsar-form'
 import { NotRecorded, Value, ValueList } from '@/components/records/states'
 import { Button } from '@/components/ui/button'
+import { orgPath } from '@/lib/auth/org'
 import type { RecordActionState } from '@/lib/records/action-state'
 import {
   Table,
@@ -246,6 +249,12 @@ export function DsarTable({
               thing: this column is a date, that one is a state. */}
           <TableHead className={HEAD}>Response sent</TableHead>
           <TableHead className={HEAD}>State</TableHead>
+          {/* ENT-226. Beside the state rather than tucked at the end, because
+              it is what makes the state checkable: a request whose response
+              went out and whose trail is empty is an assertion with nothing
+              behind it, and the register should say so rather than let the
+              date stand on its own. */}
+          <TableHead className={HEAD}>Trail</TableHead>
           {respondable ? (
             <TableHead className="sr-only">Actions</TableHead>
           ) : null}
@@ -293,6 +302,9 @@ export function DsarTable({
           <TableCell className={CELL}>
             <UrgencyBadge value={dsar.urgency} />
           </TableCell>
+          <TableCell className={CELL}>
+            <TrailCell slug={slug} dsar={dsar} />
+          </TableCell>
           {respondable ? (
             <TableCell className={CELL}>
               {/* Nothing to offer once it is answered. The transition is one
@@ -310,6 +322,45 @@ export function DsarTable({
         </TableRow>
       ))}
     </Register>
+  )
+}
+
+/**
+ * How much evidence stands behind a request, and the way into it (ENT-226).
+ *
+ * A count and a link, not the entries: a register of every request has no
+ * business carrying free text about every named data subject in it.
+ *
+ * Zero is rendered as words rather than as "0", and it is the case worth
+ * getting right. "Nothing recorded" beside a response date is the state
+ * ENT-226 exists to surface, and a bare zero in a column of numbers is easy to
+ * read past.
+ *
+ * Without a slug there is nowhere to link to, so the count stands alone. That
+ * happens only where the table is rendered outside an organisation's route,
+ * which today is the component tests.
+ */
+function TrailCell({ slug, dsar }: { slug?: string; dsar: Dsar }) {
+  const count = dsar.trailEntryCount ?? 0
+  const label =
+    count === 0 ? 'Nothing recorded' : `${count} step${count === 1 ? '' : 's'}`
+
+  if (!slug) {
+    return <span className="text-muted-foreground">{label}</span>
+  }
+
+  return (
+    <Link
+      href={orgPath(slug, `/records/dsars/${dsar.dsarId}`)}
+      data-testid="dsar-trail-link"
+      className={
+        count === 0
+          ? 'text-muted-foreground underline underline-offset-4 hover:text-foreground'
+          : 'text-foreground underline underline-offset-4 hover:opacity-80'
+      }
+    >
+      {label}
+    </Link>
   )
 }
 
