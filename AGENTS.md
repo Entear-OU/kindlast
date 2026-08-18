@@ -341,6 +341,24 @@ that is not there. When a test covers a security property, prove it can fail:
 break the property deliberately, watch the test go red, then restore it. The
 isolation suite and the scope-declaration test were both verified that way.
 
+**A test that walks a list proves the members, not the list.** The
+scope-declaration test walks `server.Services()` and proves every RPC in it
+declares a required scope. It cannot prove the registry is complete, so a
+service missing from the registry is invisible to it. That is not theoretical:
+`NarrativeService` shipped mounted on the mux and absent from the registry, the
+scope interceptor default-denied every call, and the feature was unreachable in
+every deployment while its own tests stayed green (ENT-245, fixed in #184). The
+HTTP-binding test walks the same list and was blind identically. When a guard
+reads from a list, ask what proves the list, and write that test too.
+
+**A service-to-service seam is not done until it has been driven once against
+the running stack.** The same feature carried a second, independent bug: the
+outbound client sent no bearer token, so every call failed even once routing
+worked. Neither bug was findable from the Go suite, because the service tests
+used a fake client and the store tests never left the database, so the two
+halves had never met. If a change introduces a call between two services, drive
+it once end to end and record what came back in the PR.
+
 Three test suites, and they are not interchangeable:
 
 | Suite | Needs | Covers |
