@@ -160,11 +160,10 @@ message Finding {
   string detected = 4;
   // The one specific thing to do about it.
   //
-  // Today this is the SQL baseline sentence for every finding, because the
-  // narrative layer was deleted with the console and has not been rebuilt
-  // (ENT-162). The field is not new or provisional; what is missing is a
-  // better value in it, and that is a producer concern rather than a contract
-  // one.
+  // The deterministic sweep writes this and nothing else ever overwrites it.
+  // For most findings it is the baseline sentence, which is the same sentence
+  // on every card; `narrative` below is where a finding stops reading like
+  // every other one (ENT-162).
   string proposed_action = 5;
   // minutes, hours, days or weeks: how much work this is likely to be.
   string effort_estimate = 6;
@@ -192,6 +191,50 @@ message Finding {
   string approved_by = 11;
   // Set only when status is `rejected`, and only when one was given.
   string rejection_reason = 12;
+
+  // The plain-language explanation, when a run produced one and every citation
+  // in it resolved (ENT-162, ENT-245).
+  //
+  // EMPTY IS THE ORDINARY CASE AND NOT A MISSING VALUE. Narration is an
+  // asynchronous job, Intelligence sits behind a compose profile, and a
+  // deployment may never narrate anything. So a client renders this when it is
+  // there and renders exactly what it renders today when it is not. A
+  // placeholder, a skeleton or a "narrative pending" line on every card would
+  // turn the common case into a defect report.
+  //
+  // IT IS BODY COPY, NEVER A HEADING. This is ENT-164 written into the
+  // contract rather than left to each renderer to rediscover. `detected` is
+  // the heading: a short phrase, in the customer's terms. The narrative is one
+  // or two sentences of prose, and the version of this that shared `detected`
+  // put a paragraph in the slot a card renders as its title.
+  string narrative = 13;
+
+  // The run that produced the narrative or the refusal, so "how this was
+  // produced" is answerable from the finding rather than by correlating
+  // timestamps.
+  //
+  // Carried rather than rendered as a link, because `agent_runs` has a write
+  // path (`IngestService.RecordAgentRun`) and no read path yet. A client shows
+  // it as the reference it is; when a read RPC exists it becomes the key that
+  // resolves the run.
+  string agent_run_id = 14;
+
+  // Why no narrative was produced, when a run was made and refused.
+  //
+  // A REFUSAL IS A FACT, NOT AN ERROR. The finding keeps its deterministic
+  // text, so a refused run costs the customer nothing, and this field is the
+  // difference between "we tried and the model cited an article that does not
+  // apply to you" and "nothing has ever looked". Those are different states and
+  // a product whose claim is that a human can check its work should not render
+  // them identically.
+  //
+  // On the surface it belongs to: this is for a page somebody opened about one
+  // finding, not for the feed. A list where every card reports what our
+  // pipeline could not do is a list about us rather than about their
+  // compliance. It travels on the same message because the feed and the detail
+  // view read one `Finding`, and a second message shaped to hide a field is a
+  // second shape that can drift.
+  string narrative_refusal = 15;
 }
 
 // The regulatory basis for a finding, exactly as stored.

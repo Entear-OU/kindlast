@@ -163,11 +163,10 @@ type Finding struct {
 	Detected string `protobuf:"bytes,4,opt,name=detected,proto3" json:"detected,omitempty"`
 	// The one specific thing to do about it.
 	//
-	// Today this is the SQL baseline sentence for every finding, because the
-	// narrative layer was deleted with the console and has not been rebuilt
-	// (ENT-162). The field is not new or provisional; what is missing is a
-	// better value in it, and that is a producer concern rather than a contract
-	// one.
+	// The deterministic sweep writes this and nothing else ever overwrites it.
+	// For most findings it is the baseline sentence, which is the same sentence
+	// on every card; `narrative` below is where a finding stops reading like
+	// every other one (ENT-162).
 	ProposedAction string `protobuf:"bytes,5,opt,name=proposed_action,json=proposedAction,proto3" json:"proposed_action,omitempty"`
 	// minutes, hours, days or weeks: how much work this is likely to be.
 	EffortEstimate string `protobuf:"bytes,6,opt,name=effort_estimate,json=effortEstimate,proto3" json:"effort_estimate,omitempty"`
@@ -195,8 +194,49 @@ type Finding struct {
 	ApprovedBy string `protobuf:"bytes,11,opt,name=approved_by,json=approvedBy,proto3" json:"approved_by,omitempty"`
 	// Set only when status is `rejected`, and only when one was given.
 	RejectionReason string `protobuf:"bytes,12,opt,name=rejection_reason,json=rejectionReason,proto3" json:"rejection_reason,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// The plain-language explanation, when a run produced one and every citation
+	// in it resolved (ENT-162, ENT-245).
+	//
+	// EMPTY IS THE ORDINARY CASE AND NOT A MISSING VALUE. Narration is an
+	// asynchronous job, Intelligence sits behind a compose profile, and a
+	// deployment may never narrate anything. So a client renders this when it is
+	// there and renders exactly what it renders today when it is not. A
+	// placeholder, a skeleton or a "narrative pending" line on every card would
+	// turn the common case into a defect report.
+	//
+	// IT IS BODY COPY, NEVER A HEADING. This is ENT-164 written into the
+	// contract rather than left to each renderer to rediscover. `detected` is
+	// the heading: a short phrase, in the customer's terms. The narrative is one
+	// or two sentences of prose, and the version of this that shared `detected`
+	// put a paragraph in the slot a card renders as its title.
+	Narrative string `protobuf:"bytes,13,opt,name=narrative,proto3" json:"narrative,omitempty"`
+	// The run that produced the narrative or the refusal, so "how this was
+	// produced" is answerable from the finding rather than by correlating
+	// timestamps.
+	//
+	// Carried rather than rendered as a link, because `agent_runs` has a write
+	// path (`IngestService.RecordAgentRun`) and no read path yet. A client shows
+	// it as the reference it is; when a read RPC exists it becomes the key that
+	// resolves the run.
+	AgentRunId string `protobuf:"bytes,14,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
+	// Why no narrative was produced, when a run was made and refused.
+	//
+	// A REFUSAL IS A FACT, NOT AN ERROR. The finding keeps its deterministic
+	// text, so a refused run costs the customer nothing, and this field is the
+	// difference between "we tried and the model cited an article that does not
+	// apply to you" and "nothing has ever looked". Those are different states and
+	// a product whose claim is that a human can check its work should not render
+	// them identically.
+	//
+	// On the surface it belongs to: this is for a page somebody opened about one
+	// finding, not for the feed. A list where every card reports what our
+	// pipeline could not do is a list about us rather than about their
+	// compliance. It travels on the same message because the feed and the detail
+	// view read one `Finding`, and a second message shaped to hide a field is a
+	// second shape that can drift.
+	NarrativeRefusal string `protobuf:"bytes,15,opt,name=narrative_refusal,json=narrativeRefusal,proto3" json:"narrative_refusal,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Finding) Reset() {
@@ -309,6 +349,27 @@ func (x *Finding) GetApprovedBy() string {
 func (x *Finding) GetRejectionReason() string {
 	if x != nil {
 		return x.RejectionReason
+	}
+	return ""
+}
+
+func (x *Finding) GetNarrative() string {
+	if x != nil {
+		return x.Narrative
+	}
+	return ""
+}
+
+func (x *Finding) GetAgentRunId() string {
+	if x != nil {
+		return x.AgentRunId
+	}
+	return ""
+}
+
+func (x *Finding) GetNarrativeRefusal() string {
+	if x != nil {
+		return x.NarrativeRefusal
 	}
 	return ""
 }
@@ -1228,7 +1289,7 @@ const file_kindlast_core_v1_findings_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\tR\x06status\"u\n" +
 	"\x14ListFindingsResponse\x125\n" +
 	"\bfindings\x18\x01 \x03(\v2\x19.kindlast.core.v1.FindingR\bfindings\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xeb\x03\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xd8\x04\n" +
 	"\aFinding\x12\x1d\n" +
 	"\n" +
 	"finding_id\x18\x01 \x01(\tR\tfindingId\x12\x16\n" +
@@ -1246,7 +1307,11 @@ const file_kindlast_core_v1_findings_proto_rawDesc = "" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\fsnoozedUntil\x12\x1f\n" +
 	"\vapproved_by\x18\v \x01(\tR\n" +
 	"approvedBy\x12)\n" +
-	"\x10rejection_reason\x18\f \x01(\tR\x0frejectionReason\"\x83\x02\n" +
+	"\x10rejection_reason\x18\f \x01(\tR\x0frejectionReason\x12\x1c\n" +
+	"\tnarrative\x18\r \x01(\tR\tnarrative\x12 \n" +
+	"\fagent_run_id\x18\x0e \x01(\tR\n" +
+	"agentRunId\x12+\n" +
+	"\x11narrative_refusal\x18\x0f \x01(\tR\x10narrativeRefusal\"\x83\x02\n" +
 	"\bCitation\x12'\n" +
 	"\x0fobligation_slug\x18\x01 \x01(\tR\x0eobligationSlug\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
