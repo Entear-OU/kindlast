@@ -156,6 +156,24 @@ def test_the_gate_fails_when_the_truncation_check_stops_firing(golden, monkeypat
     assert any("truncation" in failure for failure in report.failures)
 
 
+def test_the_gate_fails_when_the_house_style_critic_stops_firing(golden, monkeypatch):
+    """ENT-163, and the reason the check is code rather than a prompt line.
+
+    Disabling the critic leaves the system prompt's request in place and the
+    weak tier's em dash sails through it, which is precisely the state ENT-160
+    left the service in. The gate has to notice, or the next person deletes the
+    critic as redundant with the prompt.
+    """
+    from kindlast_intelligence.harness import run as run_module
+    from kindlast_intelligence.harness.prose import ProseResult
+
+    monkeypatch.setattr(run_module, "review_prose", lambda text: ProseResult())
+
+    report = run_suite(golden)
+
+    assert any("house_style" in failure for failure in report.failures)
+
+
 def test_the_gate_fails_when_customer_text_reaches_the_system_prompt(
     golden, monkeypatch
 ):
