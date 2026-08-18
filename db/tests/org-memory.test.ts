@@ -108,9 +108,10 @@ describe.skipIf(!reachable)('a value is superseded, never rewritten', () => {
     // a policy can be widened by a later migration that looks reasonable,
     // where a column-level grant has to be widened on purpose.
     await expect(
-      app.query(`update org_profile_facts set value = '"yes"'::jsonb where id = $1`, [
-        id,
-      ]),
+      app.query(
+        `update org_profile_facts set value = '"yes"'::jsonb where id = $1`,
+        [id],
+      ),
     ).rejects.toThrow(/permission denied/i)
   })
 
@@ -138,9 +139,10 @@ describe.skipIf(!reachable)('a value is superseded, never rewritten', () => {
   it('accepts the new value once the old one is closed', async () => {
     const key = `staff_band_${randomUUID().slice(0, 8)}`
     const first = await record(orgA, key, 'under-50')
-    await app.query(`update org_profile_facts set valid_to = now() where id = $1`, [
-      first,
-    ])
+    await app.query(
+      `update org_profile_facts set valid_to = now() where id = $1`,
+      [first],
+    )
     const second = await record(orgA, key, '50-250')
 
     const r = await app.query(
@@ -158,9 +160,10 @@ describe.skipIf(!reachable)('history does not move, not even for us', () => {
   it('refuses to edit a closed fact as the migrator', async () => {
     const key = `closed_${randomUUID().slice(0, 8)}`
     const id = await record(orgA, key, 'before')
-    await app.query(`update org_profile_facts set valid_to = now() where id = $1`, [
-      id,
-    ])
+    await app.query(
+      `update org_profile_facts set valid_to = now() where id = $1`,
+      [id],
+    )
 
     // AS THE MIGRATOR, WHICH IS THE POINT OF THIS TEST. It bypasses RLS and
     // holds every grant, so neither the policies nor the column-level grant
@@ -199,9 +202,10 @@ describe.skipIf(!reachable)('the profile as of an instant', () => {
     // The instant a run would have stamped on `agent_runs.profile_as_of`.
     const asOf = (await app.query(`select now() as t`)).rows[0].t
 
-    await app.query(`update org_profile_facts set valid_to = now() where id = $1`, [
-      first,
-    ])
+    await app.query(
+      `update org_profile_facts set valid_to = now() where id = $1`,
+      [first],
+    )
     await record(orgA, key, 'legitimate-interest')
 
     const then = await app.query(
@@ -255,7 +259,10 @@ describe.skipIf(!reachable)('one organisation cannot reach another', () => {
     // change org_id at all here, since the column-level grant covers only
     // valid_to, so this asserts the outer of two locks.
     await expect(
-      app.query(`update org_profile_facts set org_id = $1 where id = $2`, [orgB, id]),
+      app.query(`update org_profile_facts set org_id = $1 where id = $2`, [
+        orgB,
+        id,
+      ]),
     ).rejects.toThrow(/permission denied|row-level security/i)
   })
 })
@@ -301,14 +308,18 @@ describe.skipIf(!reachable)('evidence records what we observed', () => {
     expect(ok.rowCount).toBe(1)
 
     await expect(
-      app.query(`update org_evidence set body = '{}'::jsonb where id = $1`, [older]),
+      app.query(`update org_evidence set body = '{}'::jsonb where id = $1`, [
+        older,
+      ]),
     ).rejects.toThrow(/permission denied/i)
   })
 
   it('refuses a row that supersedes itself', async () => {
     const id = await observe(orgA, null)
     await expect(
-      app.query(`update org_evidence set superseded_by = id where id = $1`, [id]),
+      app.query(`update org_evidence set superseded_by = id where id = $1`, [
+        id,
+      ]),
     ).rejects.toThrow(/not_self_superseding/i)
   })
 })

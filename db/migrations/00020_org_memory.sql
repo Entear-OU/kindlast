@@ -163,7 +163,18 @@ create table public.org_profile_facts (
   -- that instant this table reconstructs exactly what it saw. An integer would
   -- be a second thing to maintain, a second thing to get wrong, and would
   -- answer the question no better.
-  valid_from timestamptz not null default now(),
+  -- `clock_timestamp()`, NOT `now()`, AND THE DIFFERENCE IS NOT PEDANTRY.
+  --
+  -- `now()` is the TRANSACTION timestamp and is identical for every statement
+  -- in a transaction. Closing one value and opening its successor in the same
+  -- transaction with `now()` produces two rows with the same `valid_from`, a
+  -- zero-length interval for the superseded one, and a history whose order is
+  -- undefined because the column it sorts by ties.
+  --
+  -- None of that shows up in a single correction, which is why it survived
+  -- being written. A test in the store package found it, and this default is
+  -- here so the next writer, onboarding at ENT-212, does not find it again.
+  valid_from timestamptz not null default clock_timestamp(),
   valid_to timestamptz,
   constraint org_profile_facts_valid_range
     check (valid_to is null or valid_to >= valid_from),
@@ -183,6 +194,15 @@ create table public.org_profile_facts (
   -- foreign key, matching every other user reference in this schema, because
   -- identity is Zitadel's and the domain mirrors rather than owns it.
   recorded_by uuid,
+
+  -- Why it changed, in the correcting human's words.
+  --
+  -- FREE TEXT, AND NOT A CONTRADICTION OF THE RULE ABOVE. "Never free-text
+  -- rewrite" is about the VALUE: nothing may replace a typed fact with prose.
+  -- This is an annotation beside the value, and it is what makes a profile
+  -- change legible a year later. "We appointed a DPO in June" is the sentence
+  -- somebody auditing a finding needs and no enum can carry.
+  note text,
 
   created_at timestamptz not null default now()
 );
