@@ -72,6 +72,23 @@ func (t *Tenant) OrganisationName(ctx context.Context) (string, error) {
 	return name, nil
 }
 
+// OrganisationSlug reads the caller's organisation slug.
+//
+// Read through the tenant's own policy rather than passed in, which is the
+// same argument OrganisationName makes and matters more here: the answer is
+// the URL an approve-from-email interstitial sends somebody to, and §8's named
+// failure is a consultant landing in the wrong company's console. A slug that
+// came from the request could be any of the three they have open.
+func (t *Tenant) OrganisationSlug(ctx context.Context) (string, error) {
+	var slug string
+	err := t.tx.QueryRow(ctx,
+		`select slug from organisations where id = $1`, t.orgID).Scan(&slug)
+	if err != nil {
+		return "", fmt.Errorf("postgres: reading the organisation slug: %w", err)
+	}
+	return slug, nil
+}
+
 // Deliver sends one message somewhere. Supplied by the caller so the store owns
 // the transaction discipline and the channel owns the sending, and neither
 // knows how the other works.

@@ -32,6 +32,13 @@ type Subject struct {
 	Subject     string
 	Email       string
 	DisplayName string
+	// EmailVerified is what the IdP said about the address at this sign-in.
+	//
+	// Mirrored into `user_identities` (00027) rather than left on the token,
+	// because §1.8's gate has to hold for a link in an email, and a link
+	// carries no token for anything to read a claim off. Meaningful only
+	// alongside Email: absent address, no assertion either way.
+	EmailVerified bool
 }
 
 // Membership is one row of what already exists for a subject.

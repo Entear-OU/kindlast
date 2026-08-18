@@ -77,14 +77,27 @@ func (t *Tenant) RecordIdentity(ctx context.Context, subject org.Subject) error 
 	// Both are coalesced on conflict rather than overwritten, so a later
 	// sign-in whose token or userinfo carries no name does not erase one we
 	// already had. Absence is not a correction.
+	// `email_verified` moves with the address rather than on its own (ENT-249).
+	//
+	// A boolean has no absence, so the coalesce trick above does not work for
+	// it: assigning `excluded.email_verified` unconditionally would set false on
+	// every call that carries no email, which for the bundled Zitadel is every
+	// call after provisioning, and a verified address would unverify itself on
+	// the next page load. Verification is a property OF an address, so it is
+	// revised exactly when an address is observed and left alone otherwise.
 	_, err := t.tx.Exec(ctx, `
-		insert into user_identities (user_id, issuer, subject, email, display_name)
-		values ($1, $2, $3, nullif($4, ''), nullif($5, ''))
+		insert into user_identities (user_id, issuer, subject, email, display_name, email_verified)
+		values ($1, $2, $3, nullif($4, ''), nullif($5, ''), $6 and nullif($4, '') is not null)
 		on conflict (user_id) do update
 		set email = coalesce(excluded.email, user_identities.email),
 		    display_name = coalesce(excluded.display_name, user_identities.display_name),
+		    email_verified = case
+		      when excluded.email is not null then excluded.email_verified
+		      else user_identities.email_verified
+		    end,
 		    updated_at = now()
-	`, t.userID, subject.Issuer, subject.Subject, subject.Email, subject.DisplayName)
+	`, t.userID, subject.Issuer, subject.Subject, subject.Email, subject.DisplayName,
+		subject.EmailVerified)
 	if err != nil {
 		return fmt.Errorf("postgres: recording identity: %w", err)
 	}

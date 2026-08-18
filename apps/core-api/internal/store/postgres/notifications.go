@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -121,8 +122,16 @@ type Doorbell struct {
 // "should this person be emailed" rule in the SQL would hide a product decision
 // somewhere it cannot be unit tested.
 type Recipient struct {
-	UserID          string
-	Email           string
+	UserID string
+	Email  string
+	// EmailVerified is about the address above rather than about the person.
+	//
+	// It decides whether this message carries an approve link (ENT-249): §1.8
+	// gates acting on a finding behind an address somebody proved they control,
+	// and a preferences override is by definition an address nobody proved
+	// anything about, so somebody reading mail elsewhere reads as false here
+	// even when their sign-in address is verified.
+	EmailVerified   bool
 	MinSeverity     string
 	FindingSeverity string
 	Timezone        string
@@ -169,7 +178,7 @@ func (a *AgentStore) ClaimDoorbell(ctx context.Context, tx pgx.Tx) (Doorbell, er
 // function answers one question about one row instead. See 00015's header.
 func (a *AgentStore) Recipients(ctx context.Context, tx pgx.Tx, outboxID string) ([]Recipient, error) {
 	rows, err := tx.Query(ctx, `
-		select user_id::text, email,
+		select user_id::text, email, email_verified,
 		       min_severity::text, finding_severity::text, timezone,
 		       coalesce(to_char(quiet_hours_start, 'HH24:MI'), ''),
 		       coalesce(to_char(quiet_hours_end, 'HH24:MI'), ''),
@@ -184,7 +193,7 @@ func (a *AgentStore) Recipients(ctx context.Context, tx pgx.Tx, outboxID string)
 	var out []Recipient
 	for rows.Next() {
 		var r Recipient
-		if err := rows.Scan(&r.UserID, &r.Email, &r.MinSeverity,
+		if err := rows.Scan(&r.UserID, &r.Email, &r.EmailVerified, &r.MinSeverity,
 			&r.FindingSeverity, &r.Timezone, &r.QuietHoursStart, &r.QuietHoursEnd,
 			&r.OrgSlug, &r.OrgName); err != nil {
 			return nil, fmt.Errorf("postgres: reading a recipient: %w", err)
@@ -232,6 +241,48 @@ func (a *AgentStore) MintCapabilityToken(
 		return fmt.Errorf("postgres: minting a capability token: %w", err)
 	}
 	return nil
+}
+
+// MintApprovalDelegation stores the hash of a link that approves one finding.
+//
+// # WHY THIS GOES THROUGH A FUNCTION AND MintCapabilityToken DOES NOT
+//
+// A capability token is an ordinary insert the agent role holds a grant for. A
+// delegation is not: `kindlast_agent` deliberately holds nothing at all on
+// `act_delegations`, because that table carries a human's authority and 00021
+// says a delegation may only be minted from inside a transaction that is
+// already that person's. The dispatcher breaks that shape by being the one
+// legitimate minter with nobody signed in.
+//
+// So it passes an OUTBOX ROW IT HAS ALREADY CLAIMED and a user id, and
+// `mint_finding_approval_delegation` derives the organisation and the finding
+// from that row. The dispatcher therefore cannot pair a person with a finding
+// it was not sent to deliver, cannot mint for somebody outside that
+// organisation, and still cannot read a delegation back. See 00027's header for
+// why a grant plus a policy was not available: a policy would have to check
+// membership, and a policy expression reading a table the querying role cannot
+// read errors rather than refuses.
+//
+// The raw token never arrives here. Hashing happens at the call site through
+// the same helper the redeem path uses, which is the arrangement `invitations`
+// and `capability_tokens` already have.
+//
+// A false second return means the mint was declined rather than failed: the
+// outbox row went away, or the person is no longer a member. Both are ordinary
+// races against a dispatcher that claimed a row moments ago, and neither is a
+// reason to fail a delivery. The message then goes out without an approve link,
+// which is the doorbell doing its actual job.
+func (a *AgentStore) MintApprovalDelegation(
+	ctx context.Context, tx pgx.Tx, outboxID, userID, tokenHash string, lifetime time.Duration,
+) (bool, error) {
+	var id *string
+	err := tx.QueryRow(ctx, `
+		select mint_finding_approval_delegation($1::uuid, $2::uuid, $3, $4::interval)::text
+	`, outboxID, userID, tokenHash, fmt.Sprintf("%d seconds", int(lifetime.Seconds()))).Scan(&id)
+	if err != nil {
+		return false, fmt.Errorf("postgres: minting an approval delegation: %w", err)
+	}
+	return id != nil, nil
 }
 
 // MarkDoorbellSent records that a notification went out.

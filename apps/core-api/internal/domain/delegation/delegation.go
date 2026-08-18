@@ -81,6 +81,18 @@ type Mint struct {
 	ActingAgent string
 	// TTL is how long it should live. Zero means DefaultTTL.
 	TTL time.Duration
+	// SingleUse spends the delegation on its first redemption.
+	//
+	// False for a run, whose tools are many calls under one delegation. True
+	// for the approve link, where redeeming twice is the thing to prevent.
+	SingleUse bool
+	// FindingID binds the delegation to one finding (ENT-249, §8).
+	//
+	// Empty for a run delegation, which is not about any one thing. Set for the
+	// approve link, and then the credential answers only to a caller that names
+	// the same finding, so a token recovered from a mail relay's logs without
+	// the message body approves nothing.
+	FindingID string
 }
 
 // Validate refuses a request rather than clamping it.
@@ -101,8 +113,49 @@ func (m Mint) Validate() error {
 	if m.TTL > MaxTTL {
 		return fmt.Errorf("delegation: %s is longer than the %s ceiling", m.TTL, MaxTTL)
 	}
+	// Refused rather than corrected, for the same reason the TTL is. A caller
+	// asking for a reusable approve link has misunderstood what it is, and
+	// quietly setting the flag would ship that misunderstanding into a mailbox.
+	// 00027 refuses the row as well, and that is the boundary; this is the
+	// readable message at the point somebody made the mistake.
+	if m.FindingID != "" && !m.SingleUse {
+		return errors.New(
+			"delegation: a delegation bound to a finding must be single use")
+	}
 	return nil
 }
+
+// Approval is the mint for §8's one-tap approve link.
+//
+// A constructor rather than three fields a caller sets by hand, because the
+// three have to agree: the channel is what the audit row will name, the binding
+// is what makes the credential worth less than a session, and single use is
+// what stops the same message approving twice. A caller that assembled them
+// itself could get two right.
+//
+// The lifetime is the ceiling on purpose, and it is the one place this design
+// is uncomfortable. §8 wants a link somebody can act on when they read their
+// mail, and people read compliance mail late; 00021's ceiling says no
+// delegation is ever long-lived, and that is a claim this schema makes to a
+// customer rather than to its own application. The ceiling wins, and the cost
+// is paid by the interstitial: a link that has expired says so and points at
+// the finding in the console, which is one more click rather than a dead end.
+func Approval(findingID string) Mint {
+	return Mint{
+		ActingAgent: EmailChannel,
+		TTL:         MaxTTL,
+		SingleUse:   true,
+		FindingID:   findingID,
+	}
+}
+
+// EmailChannel is what an approval from a link calls itself in the audit row.
+//
+// §26.3 asks the trail to say what was holding the pen. For an agent that is a
+// skill; for this path it is the medium the decision arrived through, which is
+// the fact a person reading the trail actually needs in order to ask whether a
+// link in a mailbox should have been able to do this.
+const EmailChannel = "email"
 
 // Lifetime is the TTL to apply, with the default filled in.
 func (m Mint) Lifetime() time.Duration {

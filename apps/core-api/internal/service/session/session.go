@@ -90,6 +90,10 @@ func (s *Service) GetCurrentUser(
 		Subject:     claims.Subject,
 		Email:       claims.Email,
 		DisplayName: claims.Name,
+		// Mirrored into `user_identities` alongside the address (ENT-249),
+		// because §1.8's gate has to survive into a link in an email, where
+		// there is no token to read a claim off.
+		EmailVerified: claims.EmailVerified,
 	}
 
 	// The reverse mapping for the one-way subject derivation, recorded on
@@ -310,6 +314,10 @@ func (s *Service) withProfile(ctx context.Context, subject org.Subject) org.Subj
 
 	subject.Email = profile.Email
 	subject.DisplayName = profile.Name
+	// From the same document as the address it belongs to. The bundled Zitadel
+	// puts no email in an access token at all, so for that deployment this is
+	// the only place the verification fact is ever learned.
+	subject.EmailVerified = profile.EmailVerified
 	return subject
 }
 

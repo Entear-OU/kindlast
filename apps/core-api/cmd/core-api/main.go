@@ -281,6 +281,10 @@ func run(logger *slog.Logger) error {
 		AppBaseURL:     cfg.AppBaseURL,
 		SMTPConfigured: cfg.SMTPAddr != "",
 		Tokens:         store,
+		// The approve-from-email endpoint (ENT-249). The same application pool:
+		// redemption resolves the delegation and then acts as the person it
+		// names, in one transaction, through the ordinary policy surface.
+		Approvals:      store,
 		BillingWebhook: billingWebhook,
 		// Nil when no ingest DSN is set, and then IngestService is not
 		// registered at all. A typed nil would not be: assigning a nil
