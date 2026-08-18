@@ -43,9 +43,17 @@ already applies to `gen/go`.
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from kindlast.platform.v1 import ingest_connect, ingest_pb2
 
 from .harness.run import AgentRun, Outcome
+
+
+class TokenSource(Protocol):
+    """Something that can produce a currently-valid access token."""
+
+    def get(self) -> str: ...
 
 # What core-api calls the outcomes, matching 00019's check constraint. Mapped
 # rather than passed through, so the enum here and the constraint there cannot
@@ -64,8 +72,13 @@ class CoreAPIError(Exception):
 class CoreAPI:
     """Everything this service may do to the outside world."""
 
-    def __init__(self, base_url: str, token: str) -> None:
-        self._token = token
+    def __init__(self, base_url: str, tokens: TokenSource) -> None:
+        # A SOURCE RATHER THAN A TOKEN, because §1.2 makes access tokens live
+        # ten minutes. Holding a string here would mean a service that works
+        # for ten minutes after every deploy and then reports that core-api
+        # refused it, which gets diagnosed as a network problem several times
+        # before somebody checks an expiry.
+        self._tokens = tokens
         self._ingest = ingest_connect.IngestServiceClientSync(base_url)
 
     def record_run(self, org_id: str, run: AgentRun) -> str:
@@ -107,7 +120,7 @@ class CoreAPI:
 
         try:
             response = self._ingest.record_agent_run(
-                request, headers={"Authorization": f"Bearer {self._token}"}
+                request, headers={"Authorization": f"Bearer {self._tokens.get()}"}
             )
         except Exception as exc:
             raise CoreAPIError(f"recording the agent run: {exc}") from exc

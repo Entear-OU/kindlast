@@ -137,9 +137,17 @@ message DraftNarrativeResponse {
   // The `agent_runs` row this produced, so the caller can point a finding at
   // the record of how it was made.
   //
-  // Empty only when recording itself failed, which the caller should treat as
-  // serious rather than cosmetic: a finding whose provenance was never stored
-  // is a finding nobody can check.
+  // ALWAYS SET ON A 200, and the reason is worth stating because an earlier
+  // draft of this comment said the opposite.
+  //
+  // Recording is not best-effort telemetry running alongside the answer. If a
+  // run cannot be recorded, the handler returns `internal` rather than
+  // returning the narrative with this field empty, because a caller handed
+  // prose and a blank provenance field is a caller that stores the prose. A
+  // finding nobody can check is the thing this service exists to not produce.
+  //
+  // So there is no "recording failed" case for a caller to handle here. There
+  // is a transport error, which means it did.
   string agent_run_id = 6;
 }
 
