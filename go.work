@@ -3,11 +3,13 @@
 // upgrade for core-api would silently upgrade workers, and nothing would stop
 // a careless import from crossing a service boundary.
 //
-// apps/workers and apps/intelligence join when they exist.
+// apps/workers joined at ENT-231, when the integrations gateway gave it
+// something to do. apps/intelligence is Python and never joins.
 go 1.25.0
 
 use (
 	./apps/core-api
+	./apps/workers
 	./gen/go
 	./libs/chassis
 )

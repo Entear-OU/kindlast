@@ -64,6 +64,12 @@ func Services() []protoreflect.ServiceDescriptor {
 		// hold a write scope to find out where somebody had got to would be a
 		// scope granted for a question rather than for an action.
 		corev1.File_kindlast_core_v1_onboarding_proto,
+		// IntegrationsService (ENT-231). Which of a customer's systems Kindlast
+		// may reach, and what it may do there. On the core surface because it
+		// is the customer's own control panel, and every method is bounded by
+		// membership and RLS like the rest of it. The service that actually
+		// dials out is GatewayService, which this binary does not serve.
+		corev1.File_kindlast_core_v1_integrations_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the

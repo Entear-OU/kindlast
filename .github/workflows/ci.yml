@@ -381,17 +381,21 @@ jobs:
 
       # `run` covers the formatters too, so this is the Go equivalent of the
       # format check and the lint step in the `unit` job at once. Config is one
-      # .golangci.yml at the root, shared by all three modules.
+      # .golangci.yml at the root, shared by all four modules.
+      #
+      # apps/workers joined at ENT-231, when the integrations gateway gave it
+      # something to do. The boundary check further down already named it
+      # before it existed.
       - name: Lint every module
         run: |
-          for module in apps/core-api libs/chassis gen/go; do
+          for module in apps/core-api apps/workers libs/chassis gen/go; do
             echo "== $module"
             (cd "$module" && golangci-lint run ./...)
           done
 
       - name: Build and test every module
         run: |
-          for module in apps/core-api libs/chassis gen/go; do
+          for module in apps/core-api apps/workers libs/chassis gen/go; do
             echo "== $module"
             (cd "$module" && go build ./... && go test ./...)
           done

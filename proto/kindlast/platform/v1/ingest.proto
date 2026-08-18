@@ -119,6 +119,52 @@ service IngestService {
   // A refusal is a run and is recorded. A run that failed to record is not a
   // run that did not happen, so the caller must treat a failure here as
   // serious rather than as best-effort telemetry.
+  // Records what a machine fetched from a customer's own system (ENT-231,
+  // §26.4).
+  //
+  // # THE DOOR EVIDENCE COMES IN BY WHEN NOBODY IS SIGNED IN
+  //
+  // ENT-231 says evidence enters only through `IngestService`, and this is
+  // that door. The scheduled Watcher at build-order step 8 uses it, and so
+  // does any gateway-initiated fetch that runs for an organisation with no
+  // session behind it.
+  //
+  // # AND WHY THERE IS A SECOND DOOR ON THE CORE SURFACE
+  //
+  // Worth stating plainly rather than leaving somebody to find the asymmetry
+  // and assume it is a mistake. A live fetch a person asked for from the
+  // console arrives on a USER token, and a user token by design can never
+  // carry an `internal:*` scope. Routing it through here would mean either
+  // issuing internal scopes to people, which undoes what ENT-207 built, or
+  // writing without the person's identity, which loses `requested_by` on the
+  // one record where "which human asked" matters most.
+  //
+  // So: a machine ingests here, on `kindlast_agent`, org named in the message.
+  // A person's live fetch goes through `IntegrationsService.FetchNow`, on
+  // `kindlast_app`, under RLS and their own membership. Both write the same
+  // two rows with the same stamps, and neither is reachable by the other's
+  // caller. `MemoryService`'s header makes the identical argument for why a
+  // human corrects a fact on the core surface rather than through here.
+  //
+  // # WHAT IS ALREADY TRUE BY THE TIME THIS IS CALLED
+  //
+  // The content has been through the gateway: an endpoint on the egress
+  // allow-list, a tool the connection granted, and redaction applied before it
+  // crossed back. This RPC does not re-apply any of that and could not: it
+  // holds no allow-list and no policy, and a second redaction pass here would
+  // be a second implementation free to disagree with the first.
+  //
+  // What it does enforce is the shape: an observation names its connection and
+  // when it was observed, and a fetch record is written for every call
+  // including the ones that produced nothing.
+  rpc IngestEvidence(IngestEvidenceRequest) returns (IngestEvidenceResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/evidence"
+      body: "*"
+    };
+  }
+
   rpc RecordAgentRun(RecordAgentRunRequest) returns (RecordAgentRunResponse) {
     option (kindlast.options.v1.required_scope) = "internal:intelligence";
     option (google.api.http) = {
@@ -471,4 +517,78 @@ message IngestCounts {
   int32 obligations = 8;
   int32 guidelines = 9;
   int32 enforcement_decisions = 10;
+}
+
+// IngestEvidenceRequest is one fetch and what it produced.
+//
+// # A FETCH THAT PRODUCED NOTHING IS STILL A FETCH
+//
+// `content_json` is empty when the outcome was not a success, and the request
+// is still recorded. A log holding only successful fetches would be
+// indistinguishable from a deployment where the policy gateway does nothing,
+// and the rows that make a control visible to a customer are precisely the
+// ones saying "we did not call that".
+message IngestEvidenceRequest {
+  // The organisation this was for. Required, and carried in the message rather
+  // than a header for the reason RecordAgentRun's `org_id` is: this caller has
+  // no active organisation and says so per call.
+  //
+  // NOT BELIEVED BECAUSE IT IS CONVENIENT. It is safe only because
+  // `internal:ingest` is issued to service principals through client
+  // credentials and never to a browser, so "the caller could name any
+  // organisation" describes a component we ship rather than an input a person
+  // controls. If that scope ever reaches something a customer can drive, this
+  // becomes a tenancy hole.
+  string org_id = 1;
+
+  // Which connection produced it. Required even for a refusal, because "what
+  // did it try to reach" is the question a refusal exists to answer.
+  string connection_id = 2;
+
+  // Which tool was called, or would have been.
+  string tool = 3;
+
+  // The arguments, after redaction, as JSON.
+  string arguments_json = 4;
+
+  // `succeeded`, `refused` or `failed`.
+  //
+  // THREE, AND THE MIDDLE ONE IS THE POINT. A refusal is what a working
+  // control produces, not a kind of failure, and a vocabulary offering only
+  // the two would push refusals into one of them and lose the distinction that
+  // matters most for trust.
+  string outcome = 5;
+
+  // Why, when it was not a success. For a human to read, and required for a
+  // refusal or a failure: a row that says neither what happened nor why tells
+  // nobody anything.
+  string detail = 6;
+
+  // What the tool returned, as JSON, ALREADY REDACTED BY THE GATEWAY. Empty
+  // when the outcome was not a success.
+  //
+  // A string rather than a Struct, for the same reason every other third-party
+  // payload on this surface is one: it is data on its way to becoming a stored
+  // observation, and a typed message would invite code that branches on a
+  // customer's content.
+  string content_json = 7;
+
+  // How many values the redactor replaced. Zero says the redactor ran and
+  // found nothing, which is a different statement from the field being absent.
+  int32 redactions = 8;
+
+  // When it was true at the source, and when the fetch was asked for. Both,
+  // because they are routinely far apart and the gap is the interesting part:
+  // a record last edited in March and first read by us in August is a
+  // five-month blind spot that one timestamp would hide.
+  google.protobuf.Timestamp observed_at = 9;
+  google.protobuf.Timestamp requested_at = 10;
+}
+
+message IngestEvidenceResponse {
+  // The stored observation's id, empty when the fetch produced none. A caller
+  // that wants to reference what it learned has something to reference.
+  string evidence_id = 1;
+  // The stored fetch record's id, which is written whatever the outcome.
+  string fetch_id = 2;
 }

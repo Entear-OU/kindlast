@@ -20,6 +20,9 @@ class IngestService(Protocol):
     async def ingest_corpus(self, request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestCorpusRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestCorpusResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def ingest_evidence(self, request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
     async def record_agent_run(self, request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.RecordAgentRunRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_ingest__pb2.RecordAgentRunResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
@@ -38,6 +41,16 @@ class IngestServiceASGIApplication(ConnectASGIApplication[IngestService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.ingest_corpus,
+                ),
+                "/kindlast.platform.v1.IngestService/IngestEvidence": Endpoint.unary(
+                    method=MethodInfo(
+                        name="IngestEvidence",
+                        service_name="kindlast.platform.v1.IngestService",
+                        input=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.ingest_evidence,
                 ),
                 "/kindlast.platform.v1.IngestService/RecordAgentRun": Endpoint.unary(
                     method=MethodInfo(
@@ -82,6 +95,26 @@ class IngestServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def ingest_evidence(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="IngestEvidence",
+                service_name="kindlast.platform.v1.IngestService",
+                input=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceRequest,
+                output=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
     async def record_agent_run(
         self,
         request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.RecordAgentRunRequest,
@@ -106,6 +139,8 @@ class IngestServiceClient(ConnectClient):
 class IngestServiceSync(Protocol):
     def ingest_corpus(self, request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestCorpusRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestCorpusResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def ingest_evidence(self, request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def record_agent_run(self, request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.RecordAgentRunRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_ingest__pb2.RecordAgentRunResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
@@ -123,6 +158,16 @@ class IngestServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.ingest_corpus,
+                ),
+                "/kindlast.platform.v1.IngestService/IngestEvidence": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="IngestEvidence",
+                        service_name="kindlast.platform.v1.IngestService",
+                        input=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.ingest_evidence,
                 ),
                 "/kindlast.platform.v1.IngestService/RecordAgentRun": EndpointSync.unary(
                     method=MethodInfo(
@@ -161,6 +206,26 @@ class IngestServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.IngestService",
                 input=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestCorpusRequest,
                 output=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestCorpusResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def ingest_evidence(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="IngestEvidence",
+                service_name="kindlast.platform.v1.IngestService",
+                input=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceRequest,
+                output=kindlast_dot_platform_dot_v1_dot_ingest__pb2.IngestEvidenceResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

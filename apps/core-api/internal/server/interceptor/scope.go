@@ -77,6 +77,13 @@ var HumanScopes = []string{
 	"dashboard:read",
 	"findings:act",
 	"findings:read",
+	// Connecting a customer's own systems (ENT-231). Both halves are human
+	// scopes, and the write one deliberately so: deciding which of your own
+	// tools a product may reach is the customer exercising control rather than
+	// a privileged operation. What bounds it is membership, RLS and the
+	// per-connection allow-list, none of which a scope could express.
+	"integrations:read",
+	"integrations:write",
 	// What Kindlast knows about the organisation (ENT-228). Both halves are
 	// human scopes, and the write one deliberately so: correcting a fact about
 	// yourself is the customer exercising rectification, which is the thing
