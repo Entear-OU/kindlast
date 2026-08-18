@@ -384,19 +384,23 @@ func (t *Tenant) recordFetch(
 		return integrations.Fetch{}, fmt.Errorf("recording the fetch: %w", err)
 	}
 
-	fetches, err := t.Fetches(ctx, connectionID, 1, time.Time{})
-	if err != nil || len(fetches) == 0 {
-		// The row is written either way; only the echo back to the caller
-		// failed. Returning what is known rather than an error, because
-		// failing here would report a fetch that did happen as one that did
-		// not.
-		return integrations.Fetch{
-			ID: id, IntegrationID: connectionID, Tool: tool,
-			Outcome: outcome, Detail: detail, EvidenceID: evidenceID,
-			Redactions: redactions, RequestedAt: requestedAt,
-		}, nil
+	// Read back, so the caller gets the row as stored rather than as sent:
+	// the connection's display name and the database's `finished_at` are both
+	// filled in by the insert and neither is known here.
+	//
+	// A FAILURE TO READ BACK IS NOT A FAILURE TO WRITE, and the two must not
+	// come back the same. The row is on disk by this point, so returning an
+	// error would report a fetch that did happen as one that did not, and the
+	// caller would then write a second record for the same attempt. So the
+	// known fields are returned instead.
+	if fetches, readErr := t.Fetches(ctx, connectionID, 1, time.Time{}); readErr == nil && len(fetches) > 0 {
+		return fetches[0], nil
 	}
-	return fetches[0], nil
+	return integrations.Fetch{
+		ID: id, IntegrationID: connectionID, Tool: tool,
+		Outcome: outcome, Detail: detail, EvidenceID: evidenceID,
+		Redactions: redactions, RequestedAt: requestedAt,
+	}, nil
 }
 
 func (t *Tenant) insertTools(ctx context.Context, connectionID string, tools []integrations.Tool, by string) error {

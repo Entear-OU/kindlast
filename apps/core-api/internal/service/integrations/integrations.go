@@ -62,13 +62,29 @@ type store interface {
 	UserID() string
 }
 
+// dialer is what these handlers need of the gateway client, declared where it
+// is used (§21.6).
+//
+// An interface rather than the concrete client for one reason that is not
+// testing convenience: it makes the seam visible. Everything this package can
+// do to a customer's system is these two methods, so a reader can see the
+// whole outbound surface without leaving the file.
+//
+// The typed-nil trap applies at the wiring end, where main checks the concrete
+// pointer before assigning it. See integrationsDependency there.
+type dialer interface {
+	ListTools(ctx context.Context, orgID, endpoint, credential string) ([]gateway.Tool, error)
+	CallTool(ctx context.Context, orgID, connectionID, endpoint, credential, tool, argumentsJSON string,
+		writeCapable bool, policy gateway.Policy) (gateway.Result, error)
+}
+
 // Service implements corev1connect.IntegrationsServiceHandler.
 type Service struct {
-	gateway *gateway.Client
+	gateway dialer
 	keys    *secrets.Keyring
 }
 
-func New(client *gateway.Client, keys *secrets.Keyring) *Service {
+func New(client dialer, keys *secrets.Keyring) *Service {
 	return &Service{gateway: client, keys: keys}
 }
 
