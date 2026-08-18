@@ -1,0 +1,210 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// The policy gateway: the only thing in this system that opens a connection to
+// an address a customer supplied (ENT-231, §26.4; OWASP LLM01, LLM03, LLM04).
+//
+// # SERVED BY `workers`, NOT BY core-api
+//
+// This is the one proto file in the repository whose service is implemented
+// somewhere other than core-api, so it is worth saying plainly why the
+// boundary is drawn here.
+//
+// core-api holds the database credential and the key that seals third-party
+// credentials. Giving it an HTTP client pointed at a URL a customer typed puts
+// server-side request forgery in the process with the most to lose. The
+// gateway holds neither: it is handed one fetch to perform, with the
+// credential for that fetch and the policy for that connection, and it returns
+// what it found. A compromised gateway leaks what it was in the middle of
+// fetching. A compromised core-api with an egress path leaks everything.
+//
+// And Intelligence is not in this picture at all. It reads stored evidence
+// through core-api tools; it never reaches a customer system and never holds a
+// customer credential, which the Python service's own tests assert against its
+// configuration layer.
+//
+// # WHAT THE GATEWAY ENFORCES, IN ORDER, BEFORE ANY PACKET LEAVES
+//
+//   1. The endpoint's host is on the deployment's egress allow-list. Checked
+//      against the parsed URL, not the string, and checked again inside the
+//      dialer, so a redirect or a DNS answer cannot walk around it.
+//   2. The named tool is one this connection granted. Not one it offered: one
+//      it granted.
+//   3. If the tool is write-capable, the grant says so explicitly. A
+//      write-capable tool that arrives marked granted but not write-granted is
+//      refused.
+//   4. The organisation is inside its rate limit.
+//
+// Only then is a request built. Every refusal happens with zero bytes on the
+// wire, which is what makes "refused before any request leaves" a property a
+// test can assert rather than a sentence in a design document.
+//
+// # AND WHAT COMES BACK IS REDACTED BEFORE IT IS RETURNED
+//
+// The redactor runs inside the gateway, on the response, before it crosses
+// back to core-api. So the process that stores evidence never holds the
+// unredacted form, and there is no ordering bug available where somebody
+// stores first and redacts second.
+//
+// # BOUNDED, BECAUSE TEMPORAL IS NOT HERE YET
+//
+// §23 step 8 makes each of these a Temporal activity: a workflow-level retry
+// policy, a heartbeat, a schedule-to-close timeout, and an idempotency key
+// that makes a replay harmless. None of that exists, so the bounds are
+// explicit and in code: a context deadline the caller sets, a capped retry
+// with backoff inside the gateway, and writes on the core-api side that happen
+// exactly once per call. When step 8 lands these methods become the activity
+// bodies unchanged, and the retry loop here is what the retry policy replaces.
+//
+// # AUTHENTICATION
+//
+// `internal:gateway`, and the gateway's interceptor satisfies it with a shared
+// secret presented as a bearer token rather than with an OIDC access token.
+// That is a deliberate narrowing and not an omission.
+//
+// This service has exactly one caller, inside the compose network, with no
+// person and no organisation of its own; there is nothing for a token's
+// subject, audience or tenancy to mean here. A client-credentials round trip
+// would mean core-api acquiring and refreshing an OAuth client for one hop,
+// which is a credential it holds for nothing else. The shared secret is the
+// mechanism the billing webhook already uses for the same shape of problem,
+// compared in constant time, and mountable from a file rather than an
+// environment variable a `docker inspect` prints.
+//
+// The scope option stays on every method because it records the authority the
+// method needs, and because an RPC with no declared scope must fail a test
+// wherever it is served. Moving to client credentials later is a change to one
+// interceptor and to nothing else.
+service GatewayService {
+  // Ask an endpoint what tools it has.
+  //
+  // Reads nothing and stores nothing. It exists so the consent screen can list
+  // the exact tools a connection exposes, and so an endpoint outside the
+  // egress allow-list is refused at the moment somebody tries to connect it
+  // rather than the first time somebody uses it.
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:gateway";
+    option (google.api.http) = {
+      post: "/internal/v1/gateway/tools:list"
+      body: "*"
+    };
+  }
+
+  // Call one tool, on one connection, under one connection's policy.
+  //
+  // The policy travels in the request rather than being looked up here,
+  // because the gateway holds no database handle. That makes the caller
+  // responsible for sending the truth, and the gateway responsible for
+  // refusing anything the policy does not permit, which is the right split:
+  // core-api cannot be relied on to be free of bugs, so the gateway checks
+  // what it was sent rather than assuming it was filtered.
+  rpc CallTool(CallToolRequest) returns (CallToolResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:gateway";
+    option (google.api.http) = {
+      post: "/internal/v1/gateway/tools:call"
+      body: "*"
+    };
+  }
+}
+
+// Where to go, and with what.
+//
+// The credential is sent per call and never stored here. The gateway keeps no
+// state about a connection between calls, which is why a revocation takes
+// effect immediately: there is no cached session to invalidate, because the
+// next call simply does not arrive.
+message Endpoint {
+  string url = 1;
+  string credential = 2;
+}
+
+message ListToolsRequest {
+  Endpoint endpoint = 1;
+  // Which organisation this is for, so the rate limiter and the log can
+  // attribute it. Not a tenancy check: the gateway reaches no rows.
+  string org_id = 2;
+}
+
+// One tool as the endpoint described it.
+message GatewayTool {
+  string name = 1;
+  // The server's own words, passed through unchanged and unread. It is shown
+  // to a human and never interpreted.
+  string description = 2;
+  // The gateway's reading of whether calling it can change something. See the
+  // tool policy package for how an unannotated tool is classified, and why the
+  // unknown case reads as write-capable.
+  bool write_capable = 3;
+}
+
+message ListToolsResponse {
+  repeated GatewayTool tools = 1;
+}
+
+// What this connection is permitted to do, as the caller believes it.
+//
+// Sent per call rather than configured, because the gateway is stateless and
+// because a policy that lived here would be a second copy of what the database
+// holds, free to drift.
+message ToolPolicy {
+  // The tools this connection has granted. A tool absent from this list is
+  // refused whatever else the request says.
+  repeated string granted_tools = 1;
+
+  // Of those, the ones the grant covers for writing.
+  //
+  // A SEPARATE LIST RATHER THAN A FLAG ON EACH NAME, AND THE REASON IS THE
+  // FAILURE MODE. With one list of names and a boolean beside each, a caller
+  // that forgets to populate the boolean sends a request where every tool
+  // reads as read-only, and the gateway would let a write through on a message
+  // that was merely incomplete. With two lists, forgetting the second means
+  // every write is refused, which is the direction a mistake should fail in.
+  repeated string write_granted_tools = 2;
+}
+
+message CallToolRequest {
+  Endpoint endpoint = 1;
+  string org_id = 2;
+
+  // Which connection, for the gateway's own log line. Not used for any
+  // decision: the policy below is.
+  string connection_id = 3;
+
+  string tool = 4;
+  // Arguments as JSON. Passed through to the endpoint, and redacted on the way
+  // into the response so the fetch record does not carry a secret somebody
+  // typed into a form.
+  string arguments_json = 5;
+
+  ToolPolicy policy = 6;
+
+  // Whether the caller believes the named tool writes.
+  //
+  // Checked against the gateway's own reading of the endpoint and against the
+  // policy, and a disagreement is a refusal rather than a resolution. Two
+  // parties disagreeing about whether an operation writes is exactly when
+  // nothing should happen.
+  bool write_capable = 7;
+}
+
+message CallToolResponse {
+  // What the tool returned, as JSON, after redaction.
+  //
+  // A string rather than a Struct, for the same reason the arguments are one:
+  // this is third-party content on its way to becoming a stored observation,
+  // and a typed message would invite code that branches on its shape. It is
+  // data.
+  string content_json = 1;
+
+  // How many values the redactor replaced. Zero says the redactor ran and
+  // found nothing, which is a different statement from the field being absent.
+  int32 redactions = 2;
+
+  // When the endpoint answered, RFC 3339. The gateway's clock, because the
+  // endpoint's is not ours to trust and `observed_at` needs to mean something.
+  string fetched_at = 3;
+}
