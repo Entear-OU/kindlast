@@ -105,6 +105,12 @@ class CoreAPI:
             citations_json=run.citations_json(),
             outcome=_OUTCOMES[run.outcome],
             outcome_detail=run.outcome_detail,
+            # What a critic refused, and which named rule refused it
+            # (ENT-248). Separate from `outcome_detail` because that
+            # string is shown to the customer beside the finding, and a
+            # narrative refused for stating the law wrongly must not be
+            # printed under the heading explaining that it was refused.
+            refusal_json=run.refusal_json(),
             usage=ingest_pb2.AgentRunUsage(
                 input_tokens=run.input_tokens,
                 cached_input_tokens=run.cached_input_tokens,

@@ -291,14 +291,19 @@ func toProto(f domain.Finding) *corev1.Finding {
 		Citation: &corev1.Citation{
 			ObligationSlug: f.Citation.ObligationSlug,
 			Title:          f.Citation.Title,
-			Celex:          f.Citation.CELEX,
-			Kind:           f.Citation.Kind,
-			Article:        f.Citation.Article,
-			Recital:        f.Citation.Recital,
-			Annex:          f.Citation.Annex,
-			Paragraph:      f.Citation.Paragraph,
-			Label:          f.Citation.Label,
-			Url:            f.Citation.URL,
+			// The authored statement of law, carried so a client can render it
+			// beside the model's narrative (ENT-248). Copied, never edited: the
+			// point is that a reader sees the curator's words rather than a
+			// paraphrase of them.
+			ObligationSummary: f.Citation.Summary,
+			Celex:             f.Citation.CELEX,
+			Kind:              f.Citation.Kind,
+			Article:           f.Citation.Article,
+			Recital:           f.Citation.Recital,
+			Annex:             f.Citation.Annex,
+			Paragraph:         f.Citation.Paragraph,
+			Label:             f.Citation.Label,
+			Url:               f.Citation.URL,
 		},
 	}
 	if f.SnoozedUntil != nil {

@@ -136,6 +136,29 @@ message ObligationContext {
   string slug = 1;
   string title = 2;
   string summary = 3;
+
+  // Why the Watcher raised this for this organisation, in plain words
+  // (ENT-248).
+  //
+  // # GROUNDS ARE AN INPUT, BECAUSE A MODEL WITHOUT THEM INVENTS THEM
+  //
+  // Both narratives ENT-248 was filed for filled this gap themselves. One
+  // asserted the obligation binds every controller regardless of size; the
+  // other reasoned from the absence of a record to a headcount exemption.
+  // Neither had been told why the obligation was thought to apply, so both
+  // reached for whatever they remembered about the regulation, which is the
+  // one thing a 2B is worst at.
+  //
+  // Caller-assembled like everything else here (§26.2). These are the
+  // applicability conditions the obligation declares, rendered from the
+  // vocabulary in `domain/corpus`, NOT a second evaluation of whether they
+  // hold: the sweep already decided that, and a second evaluator disagreeing
+  // with the first is the arrangement that produced ENT-246.
+  //
+  // May be empty, and an empty list is rendered as no block at all rather than
+  // as a heading with nothing under it, because a model shown an empty list
+  // reads it as "no grounds" instead of "not supplied".
+  repeated string applies_because = 4;
 }
 
 message DraftNarrativeResponse {

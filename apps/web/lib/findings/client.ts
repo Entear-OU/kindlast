@@ -30,6 +30,22 @@ export interface Citation {
   paragraph?: string
   label?: string
   url?: string
+
+  /**
+   * The obligation's authored statement of the law, from the corpus row
+   * (ENT-248).
+   *
+   * Rendered beside a narrative, verbatim, and never instead of one. The model
+   * is forbidden to state the law, because two live runs on the 2B tier stated
+   * it backwards next to a citation that resolved correctly, which is a failure
+   * the customer who checks the citation cannot detect. This is where the
+   * statement comes from instead, and a reader is entitled to know which of the
+   * two paragraphs a person wrote.
+   *
+   * Do not summarise, truncate or reflow it. Same rule as `label`: a second
+   * author is a second thing that can disagree with the record.
+   */
+  obligationSummary?: string
 }
 
 export interface Finding {

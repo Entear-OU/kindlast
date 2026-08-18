@@ -16,17 +16,21 @@ import (
 // and round-tripping through a map reorders keys and rewrites numbers as
 // floats. The same reasoning `audit_log`'s before and after payloads follow.
 type AgentRun struct {
-	OrgID             uuid.UUID
-	Skill             string
-	SkillVersion      string
-	Model             string
-	ModelVersion      string
-	OnBehalfOfUserID  *uuid.UUID
-	RequestJSON       string
-	ToolCallsJSON     string
-	CitationsJSON     string
-	Outcome           string
-	OutcomeDetail     string
+	OrgID            uuid.UUID
+	Skill            string
+	SkillVersion     string
+	Model            string
+	ModelVersion     string
+	OnBehalfOfUserID *uuid.UUID
+	RequestJSON      string
+	ToolCallsJSON    string
+	CitationsJSON    string
+	Outcome          string
+	OutcomeDetail    string
+	// What an output critic refused, as JSON, and empty when none did
+	// (ENT-248). See 00027 for why the rejected text is here rather than in
+	// OutcomeDetail, which a customer reads.
+	RefusalJSON       string
 	InputTokens       int32
 	CachedInputTokens int32
 	OutputTokens      int32
@@ -68,6 +72,7 @@ func (a *AgentStore) RecordAgentRun(ctx context.Context, run AgentRun) (uuid.UUI
 		"request":    run.RequestJSON,
 		"tool_calls": run.ToolCallsJSON,
 		"citations":  run.CitationsJSON,
+		"refusal":    run.RefusalJSON,
 	} {
 		if raw == "" {
 			continue
@@ -81,16 +86,16 @@ func (a *AgentStore) RecordAgentRun(ctx context.Context, run AgentRun) (uuid.UUI
 		insert into agent_runs (
 			org_id, skill, skill_version, model, model_version,
 			on_behalf_of_user_id, request, tool_calls, citations,
-			outcome, outcome_detail,
+			outcome, outcome_detail, refusal,
 			input_tokens, cached_input_tokens, output_tokens, cost_micros,
 			queued_at, started_at, finished_at
 		) values (
 			$1, $2, $3, $4, $5,
 			$6, coalesce($7, '{}')::jsonb, coalesce($8, '[]')::jsonb,
 			coalesce($9, '{"resolved": [], "rejected": []}')::jsonb,
-			$10, nullif($11, ''),
-			$12, $13, $14, $15,
-			$16, $17, $18
+			$10, nullif($11, ''), coalesce($12, '{}')::jsonb,
+			$13, $14, $15, $16,
+			$17, $18, $19
 		)
 		returning id`
 
@@ -99,7 +104,7 @@ func (a *AgentStore) RecordAgentRun(ctx context.Context, run AgentRun) (uuid.UUI
 		run.OrgID, run.Skill, run.SkillVersion, run.Model, run.ModelVersion,
 		run.OnBehalfOfUserID,
 		nullifEmpty(run.RequestJSON), nullifEmpty(run.ToolCallsJSON), nullifEmpty(run.CitationsJSON),
-		run.Outcome, run.OutcomeDetail,
+		run.Outcome, run.OutcomeDetail, nullifEmpty(run.RefusalJSON),
 		run.InputTokens, run.CachedInputTokens, run.OutputTokens, run.CostMicros,
 		run.QueuedAt, run.StartedAt, run.FinishedAt,
 	).Scan(&id)

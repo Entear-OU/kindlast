@@ -201,12 +201,34 @@ func (x *DraftNarrativeRequest) GetDelegation() string {
 // A summary, never the Official Journal wording. The corpus stores no verbatim
 // text, and the citation resolves to the publisher rather than to our copy.
 type ObligationContext struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Slug          string                 `protobuf:"bytes,1,opt,name=slug,proto3" json:"slug,omitempty"`
-	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	Summary       string                 `protobuf:"bytes,3,opt,name=summary,proto3" json:"summary,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Slug    string                 `protobuf:"bytes,1,opt,name=slug,proto3" json:"slug,omitempty"`
+	Title   string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Summary string                 `protobuf:"bytes,3,opt,name=summary,proto3" json:"summary,omitempty"`
+	// Why the Watcher raised this for this organisation, in plain words
+	// (ENT-248).
+	//
+	// # GROUNDS ARE AN INPUT, BECAUSE A MODEL WITHOUT THEM INVENTS THEM
+	//
+	// Both narratives ENT-248 was filed for filled this gap themselves. One
+	// asserted the obligation binds every controller regardless of size; the
+	// other reasoned from the absence of a record to a headcount exemption.
+	// Neither had been told why the obligation was thought to apply, so both
+	// reached for whatever they remembered about the regulation, which is the
+	// one thing a 2B is worst at.
+	//
+	// Caller-assembled like everything else here (§26.2). These are the
+	// applicability conditions the obligation declares, rendered from the
+	// vocabulary in `domain/corpus`, NOT a second evaluation of whether they
+	// hold: the sweep already decided that, and a second evaluator disagreeing
+	// with the first is the arrangement that produced ENT-246.
+	//
+	// May be empty, and an empty list is rendered as no block at all rather than
+	// as a heading with nothing under it, because a model shown an empty list
+	// reads it as "no grounds" instead of "not supplied".
+	AppliesBecause []string `protobuf:"bytes,4,rep,name=applies_because,json=appliesBecause,proto3" json:"applies_because,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ObligationContext) Reset() {
@@ -258,6 +280,13 @@ func (x *ObligationContext) GetSummary() string {
 		return x.Summary
 	}
 	return ""
+}
+
+func (x *ObligationContext) GetAppliesBecause() []string {
+	if x != nil {
+		return x.AppliesBecause
+	}
+	return nil
 }
 
 type DraftNarrativeResponse struct {
@@ -431,11 +460,12 @@ const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\x14on_behalf_of_user_id\x18\x04 \x01(\tR\x10onBehalfOfUserId\x12\x1e\n" +
 	"\n" +
 	"delegation\x18\x05 \x01(\tR\n" +
-	"delegation\"W\n" +
+	"delegation\"\x80\x01\n" +
 	"\x11ObligationContext\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
-	"\asummary\x18\x03 \x01(\tR\asummary\"\xc3\x02\n" +
+	"\asummary\x18\x03 \x01(\tR\asummary\x12'\n" +
+	"\x0fapplies_because\x18\x04 \x03(\tR\x0eappliesBecause\"\xc3\x02\n" +
 	"\x16DraftNarrativeResponse\x12<\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2\".kindlast.platform.v1.DraftOutcomeR\aoutcome\x12\x1c\n" +
 	"\tnarrative\x18\x02 \x01(\tR\tnarrative\x12%\n" +

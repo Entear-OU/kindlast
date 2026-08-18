@@ -3,6 +3,7 @@ package narrative
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -72,6 +73,9 @@ type fakeDrafter struct {
 	err      error
 	calls    int
 	offered  [][]string
+	// The whole obligation context of the last call, so a test can assert what
+	// the model was actually given rather than only which slug it may cite.
+	context []*platformv1.ObligationContext
 }
 
 func (d *fakeDrafter) DraftNarrative(
@@ -84,6 +88,7 @@ func (d *fakeDrafter) DraftNarrative(
 		slugs = append(slugs, o.GetSlug())
 	}
 	d.offered = append(d.offered, slugs)
+	d.context = req.Msg.GetObligations()
 	if d.err != nil {
 		return nil, d.err
 	}
@@ -99,6 +104,9 @@ func finding() postgres.PendingFinding {
 		ObligationSlug:    "gdpr-art-30-ropa",
 		ObligationTitle:   "Records of processing activities",
 		ObligationSummary: "A controller must maintain a record.",
+		// The real row's conditions, so the grounds this test asserts are the
+		// ones the ROPA finding actually carries.
+		ObligationAppliesWhen: `{"role": "controller", "requires": ["ropa"]}`,
 	}
 }
 
@@ -276,5 +284,74 @@ func TestABadOrganisationIsTheCallersFault(t *testing.T) {
 	// goes looking at the service; the problem is in the request they sent.
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("code is %v, want invalid_argument", connect.CodeOf(err))
+	}
+}
+
+// TestTheModelIsToldWhyTheObligationWasRaised is ENT-248's first half.
+//
+// Two live narrations on the 2B tier stated the law wrongly beside a citation
+// that resolved. Neither had been told why the Watcher thought the obligation
+// applied, so both worked it out: one asserted the obligation binds every
+// controller regardless of size, the other reasoned from a missing record to a
+// headcount exemption. A model with no grounds invents grounds.
+//
+// Asserted here rather than only in `domain/corpus` because the wiring is the
+// part that goes missing. `AppliesBecause` returning good sentences that nobody
+// puts in the request is a passing unit test and an unchanged product.
+func TestTheModelIsToldWhyTheObligationWasRaised(t *testing.T) {
+	drafter := &fakeDrafter{response: &platformv1.DraftNarrativeResponse{
+		Outcome:   platformv1.DraftOutcome_DRAFT_OUTCOME_SUCCEEDED,
+		Narrative: "text",
+	}}
+
+	if _, err := New(newFindings(finding()), drafter, nil).NarrateFindings(
+		t.Context(), request(org),
+	); err != nil {
+		t.Fatalf("narrating: %v", err)
+	}
+
+	if len(drafter.context) != 1 {
+		t.Fatalf("offered %d obligations, want one", len(drafter.context))
+	}
+	grounds := drafter.context[0].GetAppliesBecause()
+	if len(grounds) == 0 {
+		t.Fatal("the model was given no grounds, so it will supply its own")
+	}
+
+	// Facts about the organisation, not statements of law. The claim critic on
+	// the far side refuses a narrative that states the law, so handing the
+	// model a statement of law to paraphrase would produce a refusal on every
+	// run for this obligation.
+	for _, ground := range grounds {
+		for _, legal := range []string{"Article", "must maintain"} {
+			if strings.Contains(ground, legal) {
+				t.Errorf("a ground states the law: %q", ground)
+			}
+		}
+	}
+}
+
+// TestTheAuthoredSummaryStillReachesTheModelUnchanged guards the other half.
+//
+// The model is forbidden to state the law, and the corpus summary is where the
+// statement comes from. It has to reach the run, verbatim, or the model is
+// being asked to explain an obligation whose content it has not been shown, and
+// the honest answer to that is a refusal on every finding.
+func TestTheAuthoredSummaryStillReachesTheModelUnchanged(t *testing.T) {
+	f := finding()
+	drafter := &fakeDrafter{response: &platformv1.DraftNarrativeResponse{
+		Outcome:   platformv1.DraftOutcome_DRAFT_OUTCOME_SUCCEEDED,
+		Narrative: "text",
+	}}
+
+	if _, err := New(newFindings(f), drafter, nil).NarrateFindings(
+		t.Context(), request(org),
+	); err != nil {
+		t.Fatalf("narrating: %v", err)
+	}
+
+	if got := drafter.context[0].GetSummary(); got != f.ObligationSummary {
+		t.Fatalf("the model was given %q, want the stored summary %q",
+			got, f.ObligationSummary)
 	}
 }

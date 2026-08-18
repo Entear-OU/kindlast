@@ -32,6 +32,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
 )
@@ -159,6 +160,22 @@ func (s *Service) narrate(
 				Slug:    finding.ObligationSlug,
 				Title:   finding.ObligationTitle,
 				Summary: finding.ObligationSummary,
+				// WHY THE OBLIGATION APPLIES, RATHER THAN LEAVING THE MODEL TO
+				// WORK IT OUT (ENT-248).
+				//
+				// Both narratives ENT-248 was filed for invented their own
+				// grounds, because nothing had given them any: one asserted the
+				// obligation binds every controller regardless of size, the
+				// other reasoned from a missing record to a headcount
+				// exemption. A model with no grounds reaches for what it
+				// remembers about the regulation, which is the single thing a
+				// 2B is worst at.
+				//
+				// Rendered from the obligation's own conditions rather than
+				// re-evaluated here. The sweep already decided they hold, and
+				// a second evaluator disagreeing with the first is what
+				// produced ENT-246.
+				AppliesBecause: corpus.AppliesBecause(finding.ObligationAppliesWhen),
 			}},
 		}))
 	if err != nil {

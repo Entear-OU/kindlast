@@ -269,6 +269,29 @@ message Citation {
   // `analyst_citation_url`. May be empty when the corpus has no anchor for the
   // provision; a client shows the label unlinked rather than guessing a URL.
   string url = 10;
+
+  // The obligation's plain-language statement of the law, from the corpus row
+  // (ENT-248).
+  //
+  // # THIS IS THE AUTHORED HALF, AND IT IS WHY IT IS ON THE WIRE
+  //
+  // A finding may carry a narrative the Analyst drafted. The model writes about
+  // the organisation and is forbidden to state the law, because two live runs
+  // on the 2B tier stated it wrongly beside a citation that resolved correctly,
+  // which is a failure a customer checking the citation cannot detect.
+  //
+  // So the statement of law has to reach the same page from somewhere a person
+  // wrote it, and this is that field. A client renders it BESIDE the narrative,
+  // verbatim: the two are different kinds of text and a reader is entitled to
+  // know which is which.
+  //
+  // Read live from `obligations`, unlike `label` and `url`, and the difference
+  // is deliberate. Those two are what the Analyst assembled at the time and
+  // must not change under a finding. This is the current authored statement of
+  // the provision, and a reworded summary SHOULD reach every finding that cites
+  // it, because the alternative is a customer reading a statement of law the
+  // curator has since corrected.
+  string obligation_summary = 11;
 }
 
 message GetFindingRequest {

@@ -2293,6 +2293,30 @@ components:
                         Deep link to the provision on EUR-Lex, assembled by
                          `analyst_citation_url`. May be empty when the corpus has no anchor for the
                          provision; a client shows the label unlinked rather than guessing a URL.
+                obligationSummary:
+                    type: string
+                    description: |-
+                        The obligation's plain-language statement of the law, from the corpus row
+                         (ENT-248).
+
+                         # THIS IS THE AUTHORED HALF, AND IT IS WHY IT IS ON THE WIRE
+
+                         A finding may carry a narrative the Analyst drafted. The model writes about
+                         the organisation and is forbidden to state the law, because two live runs
+                         on the 2B tier stated it wrongly beside a citation that resolved correctly,
+                         which is a failure a customer checking the citation cannot detect.
+
+                         So the statement of law has to reach the same page from somewhere a person
+                         wrote it, and this is that field. A client renders it BESIDE the narrative,
+                         verbatim: the two are different kinds of text and a reader is entitled to
+                         know which is which.
+
+                         Read live from `obligations`, unlike `label` and `url`, and the difference
+                         is deliberate. Those two are what the Analyst assembled at the time and
+                         must not change under a finding. This is the current authored statement of
+                         the provision, and a reworded summary SHOULD reach every finding that cites
+                         it, because the alternative is a customer reading a statement of law the
+                         curator has since corrected.
             description: |-
                 The regulatory basis for a finding, exactly as stored.
 
@@ -3748,6 +3772,32 @@ components:
                     type: string
                 summary:
                     type: string
+                appliesBecause:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Why the Watcher raised this for this organisation, in plain words
+                         (ENT-248).
+
+                         # GROUNDS ARE AN INPUT, BECAUSE A MODEL WITHOUT THEM INVENTS THEM
+
+                         Both narratives ENT-248 was filed for filled this gap themselves. One
+                         asserted the obligation binds every controller regardless of size; the
+                         other reasoned from the absence of a record to a headcount exemption.
+                         Neither had been told why the obligation was thought to apply, so both
+                         reached for whatever they remembered about the regulation, which is the
+                         one thing a 2B is worst at.
+
+                         Caller-assembled like everything else here (§26.2). These are the
+                         applicability conditions the obligation declares, rendered from the
+                         vocabulary in `domain/corpus`, NOT a second evaluation of whether they
+                         hold: the sweep already decided that, and a second evaluator disagreeing
+                         with the first is the arrangement that produced ENT-246.
+
+                         May be empty, and an empty list is rendered as no block at all rather than
+                         as a heading with nothing under it, because a model shown an empty list
+                         reads it as "no grounds" instead of "not supplied".
             description: |-
                 ObligationContext is one obligation as the model sees it.
 
@@ -4216,6 +4266,31 @@ components:
                          delegation is single-org, so a run recorded against a different tenant than
                          the one the person authorised is a caller bug, and the mismatch is worth
                          refusing rather than silently correcting.
+                refusalJson:
+                    type: string
+                    description: |-
+                        What an output critic refused, as JSON, and empty when none did (ENT-248).
+
+                         `{"critic": "legal_claim", "patterns": [...], "text": "..."}`.
+
+                         # WHY THE TEXT IS HERE AND NOT IN `outcome_detail`
+
+                         Both halves are recorded because they answer different questions, and they
+                         are kept apart because only one of them can safely be shown.
+                         `outcome_detail` is the short reason, and the feed prints it beside a
+                         finding under a heading saying the draft was refused. A narrative refused
+                         for stating the law wrongly must not travel in that string, or the sentence
+                         reaches the customer through the very page that exists to say it was
+                         rejected. It travels here instead, into a column read by whoever is asking
+                         what the model got wrong.
+
+                         # AND WHY THE PATTERNS ARE NAMED RATHER THAN DESCRIBED
+
+                         A maintainer asking how often the claim critic fires on "regardless of"
+                         should be able to count rows rather than parse English out of a detail
+                         string. That is the mistake the records store made with `check_violation`
+                         messages, which `AGENTS.md` names as one of the reasons decisions moved out
+                         of plpgsql.
             description: |-
                 RecordAgentRunRequest is one finished run.
 

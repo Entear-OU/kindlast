@@ -51,6 +51,21 @@ type Citation struct {
 	Paragraph      string
 	Label          string
 	URL            string
+
+	// The authored statement of the law, read live from the obligation row
+	// (ENT-248).
+	//
+	// Unlike Label and URL beside it, which are what the Analyst assembled at
+	// the time and must never change under a finding. This is deliberately the
+	// CURRENT summary: a curator correcting a statement of law should reach
+	// every finding that cites it, because the alternative is a customer
+	// reading a sentence we already know to be wrong.
+	//
+	// It exists on the wire because the model is forbidden to state the law
+	// (two live runs on the 2B tier stated it backwards beside a citation that
+	// resolved), so the statement has to reach the same page from somewhere a
+	// person wrote it.
+	Summary string
 }
 
 // SupportingChunk is one quoted passage behind a finding, from

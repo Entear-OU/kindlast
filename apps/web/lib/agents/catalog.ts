@@ -127,7 +127,7 @@ export const AGENTS: readonly Agent[] = [
   {
     slug: 'analyst',
     name: 'The Analyst',
-    does: 'Turns what was found into a finding that cites the article.',
+    does: 'Explains why a finding applies to you, beside the article it cites.',
     status: 'working',
     runs: 'When something asks it for a narrative. Nothing asks it on a schedule yet.',
     effects:
@@ -138,7 +138,11 @@ export const AGENTS: readonly Agent[] = [
     skill: {
       module: 'analyst',
       name: 'analyst.narrative',
-      version: '1.0.0',
+      // 2.0.0 is ENT-248: the output split, so the skill explains applicability
+      // to this organisation and no longer states the law. A major bump because
+      // the field a caller reads was renamed, and because a run recorded under
+      // 1.0.0 was answering a materially different question.
+      version: '2.0.0',
       tools: [],
     },
   },
