@@ -43,6 +43,14 @@
 #                      deployment holding a compliance record run with no
 #                      outbound internet at all (§18.1). Also in the `model`
 #                      profile.
+#   workers            The integrations policy gateway (ENT-231). The ONLY
+#                      process here that opens a connection to an address a
+#                      customer supplied, behind an egress allow-list, a
+#                      per-connection tool allow-list, redaction and a
+#                      per-organisation rate limit. Holds no database
+#                      credential and no third-party credential at rest: it is
+#                      handed one fetch at a time by core-api and returns what
+#                      it found.
 #   edge               Caddy. Terminates the stack's front door; today it
 #                      serves a health endpoint and reserves the routes web
 #                      and core-api will claim in build-order step 1.
@@ -250,6 +258,11 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      # Healthy rather than started, so the first fetch does not race a cold
+      # gateway. Not `service_completed_successfully`, obviously: it is a
+      # long-running service, not a job.
+      workers:
+        condition: service_healthy
     environment:
       KINDLAST_CORE_API_LISTEN: ":8080"
 
@@ -349,6 +362,36 @@ services:
       # too, so a stack with no model reads this file and does nothing with it.
       # The pairing is what decides, not this line on its own.
       KINDLAST_INTERNAL_CLIENT_FILE: /machinekey/core-api-client.json
+
+      # The integrations gateway (ENT-231), and the key that seals a
+      # customer's third-party credentials before they reach a column.
+      #
+      # BOTH ARE REQUIRED BEFORE IntegrationsService IS SERVED AT ALL, so a
+      # deployment that has not configured a gateway shows no Integrations page
+      # rather than one whose every button fails. Those two look identical to a
+      # customer and very different to an operator.
+      #
+      # core-api never dials a customer's address itself, so this is the only
+      # outbound address it holds for the whole feature.
+      KINDLAST_GATEWAY_URL: ${KINDLAST_GATEWAY_URL:-http://workers:8100}
+      KINDLAST_GATEWAY_TOKEN: ${KINDLAST_GATEWAY_TOKEN:-gateway-dev-shared-secret-value}
+
+      # AES-256, written `id:base64key`, where the id is recorded on every row
+      # so a key can be rotated without downtime. A fixed development value, so
+      # a local stack can store a credential and be exercised; it is not a
+      # secret and must not be reused anywhere real.
+      #
+      # A real deployment sets KINDLAST_INTEGRATION_KEY_FILE and mounts it,
+      # because this is the key protecting every customer's third-party
+      # credentials and it is the last value here that should sit in an
+      # environment variable a process listing prints. Retired keys go in
+      # KINDLAST_INTEGRATION_KEYS_OLD and still open what they sealed; see
+      # apps/core-api/internal/secrets for the whole decision.
+      #
+      # Absent, connections to endpoints that need no credential still work and
+      # one that needs a credential is refused rather than stored unencrypted.
+      KINDLAST_INTEGRATION_KEY: ${KINDLAST_INTEGRATION_KEY:-local-dev:ZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMtYWI=}
+      KINDLAST_INTEGRATION_KEYS_OLD: ${KINDLAST_INTEGRATION_KEYS_OLD:-}
 
       # The provider's signing secret (ENT-210).
       #
@@ -755,6 +798,81 @@ services:
       - zitadel-machinekey:/machinekey:ro
     ports:
       - "127.0.0.1:${KINDLAST_INTELLIGENCE_PORT:-8090}:8090"
+
+  # The integrations policy gateway (ENT-231, §26.4).
+  #
+  # THE ONLY PROCESS IN THIS STACK THAT DIALS AN ADDRESS A CUSTOMER SUPPLIED.
+  #
+  # It holds no database credential and no third-party credential at rest:
+  # core-api hands it one fetch at a time with the credential for that fetch,
+  # and it returns what it found. That is why it can be restarted, scaled or
+  # compromised without any of that touching a tenant's data.
+  #
+  # No published port and no EXPOSE. core-api reaches it on this network and
+  # nothing else should reach it at all; the shared secret below is defence in
+  # depth behind that, not instead of it.
+  workers:
+    container_name: kindlast-workers
+    build:
+      context: ..
+      dockerfile: apps/workers/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      KINDLAST_GATEWAY_LISTEN: ":8100"
+
+      # The shared secret core-api presents.
+      #
+      # A fixed development value so the gateway works on a local stack out of
+      # the box. It is not a secret and must not be reused anywhere real: a
+      # deployment sets KINDLAST_GATEWAY_TOKEN_FILE and mounts it, because a
+      # shared secret in an environment variable is one a `docker inspect`
+      # prints. The same arrangement the billing webhook's secret uses.
+      KINDLAST_GATEWAY_TOKEN: ${KINDLAST_GATEWAY_TOKEN:-gateway-dev-shared-secret-value}
+
+      # WHICH HOSTS THIS DEPLOYMENT MAY REACH. Empty by default, and empty
+      # permits nothing.
+      #
+      # That is deliberate and it is the setting to read carefully. An operator
+      # who has not decided which hosts their gateway may dial gets a gateway
+      # that dials none, which is a support question; the other default is a
+      # server-side request forgery available to anybody with an account, which
+      # is an incident. The gateway logs a loud warning at boot when this is
+      # unset, so the symptom is a log line rather than a mystery.
+      #
+      # Entries are host names, comma separated, with a leading dot for a whole
+      # domain: `tools.example.com,.mcp.example.org`.
+      KINDLAST_GATEWAY_EGRESS_ALLOWLIST: ${KINDLAST_GATEWAY_EGRESS_ALLOWLIST:-}
+
+      # Whether a permitted name may resolve into a private or loopback
+      # address.
+      #
+      # TRUE HERE, FALSE BY DEFAULT IN THE BINARY, and the difference is the
+      # deployment shape rather than an inconsistency. On this stack every
+      # service name resolves into 172.16/12, and a self-hoster's MCP server is
+      # on their own network by definition, so refusing private destinations
+      # would make the feature work only for the deployment that needs it
+      # least. A hosted deployment must leave this off: without it, anybody who
+      # can type a URL can point the gateway at the instance metadata service.
+      #
+      # Link-local is refused either way, so 169.254.169.254 is unreachable
+      # even here.
+      KINDLAST_GATEWAY_ALLOW_PRIVATE_DESTINATIONS: ${KINDLAST_GATEWAY_ALLOW_PRIVATE_DESTINATIONS:-true}
+
+      # The bounds that stand in for Temporal until build-order step 8: one
+      # outbound call cannot exceed this, and one organisation cannot make more
+      # than `RATE_BURST` calls per `RATE_WINDOW`.
+      KINDLAST_GATEWAY_OUTBOUND_TIMEOUT: ${KINDLAST_GATEWAY_OUTBOUND_TIMEOUT:-30s}
+      KINDLAST_GATEWAY_RATE_BURST: ${KINDLAST_GATEWAY_RATE_BURST:-30}
+      KINDLAST_GATEWAY_RATE_WINDOW: ${KINDLAST_GATEWAY_RATE_WINDOW:-1m}
+    healthcheck:
+      # The runtime image is distroless, so there is no curl to probe with and
+      # the binary probes itself. Same shape as core-api's.
+      test: ["CMD", "/workers", "healthcheck"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
 
   edge:
     container_name: kindlast-edge
