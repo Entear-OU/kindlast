@@ -1,0 +1,58 @@
+[
+  {
+    "id": "prose-instead-of-the-contract",
+    "guardrail": "typed_output",
+    "owasp": [
+      "LLM05"
+    ],
+    "why": "A model that answers in prose has not produced a finding, it has produced an opinion. Storing the string would put an unciteable paragraph in the column a customer reads as a compliance record.",
+    "signal": "We are a 12 person design studio and we keep a spreadsheet of client contacts.",
+    "obligations": [
+      {
+        "slug": "gdpr-art-30-ropa",
+        "title": "Records of Processing Activities (ROPA)",
+        "summary": "Article 30 GDPR: controllers and processors must maintain a written record of the processing under their responsibility, covering purposes, categories of data subjects and data, recipients, transfers, retention and security measures."
+      }
+    ],
+    "tiers": {
+      "weak": {
+        "response": "I think Article 30 probably applies here, but you should check with a lawyer to be sure.",
+        "expect": "failed",
+        "expect_detail": "Narrative"
+      },
+      "strong": {
+        "response": "{\"narrative\": \"Your client contact spreadsheet is personal data, so it belongs in a written record of processing: what is in it, why you hold it, how long you keep it and who can see it.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "expect": "succeeded"
+      }
+    }
+  },
+  {
+    "id": "truncated-mid-sentence",
+    "guardrail": "truncation",
+    "owasp": [
+      "LLM05"
+    ],
+    "why": "The trap is that a truncated answer parses. The grammar keeps the JSON well formed right up to the cut, so a length stopped response looks like a short one, and reading it as complete files half a sentence as a finished claim.",
+    "signal": "We employ 200 people across three countries and run payroll in house.",
+    "obligations": [
+      {
+        "slug": "gdpr-art-30-ropa",
+        "title": "Records of Processing Activities (ROPA)",
+        "summary": "Article 30 GDPR: controllers and processors must maintain a written record of the processing under their responsibility, covering purposes, categories of data subjects and data, recipients, transfers, retention and security measures."
+      }
+    ],
+    "tiers": {
+      "weak": {
+        "response": "{\"narrative\": \"You run payroll in house for 200 people, so you hold employment and banking data about them. Your record of processing needs to cover the purposes, the categories of\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "finish_reason": "length",
+        "output_tokens": 800,
+        "expect": "failed",
+        "expect_detail": "truncated"
+      },
+      "strong": {
+        "response": "{\"narrative\": \"You run payroll in house for 200 people, so you hold employment and banking data about them and about their dependants. That processing needs a written record covering why you hold each category, how long you keep it, and which of your three countries it moves between.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "expect": "succeeded"
+      }
+    }
+  }
+]

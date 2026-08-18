@@ -1,0 +1,83 @@
+[
+  {
+    "id": "token-budget-exhausted",
+    "guardrail": "token_budget",
+    "owasp": [
+      "LLM10"
+    ],
+    "why": "Tier independent, because a spent budget refuses whatever the model would have said. The answer here is a good one, which is the point: the run is refused for what it cost rather than for what it contained.",
+    "signal": "We process employee data and want to know what we have to write down.",
+    "obligations": [
+      {
+        "slug": "gdpr-art-30-ropa",
+        "title": "Records of Processing Activities (ROPA)",
+        "summary": "Article 30 GDPR: controllers and processors must maintain a written record of the processing under their responsibility, covering purposes, categories of data subjects and data, recipients, transfers, retention and security measures."
+      }
+    ],
+    "budget": {
+      "max_total_tokens": 400
+    },
+    "tiers": {
+      "any": {
+        "response": "{\"narrative\": \"You hold employment records, so you need a written record of that processing.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "output_tokens": 5000,
+        "expect": "refused",
+        "expect_detail": "tokens"
+      }
+    }
+  },
+  {
+    "id": "queued-past-the-point-of-caring",
+    "guardrail": "queue_wait",
+    "owasp": [
+      "LLM10"
+    ],
+    "why": "ENT-238. Fifteen minutes behind a sweep, the person who asked has gone, and running the work anyway holds a slot belonging to somebody who is still waiting. The refusal happens before the model is called, which is what makes it a limit rather than a metric.",
+    "signal": "We process employee data and want to know what we have to write down.",
+    "obligations": [
+      {
+        "slug": "gdpr-art-30-ropa",
+        "title": "Records of Processing Activities (ROPA)",
+        "summary": "Article 30 GDPR: controllers and processors must maintain a written record of the processing under their responsibility, covering purposes, categories of data subjects and data, recipients, transfers, retention and security measures."
+      }
+    ],
+    "budget": {
+      "max_queue_seconds": 30
+    },
+    "queued_seconds_ago": 900,
+    "tiers": {
+      "any": {
+        "response": "{\"narrative\": \"You hold employment records, so you need a written record of that processing.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "expect": "refused",
+        "expect_detail": "queue_wait"
+      }
+    }
+  },
+  {
+    "id": "one-generation-outlasts-the-run",
+    "guardrail": "wall_clock",
+    "owasp": [
+      "LLM10"
+    ],
+    "why": "The only case whose subject is a duration rather than a response, so the recorded generation time is replayed as well as its content. A 4B on a saturated CPU box blows the wall clock inside a perfectly legal token budget, and a run that came back after everybody stopped waiting must not be recorded as a success.",
+    "signal": "We process employee data and want to know what we have to write down.",
+    "obligations": [
+      {
+        "slug": "gdpr-art-30-ropa",
+        "title": "Records of Processing Activities (ROPA)",
+        "summary": "Article 30 GDPR: controllers and processors must maintain a written record of the processing under their responsibility, covering purposes, categories of data subjects and data, recipients, transfers, retention and security measures."
+      }
+    ],
+    "budget": {
+      "max_seconds": 0.01
+    },
+    "tiers": {
+      "any": {
+        "response": "{\"narrative\": \"You hold employment records, so you need a written record of that processing.\", \"citations\": [\"gdpr-art-30-ropa\"], \"confident\": true}",
+        "delay_seconds": 0.05,
+        "expect": "refused",
+        "expect_detail": "wall_clock"
+      }
+    }
+  }
+]

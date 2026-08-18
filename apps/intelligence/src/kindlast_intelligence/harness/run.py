@@ -214,6 +214,20 @@ def _call_model(
     # the NEXT call rather than un-making this one.
     budget.spend_model_call(completion.total_tokens)
 
+    # AND THE CLOCK IS CHARGED THE SAME WAY (ENT-238).
+    #
+    # Checked before the call as well, where it stops work from starting. Here it
+    # catches the generation that alone outlasted the budget, which on a
+    # saturated box is the normal way to blow it and is invisible to a check that
+    # only runs at the loop head.
+    #
+    # This discards a completed answer, which looks wasteful and is the
+    # established stance: `spend_model_call` above already throws away a
+    # narrative whose tokens went over. A run that finished after everybody
+    # stopped waiting should not be recorded as a success, because the record is
+    # what a customer reads to understand what they experienced.
+    budget.check_clock()
+
     run.input_tokens += completion.input_tokens
     run.cached_input_tokens += completion.cached_input_tokens
     run.output_tokens += completion.output_tokens

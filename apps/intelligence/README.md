@@ -71,8 +71,85 @@ Every security property here was checked the same way: broken deliberately,
 watched go red, restored. The allow-list, the audience check, the scope gate
 and the no-database rule.
 
+## The eval gate
+
+```bash
+uv run python -m kindlast_intelligence.evals.gate
+```
+
+Runs the golden set in `evals/golden/` through the real `draft_narrative` and
+fails on two different things: a guardrail that stopped firing, and an aggregate
+that moved against `evals/baseline.json`. It runs in the `intelligence` CI job,
+needs no model, and takes about a second.
+
+**It measures the harness, not the model.** ENT-229 named DeepEval and Ragas and
+both install cleanly, so not using them is a choice. Measured on 2026-08-18 with
+`uv add` in a throwaway project: `deepeval==4.1.8` resolves 69 packages into an
+88 MB environment and reports telemetry to `us.i.posthog.com` unless
+`DEEPEVAL_TELEMETRY_OPT_OUT` is set; `ragas==0.4.3` resolves into 564 MB
+carrying langchain, langgraph, langsmith, pandas, pyarrow, scipy and tiktoken.
+
+Size is the smaller objection. Their headline metrics are LLM-as-judge:
+`ragas.metrics.Faithfulness` is a `MetricWithLLM` and asserts an llm is set
+before it will score. That is the right instrument for "is this RAG answer
+good", which is a question about the model. This gate asks whether the harness
+did its job, and that question has exact answers: a slug either was among the
+obligations the run was offered or it was not. Putting a judge model in front of
+a set-membership question buys nondeterminism and a network dependency in a gate
+whose whole purpose is to be trustworthy when the first model is not.
+
+### The weak-versus-strong number
+
+Each case carries a `weak` and a `strong` recorded response, and the gate reports
+two rates per tier: what a naive implementation would have stored, and what the
+ring actually let through. The weak tier fabricates and the strong tier does
+not, so the first gap is wide; the second is zero, because nothing gets through
+either way. The difference between them is how much of the tier gap the harness
+closes, and it is the headline number.
+
+The utility delta beside it is what the harness does **not** close. It makes a
+weak model safe, not good, and it pays for that in refusals, so the weak tier
+produces fewer usable answers. A change that raises the strong tier's usable rate
+without raising the weak tier's widens that gap and turns the gate red, which is
+what ENT-229 means by a change that only helps strong models being visible.
+
+Refresh the recorded responses against a real model with:
+
+```bash
+uv run python -m kindlast_intelligence.evals.record --tier weak
+```
+
+It captures responses and deliberately does not touch the expectations. A
+recorder that rewrote the expected outcome to match what just happened would
+turn every regression into a fixture update.
+
+## Throughput is a guardrail too
+
+The ring counts tokens, model calls, tool calls and recursion, which are cost
+controls and are the right ones when inference is a hosted API. ENT-235 made it
+local, so the scarce thing is a slot on one `llama-server` and a run can satisfy
+every cost limit while holding that slot for eleven minutes.
+
+So `Budget` carries two clocks. `max_queue_seconds` is how long an answer is
+still worth having, checked once at admission and before the model is called.
+`max_seconds` is how long the work itself may take, and its clock starts when the
+work does. Conflating them is the tempting mistake: one clock started at enqueue
+lets the queue spend the model's budget, and one started at dispatch cannot
+explain why the customer waited.
+
+`FairQueue` is the bounded queue in front of it, rotating between organisations
+so one tenant's sweep cannot take every slot. It is not a security boundary (RLS
+is, and this cannot see a row), but on a shared deployment starving another
+tenant's console request is a tenancy problem even though no data crosses.
+
 ## What it does not have yet
 
-The agent loop, `skills/`, the guardrail middleware ring, the citation
-validator, `agent_runs`, and `DraftNarrative`. Those are the rest of ENT-218
-and they arrive on top of this, not beside it.
+The queue is a data structure with no worker loop around it, and nothing wires it
+into the service yet: `DraftNarrative` still runs its work inline, so the
+admission limits protect a caller that passes `queued_at` and nobody else. The
+`llama-server` replicas and the slot-aware balancer ENT-238 asks for are a
+`deploy/` change, and the sizing guidance it wants belongs in `docs/`. Neither is
+here.
+
+The wall-clock limit stops further work rather than interrupting a call in
+flight, which is the honest limit of enforcing it in-process.

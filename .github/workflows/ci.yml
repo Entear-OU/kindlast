@@ -188,6 +188,31 @@ jobs:
         run: uv run pytest -q
         working-directory: apps/intelligence
 
+      # THE HARNESS EVALS (ENT-229), AND WHY THEY ARE A STEP RATHER THAN A JOB.
+      #
+      # A separate job would pay a fresh checkout and a uv install to run
+      # something that takes under a second, which is the same argument this
+      # file already makes about not giving formatting a job of its own.
+      #
+      # The gate needs no model, and that is deliberate rather than a
+      # simplification. It replays recorded responses through the real
+      # `draft_narrative`, so it measures the HARNESS: whether a fabricated
+      # citation is still refused, whether a spent budget still stops the run,
+      # whether what a customer typed still arrives as data rather than as
+      # instruction. A gate that called a live 2B would be measuring the model's
+      # knowledge instead, would be flaky by design, and would go red for a
+      # reason that is the citation validator's job to catch rather than CI's.
+      #
+      # It exits non-zero on two different things: a guardrail that stopped
+      # firing (no threshold, that is a bug) and an aggregate that moved against
+      # the committed baseline (a threshold, in evals/baseline.json). The report
+      # with the absolute scores and the weak-versus-strong delta is written to
+      # the run summary as well as the log, so the numbers are on the run page
+      # rather than fifty lines into a job nobody opens on a green build.
+      - name: Harness evals
+        run: uv run python -m kindlast_intelligence.evals.gate
+        working-directory: apps/intelligence
+
   intelligence-e2e:
     name: Intelligence end to end
     runs-on: ubuntu-latest

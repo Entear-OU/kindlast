@@ -119,6 +119,32 @@ def test_a_run_that_waited_too_long_refuses_before_calling_the_model():
     assert model.calls == 0, "the run refused after paying for a slot anyway"
 
 
+def test_a_generation_that_alone_outlasts_the_budget_refuses():
+    """ENT-238: a wall-clock overrun has to be visible in `agent_runs`.
+
+    Checking only before the call cannot see this. One generation on a
+    saturated box is the normal way to blow the budget, and a run that came back
+    after everybody stopped waiting must not be recorded as a success: the
+    record is what a customer reads to understand what they experienced.
+
+    Discarding the answer is the established stance rather than a new one.
+    `spend_model_call` already throws away a narrative whose tokens went over.
+    """
+    run = draft_narrative(
+        signal="x",
+        obligations=OBLIGATIONS,
+        model=FakeModel(a_good_answer(), delay=0.05),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+        budget=Budget(max_seconds=0.01),
+    )
+
+    assert run.outcome == Outcome.REFUSED
+    assert "wall_clock" in run.outcome_detail
+    assert run.narrative == ""
+
+
 def test_the_record_carries_queue_wait_and_latency():
     """`agent_runs` cannot explain a slow run from tokens alone (ENT-238).
 
