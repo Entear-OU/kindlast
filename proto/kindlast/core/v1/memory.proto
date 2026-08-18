@@ -31,11 +31,14 @@ import "kindlast/options/v1/scope.proto";
 // behalf without their identity, which loses `recorded_by` on the one write
 // where "which human said so" matters most.
 //
-// So: a human corrects through here, under `memory:write` and RLS. When the
-// integrations gateway (ENT-231) and onboarding (ENT-212) need to write facts
-// without a human, they get their own typed patch on the platform surface.
-// Neither exists yet, and inventing the RPC before its caller would be
-// guessing at the shape.
+// So: a human corrects through here, under `memory:write` and RLS. Onboarding
+// (ENT-212) turned out to want the same argument rather than the platform one:
+// a person answering questions about their own organisation is holding a user
+// token too, and `OnboardingService` writes these facts under `onboarding:write`
+// for exactly the reason `CorrectFact` is here. The integrations gateway
+// (ENT-231) is the case that genuinely has no human, and it gets a typed patch
+// on the platform surface when it exists; inventing that RPC before its caller
+// would be guessing at the shape.
 //
 // # THE VALUES ARE TYPED, WHICH IS THE POINT RATHER THAN THE STYLE
 //
@@ -106,8 +109,11 @@ service MemoryService {
 // invariants instead (one open value per key, closed values immutable).
 //
 // The first ten mirror what the legacy `compliance_profiles` asked at
-// onboarding, so ENT-212 can move onto this profile without a translation
-// table nobody maintains.
+// onboarding, so ENT-212 could move onto this profile without a translation
+// table nobody maintains. Everything after them was added because something
+// already read it and nothing could answer: ENT-246's four for the corpus, and
+// ENT-212's for the processor obligations. See the notes against each for why
+// their absence was a bug rather than a gap.
 enum ProfileFactKey {
   PROFILE_FACT_KEY_UNSPECIFIED = 0;
   PROFILE_FACT_KEY_INDUSTRY = 1;
@@ -147,6 +153,22 @@ enum ProfileFactKey {
   // every controller relies on more than one, and Article 7's conditions bind
   // whenever consent is among them.
   PROFILE_FACT_KEY_LAWFUL_BASES = 14;
+
+  // Who else handles the organisation's data (ENT-212).
+  //
+  // ADDED BECAUSE THE WATCHER ALREADY READS IT, which is a stronger reason
+  // than completeness. `watcher_obligation_applies` gates every obligation
+  // carrying `engages_processor` on the legacy profile's `vendor_list` being
+  // non-empty, so an organisation whose vendors are unrecorded is quietly told
+  // that the processor obligations do not apply to it. A profile that can
+  // change which obligations a customer is shown, and has no way to hold the
+  // answer, is the worst of the two failures this enum exists to prevent.
+  //
+  // A list rather than the legacy comma-separated line. The column stays a
+  // line, because the plpgsql that reads it does, and the projection joins
+  // this into it; the fact is typed the way every other multi-valued answer
+  // here is, so a console can render and correct one vendor at a time.
+  PROFILE_FACT_KEY_VENDOR_LIST = 15;
 }
 
 // Yes, no, or we asked and they did not know.

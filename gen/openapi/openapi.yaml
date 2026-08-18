@@ -789,6 +789,7 @@ paths:
                         - PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM
                         - PROFILE_FACT_KEY_LARGE_SCALE_MONITORING
                         - PROFILE_FACT_KEY_LAWFUL_BASES
+                        - PROFILE_FACT_KEY_VENDOR_LIST
                     type: string
                     format: enum
             responses:
@@ -919,6 +920,126 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/UpdateNotificationPreferencesResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/onboarding/answers:
+        post:
+            tags:
+                - OnboardingService
+            description: |-
+                Answer the question that was asked, or decline it.
+
+                 The key travels in the request rather than being inferred from position,
+                 because a person may go back and change an earlier answer and because a
+                 retry must not be able to attach an answer to a different question than the
+                 one it was typed under.
+            operationId: OnboardingService_AnswerQuestion
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AnswerQuestionRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AnswerQuestionResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/onboarding/session:
+        get:
+            tags:
+                - OnboardingService
+            description: |-
+                Where this organisation has got to, without starting anything.
+
+                 A read that creates nothing, deliberately. Every authenticated route that
+                 wants to know whether to route a person into onboarding asks this, and a
+                 read that quietly opened a session would mean merely LOOKING at the console
+                 started an interview.
+            operationId: OnboardingService_GetOnboardingSession
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetOnboardingSessionResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/onboarding/session:confirm:
+        post:
+            tags:
+                - OnboardingService
+            description: |-
+                Record what was said as what the organisation believes.
+
+                 This is the only call in this service that writes a fact. Until it is made,
+                 the interview is a conversation and nothing else, which is how "the person
+                 sees and confirms the profile before it drives anything" is enforced rather
+                 than promised.
+
+                 Idempotent: confirming twice records the same values, and a value equal to
+                 what is already believed writes no history row.
+            operationId: OnboardingService_ConfirmProfile
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ConfirmProfileRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConfirmProfileResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/onboarding/session:start:
+        post:
+            tags:
+                - OnboardingService
+            description: |-
+                Open the interview, or resume the one already open.
+
+                 Idempotent by construction: an organisation with an unfinished session gets
+                 that session back rather than a second one, so a refresh, a second tab and
+                 a retry after a dropped connection all land in the same conversation.
+            operationId: OnboardingService_StartOnboarding
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StartOnboardingRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StartOnboardingResponse'
                 default:
                     description: Default error response
                     content:
@@ -1958,6 +2079,48 @@ components:
                 ordering:
                     type: integer
                     format: int32
+        AnswerQuestionRequest:
+            type: object
+            properties:
+                key:
+                    enum:
+                        - PROFILE_FACT_KEY_UNSPECIFIED
+                        - PROFILE_FACT_KEY_INDUSTRY
+                        - PROFILE_FACT_KEY_EU_JURISDICTIONS
+                        - PROFILE_FACT_KEY_DATA_CATEGORIES
+                        - PROFILE_FACT_KEY_DATA_SUBJECTS
+                        - PROFILE_FACT_KEY_AI_SYSTEMS
+                        - PROFILE_FACT_KEY_HAS_DPO
+                        - PROFILE_FACT_KEY_HAS_ROPA
+                        - PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU
+                        - PROFILE_FACT_KEY_TRANSFER_DESTINATIONS
+                        - PROFILE_FACT_KEY_STAFF_COUNT
+                        - PROFILE_FACT_KEY_HIGH_RISK_PROCESSING
+                        - PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM
+                        - PROFILE_FACT_KEY_LARGE_SCALE_MONITORING
+                        - PROFILE_FACT_KEY_LAWFUL_BASES
+                        - PROFILE_FACT_KEY_VENDOR_LIST
+                    type: string
+                    format: enum
+                answer:
+                    type: string
+                    description: |-
+                        What the person typed, verbatim. Parsed into the key's declared kind, and
+                         refused with a sentence when it does not fit, because a server that
+                         interprets a number out of "about fifty" has guessed.
+                skip:
+                    type: boolean
+                    description: |-
+                        They would rather not say.
+
+                         A field rather than an empty answer, because the two mean different things
+                         and only one of them is a decision: a blank box is a mistake to correct,
+                         and a skip is a person declining, which leaves the fact absent on purpose.
+        AnswerQuestionResponse:
+            type: object
+            properties:
+                state:
+                    $ref: '#/components/schemas/OnboardingState'
         ApproveFindingRequest:
             type: object
             properties:
@@ -2136,6 +2299,24 @@ components:
                  See the service comment: every field is a value the database already holds.
                  A client renders `label` and links `url`; the structured parts are present so
                  a client can filter or group by regulation, not so it can rebuild the label.
+        ConfirmProfileRequest:
+            type: object
+            properties: {}
+        ConfirmProfileResponse:
+            type: object
+            properties:
+                state:
+                    $ref: '#/components/schemas/OnboardingState'
+                profileId:
+                    type: string
+                    description: The `compliance_profiles` row the Watcher will read.
+                facts:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ProfileFact'
+                    description: |-
+                        What is now believed, as stored, with provenance. Returned rather than
+                         assumed, so a console renders what the database holds.
         CorpusObligation:
             type: object
             properties:
@@ -2200,6 +2381,7 @@ components:
                         - PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM
                         - PROFILE_FACT_KEY_LARGE_SCALE_MONITORING
                         - PROFILE_FACT_KEY_LAWFUL_BASES
+                        - PROFILE_FACT_KEY_VENDOR_LIST
                     type: string
                     format: enum
                 value:
@@ -2272,6 +2454,38 @@ components:
                     allOf:
                         - $ref: '#/components/schemas/ProcessingActivity'
                     description: The created record, so a client renders it without a second call.
+        DraftFact:
+            type: object
+            properties:
+                key:
+                    enum:
+                        - PROFILE_FACT_KEY_UNSPECIFIED
+                        - PROFILE_FACT_KEY_INDUSTRY
+                        - PROFILE_FACT_KEY_EU_JURISDICTIONS
+                        - PROFILE_FACT_KEY_DATA_CATEGORIES
+                        - PROFILE_FACT_KEY_DATA_SUBJECTS
+                        - PROFILE_FACT_KEY_AI_SYSTEMS
+                        - PROFILE_FACT_KEY_HAS_DPO
+                        - PROFILE_FACT_KEY_HAS_ROPA
+                        - PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU
+                        - PROFILE_FACT_KEY_TRANSFER_DESTINATIONS
+                        - PROFILE_FACT_KEY_STAFF_COUNT
+                        - PROFILE_FACT_KEY_HIGH_RISK_PROCESSING
+                        - PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM
+                        - PROFILE_FACT_KEY_LARGE_SCALE_MONITORING
+                        - PROFILE_FACT_KEY_LAWFUL_BASES
+                        - PROFILE_FACT_KEY_VENDOR_LIST
+                    type: string
+                    format: enum
+                value:
+                    $ref: '#/components/schemas/FactValue'
+                answer:
+                    type: string
+                    description: |-
+                        Verbatim, what the person typed to produce it. Shown next to the parsed
+                         value on the confirmation screen, because "we read this as a list of three
+                         countries" is checkable and "United Kingdom, Ireland, Spain" alone is not.
+            description: One value the interview would record.
         DraftNarrativeRequest:
             type: object
             properties:
@@ -2990,6 +3204,11 @@ components:
                 citedParagraphSummary:
                     type: string
                     description: The paragraph's summary, when the citation names one.
+        GetOnboardingSessionResponse:
+            type: object
+            properties:
+                state:
+                    $ref: '#/components/schemas/OnboardingState'
         GetProcessingActivityResponse:
             type: object
             properties:
@@ -3534,6 +3753,121 @@ components:
 
                  A summary, never the Official Journal wording. The corpus stores no verbatim
                  text, and the citation resolves to the publisher rather than to our copy.
+        OnboardingState:
+            type: object
+            properties:
+                sessionId:
+                    type: string
+                    description: Empty when this organisation has never started.
+                status:
+                    type: string
+                    description: '`in_progress`, `completed` or `abandoned`.'
+                transcript:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OnboardingTurn'
+                nextQuestion:
+                    allOf:
+                        - $ref: '#/components/schemas/Question'
+                    description: |-
+                        What to ask next. Absent once every applicable question has an answer or a
+                         skip.
+                draft:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/DraftFact'
+                    description: |-
+                        What would be recorded if the person confirmed now, as typed values.
+
+                         Derived from the answers rather than stored, so it cannot drift from them,
+                         and shown before anything is written because that is the whole of the
+                         confirmation step.
+                readyToConfirm:
+                    type: boolean
+                    description: |-
+                        True when there is nothing left to ask. A person may confirm before this,
+                         and the facts they skipped are simply absent; the flag is what a console
+                         uses to decide whether to nudge.
+                profileExists:
+                    type: boolean
+                    description: |-
+                        Whether this organisation has a compliance profile at all.
+
+                         The question every authenticated route actually asks. It is deliberately
+                         not "is there a completed session": a profile could arrive another way, and
+                         what decides whether the console has anything to show is the profile.
+                totalQuestions:
+                    type: integer
+                    description: |-
+                        How many questions there are, and how many have an answer or a skip. For a
+                         progress line, so a person can see how long this is.
+                    format: int32
+                answeredQuestions:
+                    type: integer
+                    format: int32
+            description: |-
+                The interview's state, which is the same message every call returns.
+
+                 One shape rather than four, because every one of these calls leaves the
+                 client needing exactly the same things: what has been said, what is being
+                 asked, what would be recorded, and whether it is finished. Four subtly
+                 different response bodies is how a console ends up with four renderers.
+        OnboardingTurn:
+            type: object
+            properties:
+                id:
+                    type: string
+                role:
+                    type: string
+                    description: '`user` or `assistant`. The database constrains it to those two.'
+                content:
+                    type: string
+                    description: |-
+                        What was said. For a person's turn this is verbatim what they typed, kept
+                         separately from the parsed value so a reader can check one against the
+                         other.
+                key:
+                    enum:
+                        - PROFILE_FACT_KEY_UNSPECIFIED
+                        - PROFILE_FACT_KEY_INDUSTRY
+                        - PROFILE_FACT_KEY_EU_JURISDICTIONS
+                        - PROFILE_FACT_KEY_DATA_CATEGORIES
+                        - PROFILE_FACT_KEY_DATA_SUBJECTS
+                        - PROFILE_FACT_KEY_AI_SYSTEMS
+                        - PROFILE_FACT_KEY_HAS_DPO
+                        - PROFILE_FACT_KEY_HAS_ROPA
+                        - PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU
+                        - PROFILE_FACT_KEY_TRANSFER_DESTINATIONS
+                        - PROFILE_FACT_KEY_STAFF_COUNT
+                        - PROFILE_FACT_KEY_HIGH_RISK_PROCESSING
+                        - PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM
+                        - PROFILE_FACT_KEY_LARGE_SCALE_MONITORING
+                        - PROFILE_FACT_KEY_LAWFUL_BASES
+                        - PROFILE_FACT_KEY_VENDOR_LIST
+                    type: string
+                    description: |-
+                        Which fact this turn is about. Unspecified for a turn that is not part of
+                         the question sequence.
+                    format: enum
+                value:
+                    allOf:
+                        - $ref: '#/components/schemas/FactValue'
+                    description: |-
+                        What we took the answer to mean. Absent on a question, and absent on an
+                         answer that was a skip.
+                skipped:
+                    type: boolean
+                    description: |-
+                        True when the person declined the question. Distinct from an absent value
+                         on a question turn, and distinct from an empty list, which is an answer.
+                createdAt:
+                    type: string
+                createdBy:
+                    type: string
+                    description: |-
+                        Which human said it. Onboarding is a person talking, and if two members of
+                         one organisation both take part, each turn records who it was.
+            description: One turn, as it is stored.
         Paragraph:
             type: object
             properties:
@@ -3681,6 +4015,7 @@ components:
                         - PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM
                         - PROFILE_FACT_KEY_LARGE_SCALE_MONITORING
                         - PROFILE_FACT_KEY_LAWFUL_BASES
+                        - PROFILE_FACT_KEY_VENDOR_LIST
                     type: string
                     format: enum
                 value:
@@ -3710,6 +4045,56 @@ components:
                         Which human recorded it, when a human did. Records who acted; never used
                          to decide what may be read.
             description: One fact as it was believed over one interval.
+        Question:
+            type: object
+            properties:
+                key:
+                    enum:
+                        - PROFILE_FACT_KEY_UNSPECIFIED
+                        - PROFILE_FACT_KEY_INDUSTRY
+                        - PROFILE_FACT_KEY_EU_JURISDICTIONS
+                        - PROFILE_FACT_KEY_DATA_CATEGORIES
+                        - PROFILE_FACT_KEY_DATA_SUBJECTS
+                        - PROFILE_FACT_KEY_AI_SYSTEMS
+                        - PROFILE_FACT_KEY_HAS_DPO
+                        - PROFILE_FACT_KEY_HAS_ROPA
+                        - PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU
+                        - PROFILE_FACT_KEY_TRANSFER_DESTINATIONS
+                        - PROFILE_FACT_KEY_STAFF_COUNT
+                        - PROFILE_FACT_KEY_HIGH_RISK_PROCESSING
+                        - PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM
+                        - PROFILE_FACT_KEY_LARGE_SCALE_MONITORING
+                        - PROFILE_FACT_KEY_LAWFUL_BASES
+                        - PROFILE_FACT_KEY_VENDOR_LIST
+                    type: string
+                    format: enum
+                prompt:
+                    type: string
+                    description: |-
+                        The question itself, in plain English.
+
+                         Written here rather than in the console, so the transcript a customer reads
+                         back is the text they were actually asked. A prompt that lived only in the
+                         browser would leave `onboarding_messages` holding answers to questions
+                         nobody could reconstruct.
+                shape:
+                    enum:
+                        - ANSWER_SHAPE_UNSPECIFIED
+                        - ANSWER_SHAPE_TEXT
+                        - ANSWER_SHAPE_LIST
+                        - ANSWER_SHAPE_TRI_STATE
+                        - ANSWER_SHAPE_NUMBER
+                    type: string
+                    format: enum
+                choices:
+                    type: array
+                    items:
+                        type: string
+                    description: For a tri-state, the three answers. Empty otherwise.
+                help:
+                    type: string
+                    description: A sentence under the question, when one helps. Never a legal term.
+            description: One question, as the person is asked it.
         Recital:
             type: object
             properties:
@@ -4031,6 +4416,17 @@ components:
                 snoozedUntil:
                     type: string
                     format: date-time
+        StartOnboardingRequest:
+            type: object
+            properties: {}
+        StartOnboardingResponse:
+            type: object
+            properties:
+                state:
+                    $ref: '#/components/schemas/OnboardingState'
+                created:
+                    type: boolean
+                    description: False when an unfinished session was resumed rather than opened.
         Status:
             type: object
             properties:
@@ -4421,11 +4817,14 @@ tags:
          behalf without their identity, which loses `recorded_by` on the one write
          where "which human said so" matters most.
 
-         So: a human corrects through here, under `memory:write` and RLS. When the
-         integrations gateway (ENT-231) and onboarding (ENT-212) need to write facts
-         without a human, they get their own typed patch on the platform surface.
-         Neither exists yet, and inventing the RPC before its caller would be
-         guessing at the shape.
+         So: a human corrects through here, under `memory:write` and RLS. Onboarding
+         (ENT-212) turned out to want the same argument rather than the platform one:
+         a person answering questions about their own organisation is holding a user
+         token too, and `OnboardingService` writes these facts under `onboarding:write`
+         for exactly the reason `CorrectFact` is here. The integrations gateway
+         (ENT-231) is the case that genuinely has no human, and it gets a typed patch
+         on the platform surface when it exists; inventing that RPC before its caller
+         would be guessing at the shape.
 
          # THE VALUES ARE TYPED, WHICH IS THE POINT RATHER THAN THE STYLE
 
@@ -4496,6 +4895,70 @@ tags:
          that could trigger delivery could use this service to mail an arbitrary
          address on a timer. The outbox is not readable here either, because a queue
          of pending messages is operational detail rather than a customer surface.
+    - name: OnboardingService
+      description: |-
+        The first conversation, and the organisation memory's first feeder
+         (ENT-212, §2, §24 step 6, §26.5).
+
+         # WHAT ONBOARDING PRODUCES, AND WHERE IT LANDS
+
+         It produces facts, and they land in `org_profile_facts` with
+         `source = 'onboarding'`, alongside every other thing the product believes
+         about the organisation. There is no separate onboarding profile.
+
+         That matters more than it sounds. ENT-228 built the memory so a customer can
+         see what we believe, see where each value came from, correct it, and read the
+         history of what it was before. A profile written into a parallel table would
+         have none of that: onboarding answers would be the one part of what Kindlast
+         knows that nobody could correct, which is precisely the part a customer is
+         most likely to want to.
+
+         `compliance_profiles` is still written, and it is a PROJECTION rather than a
+         second source of truth. The Watcher's `run_watcher()` reads that table, in
+         plpgsql, and moving that read is a piece of work with its own blast radius
+         (ENT-225 owns the direction). Until it moves, a fact write refreshes the
+         projection in the same transaction, so the two cannot disagree.
+
+         # THE INTERVIEW IS TYPED AT THE POINT OF ANSWER, NOT EXTRACTED AFTERWARDS
+
+         The legacy flow interviewed freely and then ran a second model pass over the
+         transcript to extract a structured profile. That is the arrangement ENT-212
+         names as the risk to design out: the profile decides which obligations apply,
+         so a field value the model invented produces wrong findings later, at enough
+         distance from the mistake that nobody traces it back.
+
+         So the shape here is inverted. Every question names the fact it is asking
+         about, every answer is parsed into that fact's declared kind by Go at the
+         moment it is given, and an answer that does not parse is refused with a
+         sentence rather than interpreted. Nothing reads the transcript afterwards to
+         decide what was meant. A person who cannot or will not answer skips, and the
+         fact is simply absent, which is what "left empty rather than guessed" means
+         when it is a property of the code instead of an instruction in a prompt.
+
+         # AND NOTHING IS BELIEVED UNTIL THE PERSON SAYS SO
+
+         Answers live in `onboarding_messages` until `ConfirmProfile`. Before that
+         call there is no fact, no profile row, and therefore nothing any finding can
+         be reasoned from. The confirmation step is structural rather than a screen
+         somebody could skip past.
+
+         # THE §25 QUESTION, ANSWERED: THE STREAM PASSES THROUGH CORE-API
+
+         §25 left open whether a token stream from the Analyst would go browser to
+         core-api to Intelligence, or browser straight to Intelligence. It goes
+         through core-api, and the reason is not latency.
+
+         `AGENTS.md` is unambiguous that no user token reaches Intelligence: its
+         audience is a different one, its scope is issued only to a machine principal,
+         and it holds no tenancy GUCs, so it could not check whether the person
+         streaming should see what it is processing. It also holds no database handle,
+         so a browser-direct stream would produce a conversation nothing persisted:
+         refresh the page and the interview is gone.
+
+         core-api is the only writer here, and every turn below is a row before it is
+         a response. Token streaming itself is not in this surface yet; see the
+         package comment on the service implementation for what that costs and what
+         it would take.
     - name: OrgService
       description: |-
         Organisations and membership (core-api-surface §20.1).

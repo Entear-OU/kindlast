@@ -32,6 +32,7 @@ export type ProfileFactKey =
   | 'PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM'
   | 'PROFILE_FACT_KEY_LARGE_SCALE_MONITORING'
   | 'PROFILE_FACT_KEY_LAWFUL_BASES'
+  | 'PROFILE_FACT_KEY_VENDOR_LIST'
 
 export type TriState =
   | 'TRI_STATE_YES'
@@ -146,6 +147,11 @@ export const FACT_LABELS: Record<ProfileFactKey, string> = {
   PROFILE_FACT_KEY_LARGE_SCALE_MONITORING:
     'Monitors data subjects regularly and systematically, on a large scale',
   PROFILE_FACT_KEY_LAWFUL_BASES: 'Lawful bases relied on',
+
+  // ENT-212. `watcher_obligation_applies` gates every obligation carrying
+  // `engages_processor` on this being non-empty, so an organisation whose
+  // processors are unrecorded is quietly told those obligations do not apply.
+  PROFILE_FACT_KEY_VENDOR_LIST: 'Companies that handle data for you',
 }
 
 /** Where a value came from, said plainly. */
