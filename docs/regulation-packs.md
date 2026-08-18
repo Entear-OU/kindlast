@@ -135,28 +135,32 @@ pair of plpgsql functions in `00001_baseline.sql`. Nothing in between could tell
 a token the Watcher evaluates from one it had never heard of.
 
 **At two regulations the vocabulary had already drifted, in both directions, and
-nothing anywhere went red.**
+nothing anywhere went red.** ENT-233 wrote the vocabulary down and refused
+unknown tokens at ingest, which made the drift visible. ENT-246 closed it.
 
-| Token | Written by | Read by | Effect |
-|---|---|---|---|
-| `thresholds.high_risk` | 4 obligations | nobody | applies too widely |
-| `thresholds.large_scale_monitoring` | 1 obligation | nobody | applies too widely |
-| `lawful_basis_includes` | 1 obligation | nobody | applies too widely |
-| `thresholds.employees_min` | nobody | `watcher_obligation_applies` | dead code |
+| Token | Was | Now |
+|---|---|---|
+| `thresholds.high_risk` | written by 4 obligations, read by nobody | split into `high_risk_processing` and `high_risk_ai_system`, each read from its own profile fact |
+| `thresholds.large_scale_monitoring` | written by 1 obligation, read by nobody | read from the `large_scale_monitoring` fact |
+| `lawful_basis_includes` | written by 1 obligation, read by nobody | read from the `lawful_bases` fact, and the basis named must be one of Article 6(1)'s six |
+| `thresholds.employees_min` | read by `watcher_obligation_applies`, written by nobody | removed from the vocabulary and the evaluator |
 
-So Article 35's DPIA obligation reaches every controller rather than high-risk
-processing, and Article 37's DPO duty reaches every controller rather than
-those doing large-scale monitoring.
+For as long as that drift stood, Article 35's DPIA obligation reached every
+controller rather than only high-risk processing, and Article 37's DPO duty
+reached every controller rather than those doing large-scale monitoring. A DPIA
+is expensive and a DPO is a hire.
 
 ### The two directions do not cost the same
 
-They are treated differently in code for this reason, and the asymmetry is the
-part worth carrying forward.
+Neither is acceptable, and knowing which way a mistake fails is what decides how
+loudly to refuse it.
 
 **An unevaluated threshold over-reports.** `watcher_obligation_applies` ignores
 a condition it does not recognise, so an unread threshold narrows nothing and
-the obligation binds more organisations than the curator wrote. That is wrong,
-it is visible to the customer, and they can dismiss it. It ships today.
+the obligation binds more organisations than the curator wrote. It is visible to
+the customer and they can dismiss it, which makes it survivable and not
+harmless: a fabricated obligation is worse than no obligation, because the
+product's value is that a human can check the claim.
 
 **An unevaluated gap token is silent, and that is the one that matters.**
 `watcher_gap_satisfied` returns `true` for a token it does not recognise, and
@@ -170,21 +174,66 @@ regulation is visible.
 
 ### So the rule is
 
-- **`requires` has no unevaluated tier.** Every gap token in the vocabulary is
-  one the evaluator implements. `corpus_vocabulary_test.go` proves it against
-  the running function rather than trusting the declaration, by asking each
-  token about a profile where the gap is genuinely open.
-- **Thresholds and applicability keys may be declared but not evaluated**, so
-  curator intent survives in the data, but the list is a thing a person edits
-  on purpose and a test pins it. A fourth entry cannot arrive unnoticed.
-- **An unknown token is refused at ingest**, naming the token and the
-  vocabulary it is missing from, because whoever hits it is authoring a pack
-  and needs to know whether to add data or add code.
+- **Nothing is declared without being evaluated**, on either side. ENT-233 left
+  thresholds a second tier, declared but unread, pinned by a test so the list
+  could only grow deliberately. ENT-246 emptied it and removed the tier:
+  `UnevaluatedKeys()` returns nothing, and a test asserts that.
+- **The declaration is checked against the running evaluator.**
+  `corpus_vocabulary_test.go` asks each gap token about a profile where the gap
+  is genuinely open, and each fact-backed threshold about an organisation that
+  has and has not answered it. A declaration that merely asserts what another
+  file does is the arrangement that drifted in the first place.
+- **An unknown token is refused at ingest**, naming the token and the vocabulary
+  it is missing from, because whoever hits it is authoring a pack and needs to
+  know whether to add data or add code.
 
 Refusing at ingest rather than at watcher time is the same treatment a citation
 that does not resolve already gets from `IngestService`. Both are claims the
 system cannot honour, and the honest moment to say so is when the claim
 arrives.
+
+### Where a threshold's answer comes from
+
+Three of them ask about the *processing* rather than about the *organisation*,
+and the legacy `compliance_profiles` has a column for none of them. They are
+answered from ENT-228's `org_profile_facts`:
+
+| Threshold | Fact | Question |
+|---|---|---|
+| `high_risk_processing` | `high_risk_processing` | Is the processing likely to result in a high risk to people (Article 35(1))? |
+| `high_risk_ai_system` | `high_risk_ai_system` | Is an AI system provided or deployed that falls in Annex III? |
+| `large_scale_monitoring` | `large_scale_monitoring` | Are data subjects monitored regularly and systematically, on a large scale (Article 37(1)(b))? |
+
+Adding those questions was not a migration, which is the property this document
+exists to protect: the fact vocabulary lives in the proto enum and in
+`domain/memory`, and `00023` adds no column and no constraint.
+
+**High risk was two questions wearing one token.** GDPR Article 35 asks whether
+the processing is likely to result in a high risk to people's rights; the AI Act
+asks whether a system falls within Annex III. Different tests under different
+regulations, and a shared answer would have meant a controller's answer about
+profiling deciding whether Annex III bound it. A pack author writing a new
+threshold should ask the same question of it: is this one condition, or two that
+happen to share a word?
+
+### An absent fact means the obligation does not apply
+
+The direction is a product decision and it is written down here, in
+`applieswhen.go` and in the migration, because it is the sort of thing that gets
+quietly reversed.
+
+Asserting a DPIA from silence is a fabricated obligation: nobody asked, so there
+are no grounds, and "you owe a DPIA" is the most expensive sentence this product
+can say wrongly. The mirror risk is real, an organisation that does do high-risk
+processing no longer being told about Article 35, and it is one answer away from
+being fixed: the fact is editable on the memory page today, and onboarding
+writes it at ENT-212.
+
+`unsure` counts as applying, and that is not a rounding of "no". ENT-228 kept
+`unsure` as its own answer because "we asked and they did not know" is a
+different claim from "they said no", and an organisation that does not know
+whether its processing is high-risk has not done the Article 35(1) screening the
+obligation exists for.
 
 ### These functions are decisions, not invariants
 
@@ -193,25 +242,21 @@ tomorrow and did not know these rules, the data would not be wrong, it would
 have made a different product decision about who an obligation binds. That is a
 decision, and decisions belong in Go.
 
-**ENT-225 owns moving them**, and ENT-233 deliberately did not, because doing it
-inside a pack PR would bundle two changes. What ENT-225 inherits:
+**ENT-225 owns moving them**, and neither ENT-233 nor ENT-246 did, because the
+only caller is the plpgsql sweep and moving that wholesale inside a pack change
+or a fix would bundle two changes. ENT-246 taught the existing evaluator to read
+the three conditions rather than adding a second evaluator in Go that nothing
+calls, on the grounds that two implementations of one rule, one of them
+decorative, is what produced this bug in the first place.
+
+What ENT-225 inherits:
 
 - the vocabulary declaration, which is the list of what the evaluator has to
-  implement, already written down
-- `corpus_vocabulary_test.go`, which asserts the same properties and should
-  keep asserting them against the Go evaluator, at which point it stops needing
-  a database
-- the three unevaluated keys, which are unevaluated because
-  `compliance_profiles` has no column to evaluate them against, not because
-  anybody chose to ignore them
-
-That last point is where packs and ENT-225 meet. `high_risk` and
-`large_scale_monitoring` describe a property of the *processing*, and
-`compliance_profiles` records only properties of the *organisation*. **ENT-228's
-`org_profile_facts` is where per-pack profile questions have to go**: it is
-keyed by a vocabulary that lives in Go precisely so that a new question is not
-a migration. A pack that needs to ask something new about a customer should add
-a fact there, not a column.
+  implement, already written down, including which fact each threshold reads
+- `corpus_vocabulary_test.go` and `watcher_applicability_test.go`, which assert
+  the same properties and should keep asserting them against the Go evaluator,
+  at which point the first stops needing a database
+- no unevaluated tier to reproduce
 
 ## What a third regulation breaks today
 
@@ -226,6 +271,14 @@ drawing the boundary; the ones ENT-233 fixed are marked.
    derived from the manifest, so a third act is covered the moment it is listed.
 3. **`appliesWhen` was unvalidated.** Now a closed vocabulary, refused at
    ingest, with the plpgsql evaluator checked against the declaration.
+
+### Fixed in ENT-246
+
+- **Three declared tokens were read by nobody, and one reader had no writer.**
+  The applicability vocabulary now has no unevaluated tier, the three
+  conditions are answered from `org_profile_facts`, and `employees_min` is
+  gone. Article 35's DPIA no longer reaches every controller. Unnumbered
+  because the list below continues ENT-233's numbering.
 
 ### Silent when it breaks, so worth fixing before a third act
 

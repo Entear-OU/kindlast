@@ -187,6 +187,47 @@ def test_an_invented_citation_comes_back_as_a_refusal_not_an_error(auth_server):
     assert [r.slug for r in response.rejected_citations] == ["gdpr-art-99"]
 
 
+def test_an_em_dash_comes_back_as_a_refusal_and_is_recorded_as_one(auth_server):
+    """ENT-163, over the wire and into the record.
+
+    Two properties in one test because they are the same property seen from
+    either end. The caller gets `REFUSED` and no prose, so nothing downstream
+    can render a narrative the house style forbids; and `agent_runs` gets the
+    same outcome with a detail naming the character, so a customer asking why
+    they have no finding reads an answer rather than a blank.
+    """
+    core_api = FakeCoreAPI()
+    service = a_service(
+        auth_server,
+        model=FakeModel(
+            {
+                "narrative": "You hold employee payroll records — so you need a "
+                "written record of that processing.",
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        core_api=core_api,
+    )
+
+    captured, body = call(
+        service, a_request(), token=auth_server.mint(auth_server.claims())
+    )
+
+    assert "200" in captured["status"], "a guardrail firing is not an error"
+    response = intelligence_pb2.DraftNarrativeResponse()
+    response.ParseFromString(body)
+
+    assert response.outcome == intelligence_pb2.DRAFT_OUTCOME_REFUSED
+    assert response.narrative == ""
+    assert "em dash (U+2014)" in response.outcome_detail
+
+    _, recorded = core_api.recorded[0]
+    assert recorded.outcome == "refused"
+    assert "em dash (U+2014)" in recorded.outcome_detail
+    assert recorded.narrative == ""
+
+
 def test_a_successful_draft_returns_the_narrative_and_the_run_id(auth_server):
     service = a_service(auth_server)
 

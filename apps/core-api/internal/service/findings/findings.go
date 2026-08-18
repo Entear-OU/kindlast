@@ -281,6 +281,13 @@ func toProto(f domain.Finding) *corev1.Finding {
 		CreatedAt:       timestamppb.New(f.CreatedAt),
 		ApprovedBy:      f.ApprovedBy,
 		RejectionReason: f.RejectionReason,
+		// What the Analyst added, beside what the sweep wrote rather than over
+		// it. Copied straight across: there is nothing to decide here, and a
+		// handler that chose when to reveal a narrative would be a second
+		// producer of the feed's text.
+		Narrative:        f.Narrative,
+		AgentRunId:       f.AgentRunID,
+		NarrativeRefusal: f.NarrativeRefusal,
 		Citation: &corev1.Citation{
 			ObligationSlug: f.Citation.ObligationSlug,
 			Title:          f.Citation.Title,

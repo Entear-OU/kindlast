@@ -75,6 +75,9 @@ function readValue(key: ProfileFactKey, raw: string): FactValue | string {
     case 'PROFILE_FACT_KEY_HAS_DPO':
     case 'PROFILE_FACT_KEY_HAS_ROPA':
     case 'PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU':
+    case 'PROFILE_FACT_KEY_HIGH_RISK_PROCESSING':
+    case 'PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM':
+    case 'PROFILE_FACT_KEY_LARGE_SCALE_MONITORING':
       switch (trimmed) {
         case 'yes':
           return { triState: 'TRI_STATE_YES' }
