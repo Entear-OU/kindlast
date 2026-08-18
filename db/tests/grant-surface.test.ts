@@ -241,7 +241,11 @@ const DOCUMENTED_CONTROLS: Array<{
     absent: ['DELETE', 'UPDATE'],
   },
   { table: 'org_evidence', role: 'kindlast_app', absent: ['DELETE', 'UPDATE'] },
-  { table: 'audit_evidence', role: 'kindlast_app', absent: ['DELETE', 'UPDATE'] },
+  {
+    table: 'audit_evidence',
+    role: 'kindlast_app',
+    absent: ['DELETE', 'UPDATE'],
+  },
 ]
 
 describe.skipIf(!reachable)('the documented controls are privileges', () => {
@@ -279,24 +283,27 @@ describe.skipIf(!reachable)('the documented controls are privileges', () => {
  * remember to revoke. 00015 remembered and 00014 did not. With no default
  * privilege at all, a table has to ask for what it needs.
  */
-describe.skipIf(!reachable)('no application role has a default privilege', () => {
-  it('so a new table arrives with nothing attached', async () => {
-    const r = await superuser.query(
-      `select pg_get_userbyid(d.defaclrole) as grantor,
+describe.skipIf(!reachable)(
+  'no application role has a default privilege',
+  () => {
+    it('so a new table arrives with nothing attached', async () => {
+      const r = await superuser.query(
+        `select pg_get_userbyid(d.defaclrole) as grantor,
               n.nspname                     as schema,
               d.defaclacl::text             as acl
          from pg_default_acl d
          join pg_namespace n on n.oid = d.defaclnamespace
         where d.defaclacl::text ~ 'kindlast_(app|agent|billing|ingest|vector_ro)'`,
-    )
-    expect(
-      r.rows,
-      'a default privilege grants an application role something on every ' +
-        'future table, which is how the grant surface widens without anybody ' +
-        'writing a grant. Each migration grants what its table needs.',
-    ).toEqual([])
-  })
-})
+      )
+      expect(
+        r.rows,
+        'a default privilege grants an application role something on every ' +
+          'future table, which is how the grant surface widens without anybody ' +
+          'writing a grant. Each migration grants what its table needs.',
+      ).toEqual([])
+    })
+  },
+)
 
 /**
  * The matrix in `db/README.md` is generated, and this is what makes that true.
@@ -363,41 +370,42 @@ async function grantMatrix(): Promise<string> {
   return [...header, ...body].join('\n')
 }
 
-describe.skipIf(!reachable)('db/README.md states the grants the database holds', () => {
-  it('carries a matrix generated from the catalogue, not typed by hand', async () => {
-    const generated = await grantMatrix()
-    const readme = await readFile(README, 'utf8')
+describe.skipIf(!reachable)(
+  'db/README.md states the grants the database holds',
+  () => {
+    it('carries a matrix generated from the catalogue, not typed by hand', async () => {
+      const generated = await grantMatrix()
+      const readme = await readFile(README, 'utf8')
 
-    const begin = readme.indexOf(MATRIX_BEGIN)
-    const end = readme.indexOf(MATRIX_END)
-    expect(
-      begin >= 0 && end > begin,
-      `db/README.md has no generated grant matrix. It is delimited by ` +
-        `${MATRIX_BEGIN} and ${MATRIX_END}.`,
-    ).toBe(true)
+      const begin = readme.indexOf(MATRIX_BEGIN)
+      const end = readme.indexOf(MATRIX_END)
+      expect(
+        begin >= 0 && end > begin,
+        `db/README.md has no generated grant matrix. It is delimited by ` +
+          `${MATRIX_BEGIN} and ${MATRIX_END}.`,
+      ).toBe(true)
 
-    const committed = readme
-      .slice(begin + MATRIX_BEGIN.length, end)
-      .trim()
+      const committed = readme.slice(begin + MATRIX_BEGIN.length, end).trim()
 
-    if (process.env.UPDATE_GRANT_MATRIX === '1' && committed !== generated) {
-      await writeFile(
-        README,
-        readme.slice(0, begin + MATRIX_BEGIN.length) +
-          '\n\n' +
-          generated +
-          '\n\n' +
-          readme.slice(end),
-        'utf8',
-      )
-      return
-    }
+      if (process.env.UPDATE_GRANT_MATRIX === '1' && committed !== generated) {
+        await writeFile(
+          README,
+          readme.slice(0, begin + MATRIX_BEGIN.length) +
+            '\n\n' +
+            generated +
+            '\n\n' +
+            readme.slice(end),
+          'utf8',
+        )
+        return
+      }
 
-    expect(
-      committed,
-      'the grant matrix in db/README.md no longer matches the database. Run ' +
-        'UPDATE_GRANT_MATRIX=1 bun run test:db and commit the result with the ' +
-        'migration that changed a grant.',
-    ).toBe(generated)
-  })
-})
+      expect(
+        committed,
+        'the grant matrix in db/README.md no longer matches the database. Run ' +
+          'UPDATE_GRANT_MATRIX=1 bun run test:db and commit the result with the ' +
+          'migration that changed a grant.',
+      ).toBe(generated)
+    })
+  },
+)
