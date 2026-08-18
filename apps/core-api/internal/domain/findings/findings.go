@@ -20,6 +20,17 @@ type Finding struct {
 	SnoozedUntil    *time.Time
 	ApprovedBy      string
 	RejectionReason string
+
+	// What the Analyst added, if anything (ENT-162, ENT-164).
+	//
+	// Empty is the ordinary state for all three. Narration is a job that runs
+	// after the sweep, Intelligence is optional, and the fields above are what
+	// a finding renders with or without it. Narrative and NarrativeRefusal are
+	// mutually exclusive by construction: a run either produced prose whose
+	// citations all resolved, or it produced a reason it did not.
+	Narrative        string
+	NarrativeRefusal string
+	AgentRunID       string
 }
 
 // Citation is the regulatory basis for a finding, exactly as stored.
