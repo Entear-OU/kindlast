@@ -36,6 +36,17 @@ import {
  * Answers live in the transcript until the person confirms them. Until then no
  * fact exists, no profile row exists, and no finding can have been reasoned
  * from any of it. That is structural rather than a screen somebody could skip.
+ *
+ * # AND NOTHING HERE TELLS ANYBODY WHAT THE LAW REQUIRES (ENT-248)
+ *
+ * There is no narrative on this page: no model writes prose here, and no copy
+ * on it states that an obligation applies or does not. The obvious next feature
+ * is a summary of what the answers mean, and it must not be built here as a
+ * free-text renderer. ENT-248's ruling is that the statement of law comes
+ * VERBATIM from the corpus row and the model only personalises around it,
+ * because the narrator was observed citing Article 30 correctly while stating
+ * the law wrongly beside it, and a citation validator cannot catch that. When
+ * that lands, this page consumes it rather than growing a second path.
  */
 export default async function OnboardingPage({
   params,

@@ -83,6 +83,15 @@ var TriStateChoices = []string{"yes", "no", "unsure"}
 // Plain English throughout, and no legal term the person did not use first.
 // "Record of processing activities" appears because it is the name of a
 // document somebody either keeps or does not; "Article 30" does not.
+//
+// AND NOTHING HERE STATES WHAT THE LAW REQUIRES (ENT-248). Every prompt and
+// every note below asks about the organisation or clarifies the scope of the
+// question. None of them says an obligation applies, or does not, or is often
+// fine to have skipped. That is not caution about wording: driving the narrator
+// against the real model produced a narrative citing Article 30 correctly and
+// stating the law wrongly beside it, and the citation validator structurally
+// cannot catch that. The statement of law comes from the corpus row, so a
+// surface that has no corpus row in front of it says nothing about the law.
 var script = []Question{
 	{
 		Key:    memory.KeyIndustry,
@@ -117,7 +126,7 @@ var script = []Question{
 	{
 		Key:    memory.KeyTransfersOutsideEU,
 		Prompt: "Does any of this information leave the EU or EEA?",
-		Help:   "A US-hosted tool counts. If you are not sure, say so: that is a real answer.",
+		Help:   "Anything hosted outside the EU or EEA is inside this question. If you are not sure, say so: that is a real answer.",
 	},
 	{
 		Key:    memory.KeyTransferDestination,
@@ -127,12 +136,12 @@ var script = []Question{
 	{
 		Key:    memory.KeyHasDPO,
 		Prompt: "Have you appointed a data protection officer?",
-		Help:   "A named person responsible for this, formally appointed. Most small companies have not, and that is often fine.",
+		Help:   "A named person formally appointed to be responsible for data protection. Many small companies have not appointed one.",
 	},
 	{
 		Key:    memory.KeyHasROPA,
 		Prompt: "Do you keep a record of processing activities?",
-		Help:   "A written list of what you do with personal information and why. A spreadsheet counts.",
+		Help:   "A written list of what you do with personal information and why. It is often a spreadsheet.",
 	},
 	{
 		Key:    memory.KeyStaffCount,
