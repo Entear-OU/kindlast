@@ -302,6 +302,18 @@ would be worse than shipping none, since it would look supported and then fail
 in ways nobody here could reproduce. If you build one that works, a pull request
 would be genuinely welcome.
 
+## Backing it up
+
+**Your deployment holds the compliance record, and nothing here backs it up for
+you.** [docs/backup-and-restore.md](./backup-and-restore.md) covers what is
+irreplaceable, why the two databases are one backup unit rather than two, and a
+restore procedure that has been walked rather than only written.
+
+Worth reading before you have data you care about rather than after. The short
+version: `postgres-app` is the record, `postgres-platform` is the identity that
+record's user ids are derived from, and losing either without the other leaves
+you with organisations nobody can sign in to.
+
 ## Support expectations
 
 Kindlast is developed for the hosted product at kindlast.com. Self-hosting is
