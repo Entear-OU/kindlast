@@ -43,7 +43,7 @@ export function createTavilyProvider(
   if (!options.apiKey) {
     // Fail loud at construction rather than at the first call. A missing
     // key with a silent no-op would look "successful" but return zero
-    // content — exactly the worst failure mode for a citation surface.
+    // content, which is exactly the worst failure mode for a citation surface.
     throw new WebSearchProviderError(
       'tavily',
       'API key is required (set TAVILY_API_KEY)',
