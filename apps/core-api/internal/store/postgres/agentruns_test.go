@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -164,6 +165,72 @@ func TestARefusalIsARunAndIsRecorded(t *testing.T) {
 	// model never tried to cite anything.
 	if !strings.Contains(citations, "gdpr-art-99-invented") {
 		t.Errorf("the rejected citation was not kept: %s", citations)
+	}
+}
+
+// TestACriticsRefusalKeepsTheTextAndTheRuleThatRejectedIt covers 00027
+// (ENT-248).
+//
+// A narrative refused for stating the law wrongly is the case this column
+// exists for, and the two halves it holds answer different questions. The
+// pattern names are machine-readable so somebody can count how often a rule
+// fires rather than parsing English out of `outcome_detail`, which is the
+// mistake the records store made with `check_violation` messages. The text is
+// here rather than in `outcome_detail` because that string is copied to
+// `findings.narrative_refusal` and printed on the finding page, and a false
+// statement of law must not appear under the heading explaining that it was
+// refused.
+func TestACriticsRefusalKeepsTheTextAndTheRuleThatRejectedIt(t *testing.T) {
+	store := agentStore(t)
+	org := seedOrg(t)
+
+	// What the 2B tier wrote on the running stack, refused by the claim critic.
+	const rejected = "This is a high severity issue because the obligation to keep " +
+		"such records applies to every controller and processor, regardless of how " +
+		"small the company is."
+
+	run := aRun(org)
+	run.Outcome = "refused"
+	run.OutcomeDetail = "the text states the law rather than explaining applicability"
+	run.RefusalJSON = `{"critic":"legal_claim",` +
+		`"patterns":["a claim about who the law applies to"],` +
+		`"text":` + strconv.Quote(rejected) + `}`
+
+	id, err := store.RecordAgentRun(t.Context(), run)
+	if err != nil {
+		t.Fatalf("recording a critic's refusal: %v", err)
+	}
+
+	var refusal string
+	err = store.pool.QueryRow(t.Context(),
+		`select refusal::text from agent_runs where id = $1`, id).Scan(&refusal)
+	if err != nil {
+		t.Fatalf("reading the refusal back: %v", err)
+	}
+
+	if !strings.Contains(refusal, "legal_claim") {
+		t.Errorf("the critic that refused was not kept: %s", refusal)
+	}
+	if !strings.Contains(refusal, "a claim about who the law applies to") {
+		t.Errorf("the rule that fired was not kept: %s", refusal)
+	}
+	if !strings.Contains(refusal, "regardless of how") {
+		t.Errorf("the rejected text was not kept: %s", refusal)
+	}
+
+	// And a run nothing refused says so, rather than leaving a reader unable to
+	// tell "no critic objected" from "a critic objected and nobody recorded
+	// what to".
+	clean, err := store.RecordAgentRun(t.Context(), aRun(org))
+	if err != nil {
+		t.Fatalf("recording a clean run: %v", err)
+	}
+	if err := store.pool.QueryRow(t.Context(),
+		`select refusal::text from agent_runs where id = $1`, clean).Scan(&refusal); err != nil {
+		t.Fatalf("reading the clean run back: %v", err)
+	}
+	if refusal != "{}" {
+		t.Errorf("a run nothing refused recorded a refusal: %s", refusal)
 	}
 }
 

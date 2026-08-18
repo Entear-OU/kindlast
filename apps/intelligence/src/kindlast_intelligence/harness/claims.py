@@ -165,6 +165,26 @@ PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        # THE PASSIVE, WHICH THE FIRST VERSION OF THIS FILE MISSED.
+        #
+        # Found by driving a real narration rather than by thinking about it.
+        # With the active patterns above in place the 2B tier wrote "it has
+        # failed to maintain the written records required by the law", which is
+        # a statement of law wearing a participle, and every pattern above reads
+        # past it because the instrument is not the subject of anything.
+        #
+        # Worth recording as a general fact about lexical checks: they catch the
+        # constructions somebody thought of. This one was added because a live
+        # run produced the construction, and the run is a golden case now.
+        "a statement of what the law requires",
+        re.compile(
+            r"\b(?:required|mandated|obliged|obligated|prohibited|permitted"
+            r"|forbidden|exempted|demanded)\s+(?:by|under)\s+"
+            r"(?:law\b|" + _INSTRUMENT + r")",
+            re.IGNORECASE,
+        ),
+    ),
+    (
         # A class of legal persons as the subject of an obligation verb. "You
         # must" is deliberately not here.
         "an obligation stated over a class of organisations",
