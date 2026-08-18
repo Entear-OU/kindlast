@@ -7,10 +7,12 @@ import { WebSearchProviderError } from '@/lib/websearch/types'
  * Factory selection coverage (ENT-98).
  *
  * `getWebSearchProvider()` reads `WEBSEARCH_PROVIDER` from env and picks the
- * matching impl. Defaults to `tavily` when unset — Tavily is the primary
- * provider in MVP. Mis-spelled env values fail loud rather than silently
- * defaulting; we don't want a typo to land in production and have the
- * Analyst cite stale text.
+ * matching impl. Defaults to `tavily` when unset, which these tests pin as it
+ * stands rather than as it should end up: ENT-240 moves the default to
+ * `firecrawl`, the only provider that can run air-gapped, in the same change
+ * that implements it. Mis-spelled env values fail loud rather than silently
+ * defaulting, because a typo should not reach production and quietly change
+ * where regulatory text is fetched from.
  */
 
 const ORIGINAL_ENV = { ...process.env }

@@ -2,13 +2,19 @@
  * Websearch provider factory (ENT-98).
  *
  * Reads `WEBSEARCH_PROVIDER` (default `tavily`) from env and returns the
- * matching implementation. The caller can override via the optional
- * argument — useful for tests, DI, and the rare case where an admin
- * surface needs to A/B providers in-process.
+ * matching implementation. The caller can override via the optional argument,
+ * which is useful for tests, DI, and the rare case where an admin surface
+ * needs to A/B providers in-process.
  *
  * The factory is the only place that touches env vars; callers pass the
  * resulting `WebSearchProvider` around as a value, which keeps `fetchUrl`
  * call sites pure and trivially mockable.
+ *
+ * Nothing calls this factory today. `types.ts` records why, and why the
+ * default is still `tavily` rather than the air-gapped-capable `firecrawl`
+ * that ENT-240 intends. Because there is no caller, neither `TAVILY_API_KEY`
+ * nor `FIRECRAWL_API_KEY` is required to run this deployment, and the
+ * self-hosting guide says so.
  */
 
 import { createFirecrawlProvider } from './firecrawl'
