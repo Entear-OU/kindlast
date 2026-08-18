@@ -44,6 +44,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 import { ConsoleShell } from '@/components/console/shell'
+import { AGENTS, STATUS_LABEL } from '@/lib/agents/catalog'
 
 /**
  * The console shell (ENT-91, re-homed by ENT-198, three columns by ENT-222).
@@ -214,16 +215,38 @@ describe('the agent rail (ENT-222)', () => {
 
   // The reason this rail exists before it can hold a conversation. ENT-161
   // happened because a dashboard claimed everything was fine on a profile the
-  // Watcher had never looked at. Saying "not scheduled" cannot make that
-  // mistake, so it is asserted rather than left to survive a tidy-up.
-  it('says plainly that nothing is scheduled, once per agent', () => {
+  // Watcher had never looked at, so the rail has to answer "is this running".
+  //
+  // It answered it with one sentence under all four, "Not scheduled yet", and
+  // that assertion is gone rather than loosened. ENT-218 shipped the Analyst as
+  // a real skill and the sentence quietly became false, which is what a claim
+  // about four separate things does as soon as one of them moves. ENT-232 gives
+  // each agent its own status from the catalogue; what that status says, and
+  // that exactly one agent is a working skill, is asserted where the catalogue
+  // is, in __tests__/lib/agents/catalog.test.ts.
+  //
+  // What survives here is the property this test was protecting: the rail says
+  // something about running, per agent, in both layouts.
+  it('carries a status for every agent, in both layouts', () => {
     render(
       <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
         <div>child</div>
       </ConsoleShell>,
     )
-    // Four agents, two layouts.
-    expect(screen.getAllByText('Not scheduled yet')).toHaveLength(8)
+    // Four agents, two layouts, so eight status lines. Counted over the
+    // distinct labels rather than per agent, because two agents share the
+    // "not built" wording and querying it once per agent would count it twice.
+    //
+    // Sourced from the catalogue rather than retyped, so a status whose
+    // wording changes does not need this file edited to stay meaningful.
+    const labels = [
+      ...new Set(AGENTS.map((agent) => STATUS_LABEL[agent.status])),
+    ]
+    const rendered = labels.reduce(
+      (total, label) => total + screen.getAllByText(label).length,
+      0,
+    )
+    expect(rendered).toBe(8)
   })
 
   it('does not render call, chat or video as controls', () => {

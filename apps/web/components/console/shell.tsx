@@ -69,14 +69,14 @@ export function ConsoleShell({
             Hidden from md up, because from there it either has its own column
             or has been dropped deliberately. */}
         <div className="md:hidden">
-          <AgentRail variant="mobile" />
+          <AgentRail orgSlug={orgSlug} variant="mobile" />
         </div>
 
         <MobileTabs orgSlug={orgSlug} />
       </div>
 
       <div className="hidden min-h-0 xl:block">
-        <AgentRail />
+        <AgentRail orgSlug={orgSlug} />
       </div>
     </div>
   )
