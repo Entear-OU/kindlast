@@ -379,6 +379,14 @@ describe.skipIf(!reachable)('notification_recipients', () => {
     expect(Object.keys(r.rows[0]).sort()).toEqual(
       [
         'email',
+        // Added by 00027, and it is a fact about the address on the line above
+        // rather than a new fact about the person. The act-from-email link
+        // carries authority to approve a finding, so it may only be sent to an
+        // address the IdP said was verified, and the dispatcher has to be able
+        // to tell before it renders the message. Anything wider than a boolean
+        // about this one address would reopen the argument the narrow
+        // projection exists to close.
+        'email_verified',
         'finding_severity',
         'min_severity',
         'org_name',

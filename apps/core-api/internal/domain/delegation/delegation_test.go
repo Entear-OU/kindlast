@@ -84,3 +84,61 @@ func TestSayingNothingAsksForMinutes(t *testing.T) {
 		t.Fatal("the default is not shorter than the ceiling, so the ceiling means nothing")
 	}
 }
+
+// §8's approve link, as a shape rather than as a redemption path (ENT-249).
+func TestABindingToAFindingMeansSingleUse(t *testing.T) {
+	t.Parallel()
+
+	// Refused rather than corrected, for the same reason a two hour lifetime
+	// is. Somebody asking for a reusable approve link has misunderstood what it
+	// is, and quietly setting the flag would ship that misunderstanding into a
+	// mailbox. 00027 refuses the row too, and that is the boundary; this is the
+	// message at the point the mistake was made.
+	if err := (delegation.Mint{
+		ActingAgent: "email", FindingID: "f-1",
+	}).Validate(); err == nil {
+		t.Fatal("a finding-bound delegation was accepted as reusable")
+	}
+
+	if err := (delegation.Mint{
+		ActingAgent: "email", FindingID: "f-1", SingleUse: true,
+	}).Validate(); err != nil {
+		t.Fatalf("a single-use approve link was refused: %v", err)
+	}
+
+	// And the run delegation is untouched: many tool calls under one
+	// credential is what the rail needs, and conflating the two would break it
+	// on its second call.
+	if err := (delegation.Mint{ActingAgent: "analyst"}).Validate(); err != nil {
+		t.Fatalf("a run delegation was refused: %v", err)
+	}
+}
+
+func TestTheApproveLinkAgreesWithItself(t *testing.T) {
+	t.Parallel()
+
+	mint := delegation.Approval("f-1")
+
+	if err := mint.Validate(); err != nil {
+		t.Fatalf("the constructor built something the rules refuse: %v", err)
+	}
+	if !mint.SingleUse {
+		t.Fatal("an approve link that can be redeemed twice can approve twice")
+	}
+	if mint.FindingID != "f-1" {
+		t.Fatalf("the delegation is bound to %q rather than to the finding", mint.FindingID)
+	}
+	// The channel, which is what the audit row will name beside the person.
+	// §26.3 asks the trail to say what was holding the pen, and for this path
+	// the honest answer is the medium the decision arrived through.
+	if mint.ActingAgent != delegation.EmailChannel {
+		t.Fatalf("the audit row would name %q rather than the channel", mint.ActingAgent)
+	}
+	// The uncomfortable one, asserted so that changing it is a decision rather
+	// than a drift. See the constructor for why the ceiling wins over the
+	// argument that people read compliance mail late.
+	if mint.Lifetime() != delegation.MaxTTL {
+		t.Fatalf("an approve link lives %s, want the %s ceiling",
+			mint.Lifetime(), delegation.MaxTTL)
+	}
+}
