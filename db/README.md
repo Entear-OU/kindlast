@@ -103,6 +103,165 @@ your rule. If the answer is "the data is wrong and nobody notices", it is an
 invariant and belongs in the schema. If the answer is "that process made a
 different product decision", it is a decision and belongs in Go.
 
+## Which role holds which command, and where a control is a privilege
+
+Tables start closed. No application role has a default privilege in `public`,
+so a table the migrator creates arrives with nothing attached and each
+migration grants exactly the commands its table needs. That is the ruling on
+ENT-243 and it is the reverse of what 00002 set up, which granted
+`kindlast_app` all four DML commands on every table and set a default so every
+later table inherited them.
+
+The reason the default had to go is that it made this drift by construction. A
+migration writing `grant select, insert on public.new_table` was not narrowing
+anything: the four commands were already there and the grant was additive.
+Only an explicit `revoke` moved the boundary, so a migration's stated intent
+and the role's actual grant were two different things, and `db/README.md`
+described the first while the second was in force.
+
+### Why a missing grant and a missing policy are not the same control
+
+Every table has `FORCE ROW LEVEL SECURITY`, so a command with no policy
+touches no rows. That looks exactly like a boundary and is not one: it is a
+table the application can address and simply finds empty (ENT-210). **A missing
+grant fails closed at parse time, where a missing policy fails quietly at run
+time.** The loud version is the one worth having, twice over: silence is
+indistinguishable from "there is nothing here yet", and a table held closed by
+the absence of a policy is one policy away from open, with nothing to fail in
+review when somebody adds that policy for a plausible reason.
+
+So when the application should not reach a command, the grant is revoked. The
+policy is not asked to carry it alone.
+
+### The controls that are privileges
+
+Each row is a claim, and each claim is a named case in
+`db/tests/grant-surface.test.ts`, so re-granting any of these turns a test red
+rather than making this table quietly wrong. A row here with no case there is a
+control nobody can check.
+
+| Table | Role | Absent | Why | Enforced by |
+|---|---|---|---|---|
+| `audit_log` | `kindlast_app` | update, delete | The accountability record. Nothing deletes from it and the `audit_log_no_update` trigger refuses a rewrite, so the grant is the layer that fails loudly | `00029` |
+| `transactional_outbox` | `kindlast_app` | update, delete | The app enqueues; every drain runs on the agent pool | `00029` |
+| `notification_outbox` | `kindlast_app` | insert, update, delete | Enqueued by a trigger on `findings`, which only ever fires as the agent, and marked sent or skipped by the dispatcher | `00029` |
+| `findings` | `kindlast_app` | insert, delete | The Analyst authors findings; the customer approves, rejects, snoozes and narrates them, which is update | `00029` |
+| `watcher_findings` | `kindlast_app` | insert, update, delete | Signals are the Watcher's output. The app reads them | `00029` |
+| `product_review_flags` | `kindlast_app` | update, delete | Append only, and `product_review_flags_no_update` refuses a rewrite at the row level | `00029` |
+| `subscriptions` | `kindlast_app` | insert, update, delete | Billing rows are the webhook's to write, on the billing pool | `00029` |
+| `user_identities` | `kindlast_app` | delete | Identity rows go with the user by cascade, never by a request | `00029` |
+| `notification_preferences` | `kindlast_app` | delete | A preference is turned off, not erased | `00029` |
+| `deadline_alert_log` | `kindlast_app` | insert, update, delete | A 00001 leftover with a select policy and no producer. Read only until something writes it | `00029` |
+| `weekly_briefing_log` | `kindlast_app` | insert, update, delete | Same | `00029` |
+| `goose_db_version` | `kindlast_app` | all | goose's own bookkeeping, owned by the migrator. Not domain data, and swept into `public` by 00002's loop rather than by a decision | `00029` |
+| `capability_tokens` | `kindlast_app` | all | Bearer credentials. Only `redeem_capability_token` reaches them | `00015` |
+| `billing_webhook_events` | `kindlast_app` | all | Provider payloads the application has no business reading | `00017` |
+| `org_profile_facts` | `kindlast_app` | delete, table-level update | Correcting a fact writes a new version and closes the old one, so the app holds `update (valid_to)` and nothing else | `00020`, `00029` |
+| `org_evidence` | `kindlast_app` | delete, table-level update | Same shape: `update (superseded_by)` only | `00020` |
+| `audit_evidence` | `kindlast_app` | update, delete | Evidence is written once | `00006` |
+
+`kindlast_agent` keeps a blanket update on `findings` deliberately. 00022 left
+it with a written reason: `run_analyst()` and the act-path functions also write
+that table, and whether they do so as caller or as definer has to be
+established before the grant can be narrowed. ENT-225 owns that audit.
+
+`kindlast_migrator` is absent from all of this. It owns the schema and holds
+everything on everything, which is what makes migrations work.
+
+### The whole surface
+
+Generated from `information_schema`, not typed by hand, because the failure
+ENT-243 documents was not a wrong sentence: it was that a prose claim about
+grants could drift from the grants with nothing noticing. A hand-written table
+can always contradict the database. One that a test regenerates and compares
+cannot.
+
+To refresh it after a migration changes a grant:
+
+```bash
+UPDATE_GRANT_MATRIX=1 bun run test:db
+```
+
+and commit the diff alongside the migration that caused it. A command shown in
+brackets is a column-level grant, and the brackets name every column it covers.
+
+<!-- begin generated grant matrix -->
+
+| Role | Table | Commands |
+|---|---|---|
+| `kindlast_agent` | `agent_runs` | insert, select |
+| `kindlast_agent` | `audit_evidence` | select |
+| `kindlast_agent` | `capability_tokens` | insert, select, update |
+| `kindlast_agent` | `compliance_profiles` | select, update |
+| `kindlast_agent` | `findings` | insert, select, update |
+| `kindlast_agent` | `integration_fetches` | insert, select |
+| `kindlast_agent` | `integration_tools` | select |
+| `kindlast_agent` | `integrations` | select (created_at, display_name, endpoint_url, id, kind, org_id, revoked_at, status) |
+| `kindlast_agent` | `notification_outbox` | insert, select, update |
+| `kindlast_agent` | `obligations` | select |
+| `kindlast_agent` | `org_evidence` | insert, select |
+| `kindlast_agent` | `org_profile_facts` | select |
+| `kindlast_agent` | `regulatory_article_paragraphs` | select |
+| `kindlast_agent` | `regulatory_articles` | select |
+| `kindlast_agent` | `regulatory_documents` | select |
+| `kindlast_agent` | `regulatory_recitals` | select |
+| `kindlast_agent` | `transactional_outbox` | select, update |
+| `kindlast_agent` | `watcher_findings` | insert, select, update |
+| `kindlast_app` | `act_delegations` | insert, select, update |
+| `kindlast_app` | `agent_runs` | select |
+| `kindlast_app` | `ai_systems` | delete, insert, select, update |
+| `kindlast_app` | `audit_evidence` | insert, select |
+| `kindlast_app` | `audit_log` | insert, select |
+| `kindlast_app` | `compliance_profiles` | delete, insert, select, update |
+| `kindlast_app` | `deadline_alert_log` | select |
+| `kindlast_app` | `dsar_trail_entries` | insert, select |
+| `kindlast_app` | `dsars` | delete, insert, select, update |
+| `kindlast_app` | `findings` | select, update |
+| `kindlast_app` | `integration_consents` | insert, select |
+| `kindlast_app` | `integration_fetches` | insert, select |
+| `kindlast_app` | `integration_tools` | insert, select, update (granted, granted_at, granted_by) |
+| `kindlast_app` | `integrations` | insert, select, update (credential_ciphertext, credential_key_id, revoked_at, revoked_by, status) |
+| `kindlast_app` | `invitations` | delete, insert, select, update |
+| `kindlast_app` | `memberships` | delete, insert, select, update |
+| `kindlast_app` | `notification_outbox` | select |
+| `kindlast_app` | `notification_preferences` | insert, select, update |
+| `kindlast_app` | `obligations` | select |
+| `kindlast_app` | `onboarding_messages` | delete, insert, select, update |
+| `kindlast_app` | `onboarding_sessions` | delete, insert, select, update |
+| `kindlast_app` | `org_evidence` | insert, select, update (superseded_by) |
+| `kindlast_app` | `org_profile_facts` | insert, select, update (valid_to) |
+| `kindlast_app` | `organisations` | delete, insert, select, update |
+| `kindlast_app` | `processing_activities` | delete, insert, select, update |
+| `kindlast_app` | `product_review_flags` | insert, select |
+| `kindlast_app` | `regulatory_annex_items` | select |
+| `kindlast_app` | `regulatory_annexes` | select |
+| `kindlast_app` | `regulatory_article_paragraphs` | select |
+| `kindlast_app` | `regulatory_article_recitals` | select |
+| `kindlast_app` | `regulatory_articles` | select |
+| `kindlast_app` | `regulatory_documents` | select |
+| `kindlast_app` | `regulatory_enforcement_decisions` | select |
+| `kindlast_app` | `regulatory_guidelines` | select |
+| `kindlast_app` | `regulatory_recitals` | select |
+| `kindlast_app` | `subscriptions` | select |
+| `kindlast_app` | `transactional_outbox` | insert, select |
+| `kindlast_app` | `user_identities` | insert, select, update |
+| `kindlast_app` | `watcher_findings` | select |
+| `kindlast_app` | `weekly_briefing_log` | select |
+| `kindlast_billing` | `billing_webhook_events` | insert, select |
+| `kindlast_billing` | `subscriptions` | insert, select, update |
+| `kindlast_ingest` | `obligations` | insert, select, update |
+| `kindlast_ingest` | `regulatory_annex_items` | insert, select, update |
+| `kindlast_ingest` | `regulatory_annexes` | insert, select, update |
+| `kindlast_ingest` | `regulatory_article_paragraphs` | insert, select, update |
+| `kindlast_ingest` | `regulatory_article_recitals` | insert, select |
+| `kindlast_ingest` | `regulatory_articles` | insert, select, update |
+| `kindlast_ingest` | `regulatory_documents` | insert, select, update |
+| `kindlast_ingest` | `regulatory_enforcement_decisions` | insert, select, update |
+| `kindlast_ingest` | `regulatory_guidelines` | insert, select, update |
+| `kindlast_ingest` | `regulatory_recitals` | insert, select, update |
+
+<!-- end generated grant matrix -->
+
 ## Running the suite
 
 ```bash
@@ -117,12 +276,21 @@ silently.
 ## `audit_log` has no retention policy, and that is a decision
 
 Nothing deletes from `audit_log`. Not a scheduled job, not a cascade, not a
-manual path in the product. The table carries an append-only trigger and
-`kindlast_app` holds no delete grant on it, so the absence is enforced rather
-than merely observed.
+manual path in the product. The table carries an append-only trigger, has no
+delete policy, and `kindlast_app` holds neither a delete nor an update grant on
+it, so the absence is enforced rather than merely observed.
 
 This is written down because ENT-223 asked for it to be a decision rather than
 an omission, and because from the outside the two look identical.
+
+**That sentence was false for eight months, and how it was false is the reason
+the section above exists.** It credited the missing grant, and the grant was
+present: 00002 gave `kindlast_app` all four commands on every table, so what
+was actually refusing a delete was the absent policy. The property held the
+whole time, one layer thinner than this file claimed, and the layer holding it
+was the one that fails silently. `00029` revoked the grant, which is what made
+the sentence true rather than what made the log safe. It is checked by name in
+`db/tests/grant-surface.test.ts` now, so it cannot go quietly false again.
 
 **Why keep everything.** The value of the record is that a regulator can be
 shown it, and a record that thins out after a fixed window is one whose answer
