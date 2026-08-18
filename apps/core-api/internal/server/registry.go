@@ -66,6 +66,19 @@ func Services() []protoreflect.ServiceDescriptor {
 		// the last place an undeclared scope should be able to hide, because it
 		// is the vocabulary that acts outside any one organisation.
 		platformv1.File_kindlast_platform_v1_ingest_proto,
+		// NarrativeService (ENT-245). Drafting the prose a finding carries, on
+		// `internal:intelligence`.
+		//
+		// It shipped mounted on the mux and missing from this list, and the
+		// scope table is built from this list, so the interceptor default-denied
+		// every call: permission_denied, "declares no required scope", in every
+		// deployment, while the service's own tests stayed green. The deny was
+		// right. Being absent here is what was wrong.
+		//
+		// TestEveryKindlastServiceIsClassified now walks the global proto
+		// registry and fails on any Kindlast service that is neither listed here
+		// nor explicitly excused, so the next one cannot arrive this way.
+		platformv1.File_kindlast_platform_v1_narrative_proto,
 	}
 
 	var services []protoreflect.ServiceDescriptor
