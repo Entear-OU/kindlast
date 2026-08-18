@@ -77,10 +77,18 @@ ARG NEXT_PUBLIC_APP_URL=http://localhost:8000
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 
 # Next runs on Node, so the binary is invoked directly rather than through
-# `bun run`. Telemetry off: a build in someone else's deployment should not
-# phone anywhere.
+# `bun run`, which would put Bun's runtime under a build that is documented to
+# run on Node.
+#
+# The binary is in the WORKSPACE's node_modules, not the root's. Bun hoists
+# packages to the root and links each workspace's own executables beside that
+# workspace, so `../../node_modules/.bin/next` does not exist and the build
+# fails with a bare "not found".
+#
+# Telemetry off: a build in somebody else's deployment should not phone
+# anywhere.
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN cd apps/web && ../../node_modules/.bin/next build
+RUN cd apps/web && ./node_modules/.bin/next build
 
 
 FROM node:22-alpine
