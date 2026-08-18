@@ -1,5 +1,7 @@
 import Link from 'next/link'
 
+import { CorrectableFact } from '@/components/memory/correct-fact-form'
+import type { ActionState } from '@/lib/org/action-state'
 import {
   FACT_LABELS,
   SOURCE_LABELS,
@@ -29,9 +31,17 @@ import { orgPath } from '@/lib/auth/org'
 export function ProfileFactList({
   facts,
   slug,
+  correct,
 }: {
   facts: ProfileFact[]
   slug: string
+  /** Omitted by the tests that only assert rendering, and by any caller with
+   *  no write to offer. A list with no correction is still a useful list. */
+  correct?: (
+    slug: string,
+    previous: ActionState,
+    form: FormData,
+  ) => Promise<ActionState>
 }) {
   return (
     <ul className="mt-3 divide-y divide-border/60 rounded-xl border border-border/60 bg-background">
@@ -43,40 +53,46 @@ export function ProfileFactList({
         const source = fact.source ? SOURCE_LABELS[fact.source] : undefined
 
         return (
-          <li
-            key={key}
-            className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 p-4"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
-                {FACT_LABELS[key]}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {source ?? fact.source}
-                {fact.validFrom ? (
-                  <>
-                    {' · since '}
-                    <time dateTime={fact.validFrom}>
-                      {formatDay(fact.validFrom)}
-                    </time>
-                  </>
-                ) : null}
-              </p>
+          <li key={key} className="p-4">
+            {/* The row, and then the correction below it rather than inside
+                it. A form opening inside a baseline-aligned flex row would be
+                squeezed into the width of a link. */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  {FACT_LABELS[key]}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {source ?? fact.source}
+                  {fact.validFrom ? (
+                    <>
+                      {' · since '}
+                      <time dateTime={fact.validFrom}>
+                        {formatDay(fact.validFrom)}
+                      </time>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+
+              <div className="flex items-baseline gap-4">
+                <p className="text-sm text-foreground">
+                  {value ?? (
+                    <span className="text-muted-foreground">Not recorded</span>
+                  )}
+                </p>
+                <Link
+                  href={orgPath(slug, `/settings/memory/${key}`)}
+                  className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                >
+                  History
+                </Link>
+              </div>
             </div>
 
-            <div className="flex items-baseline gap-4">
-              <p className="text-sm text-foreground">
-                {value ?? (
-                  <span className="text-muted-foreground">Not recorded</span>
-                )}
-              </p>
-              <Link
-                href={orgPath(slug, `/settings/memory/${key}`)}
-                className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-              >
-                History
-              </Link>
-            </div>
+            {correct ? (
+              <CorrectableFact slug={slug} fact={fact} action={correct} />
+            ) : null}
           </li>
         )
       })}

@@ -4,6 +4,7 @@ import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable
 import { EvidenceList } from '@/components/memory/evidence-list'
 import { ProfileFactList } from '@/components/memory/profile-fact-list'
 import { listEvidence, listProfileFacts } from '@/lib/memory/client'
+import { correctFactAction } from './actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 
@@ -97,7 +98,11 @@ export default async function MemoryPage({
             your circumstances against.
           </p>
         ) : (
-          <ProfileFactList facts={facts} slug={slug} />
+          <ProfileFactList
+            facts={facts}
+            slug={slug}
+            correct={correctFactAction}
+          />
         )}
       </section>
 
