@@ -68,7 +68,8 @@ class FakeCoreAPI:
 
 def a_good_answer(citations=("gdpr-art-30-ropa",)):
     return {
-        "narrative": "You hold employee data, so Article 30 requires a written record of it.",
+        "why_it_applies_to_you": "You hold employee data, so you need a written "
+        "record of what you keep and why.",
         "citations": list(citations),
         "confident": True,
     }
@@ -201,7 +202,7 @@ def test_an_em_dash_comes_back_as_a_refusal_and_is_recorded_as_one(auth_server):
         auth_server,
         model=FakeModel(
             {
-                "narrative": "You hold employee payroll records — so you need a "
+                "why_it_applies_to_you": "You hold employee payroll records — so you need a "
                 "written record of that processing.",
                 "citations": ["gdpr-art-30-ropa"],
                 "confident": True,

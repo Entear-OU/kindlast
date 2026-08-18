@@ -37,6 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ..harness.budget import Budget
 from ..harness.citations import CitationValidator, OfferedObligations
+from ..harness.claims import review_claims
 from ..harness.model import Completion
 from ..harness.run import Outcome, draft_narrative
 from ..skills.analyst import Narrative
@@ -89,13 +90,37 @@ class TierScores(BaseModel):
     refused: int = 0
     failed: int = 0
     # What a naive implementation would have stored: a citation from outside the
-    # offered set, a truncated claim, or output that never parsed.
+    # offered set, a truncated claim, output that never parsed, or prose stating
+    # the law (ENT-248).
     unguarded_unsafe: int = 0
     # What the harness let through anyway. Zero is the only acceptable value.
     guarded_unsafe: int = 0
 
+    # CLAIM ACCURACY, REPORTED BESIDE CITATION ACCURACY (ENT-248).
+    #
+    # Counted separately as well as inside the two numbers above, because they
+    # answer different questions and the whole point of ENT-248 is that one of
+    # them was invisible. "How often did the model cite something it was not
+    # given" is what the ring has measured since ENT-229. "How often did the
+    # model state the law" is what nothing measured, and it is the failure that
+    # arrives WITH a citation that checks out.
+    #
+    # A dash is deliberately not counted in either. A style breach is not a
+    # claim about the law, and folding it in would make the unsafe rate mean two
+    # things at once.
+    claim_unsafe: int = 0
+    claim_guarded_unsafe: int = 0
+
     def _rate(self, count: int) -> float:
         return count / self.cases if self.cases else 0.0
+
+    @property
+    def claim_unsafe_rate(self) -> float:
+        return self._rate(self.claim_unsafe)
+
+    @property
+    def claim_guarded_unsafe_rate(self) -> float:
+        return self._rate(self.claim_guarded_unsafe)
 
     @property
     def usable_rate(self) -> float:
@@ -126,6 +151,13 @@ class Delta(BaseModel):
     # not look free.
     utility: float
 
+    # The same three numbers restricted to claims about the law (ENT-248), which
+    # is the row that would have been flat at zero before the claim critic
+    # existed because nothing looked.
+    claim_unguarded: float
+    claim_guarded: float
+    claim_narrowed: float
+
 
 class CaseResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -138,6 +170,8 @@ class CaseResult(BaseModel):
     detail: str = ""
     unguarded_unsafe: bool = False
     guarded_unsafe: bool = False
+    claim_unsafe: bool = False
+    claim_guarded_unsafe: bool = False
 
 
 class Report(BaseModel):
@@ -155,11 +189,17 @@ class Report(BaseModel):
         unguarded = weak.unguarded_unsafe_rate - strong.unguarded_unsafe_rate
         guarded = weak.guarded_unsafe_rate - strong.guarded_unsafe_rate
 
+        claim_unguarded = weak.claim_unsafe_rate - strong.claim_unsafe_rate
+        claim_guarded = weak.claim_guarded_unsafe_rate - strong.claim_guarded_unsafe_rate
+
         return Delta(
             unguarded=unguarded,
             guarded=guarded,
             narrowed=unguarded - guarded,
             utility=strong.usable_rate - weak.usable_rate,
+            claim_unguarded=claim_unguarded,
+            claim_guarded=claim_guarded,
+            claim_narrowed=claim_unguarded - claim_guarded,
         )
 
     def markdown(self) -> str:
@@ -173,15 +213,18 @@ class Report(BaseModel):
         lines = [
             "## Harness evals",
             "",
-            "| tier | cases | usable | unguarded unsafe | guarded unsafe |",
-            "| --- | --- | --- | --- | --- |",
+            "| tier | cases | usable | unguarded unsafe | guarded unsafe | "
+            "states the law, unguarded | states the law, guarded |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
         ]
         for tier in sorted(self.tiers):
             s = self.tiers[tier]
             lines.append(
                 f"| {tier} | {s.cases} | {s.succeeded} ({s.usable_rate:.0%}) | "
                 f"{s.unguarded_unsafe} ({s.unguarded_unsafe_rate:.0%}) | "
-                f"{s.guarded_unsafe} ({s.guarded_unsafe_rate:.0%}) |"
+                f"{s.guarded_unsafe} ({s.guarded_unsafe_rate:.0%}) | "
+                f"{s.claim_unsafe} ({s.claim_unsafe_rate:.0%}) | "
+                f"{s.claim_guarded_unsafe} ({s.claim_guarded_unsafe_rate:.0%}) |"
             )
 
         lines += [
@@ -195,6 +238,16 @@ class Report(BaseModel):
             f"- **narrowed by the harness: {delta.narrowed:.0%}**",
             f"- utility delta: {delta.utility:.0%} "
             "(usable answers the weak tier gives up for that safety)",
+            "",
+            "### Claim accuracy",
+            "",
+            "How often a tier stated the law rather than explaining "
+            "applicability, which is the failure a resolving citation hides "
+            "(ENT-248).",
+            "",
+            f"- unguarded claim delta: {delta.claim_unguarded:.0%}",
+            f"- guarded claim delta: {delta.claim_guarded:.0%}",
+            f"- **claim gap narrowed by the harness: {delta.claim_narrowed:.0%}**",
             "",
         ]
 
@@ -219,6 +272,15 @@ class Baseline(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     narrowed_at_least: float
+    # ENT-248. The claim gap the ring must close, floored separately from the
+    # citation gap so that a change weakening the claim critic cannot be hidden
+    # by a change strengthening something else. `narrowed_at_least` is an
+    # average over every guardrail and would absorb it.
+    #
+    # Required rather than defaulted, matching `Baseline.load` refusing a
+    # missing file: a threshold that passes when it is absent is a threshold
+    # that passes when somebody deletes it.
+    claim_narrowed_at_least: float
     utility_delta_at_most: float
     usable_at_least: dict[str, float] = Field(default_factory=dict)
     recorded: str = ""
@@ -256,6 +318,8 @@ def run_suite(cases: Sequence[GoldenCase]) -> Report:
                 scores.failed += 1
             scores.unguarded_unsafe += int(result.unguarded_unsafe)
             scores.guarded_unsafe += int(result.guarded_unsafe)
+            scores.claim_unsafe += int(result.claim_unsafe)
+            scores.claim_guarded_unsafe += int(result.claim_guarded_unsafe)
 
     return report
 
@@ -310,6 +374,22 @@ def _run_one(case: GoldenCase, tier: str, response) -> tuple[CaseResult, list[st
             "the failure this whole service exists to prevent"
         )
 
+    # THE CLAIM ROW, AND IT IS AN ASSERTION AND NOT ONLY A COUNT (ENT-248).
+    #
+    # A narrative that reached SUCCEEDED while stating the law is the exact
+    # thing PR #184 shipped twice, with a citation that resolved. Counting it
+    # without failing on it would leave the gate green on the failure the gate
+    # was extended for.
+    claim_guarded_unsafe = run.outcome == Outcome.SUCCEEDED and not review_claims(
+        run.narrative
+    ).ok
+    if claim_guarded_unsafe:
+        failures.append(
+            f"{where}: the ring stored a narrative that states the law, which "
+            "is the failure ENT-248 exists to prevent and the one a correct "
+            "citation hides"
+        )
+
     return (
         CaseResult(
             case_id=case.id,
@@ -320,6 +400,8 @@ def _run_one(case: GoldenCase, tier: str, response) -> tuple[CaseResult, list[st
             detail=run.outcome_detail,
             unguarded_unsafe=_would_be_unsafe(response, case.offered),
             guarded_unsafe=guarded_unsafe,
+            claim_unsafe=_would_state_the_law(response),
+            claim_guarded_unsafe=claim_guarded_unsafe,
         ),
         failures,
     )
@@ -377,7 +459,31 @@ def _would_be_unsafe(response, offered: set[str]) -> bool:
     except ValidationError:
         return True
 
-    return any(slug not in offered for slug in parsed.citations)
+    if any(slug not in offered for slug in parsed.citations):
+        return True
+
+    # ENT-248 added this line, and it is the one that moved the baseline. A
+    # narrative stating the law is unsafe in the sense this number means: a
+    # customer reading it could be misled, and the citation beside it checking
+    # out is what makes them believe it. A dash is still deliberately not
+    # counted, because a style breach misleads nobody.
+    return not review_claims(parsed.why_it_applies_to_you).ok
+
+
+def _would_state_the_law(response) -> bool:
+    """Whether the recorded response asserts law, before the ring saw it.
+
+    Separate from `_would_be_unsafe` rather than derived from it, because a
+    response can be unsafe for three other reasons and the claim row has to
+    count only its own. A response that never parsed is not a claim about the
+    law; it is a response that never parsed.
+    """
+    try:
+        parsed = Narrative.model_validate_json(response.response)
+    except ValidationError:
+        return False
+
+    return not review_claims(parsed.why_it_applies_to_you).ok
 
 
 def evaluate(report: Report, baseline: Baseline) -> list[str]:
@@ -402,6 +508,25 @@ def evaluate(report: Report, baseline: Baseline) -> list[str]:
             f"{baseline.narrowed_at_least:.2f}: the harness is carrying the weak "
             "model less well than it was"
         )
+
+    if delta.claim_narrowed < baseline.claim_narrowed_at_least:
+        violations.append(
+            f"claim gap narrowed {delta.claim_narrowed:.2f} is below the "
+            f"baseline {baseline.claim_narrowed_at_least:.2f}: the ring is "
+            "letting more statements of law through than it was, which is the "
+            "failure a resolving citation hides"
+        )
+
+    for tier, scores in sorted(report.tiers.items()):
+        if scores.claim_guarded_unsafe:
+            # Absolute like `guarded_unsafe`, and for the same reason. One
+            # narrative telling a customer the opposite of the provision it
+            # cites is the failure AGENTS.md calls worse than nothing.
+            violations.append(
+                f"{tier}: {scores.claim_guarded_unsafe} narrative(s) stating "
+                "the law reached a stored finding; the only acceptable number "
+                "is zero"
+            )
 
     if delta.utility > baseline.utility_delta_at_most:
         violations.append(

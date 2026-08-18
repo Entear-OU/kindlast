@@ -25,6 +25,8 @@ from kindlast_intelligence.harness.citations import (
     ObligationLookup,
 )
 from kindlast_intelligence.harness.model import Completion
+from kindlast_intelligence.harness.claims import review_claims
+from kindlast_intelligence.harness.critics import CriticResult
 from kindlast_intelligence.harness.prose import review_prose
 from kindlast_intelligence.harness.run import Outcome, draft_narrative
 from kindlast_intelligence.skills import analyst
@@ -87,7 +89,9 @@ class FakeModel:
 
 def a_good_answer(citations=("gdpr-art-30-ropa",)):
     return {
-        "narrative": "You process staff personal data, so Article 30 applies and you need a written record of it.",
+        "why_it_applies_to_you": "You process staff personal data and hold it "
+        "in a payroll system, so you need a written record of what you keep, "
+        "why, and who else sees it.",
         "citations": list(citations),
         "confident": True,
     }
@@ -315,7 +319,7 @@ def test_an_empty_narrative_is_refused():
     run = draft_narrative(
         signal="x",
         obligations=OBLIGATIONS,
-        model=FakeModel({"narrative": "   ", "citations": [], "confident": False}),
+        model=FakeModel({"why_it_applies_to_you": "   ", "citations": [], "confident": False}),
         validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
         model_name="m",
         model_version="1",
@@ -336,7 +340,15 @@ def test_the_prompt_describes_the_schema_in_words():
     Deleting the description from the system prompt would break no shape test,
     which is exactly why this asserts on the prompt instead.
     """
-    for field_name in ("narrative", "citations", "confident"):
+    fields = analyst.output_schema()["properties"]
+    assert fields, "the schema has no fields, so this test asserts nothing"
+
+    # Read off the schema rather than written out here, so renaming a field
+    # cannot leave this test green while checking a name nothing produces. That
+    # is what happened when `narrative` became `why_it_applies_to_you`
+    # (ENT-248): a hand-written list would have kept passing against the old
+    # name until somebody noticed.
+    for field_name in fields:
         assert field_name in analyst.SYSTEM_PROMPT, (
             f"{field_name} is in the output schema but not described in the "
             "prompt; the schema is not injected, so the model would be "
@@ -412,7 +424,7 @@ def test_an_em_dash_is_refused_even_though_the_prompt_already_asked():
     )
 
     disobedient = {
-        "narrative": "You keep candidate CVs for two years — so you need a "
+        "why_it_applies_to_you": "You keep candidate CVs for two years — so you need a "
         "written record of that processing.",
         "citations": ["gdpr-art-30-ropa"],
         "confident": True,
@@ -444,7 +456,7 @@ def test_an_en_dash_is_refused_too():
         obligations=OBLIGATIONS,
         model=FakeModel(
             {
-                "narrative": "Expect this to take 2–4 hours of work.",
+                "why_it_applies_to_you": "Expect this to take 2–4 hours of work.",
                 "citations": ["gdpr-art-30-ropa"],
                 "confident": True,
             }
@@ -472,7 +484,7 @@ def test_a_hyphen_is_not_a_dash():
         obligations=OBLIGATIONS,
         model=FakeModel(
             {
-                "narrative": "Write a plain-language record of this processing, "
+                "why_it_applies_to_you": "Write a plain-language record of this processing, "
                 "which is 2-4 hours of work for a 40-person firm.",
                 "citations": ["gdpr-art-30-ropa"],
                 "confident": True,
@@ -499,7 +511,7 @@ def test_the_detail_says_where_the_dash_was():
         obligations=OBLIGATIONS,
         model=FakeModel(
             {
-                "narrative": "Your bookkeeping product is a recipient — and "
+                "why_it_applies_to_you": "Your bookkeeping product is a recipient — and "
                 "belongs in the record.",
                 "citations": ["gdpr-art-30-ropa"],
                 "confident": True,
@@ -530,7 +542,7 @@ def test_a_fabricated_citation_outranks_a_dash_in_the_refusal():
         obligations=OBLIGATIONS,
         model=FakeModel(
             {
-                "narrative": "Article 99 applies — so you must act.",
+                "why_it_applies_to_you": "Article 99 applies — so you must act.",
                 "citations": ["gdpr-art-99-invented"],
                 "confident": True,
             }
@@ -554,7 +566,7 @@ def test_every_dash_is_reported_rather_than_only_the_first():
     result = review_prose("One — two — three – four.")
 
     assert not result.ok
-    assert [f.name for f in result.found] == [
+    assert [b.pattern for b in result.breaches] == [
         "em dash (U+2014)",
         "em dash (U+2014)",
         "en dash (U+2013)",
@@ -566,3 +578,259 @@ def test_clean_prose_passes_the_critic():
 
     assert result.ok
     assert result.detail == ""
+
+
+# --- The claim critic, which is the failure a resolving citation hides ------
+#
+# ENT-248. Two narrations of one seeded Article 30 finding on the 2B tier came
+# back SUCCEEDED, cited `gdpr-art-30-ropa`, which was correct and the only
+# obligation offered, and stated the law wrongly beside it. The citation
+# validator passed both, correctly. Nothing validated the claim.
+#
+# The fixtures below are those two narratives. The first is verbatim from the
+# `narrative` column on the running stack; only the sentence recorded in
+# ENT-247 survives of the second.
+
+
+def test_the_live_narrative_that_reversed_article_30_5_is_refused():
+    """The observed failure, replayed through the real run.
+
+    Article 30(5) exempts organisations under 250 employees subject to three
+    conditions, and the corpus summary handed to that run said so in as many
+    words. The model asserted the opposite of the provision it cited, and every
+    guardrail in the ring passed it.
+    """
+    run = draft_narrative(
+        signal="No record of processing activities",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "why_it_applies_to_you": "The organisation is currently unable to "
+                "provide a written record of processing activities because they do "
+                "not have any existing records at all. This is a high severity "
+                "issue because the obligation to keep such records applies to every "
+                "controller and processor, regardless of how small the company is. "
+                "The context does not mention any exemptions or exceptions that "
+                "might apply to this specific situation.",
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.REFUSED
+    assert run.narrative == "", "a refused narrative must not reach a customer"
+    assert run.refused_by == "legal_claim"
+    assert "a claim about who the law applies to" in run.refused_patterns
+
+
+def test_the_other_live_narrative_reasoned_into_an_exemption_and_is_refused():
+    """The first of the two runs, which failed differently.
+
+    Whether a controller keeps a record does not determine its headcount, so
+    this is a non sequitur before it is a false statement of law. No lexical
+    check can see the non sequitur. What one can see is that the model reasoned
+    about an exemption at all, which is the corpus's to explain.
+    """
+    run = draft_narrative(
+        signal="No record of processing activities",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "why_it_applies_to_you": "Because this is true, it cannot claim the "
+                "exemption that applies to organisations with fewer than 250 "
+                "employees.",
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.REFUSED
+    assert "a claim about an exemption or a threshold" in run.refused_patterns
+
+
+def test_writing_about_this_organisation_passes():
+    """The other direction, and the one that decides whether this critic
+    survives contact with production.
+
+    A critic refusing most correct narratives is a critic somebody switches
+    off. Second person, an instruction to this organisation, its headcount, its
+    retention period and a hyphenated compound all have to pass, because they
+    are what a good answer is made of. "You must" is deliberately allowed where
+    "controllers must" is not: the subject is the whole distinction.
+    """
+    good = (
+        "You keep candidate CVs for two years and store interview notes in a "
+        "shared drive, so you must write down what a 40-person agency holds, "
+        "why it holds it and who else sees it. That is 2-4 hours of "
+        "plain-language work and most of it is the list."
+    )
+
+    run = draft_narrative(
+        signal="We are a 40 person recruitment agency.",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "why_it_applies_to_you": good,
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.SUCCEEDED
+    assert run.narrative == good
+
+
+def test_a_true_statement_of_law_is_refused_as_well():
+    """Said out loud, because it looks like a bug and is the design.
+
+    The critic cannot tell a true statement of law from a false one, and does
+    not try. It does not need to: the product does not want the model stating
+    the law at all, correctly or otherwise, because the corpus row already does
+    that in text a person wrote and the renderer shows it beside this one.
+
+    A critic that judged truth would be a second model, which ENT-248 rules out
+    as a control for the reason DeepEval and Ragas were kept out of the gate at
+    ENT-229: a probabilistic check on a probabilistic output is a second
+    opinion rather than a control.
+    """
+    result = review_claims(
+        "Article 30(5) exempts organisations with fewer than 250 employees, "
+        "subject to three conditions."
+    )
+
+    assert not result.ok
+    assert {b.pattern for b in result.breaches} == {
+        "a provision reference",
+        "a claim about an exemption or a threshold",
+    }
+
+
+def test_the_record_keeps_the_rejected_text_and_the_rule_that_rejected_it():
+    """ENT-248 asks for both halves, and for them to live in different places.
+
+    `outcome_detail` is the short reason, and it is what the finding page prints
+    under a heading saying the draft was refused. Folding the whole rejected
+    text into it would print a false statement of law on the page that exists to
+    say the draft was refused, which is that sentence reaching the customer by
+    a different door. So the text is its own field, bound for `agent_runs`.
+    """
+    bad = (
+        "Every controller must keep a record of processing activities, no "
+        "matter how few people it employs."
+    )
+
+    run = draft_narrative(
+        signal="x",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "why_it_applies_to_you": bad,
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.rejected_text == bad
+    assert run.refused_by == "legal_claim"
+    assert run.refused_patterns, "a refusal with no named rule is not a record"
+    assert bad not in run.outcome_detail, (
+        "the whole rejected text must not travel in the detail the feed shows, "
+        "or a refused claim is printed under the heading explaining that it "
+        "was refused"
+    )
+    assert json.loads(run.refusal_json())["patterns"] == run.refused_patterns
+
+
+def test_a_claim_outranks_a_dash_in_the_refusal():
+    """Both wrong, and the record has to name the more serious one.
+
+    A narrative that states the law AND uses an em dash is refused for the
+    statement of law. Reporting the typography would send somebody to fix the
+    punctuation of a sentence that should not have existed.
+    """
+    run = draft_narrative(
+        signal="x",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "why_it_applies_to_you": "The GDPR requires a record — always.",
+                "citations": ["gdpr-art-30-ropa"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.REFUSED
+    assert run.refused_by == "legal_claim"
+    assert "em dash" not in run.outcome_detail
+
+
+def test_a_fabricated_citation_outranks_a_claim():
+    """The ordering that was already there, extended rather than replaced.
+
+    `AGENTS.md` calls a fabricated citation worse than nothing, so it stays at
+    the front of the queue. A run that invents a slug and states the law is
+    refused for the slug.
+    """
+    run = draft_narrative(
+        signal="x",
+        obligations=OBLIGATIONS,
+        model=FakeModel(
+            {
+                "why_it_applies_to_you": "Every controller must do this.",
+                "citations": ["gdpr-art-99-invented"],
+                "confident": True,
+            }
+        ),
+        validator=CitationValidator(Corpus("gdpr-art-30-ropa")),
+        model_name="m",
+        model_version="1",
+    )
+
+    assert run.outcome == Outcome.REFUSED
+    assert "did not resolve" in run.outcome_detail
+    assert run.refused_by == "", (
+        "no critic refused this, so recording one would make the pattern "
+        "counts in agent_runs mean nothing"
+    )
+
+
+def test_both_critics_are_on_one_seam():
+    """ENT-248 makes this an acceptance criterion rather than a preference.
+
+    Two hand-written call sites is how the second critic ends up with its own
+    excerpt window, its own truncation rule and its own idea of what a refusal
+    reads like, and a customer reading two refusals finds them written by two
+    different products.
+    """
+    from kindlast_intelligence.harness import run as run_module
+
+    names = [critic.name for critic in run_module.CRITICS]
+
+    assert names == ["legal_claim", "house_style"], (
+        "the order is how badly a customer is served by what each one catches"
+    )
+    for critic in run_module.CRITICS:
+        result = critic.review("A plain sentence about your payroll system.")
+        assert isinstance(result, CriticResult)
+        assert result.critic == critic.name
+        assert result.ok

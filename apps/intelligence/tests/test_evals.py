@@ -165,13 +165,40 @@ def test_the_gate_fails_when_the_house_style_critic_stops_firing(golden, monkeyp
     critic as redundant with the prompt.
     """
     from kindlast_intelligence.harness import run as run_module
-    from kindlast_intelligence.harness.prose import ProseResult
+    from kindlast_intelligence.harness.claims import ClaimCritic
 
-    monkeypatch.setattr(run_module, "review_prose", lambda text: ProseResult())
+    # The claim critic is left in place and the prose critic taken out, rather
+    # than emptying the whole tuple. Disabling both at once would leave this
+    # test unable to say which one the gate noticed, and "a critic stopped
+    # firing" is a weaker claim than "the house-style critic stopped firing".
+    monkeypatch.setattr(run_module, "CRITICS", (ClaimCritic(),))
 
     report = run_suite(golden)
 
     assert any("house_style" in failure for failure in report.failures)
+
+
+def test_the_gate_fails_when_the_claim_critic_stops_firing(golden, monkeypatch):
+    """ENT-248, and the reason a prompt line is not the control.
+
+    Both fixtures in `claims.json` are what the 2B tier actually said on the
+    running stack, beside a citation that resolved. With the critic removed the
+    system prompt's "do not state the law" survives and the weak tier's false
+    statement of Article 30(5) sails straight through it into a stored finding,
+    which is the state PR #184 shipped.
+
+    A test that cannot fail is worse than none, so this is the proof the critic
+    is connected: take it out of the ring and the gate goes red on the cases
+    that name it.
+    """
+    from kindlast_intelligence.harness import run as run_module
+    from kindlast_intelligence.harness.prose import ProseCritic
+
+    monkeypatch.setattr(run_module, "CRITICS", (ProseCritic(),))
+
+    report = run_suite(golden)
+
+    assert any("claim_critic" in failure for failure in report.failures)
 
 
 def test_the_gate_fails_when_customer_text_reaches_the_system_prompt(
@@ -250,7 +277,10 @@ def test_a_change_that_only_helps_the_strong_tier_violates_the_baseline():
         }
     )
     baseline = Baseline(
-        narrowed_at_least=0.0, utility_delta_at_most=0.3, usable_at_least={}
+        narrowed_at_least=0.0,
+        claim_narrowed_at_least=0.0,
+        utility_delta_at_most=0.3,
+        usable_at_least={},
     )
 
     violations = evaluate(report, baseline)
@@ -266,7 +296,10 @@ def test_a_harness_that_stops_carrying_the_weak_model_violates_the_baseline():
         }
     )
     baseline = Baseline(
-        narrowed_at_least=0.4, utility_delta_at_most=1.0, usable_at_least={}
+        narrowed_at_least=0.4,
+        claim_narrowed_at_least=0.0,
+        utility_delta_at_most=1.0,
+        usable_at_least={},
     )
 
     violations = evaluate(report, baseline)
