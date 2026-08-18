@@ -343,6 +343,13 @@ func validateObligations(obligations []Obligation) []error {
 		}
 		problems = append(problems, checkDate(where, "effective date", o.EffectiveDate, false)...)
 		problems = append(problems, o.Citation.validate(where)...)
+
+		// Applicability is checked here for the same reason the citation is: an
+		// obligation the Watcher cannot act on is not a smaller problem than one
+		// that cites an article nobody stored. `applieswhen.go` has the long
+		// version, and the short one is that an unrecognised gap token counts as
+		// satisfied, so the obligation is ingested and then never fires.
+		problems = append(problems, validateAppliesWhen(where, o.AppliesWhenJSON)...)
 	}
 
 	return problems
