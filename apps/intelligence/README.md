@@ -123,6 +123,27 @@ It captures responses and deliberately does not touch the expectations. A
 recorder that rewrote the expected outcome to match what just happened would
 turn every regression into a fixture update.
 
+## House style is enforced, not requested (ENT-163)
+
+`AGENTS.md` forbids em dashes and en dashes in anything a customer reads.
+ENT-160 added a line to the Analyst's system prompt asking the model not to use
+them, and narratives kept arriving with them, which is the entire lesson: a
+prompt is a request, and `AGENTS.md` is explicit that the model may ask while
+only code refuses.
+
+So `harness/prose.py` scans the drafted narrative for U+2014 and U+2013 and
+refuses the run when it finds one, naming the character, its position and the
+words around it so the record says something a person can act on. The prompt
+still asks, because a model that complies costs nothing to run; the difference
+is that compliance is now checked rather than hoped for.
+
+Two deliberate limits. The hyphen-minus is not touched, since the rule allows
+`plain-language` and `2-4 hours`, and a critic that refused those would refuse
+most correct narratives and would be switched off within a week. And it refuses
+rather than rewriting: a substituted character would be an edit to a claim about
+the law made by no author, and it would make a weak model score in the golden set
+as a compliant one.
+
 ## Throughput is a guardrail too
 
 The ring counts tokens, model calls, tool calls and recursion, which are cost

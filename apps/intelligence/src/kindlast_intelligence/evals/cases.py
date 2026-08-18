@@ -67,6 +67,12 @@ GUARDRAILS: tuple[str, ...] = (
     "wall_clock",
     # Instructions hidden in the text an organisation typed about itself.
     "prompt_injection",
+    # An em dash or en dash in the narrative, which the system prompt has asked
+    # against since ENT-160 and models kept producing anyway (ENT-163). The
+    # case is here rather than only in the unit suite because the interesting
+    # property is a tier one: asking works often enough on a strong model to
+    # look like a control and not often enough on a weak one to be one.
+    "house_style",
 )
 
 
