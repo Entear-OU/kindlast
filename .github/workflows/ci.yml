@@ -188,6 +188,93 @@ jobs:
         run: uv run pytest -q
         working-directory: apps/intelligence
 
+  intelligence-e2e:
+    name: Intelligence end to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same digest-as-key cache as the `model` job above, and the same 2b
+      # tier, so the two jobs share the restore rather than each paying for a
+      # download. The comment there explains why the digest is the key.
+      - name: Restore the model
+        uses: actions/cache@v4
+        with:
+          path: deploy/models
+          key: gguf-aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
+
+      # THE WHOLE STACK, because the thing under test is what only appears when
+      # these are separate processes on a real network. Every one of the five
+      # failures ENT-218 hit at this step passed the unit suite first: the
+      # split horizon applying to three URLs rather than one, Zitadel routing
+      # by Host, a name collision with `model-init`'s digest. None is reachable
+      # in-process, and none would have been caught by a job that mocked the
+      # neighbours.
+      - name: Start the stack with the model profile
+        run: docker compose -f deploy/compose.yaml --profile model up -d
+        env:
+          KINDLAST_MODEL_TIER: 2b
+          KINDLAST_MODEL_CTX: "4096"
+          KINDLAST_MODEL_NAME: Qwen3.5-2B-Q4_K_M
+          KINDLAST_MODEL_VERSION: aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
+
+      - name: Wait for the seed job to finish
+        run: |
+          for _ in $(seq 1 90); do
+            status="$(docker inspect kindlast-seed --format '{{.State.Status}}' 2>/dev/null || echo missing)"
+            if [ "$status" = "exited" ]; then
+              exit_code="$(docker inspect kindlast-seed --format '{{.State.ExitCode}}')"
+              echo "seed exited with ${exit_code}"
+              exit "$exit_code"
+            fi
+            sleep 2
+          done
+          echo "seed job did not finish in time"
+          exit 1
+
+      # `up -d` returns once containers are started, not once llama.cpp has the
+      # weights loaded, and intelligence answers before the model behind it
+      # can. Waiting on both is waiting on a stack that can actually serve a
+      # request.
+      - name: Wait for the model and the service
+        run: |
+          for _ in $(seq 1 120); do
+            if curl -fsS -m 3 http://localhost:8081/health >/dev/null 2>&1; then
+              echo "model healthy"; break
+            fi
+            sleep 5
+          done
+          for _ in $(seq 1 60); do
+            if docker logs kindlast-intelligence 2>&1 | grep -q "intelligence listening"; then
+              echo "intelligence listening"; exit 0
+            fi
+            sleep 2
+          done
+          echo "intelligence never started listening" >&2
+          docker compose -f deploy/compose.yaml logs intelligence model || true
+          exit 1
+
+      # ENT-218's last acceptance criterion. It asserts the harness worked and
+      # deliberately not that the run succeeded: on a 2B a refused citation is
+      # the guardrail doing its job, and a gate demanding SUCCEEDED would go red
+      # for the one reason it should stay green. The script's docstring carries
+      # the full argument.
+      #
+      # THIS JOB MUST FAIL RATHER THAN SKIP. There is no reachability check to
+      # fall back on: if the stack is not up, the steps above have already
+      # failed, which is the property `test:db`'s self-skip costs on a laptop
+      # and CI must not repeat.
+      - name: Draft a narrative end to end
+        run: python3 scripts/intelligence-smoke.py
+
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose.yaml --profile model logs --tail 100
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f deploy/compose.yaml --profile model down -v
+
   go:
     name: Proto codegen & Go tests
     runs-on: ubuntu-latest
