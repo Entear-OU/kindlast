@@ -152,6 +152,18 @@ message RecordAgentRunRequest {
   // Empty for a scheduled sweep, which runs for the organisation and for
   // nobody in particular. Setting it there would be a lie that later reads as
   // "this person asked for this".
+  //
+  // NOT BELIEVED ON ITS OWN (ENT-230). Until this field was checked, a caller
+  // holding `internal:intelligence` could name anybody here and the record
+  // would say a person asked for a run they had never heard of, in their own
+  // organisation's compliance record. So a run that names a person must also
+  // present the delegation below, and the two must agree; a run that presents
+  // no delegation must leave this empty.
+  //
+  // Kept as a field rather than derived silently from the delegation, because
+  // an agreement that is checked is worth more than a value that is inferred:
+  // a caller sending the wrong pair finds out, where a caller whose field was
+  // quietly overwritten does not.
   string on_behalf_of_user_id = 6;
 
   // The input the run was given, as JSON. Not the assembled prompt: that
@@ -184,6 +196,30 @@ message RecordAgentRunRequest {
   google.protobuf.Timestamp queued_at = 13;
   google.protobuf.Timestamp started_at = 14;
   google.protobuf.Timestamp finished_at = 15;
+
+  // The delegation this run was given, when it ran for a person (ENT-230,
+  // §26.3).
+  //
+  // # EVIDENCE HERE, AUTHORITY EVERYWHERE ELSE
+  //
+  // On the core surface a delegation is presented in the `Kindlast-Delegation`
+  // header and the request then runs AS the person: their scopes, their
+  // tenancy, their audit row. This is the one place it appears in a message,
+  // and it does the opposite job. Recording a run is something the machine does
+  // as itself, on a scope no person holds; the delegation is here so core-api
+  // can check that the person named above really did authorise this run, rather
+  // than taking the caller's word for it.
+  //
+  // Empty for a scheduled sweep, which runs for nobody in particular and has no
+  // delegation to present.
+  //
+  // # WHY IT DOES NOT ALSO BECOME THE ORGANISATION
+  //
+  // `org_id` above still has to be sent and must MATCH the delegation's. A
+  // delegation is single-org, so a run recorded against a different tenant than
+  // the one the person authorised is a caller bug, and the mismatch is worth
+  // refusing rather than silently correcting.
+  string delegation = 16;
 }
 
 enum AgentRunOutcome {

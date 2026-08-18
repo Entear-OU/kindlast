@@ -104,9 +104,31 @@ type DraftNarrativeRequest struct {
 	Obligations []*ObligationContext `protobuf:"bytes,3,rep,name=obligations,proto3" json:"obligations,omitempty"`
 	// The person this was drafted for, when there was one. Empty for a scheduled
 	// sweep, which runs for the organisation and for nobody in particular.
+	//
+	// FOR THE HARNESS TO READ, NEVER FOR CORE-API TO BELIEVE (ENT-230). What
+	// ends up in the run record is resolved from the delegation below, not from
+	// this, because a value that travels through a second service and comes back
+	// is a value that service could have changed.
 	OnBehalfOfUserId string `protobuf:"bytes,4,opt,name=on_behalf_of_user_id,json=onBehalfOfUserId,proto3" json:"on_behalf_of_user_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// The delegation this run may act under (ENT-230, §26.3).
+	//
+	// Minted by core-api while it was serving the person's own request, short
+	// lived, single-org, single-user and revocable. Intelligence cannot make one,
+	// cannot read what is inside it, and cannot widen it: all it can do is hand
+	// it back, which is the property that keeps a machine principal from being
+	// able to act as anybody it names.
+	//
+	// Two things it is for. A skill whose tools reach core-api presents it in the
+	// `Kindlast-Delegation` header, and those calls then run as the person, bound
+	// by exactly what that person could do at the keyboard. And it travels back
+	// on `IngestService.RecordAgentRun`, where core-api resolves it to decide who
+	// the run is recorded as having been for.
+	//
+	// Empty for a scheduled sweep. A skill given no delegation has no tools that
+	// reach a tenant's data, which is the Analyst today: it declares none.
+	Delegation    string `protobuf:"bytes,5,opt,name=delegation,proto3" json:"delegation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DraftNarrativeRequest) Reset() {
@@ -163,6 +185,13 @@ func (x *DraftNarrativeRequest) GetObligations() []*ObligationContext {
 func (x *DraftNarrativeRequest) GetOnBehalfOfUserId() string {
 	if x != nil {
 		return x.OnBehalfOfUserId
+	}
+	return ""
+}
+
+func (x *DraftNarrativeRequest) GetDelegation() string {
+	if x != nil {
+		return x.Delegation
 	}
 	return ""
 }
@@ -394,12 +423,15 @@ var File_kindlast_platform_v1_intelligence_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\n" +
-	"'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xc1\x01\n" +
+	"'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xe1\x01\n" +
 	"\x15DraftNarrativeRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x16\n" +
 	"\x06signal\x18\x02 \x01(\tR\x06signal\x12I\n" +
 	"\vobligations\x18\x03 \x03(\v2'.kindlast.platform.v1.ObligationContextR\vobligations\x12.\n" +
-	"\x14on_behalf_of_user_id\x18\x04 \x01(\tR\x10onBehalfOfUserId\"W\n" +
+	"\x14on_behalf_of_user_id\x18\x04 \x01(\tR\x10onBehalfOfUserId\x12\x1e\n" +
+	"\n" +
+	"delegation\x18\x05 \x01(\tR\n" +
+	"delegation\"W\n" +
 	"\x11ObligationContext\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +

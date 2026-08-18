@@ -24,6 +24,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/dispatch"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
@@ -244,7 +245,11 @@ func run(logger *slog.Logger) error {
 		Verifier: verifier,
 		DenyList: revocations,
 		Tenants:  tenantOpener{store},
-		Profiles: identity.NewUserInfo(provider.UserInfoURI, transport),
+		// The same pool, on the application role. Resolution goes through a
+		// SECURITY DEFINER function because the caller presenting a delegation
+		// has no session yet, which is the whole reason there is one (00021).
+		Delegations: store,
+		Profiles:    identity.NewUserInfo(provider.UserInfoURI, transport),
 		Ready: func(ctx context.Context) error {
 			return store.Ping(ctx)
 		},
@@ -433,6 +438,24 @@ type tenantOpener struct{ store *postgres.Store }
 
 func (o tenantOpener) BeginTenant(ctx context.Context, subject, orgID string) (interceptor.Tenant, error) {
 	tenant, err := o.store.BeginTenant(ctx, subject, orgID)
+	if err != nil {
+		if errors.Is(err, postgres.ErrNotAMember) {
+			return nil, interceptor.ErrNotAMember
+		}
+		return nil, err
+	}
+	return tenant, nil
+}
+
+// BeginDelegatedTenant is the same adaptation for an agent acting for a person
+// (ENT-230). The membership refusal maps to the same error, because from the
+// caller's side there is no difference worth telling them: a delegation for
+// somebody who has since been removed and a delegation for an organisation they
+// were never in are both "you may not act here".
+func (o tenantOpener) BeginDelegatedTenant(
+	ctx context.Context, grant delegation.Grant,
+) (interceptor.Tenant, error) {
+	tenant, err := o.store.BeginDelegatedTenant(ctx, grant)
 	if err != nil {
 		if errors.Is(err, postgres.ErrNotAMember) {
 			return nil, interceptor.ErrNotAMember

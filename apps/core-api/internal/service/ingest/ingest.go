@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	domain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
 )
@@ -56,22 +57,37 @@ type RunRecorder interface {
 	RecordAgentRun(ctx context.Context, run postgres.AgentRun) (uuid.UUID, error)
 }
 
-// Service implements platformv1connect.IngestServiceHandler.
-type Service struct {
-	store  Writer
-	runs   RunRecorder
-	logger *slog.Logger
-	now    func() time.Time
+// Delegations resolves the delegation a run presents as evidence that a person
+// asked for it (ENT-230).
+//
+// A third dependency rather than a method on either of the two above, for the
+// same reason those are separate: it runs on the application pool, which is
+// neither the corpus role nor the agent role. It is also the only one of the
+// three that is not a write.
+type Delegations interface {
+	ResolveDelegation(ctx context.Context, token string) (delegation.Grant, error)
 }
 
-func New(store Writer, runs RunRecorder, logger *slog.Logger) *Service {
+// Service implements platformv1connect.IngestServiceHandler.
+type Service struct {
+	store       Writer
+	runs        RunRecorder
+	delegations Delegations
+	logger      *slog.Logger
+	now         func() time.Time
+}
+
+func New(store Writer, runs RunRecorder, delegations Delegations, logger *slog.Logger) *Service {
 	if logger == nil {
 		// A discarding logger rather than a nil dereference. This handler's
 		// caller is a schedule, so the one place it must not fail is while
 		// reporting that something else failed.
 		logger = slog.New(slog.DiscardHandler)
 	}
-	return &Service{store: store, runs: runs, logger: logger, now: time.Now}
+	return &Service{
+		store: store, runs: runs, delegations: delegations,
+		logger: logger, now: time.Now,
+	}
 }
 
 func (s *Service) IngestCorpus(
@@ -337,14 +353,9 @@ func (s *Service) RecordAgentRun(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	var onBehalfOf *uuid.UUID
-	if raw := msg.GetOnBehalfOfUserId(); raw != "" {
-		parsed, parseErr := uuid.Parse(raw)
-		if parseErr != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("on_behalf_of_user_id is not a uuid: %w", parseErr))
-		}
-		onBehalfOf = &parsed
+	onBehalfOf, err := s.personFor(ctx, msg, orgID)
+	if err != nil {
+		return nil, err
 	}
 
 	// All three timestamps are required. Defaulting a missing one to now()
@@ -390,6 +401,87 @@ func (s *Service) RecordAgentRun(
 		"model", msg.GetModel(), "outcome", outcome)
 
 	return connect.NewResponse(&platformv1.RecordAgentRunResponse{Id: id.String()}), nil
+}
+
+// personFor decides who a run is recorded as having been for (ENT-230).
+//
+// # THE FIELD ALONE IS NOT EVIDENCE, AND USED TO BE TREATED AS THOUGH IT WERE
+//
+// `on_behalf_of_user_id` arrived with ENT-218 and was written straight to the
+// column. That made the run record say "Ada asked for this" on the word of a
+// caller holding `internal:intelligence`, which is a machine principal: nothing
+// stopped it naming a person who had never heard of the run, in that person's
+// own organisation's compliance record. The record is the thing a customer
+// reads to decide whether to trust a finding, so a lie in it is worse than an
+// absence.
+//
+// So a run that names a person must present the delegation that person's own
+// session minted, and the two must agree. A run that presents none must name
+// nobody, which is exactly what a scheduled sweep does.
+//
+// # WHY THE ORGANISATION IS CHECKED TOO
+//
+// A delegation is single-org. Recording a run against a different tenant from
+// the one the person authorised would put a person's name on work in an
+// organisation they may not even belong to, so the mismatch is refused rather
+// than resolved in either direction.
+//
+// # AND WHY EVERY REFUSAL HERE IS PermissionDenied
+//
+// Not InvalidArgument, even though a mismatched pair is a caller bug. The
+// distinction between "your delegation expired", "your delegation is for
+// somebody else" and "there is no such delegation" is only useful to something
+// probing which delegations are live, and the caller has presented a credential
+// rather than proved a right to that difference.
+func (s *Service) personFor(
+	ctx context.Context, msg *platformv1.RecordAgentRunRequest, orgID uuid.UUID,
+) (*uuid.UUID, error) {
+	claimed := msg.GetOnBehalfOfUserId()
+	presented := msg.GetDelegation()
+
+	if presented == "" {
+		if claimed != "" {
+			return nil, connect.NewError(connect.CodePermissionDenied,
+				errors.New("a run recorded for a person must present that person's delegation"))
+		}
+		// The ordinary scheduled sweep: for the organisation, for nobody in
+		// particular.
+		return nil, nil
+	}
+
+	if s.delegations == nil {
+		// A deployment that cannot check a delegation refuses the run rather
+		// than recording it unchecked. The alternative writes exactly the row
+		// this function exists to prevent.
+		return nil, connect.NewError(connect.CodePermissionDenied,
+			errors.New("no usable delegation"))
+	}
+
+	grant, err := s.delegations.ResolveDelegation(ctx, presented)
+	if err != nil {
+		if errors.Is(err, delegation.ErrUnusable) {
+			return nil, connect.NewError(connect.CodePermissionDenied,
+				errors.New("no usable delegation"))
+		}
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("resolving the delegation: %w", err))
+	}
+
+	if grant.OrgID != orgID.String() {
+		return nil, connect.NewError(connect.CodePermissionDenied,
+			errors.New("no usable delegation"))
+	}
+	if claimed != "" && claimed != grant.UserID {
+		return nil, connect.NewError(connect.CodePermissionDenied,
+			errors.New("no usable delegation"))
+	}
+
+	person, err := uuid.Parse(grant.UserID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("the delegation names no user: %w", err))
+	}
+	return &person, nil
 }
 
 // toOutcome maps the enum to the column's check constraint.

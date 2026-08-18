@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"connectrpc.com/connect"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
 )
 
 // OrgHeader carries the organisation the caller is acting in.
@@ -66,6 +68,22 @@ type TenantOpener interface {
 	// which is what the console's first call does before it knows any
 	// organisation exists.
 	BeginTenant(ctx context.Context, subject, requestedOrgID string) (Tenant, error)
+
+	// BeginDelegatedTenant opens the same kind of transaction for a person a
+	// machine principal is acting for (ENT-230), with both GUCs set to THAT
+	// PERSON rather than to the caller.
+	//
+	// A method on this interface rather than a separate optional one, so a
+	// deployment cannot wire a tenant opener that quietly does not support
+	// delegation and discover it as a runtime refusal. There is one way to
+	// start a transaction with tenancy on it, and it has two entry points
+	// because there are two ways to learn whose transaction it is.
+	//
+	// The membership check is the same one BeginTenant runs, deliberately: a
+	// person removed from the organisation part way through a run has to be
+	// refused on the agent's next call, and the check that refuses them should
+	// be the one the rest of the system already depends on.
+	BeginDelegatedTenant(ctx context.Context, grant delegation.Grant) (Tenant, error)
 }
 
 // Tenancy resolves the active organisation, verifies membership, and sets the
@@ -88,7 +106,7 @@ func Tenancy(store TenantOpener) connect.UnaryInterceptorFunc {
 					errors.New("tenancy interceptor ran before authentication"))
 			}
 
-			tenant, err := store.BeginTenant(ctx, claims.Subject, req.Header().Get(OrgHeader))
+			tenant, err := open(ctx, store, claims.Subject, req.Header().Get(OrgHeader))
 			if err != nil {
 				if errors.Is(err, ErrNotAMember) {
 					// The same answer whether the organisation does not exist
@@ -117,4 +135,34 @@ func Tenancy(store TenantOpener) connect.UnaryInterceptorFunc {
 			return response, nil
 		}
 	}
+}
+
+// open starts the transaction, as the caller or as the person they are acting
+// for.
+//
+// # A DELEGATION IS SINGLE-ORG, AND THE HEADER DOES NOT GET A VOTE
+//
+// The organisation comes from the delegation, never from `Kindlast-Org-Id`.
+// That is the difference between a delegation and a session: a person switches
+// organisations by changing the header, and an agent must not, because the
+// header is set by whatever is driving the agent rather than by the person the
+// delegation names.
+//
+// A header naming a DIFFERENT organisation is refused rather than ignored.
+// Ignoring it would serve a caller rows from an organisation they did not ask
+// about, which is the shape of a tenancy bug even when the answer is correct;
+// and a caller that sends a mismatched header has misunderstood something worth
+// telling them about. A header naming the same one is fine, because a client
+// that sets it uniformly is not making a claim, and refusing that would make
+// the ordinary console client unusable as an agent driver.
+func open(ctx context.Context, store TenantOpener, subject, requestedOrgID string) (Tenant, error) {
+	grant, delegated := GrantFrom(ctx)
+	if !delegated {
+		return store.BeginTenant(ctx, subject, requestedOrgID)
+	}
+
+	if requestedOrgID != "" && requestedOrgID != grant.OrgID {
+		return nil, ErrNotAMember
+	}
+	return store.BeginDelegatedTenant(ctx, grant)
 }
