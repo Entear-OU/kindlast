@@ -53,13 +53,20 @@ type store interface {
 	Observations(ctx context.Context, pageSize int32, before time.Time) ([]domain.Observation, error)
 }
 
-// keys maps the wire enum onto the stored key.
+// Keys maps the wire enum onto the stored key.
 //
 // An explicit table rather than `strings.ToLower(enum.String())`, because a
 // derived mapping ties the database's contents to the enum's spelling: rename
 // the enum value for clarity and every stored row becomes unreadable, silently,
 // with no migration to notice.
-var keys = map[corev1.ProfileFactKey]string{
+//
+// EXPORTED FOR ONBOARDING (ENT-212), WHICH IS THE POINT RATHER THAN A
+// CONVENIENCE. Onboarding feeds this profile rather than a parallel one, so it
+// has to translate the same enum into the same stored keys. A second copy of
+// this table in that package would be a second place for the mapping to be
+// wrong, and the symptom would be onboarding answers landing under keys the
+// memory page cannot render.
+var Keys = map[corev1.ProfileFactKey]string{
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_INDUSTRY:              domain.KeyIndustry,
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_EU_JURISDICTIONS:      domain.KeyEUJurisdictions,
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_DATA_CATEGORIES:       domain.KeyDataCategories,
@@ -75,11 +82,12 @@ var keys = map[corev1.ProfileFactKey]string{
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM:    domain.KeyHighRiskAISystem,
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_LARGE_SCALE_MONITORING: domain.KeyLargeScaleMonitoring,
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_LAWFUL_BASES:           domain.KeyLawfulBases,
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_VENDOR_LIST:            domain.KeyVendorList,
 }
 
-var storedKeys = func() map[string]corev1.ProfileFactKey {
-	out := make(map[string]corev1.ProfileFactKey, len(keys))
-	for k, v := range keys {
+var StoredKeys = func() map[string]corev1.ProfileFactKey {
+	out := make(map[string]corev1.ProfileFactKey, len(Keys))
+	for k, v := range Keys {
 		out[v] = k
 	}
 	return out
@@ -110,7 +118,7 @@ func (s *Service) ListProfileFacts(
 
 	response := &corev1.ListProfileFactsResponse{}
 	for _, fact := range facts {
-		converted, err := toProto(fact)
+		converted, err := ToProto(fact)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
@@ -128,7 +136,7 @@ func (s *Service) GetFactHistory(
 		return nil, err
 	}
 
-	key, ok := keys[request.Msg.GetKey()]
+	key, ok := Keys[request.Msg.GetKey()]
 	if !ok {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("that is not a fact this product understands"))
@@ -141,7 +149,7 @@ func (s *Service) GetFactHistory(
 
 	response := &corev1.GetFactHistoryResponse{}
 	for _, fact := range facts {
-		converted, err := toProto(fact)
+		converted, err := ToProto(fact)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
@@ -159,13 +167,13 @@ func (s *Service) CorrectFact(
 		return nil, err
 	}
 
-	key, ok := keys[request.Msg.GetKey()]
+	key, ok := Keys[request.Msg.GetKey()]
 	if !ok {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("that is not a fact this product understands"))
 	}
 
-	valueJSON, err := valueToJSON(request.Msg.GetValue())
+	valueJSON, err := ValueToJSON(request.Msg.GetValue())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -181,7 +189,7 @@ func (s *Service) CorrectFact(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	converted, err := toProto(fact)
+	converted, err := ToProto(fact)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -249,12 +257,12 @@ func effectivePageSize(requested int32) int32 {
 	return requested
 }
 
-// valueToJSON turns the typed oneof into the jsonb the column holds.
+// ValueToJSON turns the typed oneof into the jsonb the column holds.
 //
 // The oneof arm decides the JSON shape, so a caller cannot smuggle a list into
 // a text fact by sending clever JSON: there is no place on this surface to send
 // JSON at all.
-func valueToJSON(value *corev1.FactValue) (string, error) {
+func ValueToJSON(value *corev1.FactValue) (string, error) {
 	if value == nil {
 		return "", errors.New("a fact needs a value")
 	}
@@ -296,8 +304,9 @@ func valueToJSON(value *corev1.FactValue) (string, error) {
 	return string(encoded), nil
 }
 
-func toProto(fact domain.Fact) (*corev1.ProfileFact, error) {
-	key, known := storedKeys[fact.Key]
+// ToProto renders one stored fact for the wire.
+func ToProto(fact domain.Fact) (*corev1.ProfileFact, error) {
+	key, known := StoredKeys[fact.Key]
 	if !known {
 		// A stored key with no enum arm. Reachable only if the vocabulary
 		// shrank while rows survived, which is a deployment mistake rather
@@ -306,7 +315,7 @@ func toProto(fact domain.Fact) (*corev1.ProfileFact, error) {
 		return nil, fmt.Errorf("stored fact %q has no wire representation", fact.Key)
 	}
 
-	value, err := jsonToValue(fact.Key, fact.ValueJSON)
+	value, err := JSONToValue(fact.Key, fact.ValueJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +334,8 @@ func toProto(fact domain.Fact) (*corev1.ProfileFact, error) {
 	return out, nil
 }
 
-func jsonToValue(key, valueJSON string) (*corev1.FactValue, error) {
+// JSONToValue turns a stored value back into the typed oneof.
+func JSONToValue(key, valueJSON string) (*corev1.FactValue, error) {
 	kind, known := domain.Kinds[key]
 	if !known {
 		return nil, fmt.Errorf("stored fact %q has no kind", key)

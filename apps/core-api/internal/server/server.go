@@ -19,6 +19,7 @@ import (
 	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
 	narrativeservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/notifications"
+	onboardingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/onboarding"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/records"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
@@ -215,6 +216,12 @@ func New(deps Dependencies) (http.Handler, error) {
 	// chain, because unlike the corpus this is the customer's own data and RLS
 	// is what keeps one organisation's profile out of another's console.
 	mux.Handle(corev1connect.NewMemoryServiceHandler(memoryservice.New(), chain))
+	// The first conversation (ENT-212). On the tenant chain and with no
+	// configuration switch, because the interview is scripted and typed in Go:
+	// there is no deployment where onboarding is unavailable, including one
+	// with no model. That is ENT-212's "degrades to a form rather than failing"
+	// arranged so there is no second path to keep working.
+	mux.Handle(corev1connect.NewOnboardingServiceHandler(onboardingservice.New(), chain))
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in

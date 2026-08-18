@@ -69,6 +69,14 @@ const (
 	KeyHighRiskAISystem     = "high_risk_ai_system"
 	KeyLargeScaleMonitoring = "large_scale_monitoring"
 	KeyLawfulBases          = "lawful_bases"
+
+	// Who else handles the organisation's data (ENT-212).
+	//
+	// A list here, a comma-separated line in the legacy `compliance_profiles`
+	// column the Watcher still reads. The projection joins one into the other,
+	// because the fact should be typed the way every other multi-valued answer
+	// is even while the plpgsql reading it expects a line.
+	KeyVendorList = "vendor_list"
 )
 
 // Kinds is the closed vocabulary: which facts exist, and what each one holds.
@@ -83,6 +91,7 @@ var Kinds = map[string]Kind{
 	KeyTransfersOutsideEU:  KindTriState,
 	KeyTransferDestination: KindList,
 	KeyStaffCount:          KindNumber,
+	KeyVendorList:          KindList,
 
 	KeyHighRiskProcessing:   KindTriState,
 	KeyHighRiskAISystem:     KindTriState,
