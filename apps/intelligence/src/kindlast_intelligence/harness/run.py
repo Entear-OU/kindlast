@@ -38,6 +38,7 @@ from ..skills.analyst import Narrative
 from .budget import Budget, BudgetExhausted
 from .citations import Citation, CitationValidator
 from .model import Completion, ModelClient, ModelError
+from .prose import review_prose
 
 
 class Outcome(StrEnum):
@@ -132,8 +133,10 @@ def draft_narrative(
     """Draft one narrative, or refuse.
 
     The whole guardrail ring in the order it fires: admission, then the clock,
-    then the model call against its budget, then typed output, then citations.
-    Cheapest checks first, and the one that can invent a claim last.
+    then the model call against its budget, then typed output, then citations,
+    then house style. Cheapest checks first, and then in the order of how badly
+    a customer is served by what each one catches: a fabricated citation is
+    worse than nothing, and an em dash is only wrong.
 
     Admission is first for a reason that is not tidiness. A run dispatched after
     a long wait is one whose asker has probably given up, and running it anyway
@@ -184,6 +187,24 @@ def draft_narrative(
                 f"{len(result.rejected)} citation(s) did not resolve: "
                 + ", ".join(r.citation.slug for r in result.rejected)
             )
+            return _finish(run)
+
+        # HOUSE STYLE LAST, BECAUSE IT IS THE LEAST SERIOUS REFUSAL (ENT-163).
+        #
+        # The prompt already asks the model not to use an em dash and the model
+        # keeps using one, which is what `AGENTS.md` means by the model may ask
+        # and only code refuses. A narrative that both invents an article AND
+        # uses one is refused for the article: reporting the typography would
+        # send somebody to fix the wrong thing.
+        #
+        # It reads the narrative and not the citations. A slug is checked
+        # against the offered set, so a dash inside one is already refused by
+        # the validator, and the narrative is the only free prose a customer
+        # ever sees.
+        prose = review_prose(parsed.narrative)
+        if not prose.ok:
+            run.outcome = Outcome.REFUSED
+            run.outcome_detail = prose.detail
             return _finish(run)
 
         run.narrative = parsed.narrative
