@@ -89,6 +89,34 @@ needs three things, none of which are in this repo yet:
 Maintainers and anyone with write access are exempt from the check, so this
 does not add friction to internal work.
 
+## Run the Go suite with `-p 1`
+
+```bash
+cd apps/core-api && go test -p 1 ./...
+```
+
+Not a preference, and not slowness for its own sake. `go test ./...` runs
+different test **packages** in parallel (`-p` defaults to GOMAXPROCS), and
+every package in `apps/core-api` connects to the same `kindlast` database in
+the compose stack. Two packages writing the same table are two processes
+sharing state with no transaction between them.
+
+That is not hypothetical: it made the corpus drift guard intermittently red
+for a week (ENT-252). `internal/server/interceptor` seeds an obligation citing
+the real GDPR CELEX and deletes it again, while `internal/store/postgres` is
+counting obligations either side of its own ingest, and the count moves. It
+cost three separate people an investigation each in one day, and every one of
+them correctly concluded "not mine" without finding the mechanism.
+
+The drift guard itself was narrowed to measure only the rows it ingested, so
+that particular collision cannot come back. `-p 1` is the general case: the
+next one will be between two tables nobody has thought about yet. CI passes
+the flag on the stack-backed job for the same reason.
+
+A related failure that `-p 1` does **not** fix: two worktrees running suites
+against one shared compose stack. That is ENT-250, and it needs a stack per
+worktree.
+
 ## Migrations
 
 Schema changes are goose migrations in `db/migrations/`, applied by the job

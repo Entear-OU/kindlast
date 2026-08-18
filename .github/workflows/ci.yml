@@ -480,13 +480,31 @@ jobs:
       # which is right on a laptop and wrong here, so KINDLAST_REQUIRE_STACK
       # turns the skip into a failure. Without it a green run could mean the
       # security boundary was never exercised.
+      #
+      # `-p 1` is not a performance knob and is not a workaround (ENT-252). Go
+      # runs different test PACKAGES in parallel by default, and every package
+      # here connects to the one `kindlast` database, so two packages writing
+      # the same table are two processes sharing state with no transaction
+      # between them. That is what made the corpus drift guard intermittently
+      # red: internal/server/interceptor seeds an obligation and deletes it
+      # again while internal/store/postgres is counting obligations.
+      #
+      # ENT-252 also narrowed that guard so it measures only the rows it
+      # ingested, which is the half that makes it correct rather than merely
+      # serialised. This flag is the other half, and it is here because the
+      # next such collision will be between two tables nobody has thought about
+      # yet. Serialising is the honest statement that these are integration
+      # tests over shared infrastructure rather than unit tests.
+      #
+      # It does not help the case of two worktrees sharing one compose stack,
+      # which is ENT-250 and needs a stack per worktree.
       - name: Go tests that need the stack
         env:
           KINDLAST_REQUIRE_STACK: "1"
         run: |
           for module in apps/core-api libs/chassis; do
             echo "== $module"
-            (cd "$module" && go test ./...)
+            (cd "$module" && go test -p 1 ./...)
           done
 
       # core-api is reachable only on the compose network today, and this
