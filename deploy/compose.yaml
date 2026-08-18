@@ -337,6 +337,19 @@ services:
       # `deploy/.env` is where a self-hoster running the model puts it for good.
       KINDLAST_INTELLIGENCE_URL: ${KINDLAST_INTELLIGENCE_URL:-}
 
+      # The credential core-api mints its own token with, to call Intelligence.
+      #
+      # THE SAME FILE INTELLIGENCE READS, and one credential rather than two on
+      # purpose. Both sides of this call are the same service principal, so a
+      # second client would be a second thing to grant `internal:intelligence`
+      # to, a second to rotate, and one to forget.
+      #
+      # Always set rather than profile-conditional, and harmless when it is:
+      # the token source is built only when KINDLAST_INTELLIGENCE_URL is set
+      # too, so a stack with no model reads this file and does nothing with it.
+      # The pairing is what decides, not this line on its own.
+      KINDLAST_INTERNAL_CLIENT_FILE: /machinekey/core-api-client.json
+
       # The provider's signing secret (ENT-210).
       #
       # Both this and the DSN above are required before the webhook route is

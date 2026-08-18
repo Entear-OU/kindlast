@@ -10,6 +10,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -161,6 +162,31 @@ type Config struct {
 	// behind its own edge without this needing to know it did.
 	IntelligenceURL string
 
+	// InternalClientID and InternalClientSecret are the credentials core-api
+	// mints its own token with, to call Intelligence (ENT-245).
+	//
+	// WHY CORE-API HOLDS A CLIENT CREDENTIAL AT ALL
+	//
+	// It is a resource server for every inbound request and a client for this
+	// one outbound hop. Intelligence requires `internal:intelligence` on the
+	// call, and the first wiring of NarrativeService sent no Authorization
+	// header at all, so every narration failed with "a bearer token is
+	// required" and the feature could not work in any deployment.
+	//
+	// NOT A STATIC TOKEN, which was the obvious alternative. Access tokens live
+	// minutes, so a configured token is a deployment that works until the first
+	// expiry and then reports that Intelligence refused it.
+	//
+	// Read from a file by preference, because a secret in an environment
+	// variable is one that `docker inspect` prints. The compose stack mounts
+	// the same machine key volume Intelligence reads, so both sides of this
+	// call use one credential rather than two that can drift apart.
+	//
+	// Empty is supported and means the same thing as an empty IntelligenceURL:
+	// this deployment does not narrate. It is not validated as required.
+	InternalClientID     string
+	InternalClientSecret string
+
 	// BillingDatabaseURL must connect as `kindlast_billing`, the webhook's role
 	// (ENT-210).
 	//
@@ -180,22 +206,26 @@ type Config struct {
 
 // Load reads the environment.
 func Load() (*Config, error) {
+	internalClientID, internalClientSecret := internalClient()
+
 	cfg := &Config{
-		ListenAddr:       valueOr("KINDLAST_CORE_API_LISTEN", ":8080"),
-		OIDCIssuer:       os.Getenv("KINDLAST_OIDC_ISSUER"),
-		OIDCDiscoveryURL: os.Getenv("KINDLAST_OIDC_DISCOVERY_URL"),
-		OIDCHostHeader:   os.Getenv("KINDLAST_OIDC_HOST_HEADER"),
-		OIDCAudience:     audience(),
-		OIDCScopeClaims:  splitList(os.Getenv("KINDLAST_OIDC_SCOPE_CLAIMS")),
-		DatabaseURL:      os.Getenv("KINDLAST_DATABASE_URL"),
-		RedisAddr:        os.Getenv("KINDLAST_REDIS_ADDR"),
-		HumanClientID:    fileOrValue("KINDLAST_HUMAN_CLIENT_ID"),
-		AgentDatabaseURL: os.Getenv("KINDLAST_AGENT_DATABASE_URL"),
-		IntelligenceURL:  os.Getenv("KINDLAST_INTELLIGENCE_URL"),
-		BillingEnabled:   truthy(os.Getenv("KINDLAST_BILLING_ENABLED")),
-		AppBaseURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_APP_BASE_URL")), "/"),
-		SMTPAddr:         strings.TrimSpace(os.Getenv("KINDLAST_SMTP_ADDR")),
-		EmailFrom:        valueOr("KINDLAST_EMAIL_FROM", "noreply@kindlast.localhost"),
+		ListenAddr:           valueOr("KINDLAST_CORE_API_LISTEN", ":8080"),
+		OIDCIssuer:           os.Getenv("KINDLAST_OIDC_ISSUER"),
+		OIDCDiscoveryURL:     os.Getenv("KINDLAST_OIDC_DISCOVERY_URL"),
+		OIDCHostHeader:       os.Getenv("KINDLAST_OIDC_HOST_HEADER"),
+		OIDCAudience:         audience(),
+		OIDCScopeClaims:      splitList(os.Getenv("KINDLAST_OIDC_SCOPE_CLAIMS")),
+		DatabaseURL:          os.Getenv("KINDLAST_DATABASE_URL"),
+		RedisAddr:            os.Getenv("KINDLAST_REDIS_ADDR"),
+		HumanClientID:        fileOrValue("KINDLAST_HUMAN_CLIENT_ID"),
+		AgentDatabaseURL:     os.Getenv("KINDLAST_AGENT_DATABASE_URL"),
+		IntelligenceURL:      os.Getenv("KINDLAST_INTELLIGENCE_URL"),
+		InternalClientID:     internalClientID,
+		InternalClientSecret: internalClientSecret,
+		BillingEnabled:       truthy(os.Getenv("KINDLAST_BILLING_ENABLED")),
+		AppBaseURL:           strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_APP_BASE_URL")), "/"),
+		SMTPAddr:             strings.TrimSpace(os.Getenv("KINDLAST_SMTP_ADDR")),
+		EmailFrom:            valueOr("KINDLAST_EMAIL_FROM", "noreply@kindlast.localhost"),
 
 		IngestDatabaseURL:  os.Getenv("KINDLAST_INGEST_DATABASE_URL"),
 		BillingDatabaseURL: os.Getenv("KINDLAST_BILLING_DATABASE_URL"),
@@ -335,6 +365,56 @@ func fileOrValue(name string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(contents))
+}
+
+// internalClient reads the credential core-api mints its own tokens with.
+//
+// Two shapes, because the two deployments that need this look different. A
+// self-hoster sets KINDLAST_INTERNAL_CLIENT_ID and KINDLAST_INTERNAL_CLIENT_SECRET
+// against whatever authorization server they run. The compose stack instead
+// mounts the JSON file its seed already writes for Intelligence, so both sides
+// of the Intelligence call read ONE credential: two copies is two things to
+// rotate and one to forget.
+//
+// An unreadable or malformed file returns empty rather than failing, matching
+// every other optional setting here. The caller decides what an absent value
+// means, and for this one it means the deployment does not narrate.
+func internalClient() (id, secret string) {
+	id = strings.TrimSpace(os.Getenv("KINDLAST_INTERNAL_CLIENT_ID"))
+	secret = strings.TrimSpace(os.Getenv("KINDLAST_INTERNAL_CLIENT_SECRET"))
+	if id != "" && secret != "" {
+		return id, secret
+	}
+
+	path := strings.TrimSpace(os.Getenv("KINDLAST_INTERNAL_CLIENT_FILE"))
+	if path == "" {
+		return id, secret
+	}
+
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return id, secret
+	}
+
+	// The field names are the authorization server's, not ours: this is the
+	// file Zitadel's machine-key output produces, read as it is written rather
+	// than transformed by the seed into a shape of our own. One less step that
+	// can silently stop matching.
+	var credential struct {
+		ClientID     string `json:"clientId"`
+		ClientSecret string `json:"clientSecret"`
+	}
+	if err := json.Unmarshal(contents, &credential); err != nil {
+		return id, secret
+	}
+
+	if id == "" {
+		id = strings.TrimSpace(credential.ClientID)
+	}
+	if secret == "" {
+		secret = strings.TrimSpace(credential.ClientSecret)
+	}
+	return id, secret
 }
 
 func valueOr(name, fallback string) string {

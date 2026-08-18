@@ -57,6 +57,15 @@ type Provider struct {
 	// token it was never given, so leaving it undiscovered would push every
 	// caller into provider-specific guesswork.
 	UserInfoURI string
+
+	// TokenEndpoint is RFC 8414's `token_endpoint`, rebased onto the address
+	// the document was fetched from, and empty when the document declares none.
+	//
+	// Discovered for the caller half of this package rather than the verifier
+	// half: a service that must call another service mints its own token, and
+	// the endpoint it mints against is the one it already discovered rather
+	// than a second setting somebody keeps in step by hand.
+	TokenEndpoint string
 }
 
 // Transport is how this package reaches the authorization server, as distinct
@@ -133,9 +142,10 @@ func DiscoverAt(ctx context.Context, transport *Transport, discoveryURL, expecte
 	}
 
 	var document struct {
-		Issuer      string `json:"issuer"`
-		JWKSURI     string `json:"jwks_uri"`
-		UserInfoURI string `json:"userinfo_endpoint"`
+		Issuer        string `json:"issuer"`
+		JWKSURI       string `json:"jwks_uri"`
+		UserInfoURI   string `json:"userinfo_endpoint"`
+		TokenEndpoint string `json:"token_endpoint"`
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
@@ -168,10 +178,24 @@ func DiscoverAt(ctx context.Context, transport *Transport, discoveryURL, expecte
 		}
 	}
 
+	// Absent is not an error, for the same reason userinfo is not: a resource
+	// server verifying tokens never mints one. It is discovered because a
+	// process that is BOTH a resource server and a client (core-api, which
+	// verifies inbound tokens and mints its own to call Intelligence) would
+	// otherwise need the endpoint configured a second time, by hand, in a
+	// second place that can disagree with this one.
+	var tokenEndpoint string
+	if document.TokenEndpoint != "" {
+		if tokenEndpoint, err = rebase("token_endpoint", document.TokenEndpoint, discoveryURL); err != nil {
+			return nil, err
+		}
+	}
+
 	return &Provider{
-		Issuer:      document.Issuer,
-		JWKSURI:     jwksURI,
-		UserInfoURI: userInfoURI,
+		Issuer:        document.Issuer,
+		JWKSURI:       jwksURI,
+		UserInfoURI:   userInfoURI,
+		TokenEndpoint: tokenEndpoint,
 	}, nil
 }
 
