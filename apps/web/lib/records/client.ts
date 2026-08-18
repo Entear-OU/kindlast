@@ -80,6 +80,37 @@ export interface Dsar {
   sourceFindingId?: string
   createdAt?: string
   updatedAt?: string
+  /**
+   * How many trail entries stand behind this request (ENT-226).
+   *
+   * Absent means zero, because Connect's JSON drops zero values, and zero is
+   * the number worth showing: a request marked responded with nothing behind it
+   * is an assertion the register should not present as evidence.
+   */
+  trailEntryCount?: number
+}
+
+/**
+ * One step in assembling a response to a data-subject request (ENT-226).
+ *
+ * Append-only on the server: there is no update or delete call here because
+ * there is no RPC and no grant behind one. A correction is another entry.
+ */
+export interface DsarTrailEntry {
+  entryId: string
+  dsarId: string
+  /** The store that was searched, in the customer's own words. */
+  source: string
+  /** searched, found, none_found, disclosed, or withheld. */
+  action: string
+  detail?: string
+  /** When it happened in the world. */
+  occurredAt?: string
+  /** When it entered the record, which is a different fact. */
+  recordedAt?: string
+  createdBy?: string
+  /** The agent run that produced it, when one did. */
+  agentRunId?: string
 }
 
 export function listProcessingActivities(
@@ -263,5 +294,53 @@ export function markDsarResponded(
   return call<{ applied?: boolean; dsar?: Dsar }>(
     'kindlast.core.v1.RecordsService/MarkDsarResponded',
     { accessToken, orgId, body: { dsarId, reviewed } },
+  )
+}
+
+/**
+ * One request's trail, oldest first.
+ *
+ * Chronological, unlike every other list here, because a trail answers "what
+ * did you do" rather than "what is outstanding". The order comes from the
+ * server and is by when the work happened, not by when it was typed up.
+ */
+export function listDsarTrail(
+  accessToken: string,
+  orgId: string,
+  dsarId: string,
+  options: { pageToken?: string; pageSize?: number } = {},
+) {
+  return call<{ entries?: DsarTrailEntry[]; nextPageToken?: string }>(
+    'kindlast.core.v1.RecordsService/ListDsarTrail',
+    { accessToken, orgId, body: { dsarId, ...options } },
+  )
+}
+
+/**
+ * Appends one step to a request's trail.
+ *
+ * `occurredAt` is an RFC 3339 timestamp, or omitted to mean now. A future value
+ * is refused rather than clamped, for the same reason a future receipt date is:
+ * the point of the field is when the search actually happened.
+ *
+ * `agentRunId` is empty from every caller that exists today. It is in the
+ * signature because §26.4's gateway writes through this call, and provenance
+ * added afterwards is provenance nobody recorded.
+ */
+export function addDsarTrailEntry(
+  accessToken: string,
+  orgId: string,
+  dsarId: string,
+  entry: {
+    source: string
+    action: string
+    detail?: string
+    occurredAt?: string
+    agentRunId?: string
+  },
+) {
+  return call<{ entry?: DsarTrailEntry }>(
+    'kindlast.core.v1.RecordsService/AddDsarTrailEntry',
+    { accessToken, orgId, body: { dsarId, ...entry } },
   )
 }

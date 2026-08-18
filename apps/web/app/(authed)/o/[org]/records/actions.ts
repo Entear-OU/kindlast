@@ -6,6 +6,7 @@ import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import type { RecordActionState } from '@/lib/records/action-state'
 import {
+  addDsarTrailEntry,
   createAiSystem,
   createProcessingActivity,
   logDsar,
@@ -356,4 +357,60 @@ export async function respondToDsar(
         message:
           'This request was already recorded as responded, so nothing changed.',
       }
+}
+
+/**
+ * Appends one step to a request's trail (ENT-226).
+ *
+ * There is no edit and no delete beside this, and that is deliberate rather
+ * than unfinished: an entry is evidence about how a response to a statutory
+ * request was assembled, the database refuses an UPDATE with a trigger that
+ * binds even the migrator, and the application holds no DELETE grant. A
+ * correction is another entry.
+ *
+ * Both revalidations matter. The trail is on the detail page, and the count
+ * that makes `respondedAt` checkable is on the register listing, so writing an
+ * entry changes two pages.
+ */
+export async function addTrailEntry(
+  slug: string,
+  dsarId: string,
+  _previous: RecordActionState,
+  form: FormData,
+): Promise<RecordActionState> {
+  const resolved = await resolve(slug)
+  if (!resolved.ok) return resolved.failed
+
+  const source = text(form.get('source'))
+  if (source === '') {
+    // Refused here rather than at the database, whose constraint name is not a
+    // sentence anyone should be shown.
+    return { status: 'error', message: 'Name the store that was searched.' }
+  }
+
+  // A datetime-local input posts `YYYY-MM-DDTHH:mm` with no zone, so the
+  // browser's own offset is the only thing that says which instant it meant.
+  // Read as UTC here rather than in the browser, matching how the receipt date
+  // is handled: it errs earlier and never later, and for a record of when a
+  // search happened, earlier is the honest direction.
+  const occurredOn = text(form.get('occurredAt'))
+  const occurredAt = occurredOn ? `${occurredOn}:00Z` : undefined
+
+  const result = await addDsarTrailEntry(
+    resolved.accessToken,
+    resolved.orgId,
+    dsarId,
+    {
+      source,
+      action: text(form.get('action')),
+      detail: text(form.get('detail')),
+      ...(occurredAt ? { occurredAt } : {}),
+    },
+  )
+  if (!result.ok) return say(result.error)
+
+  revalidatePath(orgPath(slug, `/records/dsars/${dsarId}`))
+  revalidatePath(orgPath(slug, '/records/dsars'))
+
+  return { status: 'ok', message: `Recorded against ${source}.` }
 }
