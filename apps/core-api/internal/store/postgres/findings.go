@@ -38,6 +38,13 @@ const MaxPageSize = 100
 // finding's citation silently changing when an obligation is reworded, which is
 // precisely the drift a compliance record must not have. The structured columns
 // are joined live because they are identifiers rather than prose.
+//
+// The last three are what the Analyst added (00022), and they are read here
+// rather than through a second query on purpose: the feed's job is to render a
+// finding, and a narrative fetched separately is a narrative that can be
+// missing from a card for a reason that has nothing to do with whether one was
+// written. `coalesce` to empty because null is the ordinary state; most
+// findings have not been narrated and a deployment may never narrate any.
 const findingColumns = `
 	f.id::text,
 	f.status,
@@ -59,7 +66,10 @@ const findingColumns = `
 	f.created_at,
 	f.snoozed_until,
 	coalesce(f.approved_by::text, ''),
-	coalesce(f.rejection_reason, '')
+	coalesce(f.rejection_reason, ''),
+	coalesce(f.narrative, ''),
+	coalesce(f.narrative_refusal, ''),
+	coalesce(f.agent_run_id::text, '')
 `
 
 func scanFinding(row pgx.Row) (findings.Finding, error) {
@@ -72,6 +82,7 @@ func scanFinding(row pgx.Row) (findings.Finding, error) {
 		&f.Citation.Annex, &f.Citation.Paragraph,
 		&f.Citation.Label, &f.Citation.URL,
 		&f.CreatedAt, &f.SnoozedUntil, &f.ApprovedBy, &f.RejectionReason,
+		&f.Narrative, &f.NarrativeRefusal, &f.AgentRunID,
 	)
 	return f, err
 }

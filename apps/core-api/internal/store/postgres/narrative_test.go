@@ -269,3 +269,71 @@ func TestNarratingAFindingInAnotherOrganisationChangesNothing(t *testing.T) {
 		t.Fatalf("it wrote %q into another organisation's finding", narrative)
 	}
 }
+
+// The read side of ENT-162, which is the hop nothing covered.
+//
+// Every test above proves the narrative is written. None of them proves it can
+// be read back through the query the feed actually runs, and that gap is
+// exactly the shape of the bug: ENT-218 built the narrative layer, ENT-245 gave
+// it a caller, and a finding still rendered as though no run had ever happened
+// because the feed's select list did not mention the column.
+//
+// As the tenant rather than as the agent, deliberately. The agent writes the
+// narrative and a signed-in human reads it, and those are different roles under
+// different policies; asserting that the writing role can read its own write
+// would prove nothing about the console.
+func TestTheFeedReadsBackTheNarrativeTheAgentWrote(t *testing.T) {
+	store := testStore(t)
+	agent := agentStore(t)
+	id := seedNarratableFinding(t, alphaOrg)
+	ctx := t.Context()
+
+	run := seedAgentRun(t, agent, alphaOrg)
+	const prose = "You keep customer orders and support tickets, so Article 30 wants a written record of both."
+	if err := agent.RecordNarrative(ctx, alphaOrg, id, prose, run); err != nil {
+		t.Fatalf("recording the narrative: %v", err)
+	}
+
+	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	if err != nil {
+		t.Fatalf("beginning a tenant transaction: %v", err)
+	}
+	defer tenant.Rollback(ctx)
+
+	finding, _, err := tenant.Finding(ctx, id.String())
+	if err != nil {
+		t.Fatalf("reading the finding back: %v", err)
+	}
+
+	if finding.Narrative != prose {
+		t.Fatalf("the narrative did not reach the reader: %q", finding.Narrative)
+	}
+	if finding.AgentRunID != run {
+		t.Fatalf("the run that produced it did not reach the reader: %q", finding.AgentRunID)
+	}
+	// ENT-164 from the reading end. The heading slot still holds the sweep's
+	// short phrase, and a prose paragraph is not in it.
+	if finding.Detected != "No record of processing activities" {
+		t.Fatalf("the narrative displaced `detected`: %q", finding.Detected)
+	}
+	if finding.NarrativeRefusal != "" {
+		t.Fatalf("a successful run recorded a refusal: %q", finding.NarrativeRefusal)
+	}
+
+	// And through the feed's own query, which is a different statement over the
+	// same columns and could drift from the one above.
+	page, err := tenant.Findings(ctx, "", "", 100)
+	if err != nil {
+		t.Fatalf("listing findings: %v", err)
+	}
+	for _, f := range page.Findings {
+		if f.ID != id.String() {
+			continue
+		}
+		if f.Narrative != prose {
+			t.Fatalf("the feed list dropped the narrative: %q", f.Narrative)
+		}
+		return
+	}
+	t.Fatal("the narrated finding was not in the feed")
+}

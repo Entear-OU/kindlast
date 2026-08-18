@@ -45,6 +45,25 @@ export interface Finding {
   snoozedUntil?: string
   approvedBy?: string
   rejectionReason?: string
+
+  /**
+   * What the Analyst added, when it ran (ENT-162, ENT-245).
+   *
+   * All three are absent far more often than they are present, and that is the
+   * ordinary state rather than a gap: narration is a job that runs after the
+   * sweep, and Intelligence is an optional compose profile, so a deployment may
+   * never narrate anything.
+   *
+   * `narrative` is prose and belongs in a body, never in a heading. `detected`
+   * is the heading. ENT-164 is the bug that exists when those two share a slot.
+   *
+   * `narrative` and `narrativeRefusal` never arrive together: a run either
+   * produced prose whose every citation resolved, or it produced a reason it
+   * did not.
+   */
+  narrative?: string
+  narrativeRefusal?: string
+  agentRunId?: string
 }
 
 export interface SupportingChunk {
