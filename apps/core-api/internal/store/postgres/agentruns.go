@@ -28,7 +28,7 @@ type AgentRun struct {
 	Outcome          string
 	OutcomeDetail    string
 	// What an output critic refused, as JSON, and empty when none did
-	// (ENT-248). See 00027 for why the rejected text is here rather than in
+	// (ENT-248). See 00028 for why the rejected text is here rather than in
 	// OutcomeDetail, which a customer reads.
 	RefusalJSON       string
 	InputTokens       int32

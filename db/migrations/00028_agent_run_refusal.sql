@@ -1,5 +1,5 @@
 -- +goose Up
--- 00027_agent_run_refusal.sql (ENT-248)
+-- 00028_agent_run_refusal.sql (ENT-248)
 --
 -- What an output critic refused, and which rule refused it.
 --

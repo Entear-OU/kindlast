@@ -168,7 +168,7 @@ func TestARefusalIsARunAndIsRecorded(t *testing.T) {
 	}
 }
 
-// TestACriticsRefusalKeepsTheTextAndTheRuleThatRejectedIt covers 00027
+// TestACriticsRefusalKeepsTheTextAndTheRuleThatRejectedIt covers 00028
 // (ENT-248).
 //
 // A narrative refused for stating the law wrongly is the case this column
