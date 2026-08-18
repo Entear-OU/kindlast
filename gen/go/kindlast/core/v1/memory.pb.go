@@ -48,6 +48,31 @@ const (
 	ProfileFactKey_PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU  ProfileFactKey = 8
 	ProfileFactKey_PROFILE_FACT_KEY_TRANSFER_DESTINATIONS ProfileFactKey = 9
 	ProfileFactKey_PROFILE_FACT_KEY_STAFF_COUNT           ProfileFactKey = 10
+	// The four the corpus was already asking for and nothing could answer
+	// (ENT-246).
+	//
+	// Four obligations narrow themselves to high-risk processing or to
+	// large-scale monitoring, and one to controllers relying on consent. Every
+	// one of those conditions is a property of what an organisation DOES, and
+	// the legacy `compliance_profiles` records only properties of what it IS, so
+	// the Watcher read none of them and the obligations bound everybody. Article
+	// 35's DPIA reached every controller.
+	//
+	// They are here rather than as columns for the reason at the top of this
+	// enum: a question the product learns to ask should not be a migration.
+	//
+	// HIGH RISK IS TWO QUESTIONS, NOT ONE. GDPR Article 35 asks whether the
+	// PROCESSING is likely to result in a high risk to people. The AI Act asks
+	// whether an AI SYSTEM falls in Annex III. They are different tests under
+	// different regulations, and one answer standing for both would mean a
+	// bakery's answer about profiling decided whether Annex III bound it.
+	ProfileFactKey_PROFILE_FACT_KEY_HIGH_RISK_PROCESSING   ProfileFactKey = 11
+	ProfileFactKey_PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM    ProfileFactKey = 12
+	ProfileFactKey_PROFILE_FACT_KEY_LARGE_SCALE_MONITORING ProfileFactKey = 13
+	// Which Article 6 bases the organisation relies on. A list, because almost
+	// every controller relies on more than one, and Article 7's conditions bind
+	// whenever consent is among them.
+	ProfileFactKey_PROFILE_FACT_KEY_LAWFUL_BASES ProfileFactKey = 14
 )
 
 // Enum value maps for ProfileFactKey.
@@ -64,19 +89,27 @@ var (
 		8:  "PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU",
 		9:  "PROFILE_FACT_KEY_TRANSFER_DESTINATIONS",
 		10: "PROFILE_FACT_KEY_STAFF_COUNT",
+		11: "PROFILE_FACT_KEY_HIGH_RISK_PROCESSING",
+		12: "PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM",
+		13: "PROFILE_FACT_KEY_LARGE_SCALE_MONITORING",
+		14: "PROFILE_FACT_KEY_LAWFUL_BASES",
 	}
 	ProfileFactKey_value = map[string]int32{
-		"PROFILE_FACT_KEY_UNSPECIFIED":           0,
-		"PROFILE_FACT_KEY_INDUSTRY":              1,
-		"PROFILE_FACT_KEY_EU_JURISDICTIONS":      2,
-		"PROFILE_FACT_KEY_DATA_CATEGORIES":       3,
-		"PROFILE_FACT_KEY_DATA_SUBJECTS":         4,
-		"PROFILE_FACT_KEY_AI_SYSTEMS":            5,
-		"PROFILE_FACT_KEY_HAS_DPO":               6,
-		"PROFILE_FACT_KEY_HAS_ROPA":              7,
-		"PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU":  8,
-		"PROFILE_FACT_KEY_TRANSFER_DESTINATIONS": 9,
-		"PROFILE_FACT_KEY_STAFF_COUNT":           10,
+		"PROFILE_FACT_KEY_UNSPECIFIED":            0,
+		"PROFILE_FACT_KEY_INDUSTRY":               1,
+		"PROFILE_FACT_KEY_EU_JURISDICTIONS":       2,
+		"PROFILE_FACT_KEY_DATA_CATEGORIES":        3,
+		"PROFILE_FACT_KEY_DATA_SUBJECTS":          4,
+		"PROFILE_FACT_KEY_AI_SYSTEMS":             5,
+		"PROFILE_FACT_KEY_HAS_DPO":                6,
+		"PROFILE_FACT_KEY_HAS_ROPA":               7,
+		"PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU":   8,
+		"PROFILE_FACT_KEY_TRANSFER_DESTINATIONS":  9,
+		"PROFILE_FACT_KEY_STAFF_COUNT":            10,
+		"PROFILE_FACT_KEY_HIGH_RISK_PROCESSING":   11,
+		"PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM":    12,
+		"PROFILE_FACT_KEY_LARGE_SCALE_MONITORING": 13,
+		"PROFILE_FACT_KEY_LAWFUL_BASES":           14,
 	}
 )
 
@@ -993,7 +1026,7 @@ const file_kindlast_core_v1_memory_proto_rawDesc = "" +
 	"page_token\x18\x02 \x01(\tR\tpageToken\"v\n" +
 	"\x14ListEvidenceResponse\x126\n" +
 	"\bevidence\x18\x01 \x03(\v2\x1a.kindlast.core.v1.EvidenceR\bevidence\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken*\x99\x03\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken*\xbe\x04\n" +
 	"\x0eProfileFactKey\x12 \n" +
 	"\x1cPROFILE_FACT_KEY_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19PROFILE_FACT_KEY_INDUSTRY\x10\x01\x12%\n" +
@@ -1006,7 +1039,11 @@ const file_kindlast_core_v1_memory_proto_rawDesc = "" +
 	"%PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU\x10\b\x12*\n" +
 	"&PROFILE_FACT_KEY_TRANSFER_DESTINATIONS\x10\t\x12 \n" +
 	"\x1cPROFILE_FACT_KEY_STAFF_COUNT\x10\n" +
-	"*`\n" +
+	"\x12)\n" +
+	"%PROFILE_FACT_KEY_HIGH_RISK_PROCESSING\x10\v\x12(\n" +
+	"$PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM\x10\f\x12+\n" +
+	"'PROFILE_FACT_KEY_LARGE_SCALE_MONITORING\x10\r\x12!\n" +
+	"\x1dPROFILE_FACT_KEY_LAWFUL_BASES\x10\x0e*`\n" +
 	"\bTriState\x12\x19\n" +
 	"\x15TRI_STATE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rTRI_STATE_YES\x10\x01\x12\x10\n" +

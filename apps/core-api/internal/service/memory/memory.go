@@ -70,6 +70,11 @@ var keys = map[corev1.ProfileFactKey]string{
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU:  domain.KeyTransfersOutsideEU,
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_TRANSFER_DESTINATIONS: domain.KeyTransferDestination,
 	corev1.ProfileFactKey_PROFILE_FACT_KEY_STAFF_COUNT:           domain.KeyStaffCount,
+
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_HIGH_RISK_PROCESSING:   domain.KeyHighRiskProcessing,
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM:    domain.KeyHighRiskAISystem,
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_LARGE_SCALE_MONITORING: domain.KeyLargeScaleMonitoring,
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_LAWFUL_BASES:           domain.KeyLawfulBases,
 }
 
 var storedKeys = func() map[string]corev1.ProfileFactKey {
