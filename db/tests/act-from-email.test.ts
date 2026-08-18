@@ -45,7 +45,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { randomUUID, createHash } from 'node:crypto'
 import type { Client } from 'pg'
-import { connect, setTenant, isStackReachable, MIGRATOR_URL, APP_URL } from './helpers/db'
+import {
+  connect,
+  setTenant,
+  isStackReachable,
+  MIGRATOR_URL,
+  APP_URL,
+} from './helpers/db'
 
 const reachable = await isStackReachable()
 
@@ -66,7 +72,6 @@ let agent: Client
 let finding = ''
 let otherFinding = ''
 let outbox = ''
-let otherOutbox = ''
 
 /** The same digest the Go store computes, so the two halves cannot drift. */
 function hash(token: string): string {
@@ -185,20 +190,27 @@ beforeAll(async () => {
   finding = await seedFinding()
   otherFinding = await seedFinding()
   outbox = await outboxFor(finding)
-  otherOutbox = await outboxFor(otherFinding)
 })
 
 afterAll(async () => {
   if (!reachable) return
   await migrator.query(`delete from act_delegations where org_id = $1`, [org])
   await migrator.query(`delete from audit_log where org_id = $1`, [org])
-  await migrator.query(`delete from notification_outbox where org_id = $1`, [org])
+  await migrator.query(`delete from notification_outbox where org_id = $1`, [
+    org,
+  ])
   await migrator.query(`delete from findings where org_id = $1`, [org])
   await migrator.query(`delete from watcher_findings where org_id = $1`, [org])
-  await migrator.query(`delete from compliance_profiles where org_id = $1`, [org])
-  await migrator.query(`delete from onboarding_sessions where org_id = $1`, [org])
+  await migrator.query(`delete from compliance_profiles where org_id = $1`, [
+    org,
+  ])
+  await migrator.query(`delete from onboarding_sessions where org_id = $1`, [
+    org,
+  ])
   await migrator.query(`delete from memberships where org_id = $1`, [org])
-  await migrator.query(`delete from user_identities where user_id = any($1)`, [[ada, miko]])
+  await migrator.query(`delete from user_identities where user_id = any($1)`, [
+    [ada, miko],
+  ])
   await migrator.query(`delete from obligations where id = $1`, [obligationID])
   await migrator.query(`delete from organisations where id = $1`, [org])
   await migrator.end()
@@ -206,95 +218,103 @@ afterAll(async () => {
   await agent.end()
 })
 
-describe.skipIf(!reachable)('minting the link the dispatcher puts in a message', () => {
-  it('binds the delegation to the outbox row it was handed', async () => {
-    const id = await mint(outbox, ada, randomUUID())
-    expect(id).not.toBeNull()
+describe.skipIf(!reachable)(
+  'minting the link the dispatcher puts in a message',
+  () => {
+    it('binds the delegation to the outbox row it was handed', async () => {
+      const id = await mint(outbox, ada, randomUUID())
+      expect(id).not.toBeNull()
 
-    const { rows } = await migrator.query(
-      `select org_id, user_id, finding_id, acting_agent, single_use, redeemed_at
+      const { rows } = await migrator.query(
+        `select org_id, user_id, finding_id, acting_agent, single_use, redeemed_at
          from act_delegations where id = $1`,
-      [id],
-    )
-    expect(rows[0].org_id).toBe(org)
-    expect(rows[0].user_id).toBe(ada)
-    // Derived from the outbox row rather than taken from the caller, so a
-    // dispatcher cannot pair a person with a finding it was not sent to
-    // deliver.
-    expect(rows[0].finding_id).toBe(finding)
-    expect(rows[0].acting_agent).toBe('email')
-    expect(rows[0].single_use).toBe(true)
-    expect(rows[0].redeemed_at).toBeNull()
-  })
+        [id],
+      )
+      expect(rows[0].org_id).toBe(org)
+      expect(rows[0].user_id).toBe(ada)
+      // Derived from the outbox row rather than taken from the caller, so a
+      // dispatcher cannot pair a person with a finding it was not sent to
+      // deliver.
+      expect(rows[0].finding_id).toBe(finding)
+      expect(rows[0].acting_agent).toBe('email')
+      expect(rows[0].single_use).toBe(true)
+      expect(rows[0].redeemed_at).toBeNull()
+    })
 
-  it('refuses somebody who is not a member of that organisation', async () => {
-    // A stranger, not a co-member: the dispatcher has no business minting for
-    // anybody it did not find through `notification_recipients`, and a user id
-    // is the one argument a caller could get wrong or be made to get wrong.
-    expect(await mint(outbox, randomUUID(), randomUUID())).toBeNull()
-  })
+    it('refuses somebody who is not a member of that organisation', async () => {
+      // A stranger, not a co-member: the dispatcher has no business minting for
+      // anybody it did not find through `notification_recipients`, and a user id
+      // is the one argument a caller could get wrong or be made to get wrong.
+      expect(await mint(outbox, randomUUID(), randomUUID())).toBeNull()
+    })
 
-  it('refuses an outbox row that does not exist', async () => {
-    expect(await mint(randomUUID(), ada, randomUUID())).toBeNull()
-  })
+    it('refuses an outbox row that does not exist', async () => {
+      expect(await mint(randomUUID(), ada, randomUUID())).toBeNull()
+    })
 
-  it('refuses an address nobody proved they control', async () => {
-    // Section 1.8's gate, held by the table rather than by the caller. Miko is
-    // a genuine member who is genuinely reachable; what is missing is the IdP
-    // saying the address is theirs.
-    await expect(mint(outbox, miko, randomUUID())).rejects.toThrow(
-      /no verified address/,
-    )
-  })
+    it('refuses an address nobody proved they control', async () => {
+      // Section 1.8's gate, held by the table rather than by the caller. Miko is
+      // a genuine member who is genuinely reachable; what is missing is the IdP
+      // saying the address is theirs.
+      await expect(mint(outbox, miko, randomUUID())).rejects.toThrow(
+        /no verified address/,
+      )
+    })
 
-  it('leaves the dispatcher unable to read a delegation back', async () => {
-    // The narrow-grant design from 00021 survives this migration: the agent
-    // role gains the ability to mint one credential through one function and
-    // nothing else. It holds the token it generated; it cannot enumerate.
-    const token = randomUUID()
-    await mint(outbox, ada, token)
+    it('leaves the dispatcher unable to read a delegation back', async () => {
+      // The narrow-grant design from 00021 survives this migration: the agent
+      // role gains the ability to mint one credential through one function and
+      // nothing else. It holds the token it generated; it cannot enumerate.
+      const token = randomUUID()
+      await mint(outbox, ada, token)
 
-    await expect(
-      agent.query(`select id from act_delegations where token_hash = $1`, [hash(token)]),
-    ).rejects.toThrow(/permission denied/i)
-  })
+      await expect(
+        agent.query(`select id from act_delegations where token_hash = $1`, [
+          hash(token),
+        ]),
+      ).rejects.toThrow(/permission denied/i)
+    })
 
-  it('cannot outlive the ceiling, even through the function', async () => {
-    await expect(mint(outbox, ada, randomUUID(), '2 hours')).rejects.toThrow(
-      /act_delegations_ttl/,
-    )
-  })
-})
+    it('cannot outlive the ceiling, even through the function', async () => {
+      await expect(mint(outbox, ada, randomUUID(), '2 hours')).rejects.toThrow(
+        /act_delegations_ttl/,
+      )
+    })
+  },
+)
 
-describe.skipIf(!reachable)('a finding-bound delegation is single use by construction', () => {
-  it('is refused as a multi-use row, and the refusal binds the migrator', async () => {
-    // Not a habit of the minting code. An approve link that could be redeemed
-    // twice would approve, be un-approved by a human, and approve again from
-    // the same message.
-    await expect(
-      migrator.query(
-        `insert into act_delegations
+describe.skipIf(!reachable)(
+  'a finding-bound delegation is single use by construction',
+  () => {
+    it('is refused as a multi-use row, and the refusal binds the migrator', async () => {
+      // Not a habit of the minting code. An approve link that could be redeemed
+      // twice would approve, be un-approved by a human, and approve again from
+      // the same message.
+      await expect(
+        migrator.query(
+          `insert into act_delegations
            (id, org_id, user_id, acting_agent, token_hash, single_use, finding_id, expires_at)
          values ($1, $2, $3, 'email', $4, false, $5, now() + interval '10 minutes')`,
-        [randomUUID(), org, ada, hash(randomUUID()), finding],
-      ),
-    ).rejects.toThrow(/act_delegations_finding_is_single_use/)
-  })
+          [randomUUID(), org, ada, hash(randomUUID()), finding],
+        ),
+      ).rejects.toThrow(/act_delegations_finding_is_single_use/)
+    })
 
-  it('cannot be repointed at a different finding after it is minted', async () => {
-    // Without this the update grant that makes revocation possible would also
-    // make "revoke" a way to aim a credential already sitting in somebody's
-    // mailbox at a different decision.
-    const id = await mint(outbox, ada, randomUUID())
+    it('cannot be repointed at a different finding after it is minted', async () => {
+      // Without this the update grant that makes revocation possible would also
+      // make "revoke" a way to aim a credential already sitting in somebody's
+      // mailbox at a different decision.
+      const id = await mint(outbox, ada, randomUUID())
 
-    await expect(
-      migrator.query(`update act_delegations set finding_id = $1 where id = $2`, [
-        otherFinding,
-        id,
-      ]),
-    ).rejects.toThrow(/only revoked_at and redeemed_at may change/)
-  })
-})
+      await expect(
+        migrator.query(
+          `update act_delegations set finding_id = $1 where id = $2`,
+          [otherFinding, id],
+        ),
+      ).rejects.toThrow(/only revoked_at and redeemed_at may change/)
+    })
+  },
+)
 
 describe.skipIf(!reachable)('redeeming it', () => {
   it('answers with the person, their organisation and the channel', async () => {
@@ -373,7 +393,15 @@ describe.skipIf(!reachable)('redeeming it', () => {
                now() - interval '30 minutes', now() - interval '1 minute', null),
               ($6, $2, $3, 'email', $7, true, $5,
                now(), now() + interval '10 minutes', now())`,
-      [randomUUID(), org, ada, hash(expired), finding, randomUUID(), hash(revoked)],
+      [
+        randomUUID(),
+        org,
+        ada,
+        hash(expired),
+        finding,
+        randomUUID(),
+        hash(revoked),
+      ],
     )
 
     const answers = [
@@ -389,52 +417,55 @@ describe.skipIf(!reachable)('redeeming it', () => {
   })
 })
 
-describe.skipIf(!reachable)('what the dispatcher is told about an address', () => {
-  it('reports a verified sign-in address as verified', async () => {
-    const r = await agent.query(
-      `select email_verified from notification_recipients($1) where user_id = $2`,
-      [outbox, ada],
-    )
-    expect(r.rows[0].email_verified).toBe(true)
-  })
+describe.skipIf(!reachable)(
+  'what the dispatcher is told about an address',
+  () => {
+    it('reports a verified sign-in address as verified', async () => {
+      const r = await agent.query(
+        `select email_verified from notification_recipients($1) where user_id = $2`,
+        [outbox, ada],
+      )
+      expect(r.rows[0].email_verified).toBe(true)
+    })
 
-  it('reports an unverified one as unverified rather than omitting the person', async () => {
-    // Miko still gets the doorbell. What they do not get is the approve link,
-    // and the difference has to be visible to the dispatcher so it can send a
-    // message rather than fail a delivery.
-    const r = await agent.query(
-      `select email_verified from notification_recipients($1) where user_id = $2`,
-      [outbox, miko],
-    )
-    expect(r.rows).toHaveLength(1)
-    expect(r.rows[0].email_verified).toBe(false)
-  })
+    it('reports an unverified one as unverified rather than omitting the person', async () => {
+      // Miko still gets the doorbell. What they do not get is the approve link,
+      // and the difference has to be visible to the dispatcher so it can send a
+      // message rather than fail a delivery.
+      const r = await agent.query(
+        `select email_verified from notification_recipients($1) where user_id = $2`,
+        [outbox, miko],
+      )
+      expect(r.rows).toHaveLength(1)
+      expect(r.rows[0].email_verified).toBe(false)
+    })
 
-  it('reports an override address as unverified even when the sign-in address is not', async () => {
-    // `notification_preferences.email` exists so somebody can be told somewhere
-    // other than where they sign in, and nobody has proved they control that
-    // second address. So the answer is about THIS address rather than about the
-    // person, which is what makes the gate correct without a rule in Go.
-    await migrator.query(
-      `insert into notification_preferences (org_id, user_id, email)
+    it('reports an override address as unverified even when the sign-in address is not', async () => {
+      // `notification_preferences.email` exists so somebody can be told somewhere
+      // other than where they sign in, and nobody has proved they control that
+      // second address. So the answer is about THIS address rather than about the
+      // person, which is what makes the gate correct without a rule in Go.
+      await migrator.query(
+        `insert into notification_preferences (org_id, user_id, email)
        values ($1, $2, $3)
        on conflict (org_id, user_id) do update set email = excluded.email`,
-      [org, ada, `elsewhere-${ada.slice(0, 8)}@example.invalid`],
-    )
+        [org, ada, `elsewhere-${ada.slice(0, 8)}@example.invalid`],
+      )
 
-    const r = await agent.query(
-      `select email, email_verified from notification_recipients($1) where user_id = $2`,
-      [outbox, ada],
-    )
-    expect(r.rows[0].email).toContain('elsewhere-')
-    expect(r.rows[0].email_verified).toBe(false)
+      const r = await agent.query(
+        `select email, email_verified from notification_recipients($1) where user_id = $2`,
+        [outbox, ada],
+      )
+      expect(r.rows[0].email).toContain('elsewhere-')
+      expect(r.rows[0].email_verified).toBe(false)
 
-    await migrator.query(
-      `delete from notification_preferences where org_id = $1 and user_id = $2`,
-      [org, ada],
-    )
-  })
-})
+      await migrator.query(
+        `delete from notification_preferences where org_id = $1 and user_id = $2`,
+        [org, ada],
+      )
+    })
+  },
+)
 
 describe.skipIf(!reachable)('the approval it produces', () => {
   it('is the delegated person acting, with the channel named beside them', async () => {
@@ -447,9 +478,15 @@ describe.skipIf(!reachable)('the approval it produces', () => {
     await mint(outbox, ada, token)
     const [grant] = await resolve(token, finding)
 
-    await app.query(`select set_config('app.current_user_id', $1, false)`, [grant.user_id])
-    await app.query(`select set_config('app.current_org_id', $1, false)`, [grant.org_id])
-    await app.query(`select set_config('app.acting_agent', $1, false)`, [grant.acting_agent])
+    await app.query(`select set_config('app.current_user_id', $1, false)`, [
+      grant.user_id,
+    ])
+    await app.query(`select set_config('app.current_org_id', $1, false)`, [
+      grant.org_id,
+    ])
+    await app.query(`select set_config('app.acting_agent', $1, false)`, [
+      grant.acting_agent,
+    ])
 
     await app.query(
       `update findings set status = 'approved', approved_by = $2, approval_reviewed = false
