@@ -217,6 +217,14 @@ If you add a tenant table, it needs `org_id`, `FORCE ROW LEVEL SECURITY`, and
 policies in the two-GUC form. `bun run test:db` asserts all of that over
 `pg_class` rather than trusting convention, and it will fail if you forget.
 
+**Migration DDL is applied by goose or not at all.** Running a migration's SQL
+by hand through `psql` leaves the objects in place and `goose_db_version`
+unaware of them, so the next `goose up` from a branch that has merged fails on
+objects that already exist, for everyone sharing that database. It has happened:
+`00025` was hand-applied during ENT-231 and had to be reconciled afterwards. If
+you need the schema, run the migration; if you need to experiment, use a scratch
+database and drop it when you are done.
+
 ## What goes in the database, and what does not
 
 **If it must hold no matter who writes, it is a constraint. If it decides, it
