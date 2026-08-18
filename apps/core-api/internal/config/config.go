@@ -196,6 +196,42 @@ type Config struct {
 	// reach a finding; see 00017.
 	BillingDatabaseURL string
 
+	// GatewayURL is where the workers policy gateway answers (ENT-231).
+	//
+	// EMPTY IS A SUPPORTED DEPLOYMENT. Without it IntegrationsService is not
+	// served at all, which is the right answer for a stack that connects
+	// nothing: a customer sees no Integrations page rather than one whose every
+	// button fails. The same reasoning IntelligenceURL carries above.
+	//
+	// core-api never dials a customer's address itself, so this is the only
+	// outbound address it holds for the whole feature.
+	GatewayURL string
+
+	// GatewaySecret is what core-api presents to the gateway.
+	//
+	// Required alongside the URL, and the pair is checked together: a gateway
+	// address with no secret would mean every call refused, and a secret with
+	// no address would mean nothing at all. Through fileOrValue, because a
+	// shared secret is exactly the sort of value an operator mounts rather than
+	// putting in an environment variable a `docker inspect` prints.
+	GatewaySecret string
+
+	// IntegrationKey seals third-party credentials at rest (ENT-231, §25).
+	//
+	// Written `id:base64key`, where the id is recorded on every row so a key
+	// can be rotated without downtime. Retired keys go in IntegrationKeysOld
+	// and still open what they sealed.
+	//
+	// Optional, and its absence is a working deployment: connections to
+	// endpoints that need no credential are made as usual, and one that needs a
+	// credential is REFUSED rather than stored in plaintext. See
+	// internal/secrets for the whole key management decision.
+	IntegrationKey string
+
+	// IntegrationKeysOld are retired keys, kept so rows sealed with them still
+	// open. Comma separated, in the same `id:base64key` form.
+	IntegrationKeysOld []string
+
 	// BillingWebhookSecret is the shared secret the provider signs with.
 	//
 	// Without it the webhook is not served, because the signature check is the
@@ -226,6 +262,15 @@ func Load() (*Config, error) {
 		AppBaseURL:           strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_APP_BASE_URL")), "/"),
 		SMTPAddr:             strings.TrimSpace(os.Getenv("KINDLAST_SMTP_ADDR")),
 		EmailFrom:            valueOr("KINDLAST_EMAIL_FROM", "noreply@kindlast.localhost"),
+
+		GatewayURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_GATEWAY_URL")), "/"),
+		GatewaySecret: fileOrValue("KINDLAST_GATEWAY_TOKEN"),
+		// Through fileOrValue for the reason the webhook secret is: this is the
+		// key protecting every customer's third-party credentials, and it is
+		// the last value in this file that should live in an environment
+		// variable a process listing prints.
+		IntegrationKey:     fileOrValue("KINDLAST_INTEGRATION_KEY"),
+		IntegrationKeysOld: splitList(os.Getenv("KINDLAST_INTEGRATION_KEYS_OLD")),
 
 		IngestDatabaseURL:  os.Getenv("KINDLAST_INGEST_DATABASE_URL"),
 		BillingDatabaseURL: os.Getenv("KINDLAST_BILLING_DATABASE_URL"),

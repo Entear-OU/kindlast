@@ -147,6 +147,17 @@ type Dependencies struct {
 	// operator.
 	Drafter narrativeservice.Drafter
 
+	// Integrations serves the console's control over which customer systems
+	// Kindlast may reach (ENT-231).
+	//
+	// Nil when this deployment has no gateway, and then IntegrationsService is
+	// not registered at all rather than registered and failing on every call.
+	// A console that shows an Integrations page whose every button returns an
+	// error is worse than one that shows no page: the first looks broken, the
+	// second looks unconfigured, and only one of those sends an operator to
+	// the right place.
+	Integrations corev1connect.IntegrationsServiceHandler
+
 	// Logger is what the internal handlers report to. An ingest that refused a
 	// pack has to say so somewhere a person will look, because its caller is a
 	// schedule rather than a browser.
@@ -222,6 +233,16 @@ func New(deps Dependencies) (http.Handler, error) {
 	// with no model. That is ENT-212's "degrades to a form rather than failing"
 	// arranged so there is no second path to keep working.
 	mux.Handle(corev1connect.NewOnboardingServiceHandler(onboardingservice.New(), chain))
+	// Connecting a customer's own systems (ENT-231). On the tenant chain,
+	// because a connection belongs to one organisation and RLS is what keeps
+	// one customer's endpoints and credentials out of another's console.
+	//
+	// Registered only when a gateway is configured. core-api itself opens no
+	// connection to a customer-supplied address, so without the gateway there
+	// is nothing behind this surface at all.
+	if deps.Integrations != nil {
+		mux.Handle(corev1connect.NewIntegrationsServiceHandler(deps.Integrations, chain))
+	}
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in
