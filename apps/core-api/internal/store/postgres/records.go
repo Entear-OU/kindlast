@@ -102,8 +102,25 @@ const dsarColumns = `
 	coalesce(d.handler, ''),
 	coalesce(d.finding_id::text, ''),
 	d.created_at,
-	d.updated_at
+	d.updated_at,
+	-- How many trail entries stand behind this request (ENT-226). See the note
+	-- above scanDsar for why it is a subquery and why the list carries it.
+	(select count(*) from dsar_trail_entries e where e.dsar_id = d.id)::int
 `
+
+// scanDsar reads one request, including the count of trail entries behind it.
+//
+// THE COUNT IS A CORRELATED SUBQUERY, AND IT IS ON THE LIST AS WELL AS THE READ
+//
+// A subquery rather than a join because this list orders by response_due_at, and
+// a join would either change the grouping or need one. It is served by the
+// (dsar_id, occurred_at, id) index 00024 adds, so a page of twenty costs twenty
+// index-only counts over a table holding tens of rows per request.
+//
+// On the list deliberately. It is the number that makes responded_at checkable
+// at a glance: a request marked answered with an empty trail is an assertion
+// with nothing behind it, and that is a state the register should show rather
+// than hide.
 
 func scanDsar(row pgx.Row) (records.Dsar, error) {
 	var d records.Dsar
@@ -112,6 +129,7 @@ func scanDsar(row pgx.Row) (records.Dsar, error) {
 		&d.ID, &d.SubjectName, &d.RequestType, &d.Status,
 		&d.ReceivedAt, &d.ResponseDueAt, &responded,
 		&d.Handler, &d.SourceFindingID, &d.CreatedAt, &d.UpdatedAt,
+		&d.TrailEntryCount,
 	)
 	if responded != nil {
 		d.RespondedAt = *responded

@@ -308,6 +308,7 @@ func dsarToProto(d domain.Dsar, now time.Time) *corev1.Dsar {
 		SourceFindingId: d.SourceFindingID,
 		CreatedAt:       timestamppb.New(d.CreatedAt),
 		UpdatedAt:       timestamppb.New(d.UpdatedAt),
+		TrailEntryCount: d.TrailEntryCount,
 	}
 	if !d.RespondedAt.IsZero() {
 		out.RespondedAt = timestamppb.New(d.RespondedAt)

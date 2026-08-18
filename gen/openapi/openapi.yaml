@@ -1223,6 +1223,99 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /api/v1/records/dsars/{dsarId}/trail:
+        get:
+            tags:
+                - RecordsService
+            description: |-
+                The trail a response was assembled from: which store was searched, when,
+                 and what came back (ENT-226).
+
+                 Chronological, oldest first, which is the opposite of every other list on
+                 this service. The other registers answer "what is outstanding" and lead
+                 with the most pressing row; a trail answers "what did you do", and that
+                 reads forward. A page token from this list is not interchangeable with any
+                 other here.
+
+                 Ordered by `occurred_at` and not by when somebody typed it in, for the
+                 reason DsarTrailEntry.occurred_at gives.
+            operationId: RecordsService_ListDsarTrail
+            parameters:
+                - name: dsarId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: pageToken
+                  in: query
+                  schema:
+                    type: string
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListDsarTrailResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - RecordsService
+            description: |-
+                Adds one entry to that trail.
+
+                 APPEND ONLY, AND THERE IS NO UPDATE OR DELETE RPC TO GO WITH IT
+
+                 Not an unfinished surface. An entry is evidence about how a response to a
+                 statutory request was built, and evidence a producer can revise after the
+                 fact is worth less than evidence it cannot. The database refuses an UPDATE
+                 with a trigger that binds even the migrator, so an RPC to do it could not
+                 be served whatever this contract said.
+
+                 Correcting a mistake means adding an entry that says so, which is how a
+                 paper file works. `withheld` and `none_found` exist so that the correction
+                 has somewhere honest to go.
+
+                 No `reviewed` gate, unlike MarkDsarResponded. Recording that you searched
+                 the CRM is not an assertion a regulator reads as compliance; it is the
+                 working note that makes the assertion checkable, and a confirm step on
+                 every note would mean fewer notes.
+            operationId: RecordsService_AddDsarTrailEntry
+            parameters:
+                - name: dsarId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AddDsarTrailEntryRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddDsarTrailEntryResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/records/dsars/{dsarId}:respond:
         post:
             tags:
@@ -1697,6 +1790,53 @@ components:
                  It is one today, and §26 has agents producing acts that reference their run
                  record. `kind` exists so that day adds a value rather than a field, and so a
                  console is never written around "the actor's name" being a human's name.
+        AddDsarTrailEntryRequest:
+            type: object
+            properties:
+                dsarId:
+                    type: string
+                source:
+                    type: string
+                    description: |-
+                        The store that was searched. Required, and free text: see
+                         DsarTrailEntry.source.
+                action:
+                    type: string
+                    description: searched, found, none_found, disclosed, or withheld. Required.
+                detail:
+                    type: string
+                    description: |-
+                        Optional. What was looked for, what came back, or why something was
+                         withheld.
+                occurredAt:
+                    type: string
+                    description: |-
+                        When the search or the disclosure actually happened. Absent means now.
+
+                         Same field and the same reasoning as LogDsarRequest.received_at: a handler
+                         who searched the CRM on Tuesday and writes it up on Friday did one thing,
+                         and a trail that only knows Friday cannot show the search happened inside
+                         the statutory month. A future date is refused rather than clamped.
+                    format: date-time
+                agentRunId:
+                    type: string
+                    description: |-
+                        The agent run that produced this entry, when one did (ENT-218, ENT-245).
+
+                         Refused unless it names a run in the caller's own organisation, so an entry
+                         can never be attributed to another tenant's run. `created_by` is recorded
+                         alongside it regardless and is taken from the session rather than the
+                         request, so an entry always says which human filed it whatever it claims
+                         about a run.
+
+                         Empty today from every caller that exists. It is in the contract because
+                         §26.4's gateway writes through this RPC, and provenance that has to be
+                         added afterwards is provenance nobody recorded.
+        AddDsarTrailEntryResponse:
+            type: object
+            properties:
+                entry:
+                    $ref: '#/components/schemas/DsarTrailEntry'
         AgentRunUsage:
             type: object
             properties:
@@ -2325,7 +2465,102 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                trailEntryCount:
+                    type: integer
+                    description: |-
+                        How many trail entries this request has (ENT-226).
+
+                         Carried on the list as well as the read, because it is the number that
+                         makes `responded_at` checkable at a glance: a request marked answered with
+                         an empty trail is an assertion with nothing behind it, and that is a state
+                         the register should show rather than hide.
+
+                         A count and not the entries themselves. A trail can be long, it holds free
+                         text about a named person, and a list of every request has no business
+                         carrying all of it; ListDsarTrail is the call that does.
+
+                         NOT A GATE. Nothing refuses MarkDsarResponded on a zero here, deliberately:
+                         a customer who assembled the response somewhere else has still met the
+                         deadline, and inventing a rule that Article 12(3) requires a Kindlast trail
+                         would be the product asserting an obligation the law does not contain.
+                    format: int32
             description: A data-subject access request, and the clock on it.
+        DsarTrailEntry:
+            type: object
+            properties:
+                entryId:
+                    type: string
+                dsarId:
+                    type: string
+                source:
+                    type: string
+                    description: |-
+                        The store that was searched, in the customer's own words: "Salesforce",
+                         "the HR system", "our payroll export".
+
+                         Free text rather than an enum, and deliberately. The stores are the
+                         customer's estate, so an enum here would be Kindlast enumerating somebody
+                         else's systems: the same mistake `request_type` avoids by not forcing an
+                         Article 15-22 request into a closed list at intake. Where a request reaches
+                         data Kindlast itself holds, the three stores in
+                         `docs/personal-data-runbook.md` are the names to use, and the console
+                         offers them as suggestions rather than as the only options.
+                action:
+                    type: string
+                    description: |-
+                        searched, found, none_found, disclosed, or withheld.
+
+                         A closed vocabulary, unlike `source`, because these are Kindlast's own and
+                         a reader has to be able to count them. `none_found` is not the same as the
+                         absence of an entry: "we looked in the CRM and there was nothing" and
+                         "nobody has looked in the CRM" are different facts, and a record that
+                         conflates them tells a customer they are covered when they are not.
+
+                         `withheld` is a first-class outcome for the reason `refused` is one on an
+                         agent run. Article 15(4) and the Member State exemptions are real, so a
+                         response that leaves something out for a stated reason is lawful, and one
+                         that leaves something out silently is evidence of nothing.
+                detail:
+                    type: string
+                    description: |-
+                        What was looked for, what came back, or why something was withheld.
+
+                         Not a place to put the personal data itself. The handler writes
+                         "employment record, 2019-2024", not the record: this table is read by
+                         everyone in the organisation who can read the register, and copying a data
+                         subject's data into it would widen who can see it.
+                occurredAt:
+                    type: string
+                    description: When it happened in the world.
+                    format: date-time
+                recordedAt:
+                    type: string
+                    description: |-
+                        When it entered the record. Never supplied by a caller, and it cannot move
+                         afterwards.
+
+                         Carried beside `occurred_at` rather than instead of it because the gap
+                         between them is itself meaningful: a trail written up entirely on the last
+                         day looks different from one kept as the work was done, and both are honest
+                         records of different behaviour.
+                    format: date-time
+                createdBy:
+                    type: string
+                    description: Which human filed it. Always set for an entry written through the console.
+                agentRunId:
+                    type: string
+                    description: |-
+                        The agent run that produced it, when one did. Empty otherwise, which today
+                         is every entry.
+            description: |-
+                One step in assembling a response to a data-subject request.
+
+                 WHY THIS EXISTS: `Dsar.responded_at` says a response went out. On its own it
+                 is an assertion with nothing behind it, and a regulator reading the register
+                 cannot see what was searched, what was found, or what was returned. These
+                 entries are that record, and they are the customer's evidence rather than an
+                 internal trace: they are exportable, they are readable in the console, and
+                 nothing in the product can edit or delete one.
         EnforcementDecision:
             type: object
             properties:
@@ -2867,6 +3102,16 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/RegulatoryDocumentSummary'
+        ListDsarTrailResponse:
+            type: object
+            properties:
+                entries:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/DsarTrailEntry'
+                    description: Oldest first. See ListDsarTrail.
+                nextPageToken:
+                    type: string
         ListDsarsResponse:
             type: object
             properties:
