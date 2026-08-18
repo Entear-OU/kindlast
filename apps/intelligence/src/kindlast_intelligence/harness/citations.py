@@ -87,18 +87,49 @@ class ValidationResult(BaseModel):
 
 
 class ObligationLookup(Protocol):
-    """What the validator needs: does this slug name a stored obligation.
+    """Was this slug among the obligations the run was given.
 
-    A Protocol rather than the core-api client, so the validator can be tested
-    without a stack and so it cannot accidentally acquire the ability to do
-    anything else with that client. The real implementation is one RPC.
+    NOT "does this exist in the corpus", and the difference is the whole
+    security property. See `CitationValidator`.
     """
 
     def exists(self, slug: str) -> bool: ...
 
 
+class OfferedObligations:
+    """The obligations a run was actually shown.
+
+    This is the lookup in production. It holds the slugs from the run's own
+    inputs, which the caller assembled (§26.2), so the validator needs no
+    network and the run stays a pure function of its arguments.
+    """
+
+    def __init__(self, obligations: list[dict[str, str]]) -> None:
+        self._slugs = {o["slug"] for o in obligations}
+
+    def exists(self, slug: str) -> bool:
+        return slug in self._slugs
+
+
 class CitationValidator:
-    """Refuses any citation that does not resolve to a stored obligation."""
+    """Refuses any citation the run was not given.
+
+    # AGAINST THE OFFERED SET, NOT AGAINST THE WHOLE CORPUS
+
+    The first version asked core-api whether a slug named a stored obligation.
+    That failed for a mundane reason, `corpus:read` being a tenant-facing human
+    scope this service does not hold, and the mundane failure exposed a better
+    design.
+
+    Checking against the corpus accepts a citation to an obligation that
+    genuinely exists but was never shown to this run. That is still a
+    fabrication: the model produced it from somewhere other than its context,
+    which is precisely what this exists to catch. The system prompt says "the
+    obligations you may cite, and no others", and validating against the
+    offered set is what actually enforces that sentence.
+
+    It is also faster, needs no network, and keeps `draft_narrative` pure.
+    """
 
     def __init__(self, lookup: ObligationLookup) -> None:
         self._lookup = lookup
@@ -134,7 +165,7 @@ class CitationValidator:
                 result.rejected.append(
                     Rejection(
                         citation=citation,
-                        reason="does not resolve to a stored obligation",
+                        reason="was not among the obligations this run was given",
                     )
                 )
                 continue

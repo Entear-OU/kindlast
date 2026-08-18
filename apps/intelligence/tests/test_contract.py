@@ -74,3 +74,38 @@ def test_the_schema_does_not_ship_our_design_notes_to_the_model():
     )
     for leaked in ("pydantic", "load-bearing", "configdict"):
         assert leaked not in description.lower()
+
+
+# --- The validator checks the offered set, not the corpus ------------------
+
+
+def test_a_real_obligation_that_was_not_offered_is_still_refused():
+    """The finding that came out of hitting a scope wall.
+
+    The first validator asked core-api whether a slug named a stored
+    obligation. That failed for a mundane reason, `corpus:read` being a
+    tenant-facing human scope this service does not hold, and the mundane
+    failure exposed a better design.
+
+    Checking the corpus would ACCEPT a citation to an obligation that genuinely
+    exists but was never shown to this run. That is still a fabrication: the
+    model produced it from somewhere other than its context, which is exactly
+    what the validator exists to catch.
+
+    The system prompt says "the obligations you may cite, and no others".
+    Validating against the offered set is what enforces that sentence.
+    """
+    from kindlast_intelligence.harness.citations import (
+        Citation,
+        CitationValidator,
+        OfferedObligations,
+    )
+
+    offered = [{"slug": "gdpr-art-30-ropa", "title": "t", "summary": "s"}]
+    validator = CitationValidator(OfferedObligations(offered))
+
+    # A real obligation in the shipped corpus, and not one this run was shown.
+    result = validator.validate([Citation(slug="gdpr-art-28-processor-contracts")])
+
+    assert not result.ok
+    assert "not among the obligations" in result.rejected[0].reason

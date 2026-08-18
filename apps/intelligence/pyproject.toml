@@ -31,5 +31,14 @@ dev = [
 # `tests/` is on the path so the battery can import its own conftest helpers
 # by name, which keeps the fixture module readable as a module rather than as
 # a pile of fixtures.
-pythonpath = ["tests"]
+#
+# `gen/python` is on it because the core-api client is generated there and
+# committed, the same way gen/go is. It is a PATH rather than a dependency
+# deliberately: making it installable would mean putting a pyproject.toml
+# inside a generated tree, and gen/ holds contract and nothing else. The
+# service sets the same path at runtime, which the Dockerfile will carry when
+# it lands; until then a caller outside pytest needs
+# PYTHONPATH=gen/python, and that is stated in the README rather than left to
+# be discovered by an ImportError.
+pythonpath = ["tests", "../../gen/python"]
 testpaths = ["tests"]

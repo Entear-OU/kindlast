@@ -373,7 +373,16 @@ def test_the_corpus_prefix_is_stable_across_signals():
     assert first[0]["content"] == second[0]["content"]
 
 
-def test_the_skill_allow_list_is_short_on_purpose():
-    """§26.3 wants a per-skill allow-list. No filesystem, no shell, no
-    database handle, no third party."""
-    assert analyst.ALLOWED_TOOLS == ("get_obligation",)
+def test_the_analyst_is_given_its_inputs_rather_than_fetching_them():
+    """Inputs and tools are different things (§26.2), and this skill has only
+    inputs.
+
+    An earlier draft declared `get_obligation` as a tool, which named
+    something the skill never called and invited the loop to fetch its own
+    inputs. That would have made the run impure and its tests need a stack.
+
+    The tool-dispatch seam is real and lives in `harness/tools.py`, exercised
+    by a test skill in `test_tool_dispatch.py` rather than by giving this one
+    a capability it does not use.
+    """
+    assert analyst.ALLOWED_TOOLS == ()

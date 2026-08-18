@@ -35,12 +35,27 @@ description of what the fields MEAN, where the schema describes what they are.
 `test_the_prompt_describes_the_schema_in_words` fails if a field gains one and
 not the other.
 
-# WHAT THIS SKILL MAY DO
+# INPUTS AND TOOLS ARE DIFFERENT THINGS, AND THIS SKILL HAS ONLY INPUTS
 
-One tool, `get_obligation`. Not a filesystem, not a shell, not a database
-handle, and no ability to reach a third party. §26.3 requires a per-skill
-allow-list with unknown tools refused rather than retried, and the list being
-this short is the point rather than a temporary state.
+A skill declares both, and they live in different places (§26.2).
+
+INPUTS are what it needs before it starts: for the Analyst, the signal and the
+obligations it may cite. They are fetched by the CALLER through core-api and
+passed in, because there is no decision in fetching them. That is what keeps
+`draft_narrative` a pure function of its arguments, which is what keeps it
+activity-shaped for Temporal at step 8, and what lets the guardrail tests run
+in milliseconds with no stack.
+
+TOOLS are what the model may decide to call during the loop. The Analyst has
+none, and the empty tuple below is a statement rather than a placeholder: this
+skill is given everything it needs and then answers. Nothing it does depends on
+a choice it makes about what to look at.
+
+An earlier draft declared `get_obligation` here, which was wrong twice over: it
+named a tool the skill never called, and it invited the loop to fetch its own
+inputs, which would have made the run impure and its tests need a stack. The
+dispatch seam exists in the loop for the skills that will need it (the Watcher,
+the rail) and is exercised by a test skill rather than by this one.
 """
 
 from __future__ import annotations
@@ -55,10 +70,13 @@ NAME = "analyst.narrative"
 # three change what the model was asked and therefore what its answer means.
 VERSION = "1.0.0"
 
-# The tools this skill may call. Anything else is refused rather than retried:
-# a model asking for a tool it was not given is not a request to satisfy, it is
-# a sign the run has left the shape it was designed in.
-ALLOWED_TOOLS = ("get_obligation",)
+# No tools. See the header: this skill is given its inputs and then answers.
+#
+# Empty is enforced the same way a non-empty list would be. A model asking for
+# any tool here is refused rather than retried, because a request for a tool
+# that was never offered is not something to satisfy; it is a sign the run has
+# left the shape it was designed in.
+ALLOWED_TOOLS: tuple[str, ...] = ()
 
 
 # WHY THE DOCSTRING BELOW IS ONE LINE, AND THE REASONING IS OUT HERE
