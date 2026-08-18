@@ -3,6 +3,8 @@ package corpus
 import (
 	"strings"
 	"testing"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/memory"
 )
 
 // Helper: validate one obligation's `appliesWhen` and return the joined
@@ -88,13 +90,13 @@ func TestAppliesWhenMustBeAnObjectOfTheRightShape(t *testing.T) {
 func TestTheVocabularyTheCorpusUsesValidates(t *testing.T) {
 	for _, raw := range []string{
 		`{"role":"controller","requires":["ropa"]}`,
-		`{"role":"controller","thresholds":{"high_risk":true}}`,
+		`{"role":"controller","thresholds":{"high_risk_processing":true}}`,
 		`{"role":"controller","thresholds":{"large_scale_monitoring":true},"requires":["dpo"]}`,
 		`{"role":"controller","lawful_basis_includes":"consent"}`,
 		`{"role":"controller","thresholds":{"cross_border_transfers":true},"requires":["transfer_safeguards"]}`,
 		`{"role":"controller","engages_processor":true}`,
 		`{"role":"deployer","requires":["ai_register"]}`,
-		`{"role":"provider","thresholds":{"high_risk":true}}`,
+		`{"role":"provider","thresholds":{"high_risk_ai_system":true}}`,
 		`{}`,
 		``,
 	} {
@@ -104,43 +106,78 @@ func TestTheVocabularyTheCorpusUsesValidates(t *testing.T) {
 	}
 }
 
-// The known drift, pinned.
+// There is no declared-but-unevaluated tier left (ENT-246).
 //
-// Three keys the curator writes that the watcher does not read. Pinned as an
-// exact set so that a fourth cannot be added without editing this list, which
-// is the whole difference between a drift somebody decided to accept and a
-// drift nobody noticed.
-func TestTheDeclaredButUnevaluatedKeysAreExactlyTodaysDrift(t *testing.T) {
-	want := map[string]bool{
-		"lawful_basis_includes":  true,
-		"high_risk":              true,
-		"large_scale_monitoring": true,
+// It used to hold three keys, and holding them was the bug: an unread threshold
+// narrows nothing, so `gdpr-art-35-dpia` reached every controller rather than
+// only those doing high-risk processing. Each is now answered from a profile
+// fact.
+//
+// The assertion is emptiness rather than a pinned list, because the list is the
+// thing that should not come back. A token nobody evaluates is either an
+// obligation that binds too many organisations or, on the `requires` side, one
+// that never fires at all.
+func TestNoTokenIsDeclaredWithoutBeingEvaluated(t *testing.T) {
+	if keys := UnevaluatedKeys(); len(keys) != 0 {
+		t.Fatalf("these tokens are declared and not evaluated: %v. An unread applicability "+
+			"token makes its obligation apply more widely than the curator wrote, which is "+
+			"the fabricated obligation ENT-246 removed. Evaluate it, or take it out of the "+
+			"vocabulary and out of the obligations that carry it", keys)
+	}
+}
+
+// `employees_min` is gone, and a pack that uses it is refused.
+//
+// Kept as its own test because "we deleted an unused thing" is exactly the
+// change somebody restores in good faith. The reason it is not merely unused is
+// in the vocabulary: it invites Article 30(5) to be encoded as a headcount,
+// which would exempt organisations Article 30(5) does not exempt.
+func TestTheHeadcountThresholdIsNotInTheVocabulary(t *testing.T) {
+	problems := appliesWhenProblems(t, `{"thresholds":{"employees_min":250}}`)
+	if !strings.Contains(problems, "employees_min") {
+		t.Errorf("employees_min was accepted: %q", problems)
+	}
+}
+
+// Every threshold answered from a fact names a fact the product understands.
+//
+// The failure this catches is silent in the worst way. A threshold whose fact
+// key is misspelled reads a key nobody ever writes, which is indistinguishable
+// from an organisation that has not answered, which means the obligation stops
+// applying to everybody with no error anywhere.
+func TestEveryThresholdFactIsAFactTheProductUnderstands(t *testing.T) {
+	for _, pair := range ThresholdFacts() {
+		threshold, fact := pair[0], pair[1]
+
+		if !thresholdKeys[threshold] {
+			t.Errorf("threshold %q is answered from a fact but is not in the vocabulary", threshold)
+		}
+		if _, known := memory.Kinds[fact]; !known {
+			t.Errorf("threshold %q reads the fact %q, which is not in memory.Kinds. Nothing "+
+				"writes that key, so the obligation would silently apply to nobody",
+				threshold, fact)
+		}
+		if memory.Kinds[fact] != memory.KindTriState {
+			t.Errorf("threshold %q reads %q, which is not a tri-state. The evaluator asks "+
+				"whether the fact is yes or unsure, and any other shape answers neither",
+				threshold, fact)
+		}
+	}
+}
+
+// A lawful basis outside Article 6(1) is refused at ingest.
+//
+// The Watcher matches this string against the organisation's recorded bases, so
+// "Consent" is not a cosmetic difference: it is an obligation that never
+// applies to anybody and reports nothing.
+func TestALawfulBasisOutsideArticle6IsRefused(t *testing.T) {
+	problems := appliesWhenProblems(t, `{"lawful_basis_includes":"Consent"}`)
+	if !strings.Contains(problems, "Consent") {
+		t.Errorf("an unrecognised lawful basis was accepted: %q", problems)
 	}
 
-	got := map[string]bool{}
-	for key, evaluated := range appliesWhenKeys {
-		if !evaluated {
-			got[key] = true
-		}
-	}
-	for key, evaluated := range thresholdKeys {
-		if !evaluated {
-			got[key] = true
-		}
-	}
-
-	for key := range want {
-		if !got[key] {
-			t.Errorf("%q is no longer declared-but-unevaluated; if the watcher now reads it, "+
-				"mark it evaluated and drop it from this list", key)
-		}
-	}
-	for key := range got {
-		if !want[key] {
-			t.Errorf("%q was added as declared-but-unevaluated. That is an obligation whose "+
-				"applicability is wider than the curator wrote. Say so in docs/regulation-packs.md "+
-				"and add it here deliberately", key)
-		}
+	if problems := appliesWhenProblems(t, `{"lawful_basis_includes":"legitimate_interests"}`); problems != "" {
+		t.Errorf("a real Article 6(1) basis was refused: %q", problems)
 	}
 }
 

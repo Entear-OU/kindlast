@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -36,11 +37,17 @@ import (
 
 // vocabularyConn opens a connection for the vocabulary probes.
 //
-// The functions are IMMUTABLE and read no tables, so any role may call them and
-// the migrator is used only because it is the connection every db-backed test
-// in this package already has a DSN for. Skips on a laptop and fails in CI,
-// exactly as `ingestStore` does, because a self-skipping guard that reports
-// green while testing nothing is how a drift check stops covering anything.
+// `watcher_gap_satisfied` reads nothing but its arguments;
+// `watcher_obligation_applies` reads `org_profile_facts` since ENT-246, which
+// is why it is STABLE rather than IMMUTABLE. The migrator is used because it is
+// the connection every db-backed test in this package already has a DSN for,
+// and because it can write the fixtures. That the PRODUCER can read those facts
+// is a different claim and is asserted separately, as its own test in
+// `watcher_applicability_test.go`.
+//
+// Skips on a laptop and fails in CI, exactly as `ingestStore` does, because a
+// self-skipping guard that reports green while testing nothing is how a drift
+// check stops covering anything.
 func vocabularyConn(t *testing.T) *pgx.Conn {
 	t.Helper()
 
@@ -151,7 +158,14 @@ func TestAnUnknownGapTokenIsSilentlyTreatedAsSatisfied(t *testing.T) {
 	}
 }
 
-// The thresholds the vocabulary claims are evaluated, are.
+// The conditions answered from the legacy profile row.
+//
+// `employees_min` used to be in this list and is not in the vocabulary at all
+// any more (ENT-246): it was evaluated and no obligation used it, and the one
+// it looks like it should serve is Article 30's ROPA, whose 250-employee
+// exemption is too narrow to be a headcount test. The conditions answered from
+// `org_profile_facts` are in the test below, because they need an organisation
+// and a fact rather than a synthetic profile.
 func TestTheEvaluatedThresholdsNarrowApplicability(t *testing.T) {
 	conn := vocabularyConn(t)
 
@@ -164,11 +178,6 @@ func TestTheEvaluatedThresholdsNarrowApplicability(t *testing.T) {
 			"cross_border_transfers",
 			`{"thresholds":{"cross_border_transfers":true}}`,
 			`{"transfers_outside_eu":"no"}`,
-		},
-		{
-			"employees_min",
-			`{"thresholds":{"employees_min":250}}`,
-			`{"staff_count":12}`,
 		},
 		{
 			"engages_processor",
@@ -195,57 +204,78 @@ func TestTheEvaluatedThresholdsNarrowApplicability(t *testing.T) {
 	}
 }
 
-// The known drift, asserted against the running function rather than trusted.
+// Every threshold answered from a fact is read from THAT fact.
 //
-// Each of these is a condition the curator wrote and the Watcher does not read.
-// The obligation therefore applies to organisations it was never meant to bind:
-// Article 35's DPIA reaches every controller rather than high-risk processing,
-// and Article 37's DPO duty reaches every controller rather than those doing
-// large-scale monitoring.
+// This is the test that would have caught ENT-246 on the day the drift was
+// introduced, and it is the one that keeps catching it. Two halves, and the
+// second is what makes the first mean anything:
 //
-// That over-reports, which is visible and dismissible, unlike the gap-token
-// case above. It is still wrong, and pinning it here means the day somebody
-// implements one of these the test says so instead of the drift silently
-// changing direction.
-func TestTheUnevaluatedKeysDoNotNarrowApplicability(t *testing.T) {
-	conn := vocabularyConn(t)
+//   - With the fact unanswered the obligation must NOT apply. A threshold the
+//     evaluator has never heard of narrows nothing, which is how Article 35's
+//     DPIA came to reach every controller.
+//   - With the fact answered `yes` it must apply. Without this half an
+//     evaluator that returned false for everything would pass, and "we fixed
+//     the over-reporting by switching the obligation off" is not a fix.
+//
+// Driven off `corpus.ThresholdFacts()` rather than a list written here, so a
+// threshold added to the vocabulary is covered the moment it is declared.
+func TestEveryFactBackedThresholdIsReadFromItsOwnFact(t *testing.T) {
+	for _, pair := range corpus.ThresholdFacts() {
+		threshold, fact := pair[0], pair[1]
 
-	// The profile is deliberately the most exempt one that can be written: no
-	// AI, no transfers, no vendors, one member of staff. If a condition still
-	// does not narrow against this, nothing narrows it.
-	exempt := `{"ai_systems":[],"transfers_outside_eu":"no","vendor_list":"","staff_count":1,` +
-		`"transfer_destinations":[],"has_ropa":"no","has_dpo":"no"}`
+		t.Run(threshold, func(t *testing.T) {
+			// AI systems on the profile, so the role gate is never the reason
+			// an answer comes back false.
+			f := newApplicabilityFixture(t, []string{"a recommender"})
+			appliesWhen := fmt.Sprintf(`{"thresholds":{%q:true}}`, threshold)
 
-	for _, tc := range []struct{ key, appliesWhen string }{
-		{"high_risk", `{"thresholds":{"high_risk":true}}`},
-		{"large_scale_monitoring", `{"thresholds":{"large_scale_monitoring":true}}`},
-		{"lawful_basis_includes", `{"lawful_basis_includes":"consent"}`},
-	} {
-		t.Run(tc.key, func(t *testing.T) {
-			if !obligationApplies(t, conn, tc.appliesWhen, exempt) {
-				t.Errorf("%q now narrows applicability, so the Watcher has learned to read it. "+
-					"Mark it evaluated in applieswhen.go, drop it from UnevaluatedKeys, and "+
-					"update docs/regulation-packs.md", tc.key)
+			if f.applies(t, appliesWhen) {
+				t.Errorf("%q did not narrow applicability for an organisation that has "+
+					"never answered it. Either the evaluator does not read the threshold, "+
+					"or it reads a fact key other than %q", threshold, fact)
+			}
+
+			f.believe(t, fact, `"yes"`)
+
+			if !f.applies(t, appliesWhen) {
+				t.Errorf("%q still did not apply after the organisation answered yes to "+
+					"%q. The vocabulary says the evaluator reads that fact and it does "+
+					"not, so the obligation now applies to nobody", threshold, fact)
 			}
 		})
 	}
 }
 
-// UnevaluatedKeys is the whole list, not a sample.
+// Every threshold in the vocabulary is probed by one of the two tests above.
 //
-// Guards the case where somebody adds a fourth unevaluated key and this file
-// keeps passing because it only ever probes the three it knows about.
-func TestTheUnevaluatedKeyListMatchesWhatThisFileProbes(t *testing.T) {
-	probed := map[string]bool{
-		"high_risk":              true,
-		"large_scale_monitoring": true,
-		"lawful_basis_includes":  true,
+// ENT-233's property, kept: a threshold cannot arrive without something here
+// asking what it does. The fact-backed ones are covered by the loop above; the
+// one answered from the legacy profile row is named here.
+func TestEveryThresholdInTheVocabularyIsProbed(t *testing.T) {
+	fromProfileRow := map[string]bool{"cross_border_transfers": true}
+
+	fromFact := map[string]bool{}
+	for _, pair := range corpus.ThresholdFacts() {
+		fromFact[pair[0]] = true
 	}
 
-	for _, key := range corpus.UnevaluatedKeys() {
-		if !probed[key] {
-			t.Errorf("%q is declared unevaluated but nothing here probes it, so its direction "+
-				"of failure is undocumented. Add a case above", key)
+	for _, threshold := range corpus.ThresholdKeys() {
+		if !fromFact[threshold] && !fromProfileRow[threshold] {
+			t.Errorf("the threshold %q is in the vocabulary and nothing in this file asks "+
+				"whether the Watcher reads it. Give it a fact and it joins the loop above, "+
+				"or name it here with the profile column it is answered from", threshold)
 		}
+	}
+}
+
+// Nothing is declared without being evaluated (ENT-246).
+//
+// The domain package asserts the same thing without a database. It is repeated
+// here because this file is where somebody looks when they are about to add a
+// token, and because the tier it guards against is the one that shipped the
+// bug.
+func TestTheVocabularyHasNoUnevaluatedTier(t *testing.T) {
+	if keys := corpus.UnevaluatedKeys(); len(keys) != 0 {
+		t.Fatalf("these tokens are declared and not evaluated: %v", keys)
 	}
 }
