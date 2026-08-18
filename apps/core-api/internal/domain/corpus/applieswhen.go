@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/memory"
 )
 
 // The applicability vocabulary: what an obligation may say about who it binds,
-// and what the Watcher actually reads (ENT-233).
+// and what the Watcher actually reads (ENT-233, ENT-246).
 //
 // # WHY THIS FILE EXISTS
 //
@@ -18,45 +20,57 @@ import (
 // was a pair of plpgsql functions in 00001. Nothing in between could tell a
 // token the Watcher evaluates from one it has never heard of.
 //
-// That is not a hypothetical. At two regulations the vocabulary had ALREADY
-// drifted, in both directions, and nothing anywhere went red:
+// That was not a hypothetical. At two regulations the vocabulary had drifted,
+// in both directions, and nothing anywhere went red. ENT-233 wrote the
+// vocabulary down and refused unknown tokens at ingest. ENT-246 closed the
+// drift itself, and the rule this file states is now the simpler one: every
+// token here is evaluated.
 //
-//   - `thresholds.high_risk` (four obligations), `thresholds.large_scale_monitoring`
-//     and `lawful_basis_includes` are written by the curator and read by nobody.
-//   - `thresholds.employees_min` is evaluated by `watcher_obligation_applies`
-//     and written by no obligation.
-//
-// The two directions do not cost the same, which is why this file treats them
-// differently rather than lumping them into one "unknown key" rule.
-//
-// # AN UNEVALUATED GAP TOKEN IS THE ONE THAT MATTERS
+// # AN UNEVALUATED TOKEN FAILS IN ONE OF TWO DIRECTIONS, AND BOTH ARE WRONG
 //
 // `watcher_gap_satisfied` answers `true` for a token it does not recognise, and
 // logs. Satisfied means no gap, no gap means no finding. So a pack whose
 // obligations require `access_review` ingests cleanly, reports as applying, and
-// produces nothing, for ever. The customer reads an empty feed as compliance.
-//
-// A regulation whose obligations silently never fire is worse than one that is
+// produces nothing, for ever. The customer reads an empty feed as compliance. A
+// regulation whose obligations silently never fire is worse than one that is
 // missing, because a missing regulation is visible.
 //
-// So `requires` has no "declared but not evaluated" tier. Every gap token in
-// this vocabulary is one the evaluator implements, and
-// `corpus_vocabulary_test.go` proves that against the running function rather
-// than trusting this file.
-//
-// # AN UNEVALUATED THRESHOLD FAILS THE OTHER WAY, AND IS SURVIVABLE
-//
 // `watcher_obligation_applies` ignores a condition it does not recognise, so an
-// unread threshold NARROWS nothing and the obligation applies to more
-// organisations than the curator wrote. That over-reports. It is wrong, it is
-// visible to the customer, and they can dismiss it. Article 35's DPIA applying
-// to every controller rather than to high-risk processing is exactly this, and
-// it ships today.
+// unread threshold NARROWS nothing and the obligation reaches organisations the
+// curator never meant to bind. That is what ENT-246 fixed: Article 35's DPIA
+// reached every controller rather than only high-risk processing, and a DPIA is
+// expensive. A fabricated obligation is worse than none at all, because the
+// product's whole value is that a human can check the claim against the law.
 //
-// So thresholds and applicability keys carry a second tier: declared, so a pack
-// may use them and the intent survives in the data, but marked here as not
-// evaluated so the list is something a person edits on purpose. The test pins
-// the set. A fourth entry cannot arrive unnoticed.
+// So neither key set has a "declared but not evaluated" tier any more. A token
+// is in this file only if the evaluator reads it, and
+// `corpus_vocabulary_test.go` proves that against the running functions rather
+// than trusting these declarations.
+//
+// # WHAT THE THRESHOLDS READ, AND WHAT SILENCE MEANS
+//
+// Three of them ask about the PROCESSING rather than about the organisation,
+// and the legacy `compliance_profiles` has a column for none of them. They are
+// answered from ENT-228's `org_profile_facts`, under the keys in
+// `thresholdFacts` below, which is why asking these questions was not a
+// migration.
+//
+// An absent fact means the obligation does NOT apply, and that direction was
+// chosen rather than inherited:
+//
+//   - Asserting a DPIA from silence is the fabricated obligation above. Nobody
+//     asked, so there are no grounds, and "you owe a DPIA" is the most
+//     expensive sentence this product can say wrongly.
+//   - The mirror risk, hiding the obligation from an organisation that does do
+//     high-risk processing, is real and is one answer away from being fixed:
+//     the fact is editable on the memory page today, and onboarding writes it
+//     at ENT-212.
+//
+// `unsure` counts as applying, and that is not a rounding of "no". ENT-228 kept
+// `unsure` as its own answer because "we asked and they did not know" is a
+// different claim from "they said no". An organisation that does not know
+// whether its processing is high-risk has not done the Article 35(1) screening,
+// which is exactly the situation the obligation exists for.
 //
 // # THIS IS A DECISION, SO THE VOCABULARY LIVES IN GO
 //
@@ -81,30 +95,54 @@ var gapTokens = map[string]bool{
 	"transfer_safeguards": true,
 }
 
-// Top-level keys. The value is whether the evaluator reads it.
+// Top-level keys. The value is whether the evaluator reads it, and it is true
+// for every entry: the header says why the second tier was closed rather than
+// tidied.
 var appliesWhenKeys = map[string]bool{
 	"role":              true,
 	"requires":          true,
 	"thresholds":        true,
 	"engages_processor": true,
 
-	// Declared, not evaluated. `gdpr-art-7-consent-conditions` narrows itself
-	// to controllers relying on consent, and the profile has no lawful-basis
-	// field to narrow against, so today it binds every controller.
-	"lawful_basis_includes": false,
+	// `gdpr-art-7-consent-conditions` narrows itself to controllers relying on
+	// consent, and is answered from the `lawful_bases` fact. The basis named
+	// must be one of the six in Article 6(1), because the two sides are matched
+	// as strings and a spelling nothing matches is Article 7 quietly not
+	// applying to anybody.
+	"lawful_basis_includes": true,
 }
 
-// Threshold keys, same convention.
+// Threshold keys, same convention: every one is read.
+//
+// `employees_min` is gone (ENT-246). It was evaluated and no obligation used
+// it, which sounds like harmless dead code and is not. The only obligation it
+// looks like it should serve is Article 30's ROPA, whose 250-employee exemption
+// is narrow enough that the curated summary tells the reader most SMEs cannot
+// rely on it. A headcount threshold sitting in the vocabulary invites somebody
+// to encode Article 30(5) as `employees_min: 250` and exempt organisations the
+// Article does not exempt. Deleting it makes that mistake unavailable.
 var thresholdKeys = map[string]bool{
-	"employees_min":          true,
 	"cross_border_transfers": true,
 
-	// Declared, not evaluated. Both describe a property of the PROCESSING
-	// rather than of the organisation, and `compliance_profiles` records only
-	// the latter. ENT-228's `org_profile_facts` is where the question they need
-	// can be asked without a migration.
-	"high_risk":              false,
-	"large_scale_monitoring": false,
+	// The three the Watcher could not read until ENT-246 gave it facts to read
+	// them from. `thresholdFacts` says which fact each one asks about.
+	"high_risk_processing":   true,
+	"high_risk_ai_system":    true,
+	"large_scale_monitoring": true,
+}
+
+// Which profile fact each threshold is answered from.
+//
+// Written down here, and not only inside the plpgsql evaluator, because this is
+// the seam that drifts next. A threshold whose fact key is misspelled reads an
+// answer nobody ever writes, which is indistinguishable from an organisation
+// that has not answered, which means the obligation silently stops applying to
+// everybody. The unit test checks each value is a fact the product understands;
+// the db-backed test checks the evaluator reads that same key.
+var thresholdFacts = map[string]string{
+	"high_risk_processing":   memory.KeyHighRiskProcessing,
+	"high_risk_ai_system":    memory.KeyHighRiskAISystem,
+	"large_scale_monitoring": memory.KeyLargeScaleMonitoring,
 }
 
 // Roles an obligation may bind. `controller` is GDPR's, `deployer` and
@@ -152,6 +190,8 @@ func validateAppliesWhen(where, raw string) []error {
 			problems = append(problems, checkRequires(where, value)...)
 		case "thresholds":
 			problems = append(problems, checkThresholds(where, value)...)
+		case "lawful_basis_includes":
+			problems = append(problems, checkLawfulBasis(where, value)...)
 		}
 	}
 
@@ -192,6 +232,28 @@ func checkRequires(where string, raw json.RawMessage) []error {
 	return problems
 }
 
+// checkLawfulBasis refuses a basis outside Article 6(1).
+//
+// The comparison the Watcher makes is string equality against a member of the
+// organisation's `lawful_bases` fact, so "Consent" or "consent_marketing"
+// would not be a slightly-off label, it would be an obligation that never
+// applies to anyone and says nothing about it.
+func checkLawfulBasis(where string, raw json.RawMessage) []error {
+	var basis string
+	if err := json.Unmarshal(raw, &basis); err != nil {
+		return []error{fmt.Errorf(
+			"%s: appliesWhen lawful_basis_includes is not a string", where)}
+	}
+	if !memory.LawfulBases[basis] {
+		return []error{fmt.Errorf(
+			"%s: appliesWhen lawful_basis_includes %q is not an Article 6(1) basis (%s). "+
+				"The Watcher matches this against the organisation's recorded bases, so a "+
+				"spelling nothing matches is an obligation that never applies",
+			where, basis, vocabulary(memory.LawfulBases))}
+	}
+	return nil
+}
+
 func checkThresholds(where string, raw json.RawMessage) []error {
 	var thresholds map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &thresholds); err != nil {
@@ -221,11 +283,39 @@ func GapTokens() []string {
 	return vocabularyList(gapTokens)
 }
 
+// ThresholdKeys is the threshold vocabulary, sorted.
+//
+// Exported so the db-backed guard can assert that something probes every one of
+// them, which is how ENT-233 stopped a threshold arriving with nobody asking
+// what the evaluator does with it.
+func ThresholdKeys() []string {
+	return vocabularyList(thresholdKeys)
+}
+
+// ThresholdFacts pairs each threshold with the profile fact it is answered
+// from, sorted by threshold.
+//
+// Exported for the tests that keep the two ends of that pairing honest: one
+// checks every fact named is a fact the product understands, and the db-backed
+// one checks the evaluator narrows on that exact key.
+func ThresholdFacts() [][2]string {
+	pairs := make([][2]string, 0, len(thresholdFacts))
+	for threshold, fact := range thresholdFacts {
+		pairs = append(pairs, [2]string{threshold, fact})
+	}
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i][0] < pairs[j][0] })
+	return pairs
+}
+
 // UnevaluatedKeys is the declared-but-not-evaluated set: applicability keys and
 // thresholds a curator may write and the Watcher does not read, so an
 // obligation using one binds more organisations than it says.
 //
-// Exported for the same reason, and worth reading before adding to it.
+// IT IS EMPTY, AND THE FUNCTION IS KEPT SO THAT STAYS CHECKABLE (ENT-246). The
+// tier existed because three conditions had no profile field to be evaluated
+// against; they have facts now. A test asserts this returns nothing, so
+// reintroducing an unread token is a red test rather than a comment nobody
+// reads.
 func UnevaluatedKeys() []string {
 	var keys []string
 	for key, evaluated := range appliesWhenKeys {

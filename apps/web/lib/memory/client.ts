@@ -28,6 +28,10 @@ export type ProfileFactKey =
   | 'PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU'
   | 'PROFILE_FACT_KEY_TRANSFER_DESTINATIONS'
   | 'PROFILE_FACT_KEY_STAFF_COUNT'
+  | 'PROFILE_FACT_KEY_HIGH_RISK_PROCESSING'
+  | 'PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM'
+  | 'PROFILE_FACT_KEY_LARGE_SCALE_MONITORING'
+  | 'PROFILE_FACT_KEY_LAWFUL_BASES'
 
 export type TriState =
   | 'TRI_STATE_YES'
@@ -130,6 +134,18 @@ export const FACT_LABELS: Record<ProfileFactKey, string> = {
     'Transfers personal data outside the EU',
   PROFILE_FACT_KEY_TRANSFER_DESTINATIONS: 'Where data is transferred',
   PROFILE_FACT_KEY_STAFF_COUNT: 'Staff',
+
+  // The four ENT-246 added, and the wording is load-bearing rather than
+  // decorative: each one decides whether an obligation applies, so a question
+  // a reader answers loosely produces a finding they did not earn or hides one
+  // they did. They name the legal test rather than summarising it.
+  PROFILE_FACT_KEY_HIGH_RISK_PROCESSING:
+    'Processing likely to result in a high risk to people (GDPR Article 35)',
+  PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM:
+    'Provides or deploys a high-risk AI system (AI Act Annex III)',
+  PROFILE_FACT_KEY_LARGE_SCALE_MONITORING:
+    'Monitors data subjects regularly and systematically, on a large scale',
+  PROFILE_FACT_KEY_LAWFUL_BASES: 'Lawful bases relied on',
 }
 
 /** Where a value came from, said plainly. */
