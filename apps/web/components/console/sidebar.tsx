@@ -6,6 +6,7 @@ import {
   ScrollText,
   Scale,
   Settings,
+  BookUser,
 } from 'lucide-react'
 
 import { SignOutForm } from '@/components/auth/sign-out-form'
@@ -102,6 +103,19 @@ export function ConsoleSidebar({
               for. */}
           <NavLink href={orgPath(orgSlug, '/logs')} label="Logs">
             <ScrollText aria-hidden="true" className="size-4" />
+          </NavLink>
+        </li>
+        <li>
+          {/* What Kindlast knows about the organisation (ENT-228). Its own
+              entry rather than a tab inside Settings, because a customer
+              looking for what a product holds about them should not have to
+              guess that it is filed under configuration. Rectification and
+              erasure are the thing being sold here, not a preference. */}
+          <NavLink
+            href={orgPath(orgSlug, '/settings/memory')}
+            label="What we know"
+          >
+            <BookUser aria-hidden="true" className="size-4" />
           </NavLink>
         </li>
         <li>

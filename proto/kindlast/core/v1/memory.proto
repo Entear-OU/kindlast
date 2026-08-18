@@ -1,0 +1,252 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// What Kindlast knows about an organisation (ENT-228, §26.4, §26.5).
+//
+// # THIS IS THE SURFACE THAT MAKES THE MEMORY THE CUSTOMER'S
+//
+// §26.5 puts memory in Postgres under RLS rather than in an agent framework's
+// store so that a customer can see it, correct it, export it and have it
+// erased. A schema alone does not deliver that. This service is the seeing and
+// the correcting; export is these same reads; erasure is deleting the
+// organisation, which cascades.
+//
+// # WHY CORRECTION IS HERE AND NOT ON `IngestService`
+//
+// ENT-228 says profile facts are updated "by typed patches through
+// IngestService". The typed-patch half is right and is what `CorrectFact`
+// below is. The routing half cannot be, and the reason is the scope model
+// rather than a preference.
+//
+// `IngestService` is behind `internal:ingest`, issued to service principals
+// through client credentials and never to a browser. A human correcting a fact
+// about their own organisation holds a user token, which by design can never
+// carry an internal scope. Routing the console's correction through
+// `IngestService` would mean either issuing internal scopes to people, which
+// undoes the separation ENT-207 built, or a service that acts on a person's
+// behalf without their identity, which loses `recorded_by` on the one write
+// where "which human said so" matters most.
+//
+// So: a human corrects through here, under `memory:write` and RLS. When the
+// integrations gateway (ENT-231) and onboarding (ENT-212) need to write facts
+// without a human, they get their own typed patch on the platform surface.
+// Neither exists yet, and inventing the RPC before its caller would be
+// guessing at the shape.
+//
+// # THE VALUES ARE TYPED, WHICH IS THE POINT RATHER THAN THE STYLE
+//
+// A fact is a key from a closed enum and a value from a closed oneof. There is
+// no field on this surface that accepts a blob of prose to be stored as the
+// organisation's profile.
+//
+// That is what "never free-text rewrite" means in practice. A profile a model
+// or a form could overwrite with a paragraph would be a profile nobody could
+// diff, correct field by field, or show a provenance for, and every downstream
+// claim about "what Kindlast knows" would be a claim about a paragraph.
+service MemoryService {
+  // What we currently believe, one row per fact.
+  //
+  // Not paged. The profile is a few dozen facts by construction, and a person
+  // asking what a product knows about them wants the answer rather than a
+  // window onto it.
+  rpc ListProfileFacts(ListProfileFactsRequest) returns (ListProfileFactsResponse) {
+    option (kindlast.options.v1.required_scope) = "memory:read";
+    option (google.api.http) = {get: "/api/v1/memory/facts"};
+  }
+
+  // Every value one fact has ever had, newest first.
+  //
+  // THE READ THAT MAKES CORRECTION MEANINGFUL. Without it, correcting a fact
+  // is indistinguishable from us having always thought the new thing, and the
+  // question somebody checking an old finding is asking is precisely what we
+  // believed at the time.
+  rpc GetFactHistory(GetFactHistoryRequest) returns (GetFactHistoryResponse) {
+    option (kindlast.options.v1.required_scope) = "memory:read";
+    option (google.api.http) = {get: "/api/v1/memory/facts/{key}/history"};
+  }
+
+  // Correct a fact, as a typed patch.
+  //
+  // Closes the current value and records a new one, in one transaction. It is
+  // never an update in place: `kindlast_app` holds `update (valid_to)` and not
+  // `update (value)`, so an in-place rewrite is refused by the database rather
+  // than avoided by convention.
+  //
+  // Idempotent in the way that matters: correcting a fact to the value it
+  // already holds is a no-op rather than a second identical row, because a
+  // history full of "changed from yes to yes" is a history nobody reads.
+  rpc CorrectFact(CorrectFactRequest) returns (CorrectFactResponse) {
+    option (kindlast.options.v1.required_scope) = "memory:write";
+    option (google.api.http) = {
+      post: "/api/v1/memory/facts:correct"
+      body: "*"
+    };
+  }
+
+  // What we observed, and where each observation came from.
+  //
+  // Paged, because unlike the profile this grows without bound: every sweep of
+  // every connected tool adds rows.
+  rpc ListEvidence(ListEvidenceRequest) returns (ListEvidenceResponse) {
+    option (kindlast.options.v1.required_scope) = "memory:read";
+    option (google.api.http) = {get: "/api/v1/memory/evidence"};
+  }
+}
+
+// Which fact. A closed set, because an open one is a free-text profile wearing
+// a key column.
+//
+// The vocabulary lives here rather than as a database check constraint: which
+// facts the product understands is a decision that changes as it learns, and a
+// migration is the wrong unit for a vocabulary. The database enforces the
+// invariants instead (one open value per key, closed values immutable).
+//
+// The first ten mirror what the legacy `compliance_profiles` asked at
+// onboarding, so ENT-212 can move onto this profile without a translation
+// table nobody maintains.
+enum ProfileFactKey {
+  PROFILE_FACT_KEY_UNSPECIFIED = 0;
+  PROFILE_FACT_KEY_INDUSTRY = 1;
+  PROFILE_FACT_KEY_EU_JURISDICTIONS = 2;
+  PROFILE_FACT_KEY_DATA_CATEGORIES = 3;
+  PROFILE_FACT_KEY_DATA_SUBJECTS = 4;
+  PROFILE_FACT_KEY_AI_SYSTEMS = 5;
+  PROFILE_FACT_KEY_HAS_DPO = 6;
+  PROFILE_FACT_KEY_HAS_ROPA = 7;
+  PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU = 8;
+  PROFILE_FACT_KEY_TRANSFER_DESTINATIONS = 9;
+  PROFILE_FACT_KEY_STAFF_COUNT = 10;
+}
+
+// Yes, no, or we asked and they did not know.
+//
+// UNSURE IS A REAL ANSWER AND NOT A MISSING ONE. "We do not know whether we
+// have a record of processing activities" is a finding in itself, and a schema
+// offering only yes and no would push it to "no", which is a different claim
+// about the same organisation.
+enum TriState {
+  TRI_STATE_UNSPECIFIED = 0;
+  TRI_STATE_YES = 1;
+  TRI_STATE_NO = 2;
+  TRI_STATE_UNSURE = 3;
+}
+
+message StringList {
+  repeated string values = 1;
+}
+
+// The value of one fact.
+//
+// A oneof rather than a string, so "how many staff" cannot arrive as prose and
+// "which jurisdictions" cannot arrive as a comma-separated line somebody has
+// to parse. Which arm a key takes is validated in Go, because pairing a key
+// with a type is a rule that could reasonably change and is therefore a
+// decision rather than an invariant.
+message FactValue {
+  oneof value {
+    string text = 1;
+    StringList list = 2;
+    int64 number = 3;
+    TriState tri_state = 4;
+  }
+}
+
+// One fact as it was believed over one interval.
+message ProfileFact {
+  ProfileFactKey key = 1;
+  FactValue value = 2;
+
+  // Where it came from: onboarding, an integration, a human, an agent, an
+  // import. Shown against each value rather than against the profile as a
+  // whole, because a profile where one field came from a connected tool and
+  // another from a guess in a form is the normal case.
+  string source = 3;
+
+  // The observation behind it, when there was one. Empty for a fact a human
+  // simply stated, which is most of onboarding.
+  string evidence_id = 4;
+
+  // When we started believing it, and when we stopped. `valid_to` empty means
+  // this is what we believe now.
+  string valid_from = 5;
+  string valid_to = 6;
+
+  // Which human recorded it, when a human did. Records who acted; never used
+  // to decide what may be read.
+  string recorded_by = 7;
+}
+
+message ListProfileFactsRequest {}
+
+message ListProfileFactsResponse {
+  // Only the open values. History is one RPC away and is a different question.
+  repeated ProfileFact facts = 1;
+}
+
+message GetFactHistoryRequest {
+  ProfileFactKey key = 1;
+}
+
+message GetFactHistoryResponse {
+  // Newest first, including the open value if there is one.
+  repeated ProfileFact facts = 1;
+}
+
+message CorrectFactRequest {
+  ProfileFactKey key = 1;
+  FactValue value = 2;
+
+  // Why, in the correcting human's words. Optional, stored against the new
+  // value, and worth asking for: "we appointed a DPO in June" is the sentence
+  // that makes a profile change legible a year later.
+  string note = 3;
+}
+
+message CorrectFactResponse {
+  // What we now believe, as stored. Returned rather than assumed, so a console
+  // renders what the database holds rather than what it just sent.
+  ProfileFact fact = 1;
+
+  // False when the value was already what it is, in which case nothing was
+  // written and no history row was created.
+  bool changed = 2;
+}
+
+// One observation.
+//
+// The body is deliberately not typed the way a fact is. An observation from a
+// helpdesk and one from a cloud provider share nothing but their stamps, and a
+// schema pretending otherwise would be a schema per integration.
+message Evidence {
+  string id = 1;
+  string source = 2;
+  string kind = 3;
+  string connection_id = 4;
+
+  // When it was true at the source, and when we learned it. Both, because they
+  // are routinely far apart and the gap is the interesting part.
+  string observed_at = 5;
+  string fetched_at = 6;
+
+  // The observation, as JSON. A string rather than a Struct, because this
+  // crosses to a console that renders it and never to code that branches on
+  // it, and a Struct would invite the second thing.
+  string body_json = 7;
+
+  // The observation that replaced this one, when one did.
+  string superseded_by = 8;
+}
+
+message ListEvidenceRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListEvidenceResponse {
+  repeated Evidence evidence = 1;
+  string next_page_token = 2;
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
+	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/notifications"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/records"
@@ -179,6 +180,10 @@ func New(deps Dependencies) (http.Handler, error) {
 	// deployment where a customer should be unable to look up the obligation a
 	// finding cites.
 	mux.Handle(corev1connect.NewCorpusServiceHandler(corpusservice.New(), chain))
+	// What Kindlast knows about the organisation (ENT-228). On the tenant
+	// chain, because unlike the corpus this is the customer's own data and RLS
+	// is what keeps one organisation's profile out of another's console.
+	mux.Handle(corev1connect.NewMemoryServiceHandler(memoryservice.New(), chain))
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in

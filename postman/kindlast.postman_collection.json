@@ -1117,6 +1117,87 @@
           }
         },
         {
+          "name": "What we know about you (ListProfileFacts)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.MemoryService/ListProfileFacts",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.MemoryService", "ListProfileFacts"]
+            },
+            "description": "What Kindlast currently believes about the organisation. Required scope: `memory:read`. **Served as of ENT-228.**\n\nThis is the surface that makes the memory the customer's. §26.5 puts memory in Postgres under RLS rather than in an agent framework's store precisely so a customer can see it, correct it, export it and have it erased, and a schema alone does not deliver that. **A GDPR product whose own memory of a customer sits outside that customer's reach cannot answer a request about it.**\n\n**Open values only.** Each fact is one row believed over one interval, and this returns the interval that has not been closed. History is `GetFactHistory` and is a different question; returning both here would make the common read carry every superseded value the organisation has ever had.\n\n**Unpaged**, deliberately: the profile is a few dozen facts by construction, and somebody asking what a product knows about them wants the answer rather than a window onto it.\n\n`source` is shown against each value rather than against the profile as a whole, because a profile where one field came from a connected tool and another from a guess in a form is the normal case. `evidenceId` is empty for a fact a human simply stated, which is most of onboarding.\n\n**No role gate.** Every member sees this, viewers included: a person who can be told a finding should be able to see the profile that finding was reasoned from."
+          }
+        },
+        {
+          "name": "What we used to think (GetFactHistory)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"PROFILE_FACT_KEY_HAS_DPO\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.MemoryService/GetFactHistory",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.MemoryService", "GetFactHistory"]
+            },
+            "description": "Every value one fact has ever had, newest first. Required scope: `memory:read`. **Served as of ENT-228.**\n\n**The read that makes correction meaningful.** Without it, correcting a fact is indistinguishable from our having always thought the new thing, and what somebody checking an old finding is asking is exactly what we believed at the time.\n\nEach entry carries `validFrom` and `validTo`. An empty `validTo` is the open value. **The intervals meet exactly**: a value's `validTo` is the successor's `validFrom`, to the microsecond, because a gap however small is an instant where an as-of query finds no value and reports that we believed nothing.\n\nThat is not free and it cost an afternoon. Postgres `now()` is the TRANSACTION timestamp and is identical for every statement in a transaction, so closing with `now()` and opening with `now()` produced two rows with the same `validFrom`, a zero-length interval, and a history whose order was undefined because the column it sorts by tied. The store takes one `clock_timestamp()` and uses it for both statements. Anything writing these rows directly must do the same.\n\n**Keyed by the fact key rather than by a row id.** A key is stable and meaningful; the id of the currently open row changes every time the fact is corrected, which is precisely when somebody wants to look at its history."
+          }
+        },
+        {
+          "name": "Correct a fact (CorrectFact)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"PROFILE_FACT_KEY_HAS_DPO\",\n  \"value\": { \"triState\": \"TRI_STATE_YES\" },\n  \"note\": \"appointed in June\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.MemoryService/CorrectFact",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.MemoryService", "CorrectFact"]
+            },
+            "description": "Correct a fact, as a typed patch. Required scope: `memory:write`. **Served as of ENT-228.**\n\n**Never an update in place.** It closes the current value and records a new one, in one transaction. `kindlast_app` holds `update (valid_to)` and NOT `update (value)`, so an in-place rewrite is refused by the database rather than avoided by convention. \"Updated only by typed patches, never free-text rewrite\" is a promise until it is a privilege, and it is a privilege you can read out of `information_schema.column_privileges`.\n\n**`value` is a oneof and the arm must match the key.** `text` for `INDUSTRY`; `list` for `EU_JURISDICTIONS`, `DATA_CATEGORIES`, `DATA_SUBJECTS`, `AI_SYSTEMS`, `TRANSFER_DESTINATIONS`; `number` for `STAFF_COUNT`; `triState` for `HAS_DPO`, `HAS_ROPA`, `TRANSFERS_OUTSIDE_EU`. The wrong arm is `invalid_argument`, checked in Go before anything is written: the oneof stops you sending two arms at once but not the wrong one, and jsonb would store `\"about fifty\"` as a staff count happily.\n\n**`TRI_STATE_UNSURE` is a real answer, not a missing one.** \"We do not know whether we have a record of processing activities\" is a finding in itself, and collapsing it to `NO` is a different claim about the same organisation.\n\n**`changed: false` means nothing was written.** Correcting a fact to the value it already holds is a no-op rather than a second identical row, because a history full of \"changed from yes to yes\" is a history nobody scrolls. The comparison is on the stored jsonb, so whitespace and key order are not changes.\n\n**`source` is not a field you can send.** It is recorded as `human` because this RPC is reached with a user token, and a console able to label its own writes `integration` could make a guess look like an observation. `recordedBy` comes from the verified subject for the same reason: a caller naming which human corrected a fact is a caller that can attribute a change to somebody else.\n\n**`note` is free text and is not a contradiction of any of the above.** The rule is about the VALUE. The note sits beside it and is what makes a profile change legible a year later.\n\n**This is on `core.v1` rather than `IngestService`, and that is a deliberate departure from ENT-228's wording.** `IngestService` sits behind `internal:ingest`, issued to service principals through client credentials and never to a browser. A human correcting a fact about their own organisation holds a user token. Routing this through `IngestService` would mean either issuing internal scopes to people, undoing what ENT-207 built, or writing without the person's identity, losing `recordedBy` on the one write where \"which human said so\" matters most. When integrations (ENT-231) and onboarding (ENT-212) need to write facts without a human, they get their own typed patch on the platform surface."
+          }
+        },
+        {
+          "name": "What we observed (ListEvidence)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageSize\": 50\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.MemoryService/ListEvidence",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.MemoryService", "ListEvidence"]
+            },
+            "description": "What we observed, and where each observation came from. Required scope: `memory:read`. **Served as of ENT-228.**\n\nEvidence and profile facts are separate on purpose. **\"What do you think our lawful basis is\" and \"what did the tool actually return in March\" are different questions**, and a schema answering both with the same rows answers the first one badly. Evidence grows forever and is never edited; the profile is small and changes.\n\n`observedAt` is when it was true at the source; `fetchedAt` is when we learned it. Both, because they are routinely far apart and **the gap is the interesting part**: a record of processing activities last edited in March and first read by us in August is a five-month blind spot that one timestamp would hide.\n\n**Paged**, unlike the profile, because every sweep of every connected tool adds rows. Keyset over `observedAt` descending: pass the `nextPageToken` back as `pageToken`. An offset would drift as observations arrive during paging, which on an append-only table is the normal case rather than a rare one. **A token is issued only when the page was full**, so an absent token means there is no more rather than that there might not be.\n\n`body` is JSON as a string and is deliberately untyped, unlike a fact. An observation from a helpdesk and one from a cloud provider share nothing but their stamps, and a schema pretending otherwise would be a schema per integration.\n\n`supersededBy` names the observation that replaced this one. Supersession is recorded rather than implied, and **dedup is an explicit operation rather than a unique constraint**: `contentHash` is indexed and not unique, because \"the tool still says this in August\" is a fact rather than a duplicate.\n\n**Nothing writes here yet.** `kindlast_app` holds the grant, so a console can record a human's upload, and the integrations gateway (ENT-231) will write through core-api like everything else rather than getting a database role of its own. `connectionId` is a column with no foreign key until that table exists."
+          }
+        },
+        {
           "name": "Ingest the corpus (internal)",
           "request": {
             "method": "POST",
