@@ -139,15 +139,26 @@ func NewScope(services []protoreflect.ServiceDescriptor, options ...func(*Scope)
 
 // holds reports whether a caller may exercise a scope.
 //
-// This is where client-class resolution happens, and it is one branch on
-// purpose. A token from the configured human client holds HumanScopes; every
-// other token holds exactly what it carries.
+// This is where client-class resolution happens, and it is two branches into
+// the same answer. A token from the configured human client holds HumanScopes;
+// so does a machine principal that has presented a delegation, because acting
+// for a person means holding what a person holds and nothing else. Every other
+// token holds exactly what it carries.
 //
 // The human set REPLACES the token's scopes rather than being unioned with
 // them, which is the property that makes it a constant. A union would let a
 // role granted to one person out of band widen what that person can do, and
 // then the human half is no longer the same for everyone and no longer
 // reasoned about as a class.
+//
+// REPLACEMENT IS ALSO WHAT MAKES A DELEGATION SAFE (ENT-230). The machine
+// presenting one holds `internal:act-on-behalf` and may hold other `internal:*`
+// scopes besides. Under a union, an agent acting for a viewer would carry the
+// viewer's authority PLUS the platform surface, which is a strictly larger set
+// than either party has: the person cannot reach `internal:ingest` and the
+// machine cannot reach a tenant's rows, and the union hands the request both.
+// HumanScopes deliberately contains no `internal:*` entry, so replacement is
+// what closes that.
 //
 // `openid` survives the replacement because it is asserted by verification
 // rather than granted (§1.3): it means signed in, not permitted, and the
@@ -157,19 +168,27 @@ func NewScope(services []protoreflect.ServiceDescriptor, options ...func(*Scope)
 // the comparison is guarded on humanClient being set. A provider that omits
 // `client_id` therefore degrades to granted scopes rather than silently
 // receiving the human set.
-func (s *Scope) holds(claims *oidc.Claims, want string) bool {
+func (s *Scope) holds(claims *oidc.Claims, delegated bool, want string) bool {
+	if delegated {
+		return human(want)
+	}
 	if s.humanClient != "" && claims.ClientID == s.humanClient {
-		if want == oidc.ScopeOpenID {
-			return true
-		}
-		for _, held := range HumanScopes {
-			if held == want {
-				return true
-			}
-		}
-		return false
+		return human(want)
 	}
 	return claims.HasScope(want)
+}
+
+// human reports whether the constant set covers a scope.
+func human(want string) bool {
+	if want == oidc.ScopeOpenID {
+		return true
+	}
+	for _, held := range HumanScopes {
+		if held == want {
+			return true
+		}
+	}
+	return false
 }
 
 // Interceptor checks the token's scopes against the one the RPC declared.
@@ -197,7 +216,15 @@ func (s *Scope) Interceptor() connect.UnaryInterceptorFunc {
 					fmt.Errorf("%s declares no required scope", procedure))
 			}
 
-			if !s.holds(claims, declared) {
+			// A delegation, if one was presented and resolved, decides which
+			// set the caller is measured against. The error message stays the
+			// same either way: telling a caller that the refusal was about the
+			// person they are acting for rather than about their own token
+			// describes the delegation's contents to somebody who has just
+			// been refused.
+			_, delegated := GrantFrom(ctx)
+
+			if !s.holds(claims, delegated, declared) {
 				return nil, connect.NewError(connect.CodePermissionDenied,
 					fmt.Errorf("token does not carry the %q scope", declared))
 			}

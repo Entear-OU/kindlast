@@ -3,18 +3,23 @@
 // The order is not a matter of taste, and it is the first thing to check if
 // something here looks wrong (core-api-surface §0.2):
 //
-//	Auth  -> JTI -> Scope -> Tenancy -> handler
-//	 who    still   may the   which rows
-//	          ?     client
-//	                touch
-//	              this kind
-//	              of thing
+//	Auth  -> JTI -> ActOnBehalf -> Scope -> Tenancy -> handler
+//	 who    still    for whom     may the   which rows
+//	          ?                   caller
+//	                              touch
+//	                            this kind
+//	                            of thing
 //
 // Each stage may only assume the stages before it have run. Auth is first
 // because nothing downstream means anything without a verified subject. JTI
 // follows immediately, so a revoked token is refused before it can cost a
-// database round trip. Scope precedes Tenancy for the same reason: comparing a
-// declared scope against a claim is free, and opening a transaction is not.
+// database round trip. ActOnBehalf is next because it changes the answer to
+// both of the remaining questions: a machine presenting a delegation is asking
+// to be treated as a person, and both Scope and Tenancy have to know that
+// before they decide anything (ENT-230). It does nothing at all when no
+// delegation is presented, which is every request today. Scope precedes Tenancy
+// for the same reason it always did: comparing a declared scope against a claim
+// is free, and opening a transaction is not.
 //
 // The three layers are also not the same question, and conflating them
 // produces a system that looks secure and is not (§0.5). Scope asks whether
@@ -41,6 +46,11 @@ const (
 	claimsKey contextKey = iota
 	tenantKey
 	tokenKey
+	// grantKey holds the delegation a machine principal presented in order to
+	// act for a person (ENT-230). Unexported like the rest: a package that
+	// could write one of these into a context could make any request read as
+	// anybody.
+	grantKey
 )
 
 // WithClaims attaches a verified identity to the context.

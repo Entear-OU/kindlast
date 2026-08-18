@@ -102,7 +102,30 @@ message DraftNarrativeRequest {
 
   // The person this was drafted for, when there was one. Empty for a scheduled
   // sweep, which runs for the organisation and for nobody in particular.
+  //
+  // FOR THE HARNESS TO READ, NEVER FOR CORE-API TO BELIEVE (ENT-230). What
+  // ends up in the run record is resolved from the delegation below, not from
+  // this, because a value that travels through a second service and comes back
+  // is a value that service could have changed.
   string on_behalf_of_user_id = 4;
+
+  // The delegation this run may act under (ENT-230, §26.3).
+  //
+  // Minted by core-api while it was serving the person's own request, short
+  // lived, single-org, single-user and revocable. Intelligence cannot make one,
+  // cannot read what is inside it, and cannot widen it: all it can do is hand
+  // it back, which is the property that keeps a machine principal from being
+  // able to act as anybody it names.
+  //
+  // Two things it is for. A skill whose tools reach core-api presents it in the
+  // `Kindlast-Delegation` header, and those calls then run as the person, bound
+  // by exactly what that person could do at the keyboard. And it travels back
+  // on `IngestService.RecordAgentRun`, where core-api resolves it to decide who
+  // the run is recorded as having been for.
+  //
+  // Empty for a scheduled sweep. A skill given no delegation has no tools that
+  // reach a tenant's data, which is the Analyst today: it declares none.
+  string delegation = 5;
 }
 
 // ObligationContext is one obligation as the model sees it.

@@ -38,6 +38,15 @@ type Dependencies struct {
 	DenyList interceptor.DenyList
 	Tenants  interceptor.TenantOpener
 
+	// Delegations resolves the credential an agent presents to act for a
+	// person (ENT-230).
+	//
+	// Nil is supported and fails closed: a request presenting a delegation is
+	// refused rather than being run as the machine principal that sent it. That
+	// is the only safe reading of an unwired resolver, because the caller's
+	// intent was to act as somebody with less authority, not more.
+	Delegations interceptor.DelegationResolver
+
 	// Profiles resolves a display name and email when the access token carries
 	// neither. Nil is allowed: provisioning then names an organisation from the
 	// subject claim, which is worse and not broken.
@@ -175,6 +184,10 @@ func New(deps Dependencies) (http.Handler, error) {
 	chain := connect.WithInterceptors(
 		interceptor.Auth(deps.Verifier),
 		interceptor.JTI(deps.DenyList),
+		// Acting for a person (ENT-230). A no-op for every request that does not
+		// present a delegation, which is all of them today, and the stage that
+		// decides who the two below are talking about when one does.
+		interceptor.ActOnBehalf(deps.Delegations),
 		scopes.Interceptor(),
 		interceptor.Tenancy(deps.Tenants),
 	)
@@ -215,6 +228,19 @@ func New(deps Dependencies) (http.Handler, error) {
 	// What replaces it is not nothing: the `internal:ingest` scope is issued
 	// only to service clients, and the agent role's policies scope every write
 	// to the organisation the header names (00008).
+	//
+	// AND IT DOES NOT CARRY ActOnBehalf, WHICH IS NOT AN OVERSIGHT (ENT-230).
+	//
+	// A delegation replaces the caller's scopes with what a person holds, and a
+	// person holds no `internal:*` scope, so a delegated call on this chain
+	// would be refused by every method on it. That is the correct outcome and
+	// the stage would only make it a more confusing one.
+	//
+	// The distinction underneath: on the chain above, a delegation is
+	// AUTHORITY, and the request runs as the person. On this chain it is
+	// EVIDENCE that a person asked, which is what `RecordAgentRun` uses it for,
+	// and evidence travels in the message where it is recorded rather than in a
+	// header that changes who the caller is.
 	internal := connect.WithInterceptors(
 		interceptor.Auth(deps.Verifier),
 		interceptor.JTI(deps.DenyList),
@@ -243,7 +269,8 @@ func New(deps Dependencies) (http.Handler, error) {
 	// better answer than a 404 on a path that does exist.
 	if deps.Corpus != nil || deps.AgentRuns != nil {
 		mux.Handle(platformv1connect.NewIngestServiceHandler(
-			ingestservice.New(deps.Corpus, deps.AgentRuns, deps.Logger), internal))
+			ingestservice.New(deps.Corpus, deps.AgentRuns, deps.Delegations, deps.Logger),
+			internal))
 	}
 
 	// Narrating findings (ENT-245). Registered whenever there is an agent pool

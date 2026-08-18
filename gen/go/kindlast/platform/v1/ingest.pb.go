@@ -108,6 +108,18 @@ type RecordAgentRunRequest struct {
 	// Empty for a scheduled sweep, which runs for the organisation and for
 	// nobody in particular. Setting it there would be a lie that later reads as
 	// "this person asked for this".
+	//
+	// NOT BELIEVED ON ITS OWN (ENT-230). Until this field was checked, a caller
+	// holding `internal:intelligence` could name anybody here and the record
+	// would say a person asked for a run they had never heard of, in their own
+	// organisation's compliance record. So a run that names a person must also
+	// present the delegation below, and the two must agree; a run that presents
+	// no delegation must leave this empty.
+	//
+	// Kept as a field rather than derived silently from the delegation, because
+	// an agreement that is checked is worth more than a value that is inferred:
+	// a caller sending the wrong pair finds out, where a caller whose field was
+	// quietly overwritten does not.
 	OnBehalfOfUserId string `protobuf:"bytes,6,opt,name=on_behalf_of_user_id,json=onBehalfOfUserId,proto3" json:"on_behalf_of_user_id,omitempty"`
 	// The input the run was given, as JSON. Not the assembled prompt: that
 	// includes the corpus prefix and is reconstructible from the skill version,
@@ -131,9 +143,32 @@ type RecordAgentRunRequest struct {
 	// Queued, started, finished. Three rather than two because ENT-238 needs to
 	// tell "slow because the model is slow" from "slow because it waited", and
 	// those are different problems with different fixes.
-	QueuedAt      *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=queued_at,json=queuedAt,proto3" json:"queued_at,omitempty"`
-	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	QueuedAt   *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=queued_at,json=queuedAt,proto3" json:"queued_at,omitempty"`
+	StartedAt  *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	// The delegation this run was given, when it ran for a person (ENT-230,
+	// §26.3).
+	//
+	// # EVIDENCE HERE, AUTHORITY EVERYWHERE ELSE
+	//
+	// On the core surface a delegation is presented in the `Kindlast-Delegation`
+	// header and the request then runs AS the person: their scopes, their
+	// tenancy, their audit row. This is the one place it appears in a message,
+	// and it does the opposite job. Recording a run is something the machine does
+	// as itself, on a scope no person holds; the delegation is here so core-api
+	// can check that the person named above really did authorise this run, rather
+	// than taking the caller's word for it.
+	//
+	// Empty for a scheduled sweep, which runs for nobody in particular and has no
+	// delegation to present.
+	//
+	// # WHY IT DOES NOT ALSO BECOME THE ORGANISATION
+	//
+	// `org_id` above still has to be sent and must MATCH the delegation's. A
+	// delegation is single-org, so a run recorded against a different tenant than
+	// the one the person authorised is a caller bug, and the mismatch is worth
+	// refusing rather than silently correcting.
+	Delegation    string `protobuf:"bytes,16,opt,name=delegation,proto3" json:"delegation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -271,6 +306,13 @@ func (x *RecordAgentRunRequest) GetFinishedAt() *timestamppb.Timestamp {
 		return x.FinishedAt
 	}
 	return nil
+}
+
+func (x *RecordAgentRunRequest) GetDelegation() string {
+	if x != nil {
+		return x.Delegation
+	}
+	return ""
 }
 
 type AgentRunUsage struct {
@@ -1699,7 +1741,7 @@ var File_kindlast_platform_v1_ingest_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"\n" +
-	"!kindlast/platform/v1/ingest.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\x9a\x05\n" +
+	"!kindlast/platform/v1/ingest.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xba\x05\n" +
 	"\x15RecordAgentRunRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x14\n" +
 	"\x05skill\x18\x02 \x01(\tR\x05skill\x12#\n" +
@@ -1718,7 +1760,10 @@ const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt\"\xa8\x01\n" +
+	"finishedAt\x12\x1e\n" +
+	"\n" +
+	"delegation\x18\x10 \x01(\tR\n" +
+	"delegation\"\xa8\x01\n" +
 	"\rAgentRunUsage\x12!\n" +
 	"\finput_tokens\x18\x01 \x01(\x05R\vinputTokens\x12.\n" +
 	"\x13cached_input_tokens\x18\x02 \x01(\x05R\x11cachedInputTokens\x12#\n" +
