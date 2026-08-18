@@ -109,10 +109,17 @@ func (a *AgentStore) IngestEvidence(
 			       (org_id, source, connection_id, observed_at, kind, body,
 			        content_hash)
 			values ($1, 'integration', $2, $3, $4, $5::jsonb,
-			        encode(sha256($5::bytea), 'hex'))
+			        encode(sha256(convert_to($6, 'UTF8')), 'hex'))
 			returning id::text`,
 			record.OrgID, record.ConnectionID, observed,
-			"integration."+record.Tool, record.ContentJSON).Scan(&evidenceID)
+			"integration."+record.Tool, record.ContentJSON,
+			// THE SAME VALUE TWICE, UNDER TWO PLACEHOLDERS, WHICH IS NOT A
+			// TYPO. Postgres infers a parameter's type from its first use, so
+			// one placeholder written `$5::jsonb` here and `$5::bytea` there
+			// asks it to cast jsonb to bytea, which it refuses outright. Found
+			// by a test rather than by review, and worth the note because the
+			// single-placeholder version reads better and does not work.
+			record.ContentJSON).Scan(&evidenceID)
 		if err != nil {
 			return "", "", fmt.Errorf("postgres: recording the observation: %w", err)
 		}

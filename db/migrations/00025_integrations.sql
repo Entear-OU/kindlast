@@ -374,6 +374,35 @@ alter table public.org_evidence
   deferrable initially deferred;
 
 ------------------------------------------------------------------------------
+-- AND 00020's INSERT POLICY LEARNS WHICH ROLE IT IS FOR
+------------------------------------------------------------------------------
+-- 00020 created `org_evidence_insert_org` for every role, which was correct
+-- then: only `kindlast_app` could insert, so naming the role would have been
+-- noise. `IngestService.IngestEvidence` makes `kindlast_agent` a second writer,
+-- and the policy consults `memberships`, which that role holds no grant on
+-- (00008, deliberately).
+--
+-- Permissive policies are OR'd, so the agent's own policy below would permit
+-- the row. Postgres still EVALUATES this one, and the evaluation is what
+-- fails: `permission denied for table memberships`, which reads as a
+-- privileges bug rather than as the row being fine.
+--
+-- Recreated rather than left alone, because the alternative is granting the
+-- producer role select on `memberships`, and a role that can read who belongs
+-- to which organisation is a materially larger role than one that can record
+-- an observation. Restored to its 00020 form by this migration's Down.
+drop policy if exists org_evidence_insert_org on public.org_evidence;
+create policy org_evidence_insert_org on public.org_evidence
+  for insert to kindlast_app with check (
+    org_id = (select current_setting('app.current_org_id')::uuid)
+    and exists (
+      select 1 from public.memberships m
+      where m.org_id = (select current_setting('app.current_org_id')::uuid)
+        and m.user_id = (select current_setting('app.current_user_id')::uuid)
+    )
+  );
+
+------------------------------------------------------------------------------
 -- Grants. EVERY TABLE STARTS CLOSED (ENT-243).
 ------------------------------------------------------------------------------
 -- 00002's default privileges hand `kindlast_app` select, insert, update and
@@ -527,8 +556,24 @@ create policy integration_fetches_select_org on public.integration_fetches
     )
   );
 
+-- `to kindlast_app`, WHICH IS NOT DECORATION AND IS NOT ON THE OTHER POLICIES.
+--
+-- Every policy in this file except this one applies to every role, which is
+-- harmless while only one role can write. This table is written by two:
+-- `kindlast_app` for a person's live fetch, and `kindlast_agent` through
+-- `IngestService.IngestEvidence`.
+--
+-- Permissive policies are OR'd, so an agent insert would satisfy the agent
+-- policy below and be fine in principle. It is not fine in practice: Postgres
+-- evaluates the other policy too, that policy reads `memberships`, and
+-- `kindlast_agent` holds no grant on `memberships` by design (00008). The
+-- insert fails with `permission denied for table memberships`, which is a
+-- confusing way to be told the row was acceptable.
+--
+-- So a policy that consults `memberships` names the role that can read it.
+-- Found by a store test, not by review.
 create policy integration_fetches_insert_org on public.integration_fetches
-  for insert with check (
+  for insert to kindlast_app with check (
     org_id = (select current_setting('app.current_org_id')::uuid)
     and exists (
       select 1 from public.memberships m
@@ -672,6 +717,21 @@ revoke all on public.integration_fetches from kindlast_app;
 revoke all on public.integration_consents from kindlast_app;
 revoke all on public.integration_tools from kindlast_app;
 revoke all on public.integrations from kindlast_app;
+
+-- `org_evidence_insert_org` back to the form 00020 created it in, for every
+-- role rather than for `kindlast_app` alone. This migration narrowed it; the
+-- Down has to widen it again or 00020 would be left changed by a migration
+-- that claims to have been undone.
+drop policy if exists org_evidence_insert_org on public.org_evidence;
+create policy org_evidence_insert_org on public.org_evidence
+  for insert with check (
+    org_id = (select current_setting('app.current_org_id')::uuid)
+    and exists (
+      select 1 from public.memberships m
+      where m.org_id = (select current_setting('app.current_org_id')::uuid)
+        and m.user_id = (select current_setting('app.current_user_id')::uuid)
+    )
+  );
 
 -- Before the tables, because the constraint names one this Down is about to
 -- drop and `org_evidence` outlives it.
