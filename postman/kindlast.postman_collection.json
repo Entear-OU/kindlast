@@ -1157,6 +1157,26 @@
           }
         },
         {
+          "name": "Draft a narrative (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"signal\": \"We are a 40 person recruitment agency. We hold candidate CVs and employee payroll records, and we have never written down what we do with them.\",\n  \"obligations\": [\n    {\n      \"slug\": \"gdpr-art-30-ropa\",\n      \"title\": \"Records of Processing Activities\",\n      \"summary\": \"Article 30 GDPR requires a written record of what you do with personal data, why, and for how long.\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{intelligence_base_url}}/kindlast.platform.v1.IntelligenceService/DraftNarrative",
+              "host": ["{{intelligence_base_url}}"],
+              "path": ["kindlast.platform.v1.IntelligenceService", "DraftNarrative"]
+            },
+            "description": "The Analyst, as an RPC. Required scope: `internal:intelligence`. **Served as of ENT-218.**\n\n**A DIFFERENT SERVICE FROM EVERYTHING ELSE IN THIS COLLECTION.** This is Python, not core-api, which is why it has its own base URL. \u00a71.6 splits the languages so Go loads and Go persists while Python drafts and returns, and this sits on the far side of that line: it holds no database credential, sets no tenancy GUC, and has no way to write a finding. The one thing it writes, it writes through core-api's `RecordAgentRun`.\n\n**Use the client-credentials token.** No user token reaches this on any path. Two independent things enforce it: the audience is `kindlast-intelligence` and a human's console token carries a different one, and `internal:intelligence` is granted only to the machine user. That is not belt and braces: Intelligence has no tenancy GUCs and no RLS session, so it cannot check whether a human should see what it is processing. It never needs to, because a human cannot reach it.\n\n**THE CALLER PASSES THE OBLIGATIONS, AND THEY ARE THE ONLY ONES THAT MAY BE CITED.** There is no fetch-them-yourself here and the absence is deliberate (\u00a726.2). Inputs are what a skill needs before it starts and there is no decision in fetching them, so the caller assembles them in Go where the corpus is already readable. That keeps a run a pure function of its inputs, which is what makes it activity-shaped for Temporal at step 8.\n\nThe validator checks citations against **this list**, not against the corpus, and that is stronger than it sounds. A citation to an obligation that genuinely exists but is not in the list is still a fabrication: the model produced it from somewhere other than its context. Asking the corpus \"does this exist\" would have accepted it.\n\n**A REFUSAL IS A 200, NOT AN ERROR.** \u00a726.3 makes refusal what a working guardrail produces: a budget exhausted, a citation that did not resolve, a tool outside the allow-list. Returning `internal` for those would tell you the harness broke when it did exactly what it was built to do. Check `outcome`, not the status code.\n\n**A refused narrative is not returned at all**, not even with a warning attached. `AGENTS.md` calls a fabricated citation worse than nothing, and handing a caller prose plus a note is how that prose reaches a customer.\n\n**`rejectedCitations` is the field to read when something looks wrong.** A response carrying only the good citations would be indistinguishable from a run where the model never tried to cite anything. This is not theoretical: asked three times which GDPR article requires a record of processing activities, the 2B tier answered 50, then 34, then 54. It is 30, and every answer was schema-valid.\n\n**`agentRunId` is the row in `agent_runs`**, so a finding can point at the record of how it was made. Empty only when recording failed, and that case comes back as an error rather than a success: a narrative whose provenance was never stored is a finding nobody can check.\n\n**`signal` is treated as data and never as instruction.** It reaches the model inside a fenced user message and never in the system prompt, because a compliance profile concatenated into a system prompt is a way to reprogram the Analyst."
+          }
+        },
+        {
           "name": "List audit entries",
           "request": {
             "method": "POST",
