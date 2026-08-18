@@ -35,24 +35,47 @@ future one nobody has written yet:
 - The append-only trigger on `audit_log`
 - Indexes
 - The `SECURITY DEFINER` functions that exist because RLS structurally cannot
-  express the check. There are five:
+  express the check. There are seven:
 
-  | Function | Why it cannot be a policy |
-  |---|---|
-  | `app_org_role` | Policies need it, so it cannot itself be gated by one |
-  | `app_org_member_count` | Same |
-  | `accept_invitation` | The invitee is not a member yet, so no policy can see their invitation |
-  | `notification_recipients` | The dispatcher holds no grants on memberships, preferences or identities, deliberately |
-  | `redeem_capability_token` | The caller has no session, so no tenancy GUC is set and every policy would refuse |
+  | Function | Added by | Why it cannot be a policy |
+  |---|---|---|
+  | `app_org_role` | `00002` | Policies need it, so it cannot itself be gated by one |
+  | `app_org_member_count` | `00002` | Same |
+  | `accept_invitation` | `00003` | The invitee is not a member yet, so no policy can see their invitation |
+  | `notification_recipients` | `00015` | The dispatcher holds no grants on memberships, preferences or identities, deliberately |
+  | `redeem_capability_token` | `00015` | The caller has no session, so no tenancy GUC is set and every policy would refuse |
+  | `resolve_act_delegation` | `00021` | Same reason as redeeming a capability token: the delegation is what establishes the session, so nothing is set yet for a policy to read |
+  | `mint_finding_approval_delegation` | `00027` | The dispatcher mints it and holds no grant on `memberships`, so it cannot check the eligibility the mint depends on |
 
 Each carries its justification in the migration that creates it. A definer
-function is how RLS gets bypassed by accident, so adding a sixth means writing
-down why none of these five already covers you.
+function is how RLS gets bypassed by accident, so adding an eighth means
+writing down why none of these seven already covers you.
+
+**This table went stale twice before anyone noticed, which is the argument for
+the `Added by` column.** It read "five" while the database held seven:
+`resolve_act_delegation` arrived with ENT-230 and `mint_finding_approval_delegation`
+with ENT-249, and neither edited this list. The count is checkable in one query,
+so check it rather than trusting the prose:
+
+```sql
+select p.proname
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.prosecdef
+ order by 1;
+```
 
 Two of them arrived together in `00015` and neither was free: the first is
 narrowed to the minimum projection delivery needs, and the second answers
 identically for every unusable token so it cannot be used to discover which
 tokens are real.
+
+The two delegation functions are both expected to move. ENT-225 phase 2 puts
+the decision in Go, because who may approve is a decision and minting is a
+write: core-api mints, Go decides eligibility, and what stays in Postgres is a
+composite foreign key from the delegation onto `memberships (user_id, org_id)`,
+so "the delegate is a member of that organisation" becomes a constraint rather
+than a function. Their present justification holds only until the dispatcher has
+a Go path that mints.
 
 ### What belongs in Go
 
