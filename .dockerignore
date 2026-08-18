@@ -1,0 +1,75 @@
+# What never reaches a build context.
+#
+# Every image in this repository builds from the repository ROOT, because each
+# one spans workspaces: core-api compiles against gen/go and libs/chassis, web
+# installs through the Bun workspace at the root, intelligence copies
+# gen/python. So there is one context for all of them and one ignore file
+# governing it, and an entry here has to be safe for every image rather than
+# only for the one being added.
+#
+# The entries are not tidiness. The daemon transfers the whole context before
+# the first instruction runs, so an unignored directory is time and memory
+# spent on every build of every service.
+#
+# THE ONE THAT MATTERS MOST IS deploy/models. It holds the GGUF weights the
+# model service serves, which is 2.7 GB for the default pin and more for a
+# larger one. It lives on the host rather than in a named volume so that
+# `down -v` does not cost a re-download (see compose), and that same choice
+# puts it inside the build context, where it would otherwise be uploaded to
+# the daemon before every single build.
+
+.git
+.github
+
+# Agent worktrees. `.claude/worktrees/` holds a full checkout per branch in
+# flight, so on a machine doing parallel work this one line is the difference
+# between a context of tens of megabytes and one of several gigabytes.
+.claude
+
+# Installed trees. Every image installs its own dependencies from a manifest
+# and a lockfile, which is the point of committing the lockfile: copying a
+# host's node_modules would ship whatever that host resolved, for whatever
+# platform it runs, on top of the resolution the image just performed.
+node_modules
+**/node_modules
+.venv
+**/.venv
+__pycache__
+**/__pycache__
+
+# Build output. web's image runs `next build` itself, so a `.next` from a host
+# build is at best redundant and at worst a stale mix of two builds.
+.next
+**/.next
+out
+**/out
+dist
+**/dist
+coverage
+**/coverage
+test-results
+playwright-report
+
+# Model weights. See the note above: gigabytes, and no image needs them.
+deploy/models
+
+# Local configuration and secrets. `.env.local` is written by
+# scripts/web-env.sh from a running stack and holds the OAuth client secret
+# Zitadel generated; it has no business in an image layer.
+.env
+.env.*
+!.env.example
+
+# Editor and OS noise.
+.DS_Store
+.idea
+.vscode
+*.swp
+
+# Nothing here changes an image, and a change to one of them should not
+# invalidate a cached layer.
+*.md
+!apps/intelligence/README.md
+docs
+postman
+scratch
