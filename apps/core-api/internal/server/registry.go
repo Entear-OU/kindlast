@@ -56,6 +56,14 @@ func Services() []protoreflect.ServiceDescriptor {
 		// The patch is a human scope on purpose, because correcting a fact
 		// about yourself is rectification rather than a privileged operation.
 		corev1.File_kindlast_core_v1_memory_proto,
+		// OnboardingService (ENT-212). The first conversation, and the surface
+		// that feeds the profile MemoryService reads. Three writes on
+		// `onboarding:write` and one read on `onboarding:read`; the read is
+		// separate because every authenticated route asks it before deciding
+		// whether to route a person into onboarding, and a route that had to
+		// hold a write scope to find out where somebody had got to would be a
+		// scope granted for a question rather than for an action.
+		corev1.File_kindlast_core_v1_onboarding_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the

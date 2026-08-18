@@ -32,8 +32,11 @@ const (
 // invariants instead (one open value per key, closed values immutable).
 //
 // The first ten mirror what the legacy `compliance_profiles` asked at
-// onboarding, so ENT-212 can move onto this profile without a translation
-// table nobody maintains.
+// onboarding, so ENT-212 could move onto this profile without a translation
+// table nobody maintains. Everything after them was added because something
+// already read it and nothing could answer: ENT-246's four for the corpus, and
+// ENT-212's for the processor obligations. See the notes against each for why
+// their absence was a bug rather than a gap.
 type ProfileFactKey int32
 
 const (
@@ -73,6 +76,21 @@ const (
 	// every controller relies on more than one, and Article 7's conditions bind
 	// whenever consent is among them.
 	ProfileFactKey_PROFILE_FACT_KEY_LAWFUL_BASES ProfileFactKey = 14
+	// Who else handles the organisation's data (ENT-212).
+	//
+	// ADDED BECAUSE THE WATCHER ALREADY READS IT, which is a stronger reason
+	// than completeness. `watcher_obligation_applies` gates every obligation
+	// carrying `engages_processor` on the legacy profile's `vendor_list` being
+	// non-empty, so an organisation whose vendors are unrecorded is quietly told
+	// that the processor obligations do not apply to it. A profile that can
+	// change which obligations a customer is shown, and has no way to hold the
+	// answer, is the worst of the two failures this enum exists to prevent.
+	//
+	// A list rather than the legacy comma-separated line. The column stays a
+	// line, because the plpgsql that reads it does, and the projection joins
+	// this into it; the fact is typed the way every other multi-valued answer
+	// here is, so a console can render and correct one vendor at a time.
+	ProfileFactKey_PROFILE_FACT_KEY_VENDOR_LIST ProfileFactKey = 15
 )
 
 // Enum value maps for ProfileFactKey.
@@ -93,6 +111,7 @@ var (
 		12: "PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM",
 		13: "PROFILE_FACT_KEY_LARGE_SCALE_MONITORING",
 		14: "PROFILE_FACT_KEY_LAWFUL_BASES",
+		15: "PROFILE_FACT_KEY_VENDOR_LIST",
 	}
 	ProfileFactKey_value = map[string]int32{
 		"PROFILE_FACT_KEY_UNSPECIFIED":            0,
@@ -110,6 +129,7 @@ var (
 		"PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM":    12,
 		"PROFILE_FACT_KEY_LARGE_SCALE_MONITORING": 13,
 		"PROFILE_FACT_KEY_LAWFUL_BASES":           14,
+		"PROFILE_FACT_KEY_VENDOR_LIST":            15,
 	}
 )
 
@@ -1026,7 +1046,7 @@ const file_kindlast_core_v1_memory_proto_rawDesc = "" +
 	"page_token\x18\x02 \x01(\tR\tpageToken\"v\n" +
 	"\x14ListEvidenceResponse\x126\n" +
 	"\bevidence\x18\x01 \x03(\v2\x1a.kindlast.core.v1.EvidenceR\bevidence\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken*\xbe\x04\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken*\xe0\x04\n" +
 	"\x0eProfileFactKey\x12 \n" +
 	"\x1cPROFILE_FACT_KEY_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19PROFILE_FACT_KEY_INDUSTRY\x10\x01\x12%\n" +
@@ -1043,7 +1063,8 @@ const file_kindlast_core_v1_memory_proto_rawDesc = "" +
 	"%PROFILE_FACT_KEY_HIGH_RISK_PROCESSING\x10\v\x12(\n" +
 	"$PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM\x10\f\x12+\n" +
 	"'PROFILE_FACT_KEY_LARGE_SCALE_MONITORING\x10\r\x12!\n" +
-	"\x1dPROFILE_FACT_KEY_LAWFUL_BASES\x10\x0e*`\n" +
+	"\x1dPROFILE_FACT_KEY_LAWFUL_BASES\x10\x0e\x12 \n" +
+	"\x1cPROFILE_FACT_KEY_VENDOR_LIST\x10\x0f*`\n" +
 	"\bTriState\x12\x19\n" +
 	"\x15TRI_STATE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rTRI_STATE_YES\x10\x01\x12\x10\n" +

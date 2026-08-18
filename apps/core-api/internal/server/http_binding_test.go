@@ -265,6 +265,35 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "GET", Path: "/api/v1/memory/evidence",
 		},
 
+		// ENT-212, the first conversation. Singular `session`, for the same
+		// reason `UpdateOrganisation` and `GetDashboard` are: it addresses the
+		// onboarding of the organisation the header names, not a member of a
+		// collection of sessions. An organisation has one interview, and a
+		// `/onboarding/sessions/{id}` would invite a client to hold an id and
+		// then to ask for somebody else's.
+		//
+		// `:start` and `:confirm` are colon verbs on that singleton, matching
+		// `findings:approve` and `memory/facts:correct`. Neither is a resource:
+		// starting is "open one or hand me the open one", and confirming is the
+		// single moment answers become facts. POST `/onboarding/sessions` would
+		// promise a second session it will not create.
+		//
+		// Answers are a collection and are posted to one, because that is what
+		// they are: an append-only sequence of turns, and a person may answer
+		// the same question twice.
+		"kindlast.core.v1.OnboardingService.GetOnboardingSession": {
+			Method: "GET", Path: "/api/v1/onboarding/session",
+		},
+		"kindlast.core.v1.OnboardingService.StartOnboarding": {
+			Method: "POST", Path: "/api/v1/onboarding/session:start",
+		},
+		"kindlast.core.v1.OnboardingService.AnswerQuestion": {
+			Method: "POST", Path: "/api/v1/onboarding/answers",
+		},
+		"kindlast.core.v1.OnboardingService.ConfirmProfile": {
+			Method: "POST", Path: "/api/v1/onboarding/session:confirm",
+		},
+
 		"kindlast.core.v1.AuditService.ListAuditEntries": {
 			Method: "GET", Path: "/api/v1/audit",
 		},
