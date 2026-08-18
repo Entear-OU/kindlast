@@ -9,20 +9,27 @@ there is no llama.cpp in this file: the endpoint is configuration.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 
 
-@dataclass(frozen=True)
-class Completion:
-    """One model response, with what it cost."""
+class Completion(BaseModel):
+    """One model response, with what it cost.
+
+    Validated on construction rather than trusted, because these numbers are
+    what the budget is charged against and what `agent_runs` reports as cost. A
+    negative token count from a misbehaving endpoint would otherwise quietly
+    buy the run more budget than it is entitled to.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     content: str
-    input_tokens: int
-    cached_input_tokens: int
-    output_tokens: int
+    input_tokens: int = Field(ge=0)
+    cached_input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
     finish_reason: str
 
     @property
@@ -57,8 +64,8 @@ class ModelClient:
 
         Tools are dispatched by the loop rather than through the model's own
         tool-calling protocol, because §26.3 requires a per-skill allow-list
-        with unknown tools refused rather than retried, and that decision has to
-        sit in code we own rather than in a field the model fills in.
+        with unknown tools refused rather than retried, and that decision has
+        to sit in code we own rather than in a field the model fills in.
         """
         body: dict[str, Any] = {
             "messages": messages,
@@ -101,8 +108,8 @@ class ModelClient:
         # its own documentation, and that a thinking run exhausted its token
         # limit before answering at all. The server is started with
         # `--reasoning off` for that reason, so a trace arriving means the flag
-        # is not in force and every budget below is being spent on tokens
-        # nobody will read.
+        # is not in force and every budget is being spent on tokens nobody will
+        # read.
         if message.get("reasoning_content"):
             raise ModelError(
                 "the model returned a reasoning trace, so --reasoning off is not "

@@ -8,7 +8,7 @@ allowed near a compliance product at all.
 `AGENTS.md` opens by saying a fabricated citation is worse than nothing,
 because the product's value is that a human can check the claim against the
 law. Here is what that looks like in practice, measured against the local model
-during ENT-235 and not hypothesised:
+during ENT-235 rather than hypothesised:
 
 Asked three times which GDPR article requires a record of processing
 activities, with a JSON schema constraining the output shape, the 2B tier
@@ -30,18 +30,23 @@ the customer's question is precisely "what did it get wrong".
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Protocol
 
+from pydantic import BaseModel, ConfigDict, Field
 
-@dataclass(frozen=True)
-class Citation:
+
+class Citation(BaseModel):
     """A claim that some obligation supports what was written.
 
     Identified by slug rather than by id, matching CorpusService: a slug is
     stable across rewordings and is a key somebody can put in a document, where
     the row's uuid differs between two installations of the same law.
+
+    Frozen, because a validated citation some later step can edit is not a
+    validated citation.
     """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     slug: str
     # What the model said this citation supports. Kept on a rejection so the
@@ -49,10 +54,25 @@ class Citation:
     claim: str = ""
 
 
-@dataclass
-class ValidationResult:
-    resolved: list[Citation] = field(default_factory=list)
-    rejected: list[tuple[Citation, str]] = field(default_factory=list)
+class Rejection(BaseModel):
+    """A citation that did not resolve, and why.
+
+    A model rather than a tuple so the reason has a name. These are stored for
+    a customer to read, and `(citation, str)` gives whoever serialises it
+    nothing to call the second element.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    citation: Citation
+    reason: str
+
+
+class ValidationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    resolved: list[Citation] = Field(default_factory=list)
+    rejected: list[Rejection] = Field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -91,7 +111,7 @@ class CitationValidator:
             slug = citation.slug.strip()
 
             if not slug:
-                result.rejected.append((citation, "empty slug"))
+                result.rejected.append(Rejection(citation=citation, reason="empty slug"))
                 continue
 
             # A repeated citation is not an error and not a second citation.
@@ -112,7 +132,10 @@ class CitationValidator:
             # finds says something else.
             if not self._lookup.exists(slug):
                 result.rejected.append(
-                    (citation, "does not resolve to a stored obligation")
+                    Rejection(
+                        citation=citation,
+                        reason="does not resolve to a stored obligation",
+                    )
                 )
                 continue
 

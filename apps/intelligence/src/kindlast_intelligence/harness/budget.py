@@ -21,7 +21,8 @@ the column a customer reads to decide whether to trust a finding.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BudgetExhausted(Exception):
@@ -33,30 +34,36 @@ class BudgetExhausted(Exception):
         self.detail = detail
 
 
-@dataclass
-class Budget:
+class Budget(BaseModel):
     """What one run may spend.
 
     Defaults are deliberately small. A harness whose limits are generous enough
     never to fire is not a harness, and the failure it exists to prevent, a
     loop calling a tool forever, is only visible when something stops it.
+
+    Every limit is constrained to be positive at construction. A zero or
+    negative limit is not a stricter budget, it is a harness that refuses every
+    run before it starts, and it should fail where somebody wrote it rather
+    than as a run that mysteriously never succeeds.
     """
 
-    max_total_tokens: int = 8_000
-    max_model_calls: int = 6
-    max_tool_calls: int = 12
-    max_depth: int = 4
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+
+    max_total_tokens: int = Field(default=8_000, gt=0)
+    max_model_calls: int = Field(default=6, gt=0)
+    max_tool_calls: int = Field(default=12, gt=0)
+    max_depth: int = Field(default=4, gt=0)
     # Sized for a 4B on CPU answering a handful of times rather than for a
     # hosted API. On local inference this is the limit that actually fires.
-    max_seconds: float = 120.0
+    max_seconds: float = Field(default=120.0, gt=0)
 
     # Spent so far. Public because `agent_runs` records these, and the run
     # summary is assembled from the same numbers the limits are checked
     # against rather than from a second count that could disagree.
-    total_tokens: int = 0
-    model_calls: int = 0
-    tool_calls: int = 0
-    started_monotonic: float = field(default_factory=time.monotonic)
+    total_tokens: int = Field(default=0, ge=0)
+    model_calls: int = Field(default=0, ge=0)
+    tool_calls: int = Field(default=0, ge=0)
+    started_monotonic: float = Field(default_factory=time.monotonic)
 
     def spend_model_call(self, tokens: int) -> None:
         # Checked BEFORE incrementing, so the limit is the number of calls

@@ -5,17 +5,35 @@ because `agent_runs` records which version answered, and a run is only
 reproducible if that means something: a bare name would record that "the
 analyst skill" ran, which is not a fact anybody can act on a year later.
 
-# THE PROMPT DESCRIBES THE SCHEMA IN WORDS, AND THAT IS NOT REDUNDANT
+# ONE DEFINITION OF THE OUTPUT, NOT TWO
 
-The output schema below is passed to the model as a grammar, and it is ALSO
-described in the system prompt. That looks like duplication and is not.
+`Narrative` below is the contract, and everything else is derived from it. The
+grammar the runtime constrains decoding with comes from
+`Narrative.model_json_schema()`, and the parsing comes from
+`Narrative.model_validate_json()`.
 
-ENT-235 established the trap by measurement: llama.cpp converts the JSON schema
-to a GBNF grammar and constrains decoding with it, but **does not inject the
-schema into the prompt**. A model given only the grammar produces
-syntactically perfect JSON with semantically wrong field contents, because it
-was never told what the fields mean. Removing the description below would not
-break any test that checks shape, which is exactly why the comment is here.
+The first draft of this file had a hand-written `OUTPUT_SCHEMA` dict AND a
+hand-written parser that checked the same fields again. Two descriptions of one
+contract, with nothing keeping them in step: adding a field to the schema and
+forgetting the parser would have produced a model dutifully filling in
+something nobody read, and the reverse would have produced a parser demanding a
+field the grammar never asked for. Neither failure shows up as an error. §26.3
+asks for typed Pydantic outputs for exactly this reason.
+
+# THE PROMPT DESCRIBES THE SCHEMA IN WORDS, AND THAT IS NOT DUPLICATION
+
+The schema is passed to the model as a grammar and is ALSO described in the
+system prompt, which looks like the thing this file just argued against and is
+not. ENT-235 established the difference by measurement: llama.cpp converts the
+JSON schema to GBNF and constrains decoding with it, but **does not inject the
+schema into the prompt**. A model given only the grammar produces syntactically
+perfect JSON with semantically wrong field contents, because it was never told
+what the fields mean.
+
+So the prompt is not a second definition of the contract. It is the only
+description of what the fields MEAN, where the schema describes what they are.
+`test_the_prompt_describes_the_schema_in_words` fails if a field gains one and
+not the other.
 
 # WHAT THIS SKILL MAY DO
 
@@ -29,6 +47,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
+
 NAME = "analyst.narrative"
 
 # Bumped when the prompt, the schema or the tool list changes, because all
@@ -39,6 +59,57 @@ VERSION = "1.0.0"
 # a model asking for a tool it was not given is not a request to satisfy, it is
 # a sign the run has left the shape it was designed in.
 ALLOWED_TOOLS = ("get_obligation",)
+
+
+# WHY THE DOCSTRING BELOW IS ONE LINE, AND THE REASONING IS OUT HERE
+#
+# Pydantic uses a model's docstring as the schema's `description`, and the
+# schema is sent to the model. A docstring explaining our implementation
+# choices would therefore be shipped to a 4B as though it were guidance about
+# what to write, on every single call. Found by generating the schema and
+# reading it, which is worth doing once whenever this model changes.
+#
+# So the design notes live here as comments, and the docstring says the one
+# thing a model benefits from being told.
+#
+# `extra="forbid"` is load-bearing rather than tidiness. It becomes
+# `additionalProperties: false` in the generated schema, so the grammar cannot
+# emit a field nobody validates, and it makes an unexpected key a refusal
+# rather than something silently carried into a stored finding.
+#
+# `str_strip_whitespace` is load-bearing too, and was found by a test rather
+# than by design. `min_length=1` alone accepts a narrative of three spaces,
+# because three spaces are three characters. Stripping first means an
+# all-whitespace answer is an empty one, which is what a reader would call it.
+# Set on the model rather than checked beside it, so it holds for every string
+# field this ever grows.
+class Narrative(BaseModel):
+    """A plain-language explanation of why an obligation may apply, with the
+    obligation slugs it relies on."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    narrative: str = Field(
+        min_length=1,
+        description="Two to four sentences of plain-language explanation.",
+    )
+    citations: list[str] = Field(
+        description="Obligation slugs the narrative relies on. May be empty.",
+    )
+    confident: bool = Field(
+        description="False when the context was too thin to be sure.",
+    )
+
+
+def output_schema() -> dict[str, Any]:
+    """The grammar, generated from the model rather than written beside it.
+
+    Derived so the two cannot disagree. If this ever has to be hand-adjusted
+    for a runtime's schema subset, adjust it HERE and say why, so the reason
+    lives next to the deviation rather than in a commit message.
+    """
+    return Narrative.model_json_schema()
+
 
 SYSTEM_PROMPT = """\
 You are the Analyst. You explain, in plain language, why a specific obligation \
@@ -66,19 +137,6 @@ on. May be empty if you could not support a claim.
 The narrative must be plain prose. Do not use em dashes or en dashes.\
 """
 
-# The grammar the runtime constrains decoding with. Described in words above as
-# well, for the reason in the module docstring.
-OUTPUT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "narrative": {"type": "string"},
-        "citations": {"type": "array", "items": {"type": "string"}},
-        "confident": {"type": "boolean"},
-    },
-    "required": ["narrative", "citations", "confident"],
-    "additionalProperties": False,
-}
-
 
 def build_messages(signal: str, obligations: list[dict[str, str]]) -> list[dict[str, str]]:
     """Assemble the prompt.
@@ -87,8 +145,8 @@ def build_messages(signal: str, obligations: list[dict[str, str]]) -> list[dict[
 
     §26 wants the corpus as a cached static prefix. Prefix caching is an exact
     match, so anything that varies per run has to come after anything that does
-    not, or the cache never hits. ENT-235 measured the difference: cached
-    tokens went 0 of 44 on a first call and 40 of 44 on an identical second.
+    not, or the cache never hits. Measured: cached tokens went 0 of 399 on a
+    first call and 395 of 399 on a second with a different signal.
 
     # AND WHAT THE CUSTOMER SAID IS DATA, NOT INSTRUCTION
 
