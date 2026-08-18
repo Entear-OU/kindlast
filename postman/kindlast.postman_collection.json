@@ -1258,6 +1258,26 @@
           }
         },
         {
+          "name": "Narrate findings (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"maxFindings\": 5\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.NarrativeService/NarrateFindings",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.NarrativeService", "NarrateFindings"]
+            },
+            "description": "Draft narratives for findings that have none. Required scope: `internal:intelligence`. **Served as of ENT-245.**\\n\\n**THE HALF ENT-218 ASSUMED AND NOBODY SCHEDULED.** ENT-218 shipped the harness, the guardrail ring, the citation validator and the `agent_runs` record, and nothing in the product called any of it. This is the call.\\n\\n**A JOB, NOT PART OF THE SWEEP.** A model call inside the sweep's transaction would hold it open for minutes per finding on a local model, block the act path behind its locks, and lose everything on a timeout. The sweep stays fast and deterministic; this runs afterwards over findings that have no narrative. Latency and refusals become a queue's problem rather than a request's, which is also what makes it activity-shaped for Temporal at step 8.\\n\\n**A NARRATIVE IS ADDED AND NEVER SUBSTITUTED.** It writes `findings.narrative`, `findings.agent_run_id` and `findings.narrative_generated_at`, and touches `detected`, `proposed_action`, `severity` and `status` not at all. The version that overwrote the sweep's text is ENT-164: model prose landed in `detected`, which the feed card renders as a heading, so a short phrase became a paragraph. Adding rather than overwriting means a refused run costs nothing and a deployment with no model is quieter rather than degraded.\\n\\n**EACH RUN IS OFFERED EXACTLY ONE OBLIGATION: the finding's own.** The validator refuses any citation outside what was offered, so a narrative citing a different article is refused even when that article genuinely exists. This is the check that catches what the local model actually does: asked which GDPR article requires a record of processing activities, the 2B answered 50, then 34, then 54. It is 30. Offering the whole corpus would make that fabrication indistinguishable from a good citation.\\n\\n**`intelligenceAvailable: false` IS A SUPPORTED ANSWER, NOT AN ERROR.** Intelligence sits behind the `model` compose profile, and `KINDLAST_INTELLIGENCE_URL` defaults to empty. A stack without it still produces findings with their deterministic text. \\\"We have no model\\\" and \\\"the model is broken\\\" want different reactions from an operator, so they are different responses.\\n\\n**Read all four counts.** `narrated` plus `refused` plus `failed` should equal `attempted`. \\\"3 of 10 narrated\\\" is a different situation from \\\"3 tried and 7 refused\\\", and refusal is the guardrail working (\\u00a726.3) rather than a failure. A refusal is recorded on the finding so the next pass does not retry it forever, and so a customer can see that we tried and what was wrong with the answer.\\n\\n**Runs are sequential.** One `llama-server` serves one request at a time, so firing these concurrently moves the queue rather than shortening it. Expect this to take minutes per finding on a local model."
+          }
+        },
+        {
           "name": "List audit entries",
           "request": {
             "method": "POST",

@@ -148,6 +148,19 @@ type Config struct {
 	// `kindlast_ingest` holds grants on the ten regulatory tables and no others.
 	IngestDatabaseURL string
 
+	// IntelligenceURL is where the Intelligence service answers (ENT-245).
+	//
+	// EMPTY IS A SUPPORTED DEPLOYMENT AND NOT A MISCONFIGURATION. The model
+	// service sits behind a compose profile, so a stack can run without it, and
+	// then NarrativeService reports `intelligence_available: false` and every
+	// finding carries the deterministic text the sweep wrote. That is a quieter
+	// product rather than a broken one, which is why this is not validated as
+	// required.
+	//
+	// A URL rather than a host and port, so a deployment can put Intelligence
+	// behind its own edge without this needing to know it did.
+	IntelligenceURL string
+
 	// BillingDatabaseURL must connect as `kindlast_billing`, the webhook's role
 	// (ENT-210).
 	//
@@ -178,6 +191,7 @@ func Load() (*Config, error) {
 		RedisAddr:        os.Getenv("KINDLAST_REDIS_ADDR"),
 		HumanClientID:    fileOrValue("KINDLAST_HUMAN_CLIENT_ID"),
 		AgentDatabaseURL: os.Getenv("KINDLAST_AGENT_DATABASE_URL"),
+		IntelligenceURL:  os.Getenv("KINDLAST_INTELLIGENCE_URL"),
 		BillingEnabled:   truthy(os.Getenv("KINDLAST_BILLING_ENABLED")),
 		AppBaseURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_APP_BASE_URL")), "/"),
 		SMTPAddr:         strings.TrimSpace(os.Getenv("KINDLAST_SMTP_ADDR")),

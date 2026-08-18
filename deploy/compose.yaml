@@ -319,6 +319,24 @@ services:
       # cannot reach a customer's findings.
       KINDLAST_INGEST_DATABASE_URL: postgres://kindlast_ingest:${KINDLAST_INGEST_PASSWORD:-ingest-dev-password}@postgres-app:5432/kindlast?sslmode=disable
 
+      # Where Intelligence answers, so findings can be narrated (ENT-245).
+      #
+      # DEFAULTS TO EMPTY, WHICH IS THE NO-MODEL PATH, and the tradeoff is worth
+      # stating because the other choice looks friendlier.
+      #
+      # Compose cannot make an environment variable conditional on a profile. So
+      # either this is always set, in which case a default `up` (no `model`
+      # profile, no `intelligence` container) reports
+      # `intelligence_available: true` and fails every call, or it defaults to
+      # empty and `--profile model` needs it supplied.
+      #
+      # Empty wins. "This deployment has no model" and "the model is broken"
+      # want different reactions from an operator, and a default that reports
+      # the second when the first is true costs somebody an afternoon. The
+      # `model` profile's own instructions carry the one-line export, and
+      # `deploy/.env` is where a self-hoster running the model puts it for good.
+      KINDLAST_INTELLIGENCE_URL: ${KINDLAST_INTELLIGENCE_URL:-}
+
       # The provider's signing secret (ENT-210).
       #
       # Both this and the DSN above are required before the webhook route is
