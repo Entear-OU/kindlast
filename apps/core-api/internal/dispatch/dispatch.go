@@ -99,13 +99,20 @@ const (
 	DefaultReclaimBatch    = 500
 )
 
-// Dispatcher drains an outbox onto a channel on a timer.
+// Dispatcher drains an outbox onto a channel on a timer, and clears out what
+// has been drained.
 type Dispatcher struct {
 	outbox   Outbox
 	channel  delivery.Channel
 	logger   *slog.Logger
 	interval time.Duration
 	batch    int
+
+	// Retention, on its own timer. Nothing about the reclaim wants to happen
+	// every ten seconds, and nothing about delivery wants to wait an hour.
+	reclaimInterval  time.Duration
+	reclaimBatch     int
+	reclaimRetention time.Duration
 }
 
 // New builds a dispatcher. A zero interval or batch takes the default.
@@ -121,10 +128,13 @@ func New(outbox Outbox, channel delivery.Channel, logger *slog.Logger,
 	return &Dispatcher{
 		outbox: outbox, channel: channel, logger: logger,
 		interval: interval, batch: batch,
+		reclaimInterval:  DefaultReclaimInterval,
+		reclaimBatch:     DefaultReclaimBatch,
+		reclaimRetention: DeliveredBodyRetention,
 	}
 }
 
-// Run drains until the context is cancelled.
+// Run drains until the context is cancelled, and reclaims on its own timer.
 //
 // Blocking, so the caller decides whether it owns a goroutine. It returns only
 // on cancellation: a failing drain is logged and retried on the next tick
@@ -132,18 +142,46 @@ func New(outbox Outbox, channel delivery.Channel, logger *slog.Logger,
 // server is down, the database is restarting) is one that resolves on its own,
 // and a dispatcher that exits on the first of them stops delivering
 // permanently while the process stays up and healthy.
+//
+// # WHY RETENTION LIVES HERE AND NOT IN A CRON
+//
+// This loop already runs on an interval inside core-api, already holds the
+// agent pool, and is already the only process that touches this table without a
+// request behind it. A second scheduler would be a second thing to configure, a
+// second thing to forget to deploy, and a second place for "why did nothing get
+// cleared" to hide. It moves to Temporal at build-order step 8 with the drain
+// it sits beside, as one piece rather than two.
+//
+// # IT IS SAFE IN MORE THAN ONE REPLICA, AND IS NOT A SINGLETON
+//
+// Both reclaim statements select their rows `for update skip locked`, so two
+// replicas ticking at the same moment take disjoint sets and neither waits on
+// the other. Every predicate tests `redacted_at is null`, so a row already done
+// is invisible to the next pass and the work is idempotent rather than merely
+// tolerable. A deployment running three of these clears its backlog three times
+// as fast and produces the same table.
 func (d *Dispatcher) Run(ctx context.Context) {
 	d.logger.Info("outbox dispatcher started",
 		"channel", d.channel.Name(),
 		"interval", d.interval.String(),
-		"batch", d.batch)
+		"batch", d.batch,
+		"reclaim_interval", d.reclaimInterval.String(),
+		"body_retention", d.reclaimRetention.String())
 
 	ticker := time.NewTicker(d.interval)
 	defer ticker.Stop()
 
-	// One pass before the first tick, so a restart delivers a backlog straight
-	// away instead of after an idle interval.
+	reclaim := time.NewTicker(d.reclaimInterval)
+	defer reclaim.Stop()
+
+	// One pass of each before the first tick. For the drain, so a restart
+	// delivers a backlog straight away instead of after an idle interval. For
+	// the reclaim, so a deployment that is restarted more often than once an
+	// hour still reclaims: with the first pass on the tick alone, a process
+	// that never lives a full hour would never run it at all, which is exactly
+	// how a retention job goes missing without anybody noticing.
 	d.once(ctx)
+	d.reclaimOnce(ctx)
 
 	for {
 		select {
@@ -152,7 +190,35 @@ func (d *Dispatcher) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			d.once(ctx)
+		case <-reclaim.C:
+			d.reclaimOnce(ctx)
 		}
+	}
+}
+
+// reclaimOnce clears the personal data out of messages that no longer need it.
+//
+// A failure is logged and the next tick tries again, for the same reason a
+// failed drain is: every cause resolves on its own, and a loop that exits on
+// one stops reclaiming permanently while the process stays up and healthy. The
+// difference is that nobody would notice this one, so it is logged at error
+// level rather than swallowed.
+func (d *Dispatcher) reclaimOnce(ctx context.Context) {
+	result, err := d.outbox.ReclaimOutbox(ctx, d.reclaimRetention, d.reclaimBatch)
+	if err != nil {
+		if ctx.Err() != nil {
+			// Shutdown, not a fault.
+			return
+		}
+		d.logger.Error("reclaiming the transactional outbox failed", "error", err)
+		return
+	}
+
+	// Silent when there was nothing to do, which is the common case on an idle
+	// deployment and would otherwise be a log line every hour forever.
+	if result.Redacted > 0 || result.Abandoned > 0 {
+		d.logger.Info("reclaimed transactional messages",
+			"redacted", result.Redacted, "abandoned", result.Abandoned)
 	}
 }
 
