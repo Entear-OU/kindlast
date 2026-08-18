@@ -17,6 +17,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
+	narrativeservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/notifications"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/records"
@@ -118,6 +119,23 @@ type Dependencies struct {
 	// corpus. Nil when this deployment runs no agents, and then RecordAgentRun
 	// answers Unimplemented rather than panicking.
 	AgentRuns ingestservice.RunRecorder
+
+	// Narratives reads findings that have none and records what a run produced,
+	// on the kindlast_agent pool (ENT-245).
+	//
+	// Nil when this deployment runs no agents, and then NarrativeService is not
+	// registered at all.
+	Narratives narrativeservice.Findings
+
+	// Drafter is Intelligence, when this deployment has one (ENT-245).
+	//
+	// NIL IS A SUPPORTED DEPLOYMENT AND NOT A MISCONFIGURATION. The model
+	// service sits behind a compose profile, so a stack can run without it, and
+	// then findings simply carry the deterministic text the sweep wrote. The
+	// handler says so in its response rather than failing, because "we have no
+	// model" and "the model is broken" want different reactions from an
+	// operator.
+	Drafter narrativeservice.Drafter
 
 	// Logger is what the internal handlers report to. An ingest that refused a
 	// pack has to say so somewhere a person will look, because its caller is a
@@ -226,6 +244,20 @@ func New(deps Dependencies) (http.Handler, error) {
 	if deps.Corpus != nil || deps.AgentRuns != nil {
 		mux.Handle(platformv1connect.NewIngestServiceHandler(
 			ingestservice.New(deps.Corpus, deps.AgentRuns, deps.Logger), internal))
+	}
+
+	// Narrating findings (ENT-245). Registered whenever there is an agent pool
+	// to read findings from, INCLUDING when no Intelligence is configured.
+	//
+	// That is deliberate rather than sloppy. A deployment without the model
+	// profile is supported, and the handler answers
+	// `intelligence_available: false` for it. Registering only when a drafter
+	// exists would make the difference between "no model here" and "wrong URL"
+	// a 404 in both cases, which is the kind of ambiguity somebody debugs for
+	// an hour.
+	if deps.Narratives != nil {
+		mux.Handle(platformv1connect.NewNarrativeServiceHandler(
+			narrativeservice.New(deps.Narratives, deps.Drafter, deps.Logger), internal))
 	}
 
 	// Unauthenticated by design, and bound to the internal listener only.

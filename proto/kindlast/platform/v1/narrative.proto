@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Narrating findings that have none (ENT-245, ENT-162, §26.2, §26.3).
+//
+// # WHY THIS IS A JOB AND NOT PART OF THE SWEEP
+//
+// The obvious design is for the sweep to draft as it creates each finding.
+// That would put a model call inside the sweep's transaction, and on a local
+// 2B on a laptop one narrative takes minutes. A sweep over twenty findings
+// would hold a transaction open for most of an hour, block the act path behind
+// its locks, and time out somewhere in the middle leaving nothing.
+//
+// So the sweep stays fast and deterministic, and this drafts afterwards for
+// findings that have no narrative yet. The latency and the refusals become a
+// queue's problem rather than a request's, which is also what makes the whole
+// thing activity-shaped for Temporal at step 8.
+//
+// # A NARRATIVE IS ADDED AND NEVER SUBSTITUTED
+//
+// Every finding already carries deterministic text from the sweep, and that
+// text is what the feed renders today. This writes a separate column.
+//
+// The version of this that overwrote the sweep's text is the bug in ENT-164:
+// model prose landed in `detected`, which the card renders as a heading, and a
+// short phrase became a paragraph. Adding rather than overwriting means a
+// refused run costs nothing, and a deployment with no model configured is not
+// a degraded one but simply a quieter one.
+//
+// # NOTHING HERE DECIDES WHAT A FINDING SAYS
+//
+// The narrative explains a finding the deterministic sweep already made. It
+// cannot create one, change a severity, or change which obligation is cited.
+// That boundary is why a model that is confidently wrong about the law (and it
+// is: a 2B asked which GDPR article requires a record of processing activities
+// answers 50, then 34, then 54) can be useful here at all.
+service NarrativeService {
+  // Draft narratives for findings that have none.
+  //
+  // Bounded by `max_findings` and by whatever the caller's patience is. Runs
+  // are sequential rather than concurrent, because a single `llama-server`
+  // serves them one at a time anyway and firing ten at once would only move
+  // the queue from here to there while making the failure modes worse.
+  //
+  // # THE CALLER ASSEMBLES NOTHING AND THIS SERVICE ASSEMBLES EVERYTHING
+  //
+  // Opposite to `IntelligenceService.DraftNarrative`, deliberately. That RPC
+  // takes its obligations from its caller because the harness must stay a pure
+  // function of its inputs. This one IS that caller: it runs in Go where the
+  // corpus and the findings are already readable, gathers what each run may
+  // cite, and hands it over.
+  rpc NarrateFindings(NarrateFindingsRequest) returns (NarrateFindingsResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:intelligence";
+    option (google.api.http) = {
+      post: "/internal/v1/findings:narrate"
+      body: "*"
+    };
+  }
+}
+
+message NarrateFindingsRequest {
+  // The organisation to narrate for.
+  //
+  // Required, and there is deliberately no "all organisations" mode. A job that
+  // swept every tenant in one call would be one bug away from putting one
+  // organisation's signal in another's prompt, and the caller losing nothing by
+  // looping is a good trade for making that impossible here.
+  string org_id = 1;
+
+  // How many findings to attempt. Zero means a small default rather than
+  // everything: an unbounded job on a slow local model is a job nobody can
+  // predict the end of.
+  int32 max_findings = 2;
+}
+
+message NarrateFindingsResponse {
+  // Attempted, succeeded, refused, failed. All four, because "we narrated 3 of
+  // 10" is a different situation from "we tried 3 and 7 were refused", and a
+  // single count cannot tell an operator which one they are in.
+  int32 attempted = 1;
+  int32 narrated = 2;
+  int32 refused = 3;
+  int32 failed = 4;
+
+  // Empty when Intelligence is not configured for this deployment, which is
+  // supported rather than broken: the model service sits behind a compose
+  // profile and a stack without it still produces findings.
+  bool intelligence_available = 5;
+}

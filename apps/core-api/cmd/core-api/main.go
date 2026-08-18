@@ -28,8 +28,10 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
+	"github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1/platformv1connect"
 	"github.com/Entear-OU/kindlast/libs/chassis/denylist"
 	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
 )
@@ -265,7 +267,12 @@ func run(logger *slog.Logger) error {
 		// deployment that runs no agents should answer Unimplemented here
 		// rather than accept a run record it cannot store.
 		AgentRuns: agentRunsDependency(outbox),
-		Logger:    logger,
+		// Findings to narrate, on the same agent pool, and the drafter that
+		// explains them. The second is nil for a deployment with no model,
+		// which is supported rather than broken (ENT-245).
+		Narratives: narrativesDependency(outbox),
+		Drafter:    drafterDependency(cfg.IntelligenceURL),
+		Logger:     logger,
 	})
 	if err != nil {
 		return err
@@ -460,4 +467,34 @@ func agentRunsDependency(store *postgres.AgentStore) ingest.RunRecorder {
 		return nil
 	}
 	return store
+}
+
+// The same typed-nil guard, for the narrator's read and write of findings
+// (ENT-245).
+func narrativesDependency(store *postgres.AgentStore) narrative.Findings {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+// The Intelligence client, when this deployment has one (ENT-245).
+//
+// NIL IS A SUPPORTED DEPLOYMENT. The model service sits behind a compose
+// profile, so a stack can run without it, and then findings carry the
+// deterministic text the sweep wrote and nothing else. Returning nil rather
+// than a client pointed at an empty URL matters: a client that exists and
+// cannot connect turns every narration pass into a pile of timeouts, where a
+// nil one answers `intelligence_available: false` in a millisecond.
+//
+// A plain http.Client with a generous timeout, because the thing on the other
+// end is a local model doing prompt evaluation on a CPU. The per-run budget
+// inside the harness is what should decide a run is too slow (ENT-238); a
+// timeout here would only decide this client is impatient.
+func drafterDependency(baseURL string) narrative.Drafter {
+	if baseURL == "" {
+		return nil
+	}
+	return platformv1connect.NewIntelligenceServiceClient(
+		&http.Client{Timeout: 10 * time.Minute}, baseURL)
 }
