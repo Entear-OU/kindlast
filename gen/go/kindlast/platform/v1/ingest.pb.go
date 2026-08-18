@@ -1767,6 +1767,222 @@ func (x *IngestCounts) GetEnforcementDecisions() int32 {
 	return 0
 }
 
+// IngestEvidenceRequest is one fetch and what it produced.
+//
+// # A FETCH THAT PRODUCED NOTHING IS STILL A FETCH
+//
+// `content_json` is empty when the outcome was not a success, and the request
+// is still recorded. A log holding only successful fetches would be
+// indistinguishable from a deployment where the policy gateway does nothing,
+// and the rows that make a control visible to a customer are precisely the
+// ones saying "we did not call that".
+type IngestEvidenceRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The organisation this was for. Required, and carried in the message rather
+	// than a header for the reason RecordAgentRun's `org_id` is: this caller has
+	// no active organisation and says so per call.
+	//
+	// NOT BELIEVED BECAUSE IT IS CONVENIENT. It is safe only because
+	// `internal:ingest` is issued to service principals through client
+	// credentials and never to a browser, so "the caller could name any
+	// organisation" describes a component we ship rather than an input a person
+	// controls. If that scope ever reaches something a customer can drive, this
+	// becomes a tenancy hole.
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// Which connection produced it. Required even for a refusal, because "what
+	// did it try to reach" is the question a refusal exists to answer.
+	ConnectionId string `protobuf:"bytes,2,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	// Which tool was called, or would have been.
+	Tool string `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
+	// The arguments, after redaction, as JSON.
+	ArgumentsJson string `protobuf:"bytes,4,opt,name=arguments_json,json=argumentsJson,proto3" json:"arguments_json,omitempty"`
+	// `succeeded`, `refused` or `failed`.
+	//
+	// THREE, AND THE MIDDLE ONE IS THE POINT. A refusal is what a working
+	// control produces, not a kind of failure, and a vocabulary offering only
+	// the two would push refusals into one of them and lose the distinction that
+	// matters most for trust.
+	Outcome string `protobuf:"bytes,5,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	// Why, when it was not a success. For a human to read, and required for a
+	// refusal or a failure: a row that says neither what happened nor why tells
+	// nobody anything.
+	Detail string `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"`
+	// What the tool returned, as JSON, ALREADY REDACTED BY THE GATEWAY. Empty
+	// when the outcome was not a success.
+	//
+	// A string rather than a Struct, for the same reason every other third-party
+	// payload on this surface is one: it is data on its way to becoming a stored
+	// observation, and a typed message would invite code that branches on a
+	// customer's content.
+	ContentJson string `protobuf:"bytes,7,opt,name=content_json,json=contentJson,proto3" json:"content_json,omitempty"`
+	// How many values the redactor replaced. Zero says the redactor ran and
+	// found nothing, which is a different statement from the field being absent.
+	Redactions int32 `protobuf:"varint,8,opt,name=redactions,proto3" json:"redactions,omitempty"`
+	// When it was true at the source, and when the fetch was asked for. Both,
+	// because they are routinely far apart and the gap is the interesting part:
+	// a record last edited in March and first read by us in August is a
+	// five-month blind spot that one timestamp would hide.
+	ObservedAt    *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	RequestedAt   *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=requested_at,json=requestedAt,proto3" json:"requested_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IngestEvidenceRequest) Reset() {
+	*x = IngestEvidenceRequest{}
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IngestEvidenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IngestEvidenceRequest) ProtoMessage() {}
+
+func (x *IngestEvidenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IngestEvidenceRequest.ProtoReflect.Descriptor instead.
+func (*IngestEvidenceRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *IngestEvidenceRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *IngestEvidenceRequest) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *IngestEvidenceRequest) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *IngestEvidenceRequest) GetArgumentsJson() string {
+	if x != nil {
+		return x.ArgumentsJson
+	}
+	return ""
+}
+
+func (x *IngestEvidenceRequest) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *IngestEvidenceRequest) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *IngestEvidenceRequest) GetContentJson() string {
+	if x != nil {
+		return x.ContentJson
+	}
+	return ""
+}
+
+func (x *IngestEvidenceRequest) GetRedactions() int32 {
+	if x != nil {
+		return x.Redactions
+	}
+	return 0
+}
+
+func (x *IngestEvidenceRequest) GetObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return nil
+}
+
+func (x *IngestEvidenceRequest) GetRequestedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RequestedAt
+	}
+	return nil
+}
+
+type IngestEvidenceResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The stored observation's id, empty when the fetch produced none. A caller
+	// that wants to reference what it learned has something to reference.
+	EvidenceId string `protobuf:"bytes,1,opt,name=evidence_id,json=evidenceId,proto3" json:"evidence_id,omitempty"`
+	// The stored fetch record's id, which is written whatever the outcome.
+	FetchId       string `protobuf:"bytes,2,opt,name=fetch_id,json=fetchId,proto3" json:"fetch_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IngestEvidenceResponse) Reset() {
+	*x = IngestEvidenceResponse{}
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IngestEvidenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IngestEvidenceResponse) ProtoMessage() {}
+
+func (x *IngestEvidenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_ingest_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IngestEvidenceResponse.ProtoReflect.Descriptor instead.
+func (*IngestEvidenceResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_ingest_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *IngestEvidenceResponse) GetEvidenceId() string {
+	if x != nil {
+		return x.EvidenceId
+	}
+	return ""
+}
+
+func (x *IngestEvidenceResponse) GetFetchId() string {
+	if x != nil {
+		return x.FetchId
+	}
+	return ""
+}
+
 var File_kindlast_platform_v1_ingest_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
@@ -1927,14 +2143,34 @@ const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"guidelines\x18\t \x01(\x05R\n" +
 	"guidelines\x123\n" +
 	"\x15enforcement_decisions\x18\n" +
-	" \x01(\x05R\x14enforcementDecisions*\x92\x01\n" +
+	" \x01(\x05R\x14enforcementDecisions\"\xff\x02\n" +
+	"\x15IngestEvidenceRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12#\n" +
+	"\rconnection_id\x18\x02 \x01(\tR\fconnectionId\x12\x12\n" +
+	"\x04tool\x18\x03 \x01(\tR\x04tool\x12%\n" +
+	"\x0earguments_json\x18\x04 \x01(\tR\rargumentsJson\x12\x18\n" +
+	"\aoutcome\x18\x05 \x01(\tR\aoutcome\x12\x16\n" +
+	"\x06detail\x18\x06 \x01(\tR\x06detail\x12!\n" +
+	"\fcontent_json\x18\a \x01(\tR\vcontentJson\x12\x1e\n" +
+	"\n" +
+	"redactions\x18\b \x01(\x05R\n" +
+	"redactions\x12;\n" +
+	"\vobserved_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"observedAt\x12=\n" +
+	"\frequested_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\vrequestedAt\"T\n" +
+	"\x16IngestEvidenceResponse\x12\x1f\n" +
+	"\vevidence_id\x18\x01 \x01(\tR\n" +
+	"evidenceId\x12\x19\n" +
+	"\bfetch_id\x18\x02 \x01(\tR\afetchId*\x92\x01\n" +
 	"\x0fAgentRunOutcome\x12!\n" +
 	"\x1dAGENT_RUN_OUTCOME_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bAGENT_RUN_OUTCOME_SUCCEEDED\x10\x01\x12\x1d\n" +
 	"\x19AGENT_RUN_OUTCOME_REFUSED\x10\x02\x12\x1c\n" +
-	"\x18AGENT_RUN_OUTCOME_FAILED\x10\x032\xdc\x02\n" +
+	"\x18AGENT_RUN_OUTCOME_FAILED\x10\x032\xff\x03\n" +
 	"\rIngestService\x12\x9f\x01\n" +
-	"\fIngestCorpus\x12).kindlast.platform.v1.IngestCorpusRequest\x1a*.kindlast.platform.v1.IngestCorpusResponse\"8\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/internal/v1/corpus:ingest\x12\xa8\x01\n" +
+	"\fIngestCorpus\x12).kindlast.platform.v1.IngestCorpusRequest\x1a*.kindlast.platform.v1.IngestCorpusResponse\"8\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/internal/v1/corpus:ingest\x12\xa0\x01\n" +
+	"\x0eIngestEvidence\x12+.kindlast.platform.v1.IngestEvidenceRequest\x1a,.kindlast.platform.v1.IngestEvidenceResponse\"3\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/internal/v1/evidence\x12\xa8\x01\n" +
 	"\x0eRecordAgentRun\x12+.kindlast.platform.v1.RecordAgentRunRequest\x1a,.kindlast.platform.v1.RecordAgentRunResponse\";\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/internal/v1/agent-runsB\xdf\x01\n" +
 	"\x18com.kindlast.platform.v1B\vIngestProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
@@ -1951,7 +2187,7 @@ func file_kindlast_platform_v1_ingest_proto_rawDescGZIP() []byte {
 }
 
 var file_kindlast_platform_v1_ingest_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kindlast_platform_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_kindlast_platform_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_kindlast_platform_v1_ingest_proto_goTypes = []any{
 	(AgentRunOutcome)(0),           // 0: kindlast.platform.v1.AgentRunOutcome
 	(*RecordAgentRunRequest)(nil),  // 1: kindlast.platform.v1.RecordAgentRunRequest
@@ -1972,14 +2208,16 @@ var file_kindlast_platform_v1_ingest_proto_goTypes = []any{
 	(*EnforcementDecision)(nil),    // 16: kindlast.platform.v1.EnforcementDecision
 	(*IngestCorpusResponse)(nil),   // 17: kindlast.platform.v1.IngestCorpusResponse
 	(*IngestCounts)(nil),           // 18: kindlast.platform.v1.IngestCounts
-	(*timestamppb.Timestamp)(nil),  // 19: google.protobuf.Timestamp
+	(*IngestEvidenceRequest)(nil),  // 19: kindlast.platform.v1.IngestEvidenceRequest
+	(*IngestEvidenceResponse)(nil), // 20: kindlast.platform.v1.IngestEvidenceResponse
+	(*timestamppb.Timestamp)(nil),  // 21: google.protobuf.Timestamp
 }
 var file_kindlast_platform_v1_ingest_proto_depIdxs = []int32{
 	0,  // 0: kindlast.platform.v1.RecordAgentRunRequest.outcome:type_name -> kindlast.platform.v1.AgentRunOutcome
 	2,  // 1: kindlast.platform.v1.RecordAgentRunRequest.usage:type_name -> kindlast.platform.v1.AgentRunUsage
-	19, // 2: kindlast.platform.v1.RecordAgentRunRequest.queued_at:type_name -> google.protobuf.Timestamp
-	19, // 3: kindlast.platform.v1.RecordAgentRunRequest.started_at:type_name -> google.protobuf.Timestamp
-	19, // 4: kindlast.platform.v1.RecordAgentRunRequest.finished_at:type_name -> google.protobuf.Timestamp
+	21, // 2: kindlast.platform.v1.RecordAgentRunRequest.queued_at:type_name -> google.protobuf.Timestamp
+	21, // 3: kindlast.platform.v1.RecordAgentRunRequest.started_at:type_name -> google.protobuf.Timestamp
+	21, // 4: kindlast.platform.v1.RecordAgentRunRequest.finished_at:type_name -> google.protobuf.Timestamp
 	5,  // 5: kindlast.platform.v1.IngestCorpusRequest.pack:type_name -> kindlast.platform.v1.RegulationPack
 	6,  // 6: kindlast.platform.v1.RegulationPack.document:type_name -> kindlast.platform.v1.RegulatoryDocument
 	13, // 7: kindlast.platform.v1.RegulationPack.obligations:type_name -> kindlast.platform.v1.Obligation
@@ -1993,16 +2231,20 @@ var file_kindlast_platform_v1_ingest_proto_depIdxs = []int32{
 	11, // 15: kindlast.platform.v1.Annex.items:type_name -> kindlast.platform.v1.AnnexItem
 	14, // 16: kindlast.platform.v1.Obligation.citation:type_name -> kindlast.platform.v1.Citation
 	18, // 17: kindlast.platform.v1.IngestCorpusResponse.counts:type_name -> kindlast.platform.v1.IngestCounts
-	19, // 18: kindlast.platform.v1.IngestCorpusResponse.ingested_at:type_name -> google.protobuf.Timestamp
-	4,  // 19: kindlast.platform.v1.IngestService.IngestCorpus:input_type -> kindlast.platform.v1.IngestCorpusRequest
-	1,  // 20: kindlast.platform.v1.IngestService.RecordAgentRun:input_type -> kindlast.platform.v1.RecordAgentRunRequest
-	17, // 21: kindlast.platform.v1.IngestService.IngestCorpus:output_type -> kindlast.platform.v1.IngestCorpusResponse
-	3,  // 22: kindlast.platform.v1.IngestService.RecordAgentRun:output_type -> kindlast.platform.v1.RecordAgentRunResponse
-	21, // [21:23] is the sub-list for method output_type
-	19, // [19:21] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	21, // 18: kindlast.platform.v1.IngestCorpusResponse.ingested_at:type_name -> google.protobuf.Timestamp
+	21, // 19: kindlast.platform.v1.IngestEvidenceRequest.observed_at:type_name -> google.protobuf.Timestamp
+	21, // 20: kindlast.platform.v1.IngestEvidenceRequest.requested_at:type_name -> google.protobuf.Timestamp
+	4,  // 21: kindlast.platform.v1.IngestService.IngestCorpus:input_type -> kindlast.platform.v1.IngestCorpusRequest
+	19, // 22: kindlast.platform.v1.IngestService.IngestEvidence:input_type -> kindlast.platform.v1.IngestEvidenceRequest
+	1,  // 23: kindlast.platform.v1.IngestService.RecordAgentRun:input_type -> kindlast.platform.v1.RecordAgentRunRequest
+	17, // 24: kindlast.platform.v1.IngestService.IngestCorpus:output_type -> kindlast.platform.v1.IngestCorpusResponse
+	20, // 25: kindlast.platform.v1.IngestService.IngestEvidence:output_type -> kindlast.platform.v1.IngestEvidenceResponse
+	3,  // 26: kindlast.platform.v1.IngestService.RecordAgentRun:output_type -> kindlast.platform.v1.RecordAgentRunResponse
+	24, // [24:27] is the sub-list for method output_type
+	21, // [21:24] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_ingest_proto_init() }
@@ -2016,7 +2258,7 @@ func file_kindlast_platform_v1_ingest_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_ingest_proto_rawDesc), len(file_kindlast_platform_v1_ingest_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

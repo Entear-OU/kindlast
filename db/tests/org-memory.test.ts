@@ -351,14 +351,80 @@ describe.skipIf(!reachable)('the agent reads and does not decide', () => {
     ).rejects.toThrow(/permission denied/i)
   })
 
-  it('cannot record an observation', async () => {
+  /**
+   * ENT-231 NARROWED THIS, AND THE NARROWING IS THE POINT RATHER THAN A
+   * WEAKENING.
+   *
+   * 00020 gave the producer role select and no insert on `org_evidence`, so
+   * this used to be a privilege refusal. `IngestService.IngestEvidence` needs
+   * to record what a scheduled fetch found for an organisation nobody is
+   * signed in to, so 00025 grants insert and adds an org-scoped policy.
+   *
+   * What survives untouched is 00020's actual argument, which is about what an
+   * organisation BELIEVES: the test above still holds, `org_profile_facts` is
+   * still select-only for this role, and a profile the agent could edit would
+   * still be a profile the customer no longer owns. Observing and believing are
+   * the two shapes 00020 separated on purpose, and only the first moved.
+   *
+   * So the assertion changes from "it cannot write here at all" to "it can only
+   * write where its GUC says", which is the property that now does the work.
+   */
+  it('cannot record an observation for an organisation its GUC does not name', async () => {
+    // No tenancy GUC set on this connection at all, which is the state a
+    // caller that forgot to set one is in. `current_setting(..., true)` is
+    // then null, the policy compares against null, and the insert is refused.
+    // The direction matters: a caller naming no organisation must write
+    // nothing rather than anything.
     await expect(
       agent.query(
         `insert into org_evidence (org_id, source, kind, observed_at)
          values ($1, 'agent', 'guess', now())`,
         [orgA],
       ),
+    ).rejects.toThrow(/row-level security/i)
+  })
+
+  it('records an observation for the organisation its GUC does name', async () => {
+    // The guard above is only worth having if it can pass, and this is the
+    // path IngestEvidence actually takes: set the org, then insert.
+    await agent.query("select set_config('app.current_org_id', $1, false)", [
+      orgA,
+    ])
+    const r = await agent.query(
+      `insert into org_evidence (org_id, source, kind, observed_at)
+       values ($1, 'agent', 'observed', now()) returning id`,
+      [orgA],
+    )
+    expect(r.rows[0].id).toBeTruthy()
+
+    // And it still cannot reach into another organisation with that GUC set,
+    // which is what makes the GUC tenancy rather than a label.
+    await expect(
+      agent.query(
+        `insert into org_evidence (org_id, source, kind, observed_at)
+         values ($1, 'agent', 'smuggled', now())`,
+        [orgB],
+      ),
+    ).rejects.toThrow(/row-level security/i)
+
+    await agent.query("select set_config('app.current_org_id', '', false)")
+  })
+
+  it('still cannot record a belief, which is what 00020 was protecting', async () => {
+    // Restated after the change above, so the two are read together: the
+    // producer role gained the ability to record what it OBSERVED and gained
+    // nothing at all over what the organisation BELIEVES.
+    await agent.query("select set_config('app.current_org_id', $1, false)", [
+      orgA,
+    ])
+    await expect(
+      agent.query(
+        `insert into org_profile_facts (org_id, key, value, source)
+         values ($1, 'invented', '"yes"'::jsonb, 'agent')`,
+        [orgA],
+      ),
     ).rejects.toThrow(/permission denied/i)
+    await agent.query("select set_config('app.current_org_id', '', false)")
   })
 })
 

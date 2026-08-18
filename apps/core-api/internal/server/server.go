@@ -101,6 +101,13 @@ type Dependencies struct {
 	// it, and keeps this dependency from being one every test has to supply.
 	Tokens CapabilityTokens
 
+	// Approvals spends §8's one-tap approve link (ENT-249).
+	//
+	// Optional, and nil leaves the endpoint answering 501 rather than
+	// panicking, exactly like Tokens above: a deployment that has not wired a
+	// database has no approve path, and saying so is better than a stack trace.
+	Approvals Approvals
+
 	// BillingWebhook serves the payment provider's callback (ENT-210).
 	//
 	// Nil when this deployment has not configured billing, and then the route
@@ -130,6 +137,15 @@ type Dependencies struct {
 	// answers Unimplemented rather than panicking.
 	AgentRuns ingestservice.RunRecorder
 
+	// Evidence records what a machine fetched from a customer's system
+	// (ENT-231), on the same kindlast_agent pool.
+	//
+	// A separate field from AgentRuns for the reason that one is separate from
+	// Corpus: a dependency is a statement about what a caller may do, and
+	// "record that a run happened" and "write into an organisation's memory"
+	// are different permissions even when they travel on one connection pool.
+	Evidence ingestservice.EvidenceRecorder
+
 	// Narratives reads findings that have none and records what a run produced,
 	// on the kindlast_agent pool (ENT-245).
 	//
@@ -146,6 +162,17 @@ type Dependencies struct {
 	// model" and "the model is broken" want different reactions from an
 	// operator.
 	Drafter narrativeservice.Drafter
+
+	// Integrations serves the console's control over which customer systems
+	// Kindlast may reach (ENT-231).
+	//
+	// Nil when this deployment has no gateway, and then IntegrationsService is
+	// not registered at all rather than registered and failing on every call.
+	// A console that shows an Integrations page whose every button returns an
+	// error is worse than one that shows no page: the first looks broken, the
+	// second looks unconfigured, and only one of those sends an operator to
+	// the right place.
+	Integrations corev1connect.IntegrationsServiceHandler
 
 	// Logger is what the internal handlers report to. An ingest that refused a
 	// pack has to say so somewhere a person will look, because its caller is a
@@ -164,6 +191,21 @@ type CapabilityTokens interface {
 	// Takes the raw token, not its hash: the store hashes with the same
 	// function the mint side uses, so the two cannot drift.
 	RedeemCapabilityToken(ctx context.Context, token, kind string) (string, error)
+}
+
+// Approvals redeems an approve link and performs the approval it authorises.
+//
+// Declared here rather than exported from the store, for the same reason
+// CapabilityTokens is: this package depends on no database driver. One method,
+// and it returns the organisation slug because the interstitial's next move is
+// to send the person into `/o/{slug}/`, which §8 requires to be the
+// organisation the credential named rather than wherever a session pointed.
+//
+// `applied` false means the finding was already approved. Not an error: a
+// second click, a retry and a colleague who got there first are the same
+// non-event, and the person should be told it is done.
+type Approvals interface {
+	ApproveFromEmail(ctx context.Context, token, findingID string) (orgSlug string, applied bool, err error)
 }
 
 // New builds the HTTP handler core-api serves.
@@ -222,6 +264,16 @@ func New(deps Dependencies) (http.Handler, error) {
 	// with no model. That is ENT-212's "degrades to a form rather than failing"
 	// arranged so there is no second path to keep working.
 	mux.Handle(corev1connect.NewOnboardingServiceHandler(onboardingservice.New(), chain))
+	// Connecting a customer's own systems (ENT-231). On the tenant chain,
+	// because a connection belongs to one organisation and RLS is what keeps
+	// one customer's endpoints and credentials out of another's console.
+	//
+	// Registered only when a gateway is configured. core-api itself opens no
+	// connection to a customer-supplied address, so without the gateway there
+	// is nothing behind this surface at all.
+	if deps.Integrations != nil {
+		mux.Handle(corev1connect.NewIntegrationsServiceHandler(deps.Integrations, chain))
+	}
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in
@@ -274,9 +326,10 @@ func New(deps Dependencies) (http.Handler, error) {
 	// agents, or run agents against a corpus somebody else loaded. The handler
 	// answers Unimplemented for whichever half it was not given, which is a
 	// better answer than a 404 on a path that does exist.
-	if deps.Corpus != nil || deps.AgentRuns != nil {
+	if deps.Corpus != nil || deps.AgentRuns != nil || deps.Evidence != nil {
 		mux.Handle(platformv1connect.NewIngestServiceHandler(
-			ingestservice.New(deps.Corpus, deps.AgentRuns, deps.Delegations, deps.Logger),
+			ingestservice.New(deps.Corpus, deps.AgentRuns, deps.Evidence,
+				deps.Delegations, deps.Logger),
 			internal))
 	}
 
@@ -374,6 +427,76 @@ func New(deps Dependencies) (http.Handler, error) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprintf(w, `{"orgId":%q}`, orgID)
+	})
+
+	// Approving a finding from a link in an email (§8, ENT-249).
+	//
+	// # WHY POST, WHICH IS THE WHOLE SECURITY PROPERTY OF THIS ENDPOINT
+	//
+	// Corporate mail gateways, link previewers and archiving proxies fetch every
+	// URL in a message before a human sees it, and some of them follow
+	// redirects and prefetch on hover afterwards. Under a GET, the act of
+	// DELIVERING a finding notification would approve the finding, in the
+	// customer's own compliance record, with an audit row naming a person who
+	// never read the message. Findings would approve themselves in transit.
+	//
+	// So this route is registered POST-only. Go's ServeMux answers 405 for
+	// every other method on a path that exists, which is the answer a scanner
+	// deserves: the path is real, nothing happened. `web` renders an
+	// interstitial at `/approve/{findingId}/{token}` on GET, and its button
+	// posts here.
+	//
+	// The same argument as the unsubscribe route above, and this one costs
+	// more if it is wrong: an unsubscribe silently stops mail, an approval
+	// silently makes a regulatory decision.
+	//
+	// # WHY IT IS NOT ON THE CONNECT SURFACE
+	//
+	// The person clicking has no session, no scope and no organisation header.
+	// The delegation is the only identity claim, which is why it is stored
+	// hashed, expires within the hour, is spent once, and is bound to the one
+	// finding the caller has to name alongside it.
+	//
+	// # ONE ANSWER FOR EVERY UNUSABLE LINK
+	//
+	// Expired, revoked, already redeemed, minted for a different finding,
+	// minted for somebody since removed from the organisation, and never
+	// existed all answer 404 with the same body. A caller presenting a
+	// credential has proved nothing that entitles them to know which, and
+	// distinguishable answers would make this an oracle for which links are
+	// live. 404 rather than 401 because there is nothing to authenticate as.
+	mux.HandleFunc("POST /api/v1/approve", func(w http.ResponseWriter, r *http.Request) {
+		if deps.Approvals == nil {
+			http.Error(w, "approving from email is not available", http.StatusNotImplemented)
+			return
+		}
+
+		var body struct {
+			Token     string `json:"token"`
+			FindingID string `json:"findingId"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		// Missing halves join the unusable set rather than getting their own
+		// reply. A 400 here would tell a caller that a request WITH both halves
+		// is the one worth making, which is a hint this endpoint owes nobody.
+		if body.Token == "" || body.FindingID == "" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+
+		slug, applied, err := deps.Approvals.ApproveFromEmail(r.Context(), body.Token, body.FindingID)
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `{"orgSlug":%q,"findingId":%q,"applied":%t}`,
+			slug, body.FindingID, applied)
 	})
 
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {

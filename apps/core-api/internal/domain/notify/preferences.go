@@ -207,6 +207,26 @@ func ShouldNotify(findingSeverity, floor string, now time.Time, quietStart, quie
 	return true, ""
 }
 
+// Doorbell is what one finding notification needs in order to be rendered.
+//
+// A struct rather than six positional strings, because four of them are text
+// that all looks alike at a call site and two of them are links that must not
+// be swapped: putting the approve link where the unsubscribe link goes would
+// turn "stop sending me these" into an approval.
+type Doorbell struct {
+	RecipientEmail string
+	OrgName        string
+	Severity       string
+	FindingURL     string
+	UnsubscribeURL string
+	// ApproveURL is section 8's one-tap link, and empty is the ordinary case
+	// rather than a degraded one. It is minted only for a recipient reading
+	// mail at an address the IdP said was verified (ENT-249), so a message
+	// without one is a message to somebody the schema will not let act from a
+	// link.
+	ApproveURL string
+}
+
 // FindingNotification renders the doorbell.
 //
 // A doorbell says that something happened, not what it says (§17.1). There is
@@ -215,26 +235,46 @@ func ShouldNotify(findingSeverity, floor string, now time.Time, quietStart, quie
 // email moves them into a mailbox and into a mail provider's logs. The
 // recipient follows the link and reads the finding behind their own session,
 // where their role and organisation are checked again.
-func FindingNotification(recipientEmail, orgName, severity, findingURL, unsubscribeURL string) Message {
-	org := strings.TrimSpace(orgName)
+//
+// The approve link does not weaken that rule, and the wording is what keeps it
+// honest. It says the person can approve WITHOUT reading, and that the trail
+// will record it that way, because that is exactly what `approval_reviewed`
+// records and somebody deciding from a mailbox deserves to know it before they
+// click rather than afterwards.
+func FindingNotification(d Doorbell) Message {
+	org := strings.TrimSpace(d.OrgName)
 	if org == "" {
 		org = "your organisation"
 	}
 
-	subject := fmt.Sprintf("A %s compliance finding needs attention in %s", severity, org)
+	subject := fmt.Sprintf("A %s compliance finding needs attention in %s", d.Severity, org)
 
-	text := strings.Join([]string{
-		fmt.Sprintf("Kindlast has raised a %s finding for %s.", severity, org),
+	lines := []string{
+		fmt.Sprintf("Kindlast has raised a %s finding for %s.", d.Severity, org),
 		"",
 		"Open it here to read what was found and decide what to do:",
-		findingURL,
+		d.FindingURL,
+	}
+
+	if d.ApproveURL != "" {
+		lines = append(lines,
+			"",
+			"If you already know this one should be approved, you can approve it",
+			"from the link below without signing in. It works once, it expires",
+			"within the hour, and the audit trail will record that you approved",
+			"it from an email without reading the finding first:",
+			d.ApproveURL,
+		)
+	}
+
+	lines = append(lines,
 		"",
 		"You are receiving this because you are a member of this organisation and",
 		"your notification settings include findings at this severity.",
 		"",
 		"To stop receiving these, use this link:",
-		unsubscribeURL,
-	}, "\n")
+		d.UnsubscribeURL,
+	)
 
 	// No Kind, deliberately. Kind names a row in `transactional_outbox`, and a
 	// doorbell never goes there: it is rendered at dispatch from a
@@ -242,8 +282,8 @@ func FindingNotification(recipientEmail, orgName, severity, findingURL, unsubscr
 	// would imply a persistence path that does not exist and invite somebody to
 	// write this message into the wrong table.
 	return Message{
-		RecipientEmail: recipientEmail,
+		RecipientEmail: d.RecipientEmail,
 		Subject:        subject,
-		BodyText:       text,
+		BodyText:       strings.Join(lines, "\n"),
 	}
 }

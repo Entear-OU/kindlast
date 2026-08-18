@@ -175,10 +175,13 @@ func TestNormaliseCatchesABadTimezoneNowRatherThanAtSendTime(t *testing.T) {
 
 // The doorbell rule (§17.1): say that something happened, not what it says.
 func TestTheNotificationDoesNotCarryTheFinding(t *testing.T) {
-	msg := FindingNotification(
-		"member@example.invalid", "acme-gmbh", "high",
-		"http://localhost:3000/o/acme-gmbh/feed/abc",
-		"http://localhost:3000/unsubscribe/tok")
+	msg := FindingNotification(Doorbell{
+		RecipientEmail: "member@example.invalid",
+		OrgName:        "acme-gmbh",
+		Severity:       "high",
+		FindingURL:     "http://localhost:3000/o/acme-gmbh/feed/abc",
+		UnsubscribeURL: "http://localhost:3000/unsubscribe/tok",
+	})
 
 	if !strings.Contains(msg.BodyText, "/o/acme-gmbh/feed/abc") {
 		t.Fatal("the notification has no link, so it cannot be acted on")
@@ -194,5 +197,78 @@ func TestTheNotificationDoesNotCarryTheFinding(t *testing.T) {
 	// Setting one would imply a persistence path that does not exist.
 	if msg.Kind != "" {
 		t.Fatalf("a doorbell carries kind %q, implying it is persisted", msg.Kind)
+	}
+}
+
+// Section 8's one-tap link, and what the message has to say about it (ENT-249).
+func TestTheApproveLinkAppearsOnlyWhenThereIsOne(t *testing.T) {
+	without := FindingNotification(Doorbell{
+		RecipientEmail: "member@example.invalid",
+		OrgName:        "acme-gmbh",
+		Severity:       "high",
+		FindingURL:     "http://localhost:3000/o/acme-gmbh/feed/abc",
+		UnsubscribeURL: "http://localhost:3000/unsubscribe/tok",
+	})
+
+	// An unverified address gets a doorbell and no authority. What must NOT
+	// happen is a message with a dangling sentence about a link that is not
+	// there, because that reads as a broken email rather than as a deliberate
+	// absence.
+	if strings.Contains(without.BodyText, "approve") {
+		t.Fatalf("a message with no approve link still talks about approving:\n%s",
+			without.BodyText)
+	}
+
+	with := FindingNotification(Doorbell{
+		RecipientEmail: "member@example.invalid",
+		OrgName:        "acme-gmbh",
+		Severity:       "high",
+		FindingURL:     "http://localhost:3000/o/acme-gmbh/feed/abc",
+		UnsubscribeURL: "http://localhost:3000/unsubscribe/tok",
+		ApproveURL:     "http://localhost:3000/approve/abc/deleg",
+	})
+
+	if !strings.Contains(with.BodyText, "/approve/abc/deleg") {
+		t.Fatalf("the approve link is missing:\n%s", with.BodyText)
+	}
+
+	// The honesty requirements, and they are requirements rather than polish.
+	// Somebody approving from a mailbox is making a regulatory decision without
+	// reading the finding, and `approval_reviewed` records exactly that, so the
+	// message has to say so before the click rather than the trail saying it
+	// afterwards.
+	for _, phrase := range []string{"without reading", "works once"} {
+		if !strings.Contains(with.BodyText, phrase) {
+			t.Fatalf("the approve link does not say %q:\n%s", phrase, with.BodyText)
+		}
+	}
+
+	// And the doorbell rule still holds with the link present: no detected
+	// text, no proposed action, nothing about what the finding says.
+	if strings.Contains(with.BodyText, "Fixture gap") {
+		t.Fatal("the approve link brought the finding's contents into the email")
+	}
+}
+
+// The two links must never be confused for one another.
+func TestTheApproveLinkIsNotTheUnsubscribeLink(t *testing.T) {
+	// The failure this guards is a swapped argument at the call site, which is
+	// why Doorbell is a struct. Under a swap, "stop sending me these" would
+	// approve a finding.
+	msg := FindingNotification(Doorbell{
+		RecipientEmail: "member@example.invalid",
+		OrgName:        "acme-gmbh",
+		Severity:       "high",
+		FindingURL:     "http://localhost:3000/o/acme-gmbh/feed/abc",
+		UnsubscribeURL: "http://localhost:3000/unsubscribe/unsub-tok",
+		ApproveURL:     "http://localhost:3000/approve/abc/approve-tok",
+	})
+
+	stop := strings.Index(msg.BodyText, "To stop receiving these")
+	if stop < 0 {
+		t.Fatal("the notification offers no way to stop receiving them")
+	}
+	if strings.Contains(msg.BodyText[stop:], "approve-tok") {
+		t.Fatal("the approve token appears under the unsubscribe sentence")
 	}
 }

@@ -38,6 +38,10 @@ type Doorbells interface {
 	ClaimDoorbell(ctx context.Context, tx pgx.Tx) (postgres.Doorbell, error)
 	Recipients(ctx context.Context, tx pgx.Tx, outboxID string) ([]postgres.Recipient, error)
 	MintCapabilityToken(ctx context.Context, tx pgx.Tx, orgID, userID, kind, tokenHash, lifetime string) error
+	// MintApprovalDelegation returns false when the mint was declined rather
+	// than when it failed, which is why it is a boolean and not an error. See
+	// the store method for the two races that produce it.
+	MintApprovalDelegation(ctx context.Context, tx pgx.Tx, outboxID, userID, tokenHash string, lifetime time.Duration) (bool, error)
 	MarkDoorbellSent(ctx context.Context, tx pgx.Tx, id string) error
 	MarkDoorbellSkipped(ctx context.Context, tx pgx.Tx, id, reason string) error
 	MarkDoorbellFailed(ctx context.Context, tx pgx.Tx, id string, cause error) error
@@ -51,6 +55,26 @@ type Doorbells interface {
 // them to use their mail client's spam button instead, which costs the sender's
 // domain reputation rather than one message.
 const UnsubscribeLifetime = "30 days"
+
+// ApprovalLifetime is how long §8's one-tap approve link stays usable.
+//
+// An hour, which is 00021's ceiling for any delegation, and this is the one
+// place in the design where two things pull against each other hard enough to
+// be worth writing down rather than resolving quietly.
+//
+// People read compliance mail late. That argument is why an unsubscribe token
+// lives for thirty days, and it applies just as well to an approve link. But an
+// unsubscribe token stops mail and an approve link makes a regulatory decision,
+// and 00021's ceiling is a claim the schema makes to a customer: no delegation
+// is ever long-lived, and it binds the migrator so that the claim is true
+// rather than merely intended. Widening it for the mailbox case would be
+// weakening a security boundary to buy convenience.
+//
+// So the ceiling wins and the cost lands on the interstitial, which tells
+// somebody arriving with an expired link exactly that and points them at the
+// finding in the console. One more click, rather than a credential with a
+// month's life sitting in a mailbox.
+const ApprovalLifetime = time.Hour
 
 // DoorbellDispatcher turns pending notifications into email.
 type DoorbellDispatcher struct {
@@ -254,9 +278,19 @@ func (d *DoorbellDispatcher) sendAll(
 			return err
 		}
 
-		msg := notify.FindingNotification(
-			r.Email, r.OrgName, r.FindingSeverity, findingURL,
-			fmt.Sprintf("%s/unsubscribe/%s", d.baseURL, token))
+		approveURL, err := d.approveLink(ctx, tx, bell, r)
+		if err != nil {
+			return err
+		}
+
+		msg := notify.FindingNotification(notify.Doorbell{
+			RecipientEmail: r.Email,
+			OrgName:        r.OrgName,
+			Severity:       r.FindingSeverity,
+			FindingURL:     findingURL,
+			UnsubscribeURL: fmt.Sprintf("%s/unsubscribe/%s", d.baseURL, token),
+			ApproveURL:     approveURL,
+		})
 
 		if err := d.channel.Send(ctx, delivery.Message{
 			To:       msg.RecipientEmail,
@@ -267,6 +301,55 @@ func (d *DoorbellDispatcher) sendAll(
 		}
 	}
 	return nil
+}
+
+// approveLink mints §8's one-tap approval for one recipient, or nothing.
+//
+// # THE ADDRESS GATE IS ASKED HERE AND ENFORCED IN THE SCHEMA
+//
+// §1.8 gates acting on a finding behind an address somebody proved they
+// control, and 00027 refuses the row for anybody else, including for this
+// caller, which runs as the schema owner and bypasses RLS. Asking first is not
+// a duplicate of that: an exception from inside the delivery transaction would
+// abort the whole notification and retry it forever, so the person with an
+// unverified address would stop receiving mail entirely rather than receiving
+// mail without a link.
+//
+// # ONE LINK PER PERSON, LIKE THE UNSUBSCRIBE TOKEN AND FOR A SHARPER REASON
+//
+// The unsubscribe token is per person so nobody can unsubscribe everybody else.
+// This is per person because it carries their authority to approve: a shared
+// link would let whichever recipient clicked first have the approval recorded
+// against a colleague, in a customer's own compliance record.
+//
+// # THE URL NAMES THE FINDING AS WELL AS CARRYING THE TOKEN
+//
+// Both are needed to redeem it (00027). A token recovered on its own, from a
+// mail relay's logs or a truncated URL, approves nothing.
+func (d *DoorbellDispatcher) approveLink(
+	ctx context.Context, tx pgx.Tx, bell postgres.Doorbell, r postgres.Recipient,
+) (string, error) {
+	if !r.EmailVerified {
+		return "", nil
+	}
+
+	token, err := newCapabilityToken()
+	if err != nil {
+		return "", err
+	}
+
+	minted, err := d.store.MintApprovalDelegation(ctx, tx, bell.ID, r.UserID,
+		postgres.HashDelegationToken(token), ApprovalLifetime)
+	if err != nil {
+		return "", err
+	}
+	if !minted {
+		// Declined rather than failed: the row went away, or this person is no
+		// longer a member. The doorbell still rings, without a link.
+		return "", nil
+	}
+
+	return fmt.Sprintf("%s/approve/%s/%s", d.baseURL, bell.FindingID, token), nil
 }
 
 // localTime is `now` in somebody's zone, falling back to UTC.

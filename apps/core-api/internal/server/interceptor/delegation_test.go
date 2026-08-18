@@ -105,7 +105,7 @@ func buildDelegationChain(t *testing.T, a *authServer) (
 	mux.Handle(corev1connect.NewFindingsServiceHandler(findingsservice.New(false), chain))
 	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboardservice.New(), chain))
 	mux.Handle(platformv1connect.NewIngestServiceHandler(
-		ingestservice.New(nil, nil, live.store, nil), chain))
+		ingestservice.New(nil, nil, nil, live.store, nil), chain))
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
@@ -574,7 +574,7 @@ func TestARunIsRecordedForAPersonOnlyWithThatPersonsDelegation(t *testing.T) {
 	)
 	mux := http.NewServeMux()
 	mux.Handle(platformv1connect.NewIngestServiceHandler(
-		ingestservice.New(nil, agentPool, live.store, nil), internal))
+		ingestservice.New(nil, agentPool, agentPool, live.store, nil), internal))
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	runs := platformv1connect.NewIngestServiceClient(server.Client(), server.URL)
