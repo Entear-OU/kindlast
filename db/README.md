@@ -283,13 +283,14 @@ it, so the absence is enforced rather than merely observed.
 This is written down because ENT-223 asked for it to be a decision rather than
 an omission, and because from the outside the two look identical.
 
-**That sentence was false for eight months, and how it was false is the reason
-the section above exists.** It credited the missing grant, and the grant was
-present: 00002 gave `kindlast_app` all four commands on every table, so what
-was actually refusing a delete was the absent policy. The property held the
-whole time, one layer thinner than this file claimed, and the layer holding it
-was the one that fails silently. `00029` revoked the grant, which is what made
-the sentence true rather than what made the log safe. It is checked by name in
+**That sentence was false from the day it was written, and how it was false is
+why [Which role holds which command](#which-role-holds-which-command-and-where-a-control-is-a-privilege)
+exists.** It credited the missing delete grant, and the grant was present:
+`00002` gave `kindlast_app` all four commands on every table, so what actually
+refused a delete was the absent policy. The property held the whole time, one
+layer thinner than this file claimed, and the layer holding it was the one that
+fails silently. `00029` (ENT-243) revoked the grant, which is what made the
+sentence true rather than what made the log safe. It is checked by name in
 `db/tests/grant-surface.test.ts` now, so it cannot go quietly false again.
 
 **Why keep everything.** The value of the record is that a regulator can be
