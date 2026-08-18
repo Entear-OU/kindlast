@@ -37,8 +37,27 @@ from ..skills import analyst
 from ..skills.analyst import Narrative
 from .budget import Budget, BudgetExhausted
 from .citations import Citation, CitationValidator
+from .claims import ClaimCritic
+from .critics import Critic, first_breach
 from .model import Completion, ModelClient, ModelError
-from .prose import review_prose
+from .prose import ProseCritic
+
+# THE CRITICS, IN THE ORDER THEY FIRE (ENT-248).
+#
+# One tuple rather than a chain of `if not x.ok` blocks, because ENT-248 makes a
+# single refusing-critic seam an acceptance criterion: two hand-written call
+# sites is how the second critic ends up with its own excerpt format, its own
+# truncation rule and its own idea of what a refusal reads like.
+#
+# The order is how badly a customer is served by what each one catches. A false
+# statement of law is the failure `AGENTS.md` calls worse than nothing delivered
+# with a citation that checks out, and an em dash is only wrong. A narrative
+# that does both is refused for the claim, because a record reporting the
+# typography would send somebody to fix the wrong thing.
+#
+# Instances rather than the module functions, so a skill whose free-text field
+# needs a differently configured critic configures one instead of forking one.
+CRITICS: tuple[Critic, ...] = (ClaimCritic(), ProseCritic())
 
 
 class Outcome(StrEnum):
@@ -81,6 +100,31 @@ class AgentRun(BaseModel):
     outcome: Outcome
     outcome_detail: str = ""
     narrative: str = ""
+
+    # WHAT A CRITIC REFUSED, AND WHICH RULE REFUSED IT (ENT-248).
+    #
+    # Three fields rather than one sentence, because they answer three
+    # questions and only the first of them belongs in front of a customer.
+    #
+    # `outcome_detail` is the short human reason, and it is what the feed shows
+    # beside a finding whose narrative was refused. `rejected_text` is the whole
+    # field the model wrote, and it is deliberately NOT in `outcome_detail`: a
+    # narrative refused for stating the law wrongly would otherwise be printed
+    # on the finding page under the heading explaining that it was refused,
+    # which is the sentence reaching the customer by a different door.
+    #
+    # `refused_by` and `refused_patterns` are the critic and the named rules, so
+    # a maintainer reading `agent_runs` can count how often each rule fires
+    # without parsing English out of a detail string. That is the same mistake
+    # the records store made with `check_violation` messages, which AGENTS.md
+    # names as one of the reasons decisions moved out of plpgsql.
+    #
+    # Empty on every outcome except a critic refusal, including a citation
+    # refusal: nothing was rejected as prose there, and reporting a pattern that
+    # did not fire would make the counts meaningless.
+    refused_by: str = ""
+    refused_patterns: list[str] = Field(default_factory=list)
+    rejected_text: str = ""
     tool_calls: list[ToolCall] = Field(default_factory=list)
     resolved_citations: list[str] = Field(default_factory=list)
     rejected_citations: list[dict[str, str]] = Field(default_factory=list)
@@ -118,11 +162,29 @@ class AgentRun(BaseModel):
             ]
         )
 
+    def refusal_json(self) -> str:
+        """What a critic refused, for `agent_runs.refusal` (ENT-248).
+
+        `{}` when no critic refused, which the column's default already is, so a
+        reader can tell "no critic objected" from "a critic objected and we did
+        not say what to". An empty object rather than null for the same reason
+        `tool_calls` defaults to an empty array: the shape is always the shape.
+        """
+        if not self.refused_by:
+            return "{}"
+        return json.dumps(
+            {
+                "critic": self.refused_by,
+                "patterns": self.refused_patterns,
+                "text": self.rejected_text,
+            }
+        )
+
 
 def draft_narrative(
     *,
     signal: str,
-    obligations: list[dict[str, str]],
+    obligations: list[dict[str, Any]],
     model: ModelClient,
     validator: CitationValidator,
     model_name: str,
@@ -166,7 +228,10 @@ def draft_narrative(
         parsed = _parse(completion)
 
         result = validator.validate(
-            [Citation(slug=s, claim=parsed.narrative) for s in parsed.citations]
+            [
+                Citation(slug=s, claim=parsed.why_it_applies_to_you)
+                for s in parsed.citations
+            ]
         )
 
         run.resolved_citations = [c.slug for c in result.resolved]
@@ -189,25 +254,33 @@ def draft_narrative(
             )
             return _finish(run)
 
-        # HOUSE STYLE LAST, BECAUSE IT IS THE LEAST SERIOUS REFUSAL (ENT-163).
+        # THE CRITICS AFTER THE CITATIONS, BECAUSE A FABRICATED CITATION
+        # OUTRANKS EVERYTHING THEY CATCH (ENT-163, ENT-248).
         #
-        # The prompt already asks the model not to use an em dash and the model
-        # keeps using one, which is what `AGENTS.md` means by the model may ask
-        # and only code refuses. A narrative that both invents an article AND
-        # uses one is refused for the article: reporting the typography would
-        # send somebody to fix the wrong thing.
+        # They read the free-text field and not the citations. A slug is checked
+        # against the offered set, so a dash or a stray article number inside
+        # one is already refused by the validator, and this field is the only
+        # free prose a customer ever sees.
         #
-        # It reads the narrative and not the citations. A slug is checked
-        # against the offered set, so a dash inside one is already refused by
-        # the validator, and the narrative is the only free prose a customer
-        # ever sees.
-        prose = review_prose(parsed.narrative)
-        if not prose.ok:
+        # THE RECORD CARRIES THE REJECTED TEXT AS WELL AS THE REASON.
+        #
+        # ENT-248 asks for both, and the reason is what somebody does next. The
+        # detail says which rule fired and quotes the words that fired it, and
+        # `rejected_text` holds the whole field, because a customer asking why
+        # they have no narrative is entitled to see what was written rather than
+        # only that something was. The finding itself keeps the deterministic
+        # sentence the Watcher wrote, which is why withholding this costs
+        # nothing and showing it costs nothing either.
+        breach = first_breach(parsed.why_it_applies_to_you, CRITICS)
+        if breach is not None:
             run.outcome = Outcome.REFUSED
-            run.outcome_detail = prose.detail
+            run.outcome_detail = breach.detail
+            run.refused_by = breach.critic
+            run.refused_patterns = sorted({b.pattern for b in breach.breaches})
+            run.rejected_text = parsed.why_it_applies_to_you
             return _finish(run)
 
-        run.narrative = parsed.narrative
+        run.narrative = parsed.why_it_applies_to_you
         run.outcome = Outcome.SUCCEEDED
         return _finish(run)
 

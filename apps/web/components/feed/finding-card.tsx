@@ -58,12 +58,30 @@ export function FindingCard({
         </h3>
 
         {finding.narrative ? (
-          <p
-            data-testid="finding-narrative"
-            className="mt-1 line-clamp-2 text-sm text-muted-foreground"
-          >
-            {finding.narrative}
-          </p>
+          <>
+            <p
+              data-testid="finding-narrative"
+              className="mt-1 line-clamp-2 text-sm text-muted-foreground"
+            >
+              {finding.narrative}
+            </p>
+            {/* GENERATED PROSE IS NEVER UNMARKED (ENT-248).
+
+                The card has no room for the authored statement of law, and the
+                finding page carries it. What the card owes the reader is the
+                one fact they cannot recover by looking: that this sentence was
+                drafted rather than written. A customer told the difference can
+                weigh it, and one not told cannot, and Article 50 of the AI Act
+                wants the AI-generated nature disclosed regardless.
+
+                It is small and quiet on purpose. This is a list of the
+                customer's compliance gaps, and a prominent banner about our
+                pipeline would be a line about us in a place reserved for
+                them. */}
+            <p className="mt-1 text-[11px] tracking-[0.04em] text-muted-foreground/80 uppercase">
+              Drafted by the Analyst
+            </p>
+          </>
         ) : finding.proposedAction ? (
           <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
             {finding.proposedAction}
@@ -101,44 +119,96 @@ export function FindingCard({
  * a support conversation, rather than as a link to nowhere.
  */
 export function FindingNarrative({ finding }: { finding: Finding }) {
-  if (!finding.narrative && !finding.narrativeRefusal) return null
+  const summary = finding.citation?.obligationSummary
+
+  if (!finding.narrative && !finding.narrativeRefusal && !summary) return null
 
   return (
     <section className="mt-6">
-      <h2 className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
-        What this means
-      </h2>
+      {finding.narrative || finding.narrativeRefusal ? (
+        <>
+          <h2 className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
+            What this means for you
+          </h2>
 
-      {finding.narrative ? (
-        <p
-          data-testid="finding-narrative"
-          className="mt-2 text-[15px] text-foreground"
-        >
-          {finding.narrative}
-        </p>
-      ) : (
-        <p
-          data-testid="finding-narrative-refusal"
-          className="mt-2 text-sm text-muted-foreground"
-        >
-          The Analyst tried to explain this one and its draft was refused:{' '}
-          {finding.narrativeRefusal}. Nothing above was written by a model, so
-          nothing above changed when that happened.
-        </p>
-      )}
+          {finding.narrative ? (
+            <p
+              data-testid="finding-narrative"
+              className="mt-2 text-[15px] text-foreground"
+            >
+              {finding.narrative}
+            </p>
+          ) : (
+            <p
+              data-testid="finding-narrative-refusal"
+              className="mt-2 text-sm text-muted-foreground"
+            >
+              The Analyst tried to explain this one and its draft was refused:{' '}
+              {finding.narrativeRefusal}. Nothing else on this page was written
+              by a model, so nothing else changed when that happened.
+            </p>
+          )}
 
-      <p className="mt-2 text-xs text-muted-foreground">
-        {finding.narrative
-          ? 'Written by the Analyst'
-          : 'Attempted by the Analyst'}
-        {finding.agentRunId ? (
-          <>
-            , run <span className="font-mono">{finding.agentRunId}</span>
-          </>
-        ) : null}
-        .
-      </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {finding.narrative
+              ? 'Drafted by the Analyst about your organisation, not a statement of the law'
+              : 'Attempted by the Analyst'}
+            {finding.agentRunId ? (
+              <>
+                , run <span className="font-mono">{finding.agentRunId}</span>
+              </>
+            ) : null}
+            .
+          </p>
+        </>
+      ) : null}
+
+      {summary ? <ObligationStatement summary={summary} /> : null}
     </section>
+  )
+}
+
+/**
+ * The authored statement of the law, beside the generated one (ENT-248).
+ *
+ * # WHY THIS SITS HERE AND NOT ONLY UNDER "THE REGULATION"
+ *
+ * Two live narrations on the 2B tier cited Article 30 correctly and stated
+ * Article 30(5) backwards in the prose beside the citation. That failure is
+ * invisible to the check a careful customer performs: they follow the citation,
+ * find it valid, and believe the sentence next to it.
+ *
+ * Two things answer it. The model is no longer asked to state the law, in the
+ * skill's schema and in a critic that refuses a draft which does anyway. And
+ * the statement of law reaches the same eye-line from the corpus row, so a
+ * reader comparing the two paragraphs is comparing what a person wrote against
+ * what a model drafted, rather than reading one paragraph and trusting it.
+ *
+ * Putting it further down the page under "The regulation" would technically
+ * show it. It would not be beside anything, and the whole value is adjacency.
+ *
+ * # VERBATIM, AND THAT IS THE POINT
+ *
+ * Rendered exactly as stored. No truncation, no clamping, no "read more". A
+ * summary of the summary is a second author, and there is exactly one author of
+ * a statement of law in this product.
+ */
+function ObligationStatement({ summary }: { summary: string }) {
+  return (
+    <div className="mt-5 border-l-2 border-border/60 pl-4">
+      <h3 className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
+        What the regulation says
+      </h3>
+      <p
+        data-testid="obligation-summary"
+        className="mt-2 text-[15px] text-foreground"
+      >
+        {summary}
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Written by a person from the regulation text, and not generated.
+      </p>
+    </div>
   )
 }
 

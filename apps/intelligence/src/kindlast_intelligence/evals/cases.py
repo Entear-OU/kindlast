@@ -73,6 +73,12 @@ GUARDRAILS: tuple[str, ...] = (
     # property is a tier one: asking works often enough on a strong model to
     # look like a control and not often enough on a weak one to be one.
     "house_style",
+    # A free-text field that states the law rather than explaining
+    # applicability (ENT-248). The failure the citation validator structurally
+    # cannot see: the citation resolves and the prose beside it is false. Two
+    # of its cases are what the 2B tier actually wrote on the running stack,
+    # which is why they read less tidily than the rest of this set.
+    "claim_critic",
 )
 
 

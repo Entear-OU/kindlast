@@ -406,9 +406,31 @@ type Citation struct {
 	// Deep link to the provision on EUR-Lex, assembled by
 	// `analyst_citation_url`. May be empty when the corpus has no anchor for the
 	// provision; a client shows the label unlinked rather than guessing a URL.
-	Url           string `protobuf:"bytes,10,opt,name=url,proto3" json:"url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Url string `protobuf:"bytes,10,opt,name=url,proto3" json:"url,omitempty"`
+	// The obligation's plain-language statement of the law, from the corpus row
+	// (ENT-248).
+	//
+	// # THIS IS THE AUTHORED HALF, AND IT IS WHY IT IS ON THE WIRE
+	//
+	// A finding may carry a narrative the Analyst drafted. The model writes about
+	// the organisation and is forbidden to state the law, because two live runs
+	// on the 2B tier stated it wrongly beside a citation that resolved correctly,
+	// which is a failure a customer checking the citation cannot detect.
+	//
+	// So the statement of law has to reach the same page from somewhere a person
+	// wrote it, and this is that field. A client renders it BESIDE the narrative,
+	// verbatim: the two are different kinds of text and a reader is entitled to
+	// know which is which.
+	//
+	// Read live from `obligations`, unlike `label` and `url`, and the difference
+	// is deliberate. Those two are what the Analyst assembled at the time and
+	// must not change under a finding. This is the current authored statement of
+	// the provision, and a reworded summary SHOULD reach every finding that cites
+	// it, because the alternative is a customer reading a statement of law the
+	// curator has since corrected.
+	ObligationSummary string `protobuf:"bytes,11,opt,name=obligation_summary,json=obligationSummary,proto3" json:"obligation_summary,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Citation) Reset() {
@@ -507,6 +529,13 @@ func (x *Citation) GetLabel() string {
 func (x *Citation) GetUrl() string {
 	if x != nil {
 		return x.Url
+	}
+	return ""
+}
+
+func (x *Citation) GetObligationSummary() string {
+	if x != nil {
+		return x.ObligationSummary
 	}
 	return ""
 }
@@ -1311,7 +1340,7 @@ const file_kindlast_core_v1_findings_proto_rawDesc = "" +
 	"\tnarrative\x18\r \x01(\tR\tnarrative\x12 \n" +
 	"\fagent_run_id\x18\x0e \x01(\tR\n" +
 	"agentRunId\x12+\n" +
-	"\x11narrative_refusal\x18\x0f \x01(\tR\x10narrativeRefusal\"\x83\x02\n" +
+	"\x11narrative_refusal\x18\x0f \x01(\tR\x10narrativeRefusal\"\xb2\x02\n" +
 	"\bCitation\x12'\n" +
 	"\x0fobligation_slug\x18\x01 \x01(\tR\x0eobligationSlug\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -1323,7 +1352,8 @@ const file_kindlast_core_v1_findings_proto_rawDesc = "" +
 	"\tparagraph\x18\b \x01(\tR\tparagraph\x12\x14\n" +
 	"\x05label\x18\t \x01(\tR\x05label\x12\x10\n" +
 	"\x03url\x18\n" +
-	" \x01(\tR\x03url\"2\n" +
+	" \x01(\tR\x03url\x12-\n" +
+	"\x12obligation_summary\x18\v \x01(\tR\x11obligationSummary\"2\n" +
 	"\x11GetFindingRequest\x12\x1d\n" +
 	"\n" +
 	"finding_id\x18\x01 \x01(\tR\tfindingId\"\x8c\x01\n" +

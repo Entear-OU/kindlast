@@ -40,6 +40,16 @@ type PendingFinding struct {
 	ObligationSlug    string
 	ObligationTitle   string
 	ObligationSummary string
+
+	// The obligation's declared applicability conditions, as stored (ENT-248).
+	//
+	// Raw JSON rather than a parsed shape, because the parsing belongs in
+	// `domain/corpus` next to the vocabulary that defines it: this store's job
+	// is to hand back what the row says. `corpus.AppliesBecause` turns it into
+	// the sentences the Analyst is given as grounds, which is what stops the
+	// model working out its own reason for the finding and getting the law
+	// wrong on the way.
+	ObligationAppliesWhen string
 }
 
 // FindingsAwaitingNarrative returns findings with neither a narrative nor a
@@ -78,7 +88,8 @@ func (a *AgentStore) FindingsAwaitingNarrative(
 		       f.severity::text,
 		       coalesce(o.slug, ''),
 		       coalesce(o.title, ''),
-		       coalesce(o.summary, '')
+		       coalesce(o.summary, ''),
+		       coalesce(o.applies_when::text, '')
 		  from public.findings f
 		  join public.obligations o on o.id = f.obligation_id
 		 where f.narrative is null
@@ -102,6 +113,7 @@ func (a *AgentStore) FindingsAwaitingNarrative(
 			&f.ObligationSlug,
 			&f.ObligationTitle,
 			&f.ObligationSummary,
+			&f.ObligationAppliesWhen,
 		); err != nil {
 			return nil, fmt.Errorf("postgres: scanning a finding to narrate: %w", err)
 		}

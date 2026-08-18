@@ -386,6 +386,7 @@ func (s *Service) RecordAgentRun(
 		CitationsJSON:     msg.GetCitationsJson(),
 		Outcome:           outcome,
 		OutcomeDetail:     msg.GetOutcomeDetail(),
+		RefusalJSON:       msg.GetRefusalJson(),
 		InputTokens:       usage.GetInputTokens(),
 		CachedInputTokens: usage.GetCachedInputTokens(),
 		OutputTokens:      usage.GetOutputTokens(),

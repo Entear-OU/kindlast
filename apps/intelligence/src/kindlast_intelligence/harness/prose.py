@@ -45,11 +45,24 @@ The neighbouring code points (U+2012 figure dash, U+2015 horizontal bar,
 U+2212 minus sign) are not covered. They are not what the rule names, none has
 been observed in this service's output, and adding one is a decision with its
 own golden case rather than a quiet widening of a set.
+
+# THE SCANNING, THE WINDOW AND THE DETAIL FORMAT MOVED OUT (ENT-248)
+
+They live in `critics.py` now, shared with the claim critic. ENT-248 made one
+refusing-critic seam an acceptance criterion rather than a preference: written
+separately, the second critic would have had its own excerpt window, its own
+truncation rule and its own detail format, and a customer reading two refusals
+would have found them written by two different products.
+
+What stayed here is the only part that is about house style: which characters,
+and the sentence explaining why they are refused.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from .critics import Breach, CriticResult, excerpt
+
+NAME = "house_style"
 
 # Written as escapes rather than as the characters themselves, so this file
 # obeys the rule it enforces and so a reader can tell the two apart. On screen
@@ -64,116 +77,48 @@ FORBIDDEN: dict[str, str] = {
     EN_DASH: "en dash (U+2013)",
 }
 
-# How much of the sentence to quote either side of the offending character. Not
-# the whole narrative: the detail is stored on the run and read in a list, and
-# a paragraph pasted into that column makes the useful part unfindable.
-_WINDOW = 32
+# What the excerpt puts in place of each forbidden character. The bracketed
+# short name rather than the full one with its code point: the code point is
+# already stated once beside the position, and repeating it inside the quote
+# crowds out the words that locate it.
+_REDACTIONS = {
+    character: f"[{name.split(' (')[0]}]" for character, name in FORBIDDEN.items()
+}
 
-# How many to spell out before summarising. A model that produced twenty would
-# otherwise produce a detail nobody reads to the end of, and the remedy after
-# the third is identical to the remedy after the first.
-_MAX_REPORTED = 3
-
-
-class DashFound(BaseModel):
-    """One forbidden character, and enough context to find it.
-
-    Frozen, because a finding some later step can edit is not a finding.
-    """
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    character: str
-    name: str
-    # Zero-based, as an index into the text. Rendered as a one-based character
-    # position in `detail`, because that is how a person counts.
-    index: int
-    excerpt: str
+_PREAMBLE = (
+    "the narrative uses dash characters the house style does not allow, and "
+    "the prompt asking the model not to is a request rather than a control"
+)
 
 
-class ProseResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class ProseCritic:
+    """Refuses a text containing a character `AGENTS.md` forbids."""
 
-    found: list[DashFound] = Field(default_factory=list)
+    name = NAME
 
-    @property
-    def ok(self) -> bool:
-        return not self.found
+    def review(self, text: str) -> CriticResult:
+        """Find every forbidden dash, in order.
 
-    @property
-    def detail(self) -> str:
-        """What the run record says, written for the customer reading it.
-
-        Names the character, gives its position, and quotes the words around
-        it, because "refused on house style" tells somebody nothing they can
-        act on and reads as the harness having broken.
+        Every one rather than the first, so a single rewrite fixes the
+        narrative. Stopping at the first would have the caller re-run, be
+        refused on the second, and pay a model call per character.
         """
-        if self.ok:
-            return ""
-
-        shown = [
-            f'{f.name} at character {f.index + 1}, in "{f.excerpt}"'
-            for f in self.found[:_MAX_REPORTED]
-        ]
-        remaining = len(self.found) - len(shown)
-        if remaining > 0:
-            shown.append(f"and {remaining} more")
-
-        return (
-            f"the narrative uses {len(self.found)} dash character(s) the house "
-            "style does not allow, and the prompt asking the model not to is a "
-            "request rather than a control: " + "; ".join(shown)
+        return CriticResult(
+            critic=NAME,
+            preamble=_PREAMBLE,
+            breaches=[
+                Breach(
+                    pattern=FORBIDDEN[character],
+                    matched=character,
+                    index=index,
+                    excerpt=excerpt(text, index, 1, redact=_REDACTIONS),
+                )
+                for index, character in enumerate(text)
+                if character in FORBIDDEN
+            ],
         )
 
 
-def review_prose(text: str) -> ProseResult:
-    """Find every forbidden dash, in order.
-
-    Every one rather than the first, so a single rewrite fixes the narrative.
-    Stopping at the first would have the caller re-run, be refused on the
-    second, and pay a model call per character.
-    """
-    return ProseResult(
-        found=[
-            DashFound(
-                character=character,
-                name=FORBIDDEN[character],
-                index=index,
-                excerpt=_excerpt(text, index),
-            )
-            for index, character in enumerate(text)
-            if character in FORBIDDEN
-        ]
-    )
-
-
-def _excerpt(text: str, index: int) -> str:
-    """The words around the character, with the character itself named.
-
-    # THE QUOTE DOES NOT CARRY THE CHARACTER IT IS REPORTING
-
-    Every forbidden dash inside the window is replaced by its name in brackets,
-    including the one being reported. The detail is stored in `agent_runs` and
-    read back on a page, so quoting the raw character would put the thing being
-    refused into the very text a customer reads, and would make the record
-    itself a hit for anybody searching stored copy for em dashes.
-
-    Newlines are flattened for the same reason the excerpt is short: this is
-    one field on one row, and a detail that wraps to five lines is a detail
-    nobody finishes.
-    """
-    start = max(0, index - _WINDOW)
-    end = min(len(text), index + _WINDOW + 1)
-
-    window = text[start:end]
-    for character, name in FORBIDDEN.items():
-        # The bracketed short name rather than the full one with its code
-        # point: the code point is already stated once beside the position, and
-        # repeating it inside the quote crowds out the words that locate it.
-        window = window.replace(character, f"[{name.split(' (')[0]}]")
-
-    window = " ".join(window.split())
-
-    prefix = "..." if start > 0 else ""
-    suffix = "..." if end < len(text) else ""
-    return f"{prefix}{window}{suffix}"
+def review_prose(text: str) -> CriticResult:
+    """Convenience for tests and for anything that wants one call."""
+    return ProseCritic().review(text)

@@ -82,3 +82,73 @@ func TestAnUnnarratedFindingCarriesNothingExtra(t *testing.T) {
 		t.Fatal("an unnarrated finding invented a narrative, a refusal or a run")
 	}
 }
+
+// TestTheAuthoredStatementOfLawReachesTheWireByteForByte is ENT-248's first
+// acceptance criterion.
+//
+// The model is forbidden to state the law, because two live runs on the 2B tier
+// stated it backwards beside a citation that resolved correctly, which is a
+// failure the customer who checks the citation cannot detect. The statement has
+// to reach the same page from somewhere a person wrote it, and this mapping is
+// the only path it has.
+//
+// Byte for byte and not "contains", because the whole property is that the
+// reader sees the curator's words. A mapping that trimmed, truncated or
+// title-cased this would be a second author, and the product's claim is that
+// there is exactly one.
+func TestTheAuthoredStatementOfLawReachesTheWireByteForByte(t *testing.T) {
+	t.Parallel()
+
+	// The row on the running stack, including the parenthetical and the
+	// trailing clause, which are the parts a paraphrase loses first.
+	const summary = "Article 30 GDPR: Controllers (and processors) must maintain a " +
+		"written record of processing activities under their responsibility, including " +
+		"purposes, categories of data subjects and data, recipients, third-country " +
+		"transfers, retention schedules, and a general description of technical and " +
+		"organisational security measures. The 250-employee exemption in Article 30(5) " +
+		"is narrow (it does not apply where processing is not occasional, involves " +
+		"special categories, or is likely to result in a risk to data subjects) so most " +
+		"SMEs cannot rely on it."
+
+	out := toProto(domain.Finding{
+		ID:        "f-4",
+		Detected:  "No record of processing activities",
+		Narrative: "You have no written record of what you do with personal data.",
+		Citation: domain.Citation{
+			ObligationSlug: "gdpr-art-30-ropa",
+			Title:          "Records of Processing Activities (ROPA)",
+			Label:          "GDPR Art. 30",
+			Summary:        summary,
+		},
+		CreatedAt: time.Now(),
+	})
+
+	if got := out.GetCitation().GetObligationSummary(); got != summary {
+		t.Fatalf("the authored statement of law did not travel unchanged: got %q, want %q",
+			got, summary)
+	}
+
+	// And it does not displace the generated half. Both are shown, side by
+	// side, because a reader is entitled to know which is which.
+	if out.GetNarrative() == "" {
+		t.Fatal("the summary displaced the narrative; they are rendered together")
+	}
+}
+
+// A finding whose obligation has no summary carries none, rather than a
+// placeholder. The client then renders nothing, for the same reason it renders
+// no citation without a stored label: silence is recoverable and an invented
+// statement of law is not.
+func TestAnObligationWithNoSummaryCarriesNothing(t *testing.T) {
+	t.Parallel()
+
+	out := toProto(domain.Finding{
+		ID:        "f-5",
+		Detected:  "No record of processing activities",
+		CreatedAt: time.Now(),
+	})
+
+	if got := out.GetCitation().GetObligationSummary(); got != "" {
+		t.Fatalf("invented a statement of law: %q", got)
+	}
+}

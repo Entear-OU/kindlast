@@ -33,7 +33,7 @@ def test_an_unexpected_field_is_refused_rather_than_carried():
     with pytest.raises(ValidationError):
         analyst.Narrative.model_validate(
             {
-                "narrative": "x",
+                "why_it_applies_to_you": "x",
                 "citations": [],
                 "confident": True,
                 "severity": "critical",
@@ -52,7 +52,7 @@ def test_a_whitespace_only_narrative_is_empty():
     """
     with pytest.raises(ValidationError):
         analyst.Narrative.model_validate(
-            {"narrative": "   ", "citations": [], "confident": True}
+            {"why_it_applies_to_you": "   ", "citations": [], "confident": True}
         )
 
 
@@ -109,3 +109,51 @@ def test_a_real_obligation_that_was_not_offered_is_still_refused():
 
     assert not result.ok
     assert "not among the obligations" in result.rejected[0].reason
+
+
+# --- The output splits, so the model is never asked to state the law -------
+
+
+def test_the_free_text_field_is_named_and_described_as_being_about_the_org():
+    """ENT-248's structural half, asserted on the contract itself.
+
+    The field is what the model is asked for, so a field called "narrative"
+    gets a narrative and a narrative contains whatever the model thinks belongs
+    in one. Renaming it and describing it is not a control, and this test is
+    not pretending it is: the control is `harness/claims.py`. This is the
+    property that makes the control rarely have to fire.
+
+    The description is checked because it is the only part of the schema a
+    runtime may send to the model, and because deleting it would break no shape
+    test. Both halves would then silently be gone.
+    """
+    schema = analyst.output_schema()
+    fields = schema["properties"]
+
+    assert "narrative" not in fields, (
+        "the free-text field is scoped to this organisation, and a field named "
+        "narrative invites a narrative"
+    )
+
+    described = fields["why_it_applies_to_you"]["description"].lower()
+
+    assert "this organisation" in described
+    for promised in ("never state what the law requires", "article", "exemption"):
+        assert promised in described, (
+            f"the schema description no longer tells the model {promised!r}; "
+            "the grammar is not injected into the prompt, so this string and "
+            "the system prompt are the only two places the narrowing is said"
+        )
+
+
+def test_the_prompt_tells_the_model_the_law_is_not_its_to_state():
+    """The same narrowing in the channel that is definitely sent.
+
+    ENT-235 measured that llama.cpp constrains decoding with the schema and
+    does NOT put it in the prompt. So the system prompt carries the narrowing
+    too, and this fails if somebody trims it back to the old wording.
+    """
+    prompt = analyst.SYSTEM_PROMPT.lower()
+
+    assert "you do not state the law" in prompt
+    assert "exemptions, exceptions or thresholds" in prompt

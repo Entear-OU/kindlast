@@ -168,7 +168,30 @@ type RecordAgentRunRequest struct {
 	// delegation is single-org, so a run recorded against a different tenant than
 	// the one the person authorised is a caller bug, and the mismatch is worth
 	// refusing rather than silently correcting.
-	Delegation    string `protobuf:"bytes,16,opt,name=delegation,proto3" json:"delegation,omitempty"`
+	Delegation string `protobuf:"bytes,16,opt,name=delegation,proto3" json:"delegation,omitempty"`
+	// What an output critic refused, as JSON, and empty when none did (ENT-248).
+	//
+	// `{"critic": "legal_claim", "patterns": [...], "text": "..."}`.
+	//
+	// # WHY THE TEXT IS HERE AND NOT IN `outcome_detail`
+	//
+	// Both halves are recorded because they answer different questions, and they
+	// are kept apart because only one of them can safely be shown.
+	// `outcome_detail` is the short reason, and the feed prints it beside a
+	// finding under a heading saying the draft was refused. A narrative refused
+	// for stating the law wrongly must not travel in that string, or the sentence
+	// reaches the customer through the very page that exists to say it was
+	// rejected. It travels here instead, into a column read by whoever is asking
+	// what the model got wrong.
+	//
+	// # AND WHY THE PATTERNS ARE NAMED RATHER THAN DESCRIBED
+	//
+	// A maintainer asking how often the claim critic fires on "regardless of"
+	// should be able to count rows rather than parse English out of a detail
+	// string. That is the mistake the records store made with `check_violation`
+	// messages, which `AGENTS.md` names as one of the reasons decisions moved out
+	// of plpgsql.
+	RefusalJson   string `protobuf:"bytes,17,opt,name=refusal_json,json=refusalJson,proto3" json:"refusal_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -311,6 +334,13 @@ func (x *RecordAgentRunRequest) GetFinishedAt() *timestamppb.Timestamp {
 func (x *RecordAgentRunRequest) GetDelegation() string {
 	if x != nil {
 		return x.Delegation
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetRefusalJson() string {
+	if x != nil {
+		return x.RefusalJson
 	}
 	return ""
 }
@@ -1957,7 +1987,7 @@ var File_kindlast_platform_v1_ingest_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"\n" +
-	"!kindlast/platform/v1/ingest.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xba\x05\n" +
+	"!kindlast/platform/v1/ingest.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xdd\x05\n" +
 	"\x15RecordAgentRunRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x14\n" +
 	"\x05skill\x18\x02 \x01(\tR\x05skill\x12#\n" +
@@ -1979,7 +2009,8 @@ const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"finishedAt\x12\x1e\n" +
 	"\n" +
 	"delegation\x18\x10 \x01(\tR\n" +
-	"delegation\"\xa8\x01\n" +
+	"delegation\x12!\n" +
+	"\frefusal_json\x18\x11 \x01(\tR\vrefusalJson\"\xa8\x01\n" +
 	"\rAgentRunUsage\x12!\n" +
 	"\finput_tokens\x18\x01 \x01(\x05R\vinputTokens\x12.\n" +
 	"\x13cached_input_tokens\x18\x02 \x01(\x05R\x11cachedInputTokens\x12#\n" +

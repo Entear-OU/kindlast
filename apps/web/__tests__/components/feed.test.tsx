@@ -222,8 +222,11 @@ describe('the narrative on a finding page', () => {
 
     expect(screen.getByText(/Art\. 50/)).toBeInTheDocument()
     // And it is explicit that nothing on the page was affected by the attempt,
-    // because that is the property that makes a refusal cost nothing.
-    expect(screen.getByText(/nothing above/i)).toBeInTheDocument()
+    // because that is the property that makes a refusal cost nothing. The
+    // wording is "nothing else on this page" rather than "nothing above" since
+    // ENT-248, because the authored statement of law now sits below this
+    // paragraph as well as the sweep's words sitting above it.
+    expect(screen.getByText(/nothing else on this page/i)).toBeInTheDocument()
   })
 
   it('renders nothing at all when no run has happened', () => {
@@ -257,5 +260,84 @@ describe('a citation', () => {
   it('renders nothing when there is no citation at all', () => {
     const { container } = render(<CitationLine citation={undefined} />)
     expect(container).toBeEmptyDOMElement()
+  })
+})
+
+// ENT-248. Two live narrations on the 2B tier cited Article 30 correctly and
+// stated Article 30(5) backwards in the prose beside the citation. The customer
+// who checks the citation finds it valid and believes the sentence next to it,
+// so the harness half of the fix (the model is not asked to state the law, and
+// a critic refuses a draft that does anyway) needs this half beside it: the
+// statement of law reaches the page from the corpus row, and the reader can see
+// which paragraph a person wrote.
+describe('the authored statement of law beside the narrative', () => {
+  // Byte for byte. Every clause, including the parenthetical and the trailing
+  // one about SMEs, which are the parts a paraphrase loses first and the parts
+  // the model got wrong.
+  const summary =
+    'Article 30 GDPR: Controllers (and processors) must maintain a written ' +
+    'record of processing activities under their responsibility. The ' +
+    '250-employee exemption in Article 30(5) is narrow (it does not apply ' +
+    'where processing is not occasional, involves special categories, or is ' +
+    'likely to result in a risk to data subjects) so most SMEs cannot rely on it.'
+
+  const withSummary: Finding = {
+    ...narrated,
+    citation: { ...narrated.citation, obligationSummary: summary },
+  }
+
+  it('renders the corpus text verbatim next to the generated text', () => {
+    render(<FindingNarrative finding={withSummary} />)
+
+    const authored = screen.getByTestId('obligation-summary')
+
+    expect(authored).toHaveTextContent(summary)
+    // Not truncated, not clamped, not summarised. A summary of the summary is
+    // a second author, and there is exactly one author of a statement of law.
+    expect(authored.textContent).toBe(summary)
+
+    // And the generated half is still there. The value is the comparison, so a
+    // page showing one of the two is not the fix.
+    expect(screen.getByTestId('finding-narrative')).toBeInTheDocument()
+  })
+
+  it('says which paragraph a person wrote and which a model drafted', () => {
+    render(<FindingNarrative finding={withSummary} />)
+
+    expect(screen.getByText(/not generated/i)).toBeInTheDocument()
+    expect(screen.getByText(/Drafted by the Analyst/i)).toBeInTheDocument()
+  })
+
+  // The statement of law does not depend on a model having run. A finding
+  // nothing narrated still shows the reader what the regulation says, which is
+  // the half of the page that was always trustworthy.
+  it('shows the regulation text even when nothing narrated the finding', () => {
+    render(
+      <FindingNarrative
+        finding={{
+          ...finding,
+          citation: { ...finding.citation, obligationSummary: summary },
+        }}
+      />,
+    )
+
+    expect(screen.getByTestId('obligation-summary')).toHaveTextContent(summary)
+    expect(screen.queryByTestId('finding-narrative')).not.toBeInTheDocument()
+  })
+
+  // A generated sentence on a card is never unmarked, which is ENT-247's
+  // "cannot reach a customer unmarked" in the place a customer actually skims.
+  it('marks the narrative as drafted on the card as well', () => {
+    render(<FindingCard finding={narrated} orgSlug="acme" />)
+
+    expect(screen.getByText(/Drafted by the Analyst/i)).toBeInTheDocument()
+  })
+
+  it('marks nothing on a card that has no narrative', () => {
+    render(<FindingCard finding={finding} orgSlug="acme" />)
+
+    expect(
+      screen.queryByText(/Drafted by the Analyst/i),
+    ).not.toBeInTheDocument()
   })
 })

@@ -55,6 +55,7 @@ const findingColumns = `
 	f.action_type,
 	coalesce(f.obligation_slug, ''),
 	coalesce(o.title, ''),
+	coalesce(o.summary, ''),
 	coalesce(o.citation_celex, ''),
 	coalesce(o.citation_kind, ''),
 	coalesce(o.citation_article, 0),
@@ -77,7 +78,8 @@ func scanFinding(row pgx.Row) (findings.Finding, error) {
 	err := row.Scan(
 		&f.ID, &f.Status, &f.Severity, &f.Detected, &f.ProposedAction,
 		&f.EffortEstimate, &f.ActionType,
-		&f.Citation.ObligationSlug, &f.Citation.Title, &f.Citation.CELEX,
+		&f.Citation.ObligationSlug, &f.Citation.Title, &f.Citation.Summary,
+		&f.Citation.CELEX,
 		&f.Citation.Kind, &f.Citation.Article, &f.Citation.Recital,
 		&f.Citation.Annex, &f.Citation.Paragraph,
 		&f.Citation.Label, &f.Citation.URL,

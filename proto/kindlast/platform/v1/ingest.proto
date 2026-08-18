@@ -266,6 +266,30 @@ message RecordAgentRunRequest {
   // the one the person authorised is a caller bug, and the mismatch is worth
   // refusing rather than silently correcting.
   string delegation = 16;
+
+  // What an output critic refused, as JSON, and empty when none did (ENT-248).
+  //
+  // `{"critic": "legal_claim", "patterns": [...], "text": "..."}`.
+  //
+  // # WHY THE TEXT IS HERE AND NOT IN `outcome_detail`
+  //
+  // Both halves are recorded because they answer different questions, and they
+  // are kept apart because only one of them can safely be shown.
+  // `outcome_detail` is the short reason, and the feed prints it beside a
+  // finding under a heading saying the draft was refused. A narrative refused
+  // for stating the law wrongly must not travel in that string, or the sentence
+  // reaches the customer through the very page that exists to say it was
+  // rejected. It travels here instead, into a column read by whoever is asking
+  // what the model got wrong.
+  //
+  // # AND WHY THE PATTERNS ARE NAMED RATHER THAN DESCRIBED
+  //
+  // A maintainer asking how often the claim critic fires on "regardless of"
+  // should be able to count rows rather than parse English out of a detail
+  // string. That is the mistake the records store made with `check_violation`
+  // messages, which `AGENTS.md` names as one of the reasons decisions moved out
+  // of plpgsql.
+  string refusal_json = 17;
 }
 
 enum AgentRunOutcome {
