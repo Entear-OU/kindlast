@@ -1,0 +1,65 @@
+{
+  "$comment": [
+    "The pack manifest (ENT-233). It is the list of what the corpus contains and",
+    "the order it must be ingested in, held as data so that adding a regulation is",
+    "an edit here rather than an edit to Go.",
+    "",
+    "Before this file, `corpuspack.All` carried `[]string{GDPRFile, AIActFile}` and",
+    "two consts naming those files. A third regulation meant a code change, a",
+    "release, and a drift test that counted packs. That is the shape ENT-233 exists",
+    "to remove: a pack is data the harness loads, not a shape the harness is built",
+    "around.",
+    "",
+    "ORDER IS LOAD-BEARING, NOT COSMETIC. Obligations cite articles, and the",
+    "citation check reads the database rather than the pack, so every regulation a",
+    "pack of obligations cites has to be ingested before it. A run that sent",
+    "obligations first would have every one of them refused against an empty",
+    "corpus, entirely correctly. The loader preserves this order and does not sort.",
+    "",
+    "`kind` selects the parser, because the five files have four different shapes",
+    "and the curator's JSON is hand-edited rather than generated. `id` names the",
+    "pack in logs and in the ingest response; nothing is stored under it, and the",
+    "natural keys inside the pack (CELEX, slug) are what the corpus is addressed",
+    "by. A pack renamed is not a new corpus."
+  ],
+  "packs": [
+    {
+      "id": "eu-gdpr",
+      "kind": "document",
+      "file": "gdpr.json",
+      "title": "Regulation (EU) 2016/679 (GDPR)"
+    },
+    {
+      "id": "eu-ai-act",
+      "kind": "document",
+      "file": "eu-ai-act.json",
+      "title": "Regulation (EU) 2024/1689 (Artificial Intelligence Act)"
+    },
+    {
+      "id": "obligations",
+      "kind": "obligations",
+      "file": "obligations.json",
+      "title": "Derived compliance obligations",
+      "$comment": [
+        "One file spanning both regulations, which is a known seam rather than an",
+        "oversight: an obligation is keyed to the law it cites, so its pack",
+        "membership is `citation.celex` and not the file it happens to live in.",
+        "Splitting it per regulation is deferred until a third act makes the",
+        "shared file genuinely awkward. docs/regulation-packs.md has the",
+        "reasoning and the cost."
+      ]
+    },
+    {
+      "id": "edpb-guidelines",
+      "kind": "guidelines",
+      "file": "edpb-guidelines.json",
+      "title": "European Data Protection Board guidelines"
+    },
+    {
+      "id": "enforcement-decisions",
+      "kind": "enforcement",
+      "file": "enforcement-decisions.json",
+      "title": "National supervisory authority enforcement decisions"
+    }
+  ]
+}

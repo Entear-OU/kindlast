@@ -54,8 +54,16 @@ func TestTheRepositoryCorpusParsesAndValidates(t *testing.T) {
 		t.Fatalf("loading the corpus: %v", err)
 	}
 
-	if len(packs) != 5 {
-		t.Fatalf("loaded %d packs, want 5", len(packs))
+	// Counted against the manifest rather than a literal 5. The literal was
+	// itself a copy of the assumption ENT-233 removed: adding a regulation is a
+	// line in `packs.json`, and a test that had to be edited alongside it would
+	// be one more place the pack boundary leaked into code.
+	manifest, err := corpuspack.LoadManifest(corpusDir(t))
+	if err != nil {
+		t.Fatalf("loading the manifest: %v", err)
+	}
+	if len(packs) != len(manifest.Packs) {
+		t.Fatalf("loaded %d packs, but the manifest lists %d", len(packs), len(manifest.Packs))
 	}
 
 	for _, pack := range packs {
@@ -159,10 +167,24 @@ func TestTheDatabaseHoldsWhatTheRepositorySays(t *testing.T) {
 	})
 
 	t.Run("articles and recitals", func(t *testing.T) {
-		for _, name := range []string{corpuspack.GDPRFile, corpuspack.AIActFile} {
-			pack, err := corpuspack.LoadDocument(dir, name)
+		// Every regulation the manifest lists, rather than the two this test
+		// was written against. A third act is then covered here the moment it
+		// is added to `packs.json`, which is the point of the manifest.
+		manifest, err := corpuspack.LoadManifest(dir)
+		if err != nil {
+			t.Fatalf("loading the manifest: %v", err)
+		}
+
+		documents := 0
+		for _, entry := range manifest.Packs {
+			if entry.Kind != corpuspack.KindDocument {
+				continue
+			}
+			documents++
+
+			pack, err := corpuspack.Load(dir, entry)
 			if err != nil {
-				t.Fatalf("loading %s: %v", name, err)
+				t.Fatalf("loading %s: %v", entry.File, err)
 			}
 			celex := pack.Document.Celex
 
@@ -202,7 +224,7 @@ func TestTheDatabaseHoldsWhatTheRepositorySays(t *testing.T) {
 
 			// And a spot check on content, against the file rather than the
 			// loader, for the reason the obligations subtest spells out.
-			for _, article := range rawArticles(t, dir, name) {
+			for _, article := range rawArticles(t, dir, entry.File) {
 				var summary string
 				err := conn.QueryRow(t.Context(), `
 					select a.summary from regulatory_articles a
@@ -218,6 +240,13 @@ func TestTheDatabaseHoldsWhatTheRepositorySays(t *testing.T) {
 						celex, article.ArticleNumber, truncate(summary), truncate(article.Summary))
 				}
 			}
+		}
+
+		// A manifest that listed no regulations would make every assertion above
+		// vacuous while the subtest still reported green, which is the failure
+		// mode this whole file exists to prevent.
+		if documents == 0 {
+			t.Error("the manifest lists no document packs, so nothing here was checked")
 		}
 	})
 }

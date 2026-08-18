@@ -31,18 +31,129 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
 )
 
-// File names under `data/corpus/`, so a caller names a pack rather than a path.
+// ManifestFile lists the packs and the order they load in. See `packs.json`
+// itself for why the order matters.
+const ManifestFile = "packs.json"
+
+// Pack kinds, which select a parser. Four rather than five because the curator
+// writes four shapes: a regulation, the obligations derived from regulations,
+// a bibliography of guidelines, and a register of enforcement decisions.
 const (
-	GDPRFile        = "gdpr.json"
-	AIActFile       = "eu-ai-act.json"
-	ObligationsFile = "obligations.json"
-	GuidelinesFile  = "edpb-guidelines.json"
-	EnforcementFile = "enforcement-decisions.json"
+	KindDocument    = "document"
+	KindObligations = "obligations"
+	KindGuidelines  = "guidelines"
+	KindEnforcement = "enforcement"
 )
+
+// ObligationsFile is still named here for one caller: the drift test reads the
+// raw obligations JSON to compare it field by field with the stored rows. It is
+// the only place that needs a path rather than a pack, and it is a deliberate
+// exception rather than the last survivor of the old const block.
+const ObligationsFile = "obligations.json"
+
+// Manifest is `packs.json` parsed.
+type Manifest struct {
+	// `$comment` is where the reasoning lives, and `DisallowUnknownFields`
+	// would refuse the file without somewhere to put it. Kept as raw JSON
+	// because nothing reads it: it is written for a person opening the file.
+	Comment json.RawMessage `json:"$comment"`
+	Packs   []ManifestEntry `json:"packs"`
+}
+
+// ManifestEntry is one pack: what it is called, how to parse it, where it is.
+type ManifestEntry struct {
+	Comment json.RawMessage `json:"$comment"`
+	ID      string          `json:"id"`
+	Kind    string          `json:"kind"`
+	File    string          `json:"file"`
+	Title   string          `json:"title"`
+}
+
+// LoadManifest reads `packs.json`.
+//
+// Validated here rather than at the first parse failure, because the mistakes
+// this catches are made by somebody adding a regulation, and "kind is not one
+// of document, obligations, guidelines, enforcement" is a better afternoon than
+// a JSON decode error against a file they did not know was the wrong one.
+func LoadManifest(dir string) (Manifest, error) {
+	var manifest Manifest
+	if err := readJSON(dir, ManifestFile, &manifest); err != nil {
+		return Manifest{}, err
+	}
+
+	if len(manifest.Packs) == 0 {
+		return Manifest{}, fmt.Errorf(
+			"corpuspack: %s lists no packs, so an ingest would report a clean run of nothing",
+			ManifestFile)
+	}
+
+	seenID := map[string]bool{}
+	seenFile := map[string]bool{}
+	for _, entry := range manifest.Packs {
+		switch {
+		case strings.TrimSpace(entry.ID) == "":
+			return Manifest{}, fmt.Errorf("corpuspack: %s has a pack with no id", ManifestFile)
+		case strings.TrimSpace(entry.File) == "":
+			return Manifest{}, fmt.Errorf("corpuspack: pack %q names no file", entry.ID)
+		case seenID[entry.ID]:
+			return Manifest{}, fmt.Errorf("corpuspack: pack id %q appears twice", entry.ID)
+		case seenFile[entry.File]:
+			// Two entries over one file would ingest it twice. Harmless, since
+			// every write is an upsert on a natural key, but it means the run
+			// reports counts nobody can reconcile against the files.
+			return Manifest{}, fmt.Errorf("corpuspack: file %q is listed twice", entry.File)
+		}
+		seenID[entry.ID] = true
+		seenFile[entry.File] = true
+
+		switch entry.Kind {
+		case KindDocument, KindObligations, KindGuidelines, KindEnforcement:
+		default:
+			return Manifest{}, fmt.Errorf(
+				"corpuspack: pack %q has kind %q, which is not one of %s, %s, %s, %s",
+				entry.ID, entry.Kind,
+				KindDocument, KindObligations, KindGuidelines, KindEnforcement)
+		}
+	}
+
+	return manifest, nil
+}
+
+// Load reads one manifest entry into a pack.
+func Load(dir string, entry ManifestEntry) (corpus.Pack, error) {
+	var (
+		pack corpus.Pack
+		err  error
+	)
+
+	switch entry.Kind {
+	case KindDocument:
+		pack, err = LoadDocument(dir, entry.File)
+	case KindObligations:
+		pack, err = LoadObligations(dir, entry.File)
+	case KindGuidelines:
+		pack, err = LoadGuidelines(dir, entry.File)
+	case KindEnforcement:
+		pack, err = LoadEnforcement(dir, entry.File)
+	default:
+		return corpus.Pack{}, fmt.Errorf(
+			"corpuspack: pack %q has unknown kind %q", entry.ID, entry.Kind)
+	}
+	if err != nil {
+		return corpus.Pack{}, err
+	}
+
+	// The manifest names the pack, so the id is the curator's rather than a
+	// file name. A pack is not a file: `obligations.json` spans two
+	// regulations today, and a regulation could arrive as several files.
+	pack.ID = entry.ID
+	return pack, nil
+}
 
 type jsonDocument struct {
 	Document struct {
@@ -306,40 +417,31 @@ func LoadEnforcement(dir, name string) (corpus.Pack, error) {
 	return pack, nil
 }
 
-// All reads every file in the corpus directory, in the order they must be
-// ingested.
+// All reads every pack the manifest lists, in the order it lists them.
 //
-// The order is not cosmetic. Obligations cite articles, so the regulations go
-// first; a run that ingested obligations first would refuse every one of them
-// on an empty corpus and be entirely correct to.
+// The order is not cosmetic and the manifest is where it is now decided.
+// Obligations cite articles and the citation check reads the database, so the
+// regulations go first; a run that ingested obligations first would refuse
+// every one of them on an empty corpus and be entirely correct to.
+//
+// This used to be a hardcoded list of two regulation files. Adding a third act
+// was a Go change, which is the thing ENT-233 set out to stop: a pack is data
+// the harness loads, not a shape it is built around. It is now a line in
+// `packs.json`.
 func All(dir string) ([]corpus.Pack, error) {
-	var packs []corpus.Pack
+	manifest, err := LoadManifest(dir)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, name := range []string{GDPRFile, AIActFile} {
-		pack, err := LoadDocument(dir, name)
+	packs := make([]corpus.Pack, 0, len(manifest.Packs))
+	for _, entry := range manifest.Packs {
+		pack, err := Load(dir, entry)
 		if err != nil {
 			return nil, err
 		}
 		packs = append(packs, pack)
 	}
-
-	obligations, err := LoadObligations(dir, ObligationsFile)
-	if err != nil {
-		return nil, err
-	}
-	packs = append(packs, obligations)
-
-	guidelines, err := LoadGuidelines(dir, GuidelinesFile)
-	if err != nil {
-		return nil, err
-	}
-	packs = append(packs, guidelines)
-
-	decisions, err := LoadEnforcement(dir, EnforcementFile)
-	if err != nil {
-		return nil, err
-	}
-	packs = append(packs, decisions)
 
 	return packs, nil
 }
