@@ -462,6 +462,25 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "POST", Path: "/internal/v1/agent-runs",
 		},
 
+		// What a machine fetched from a customer's own system (ENT-231).
+		//
+		// A plural collection and a plain POST, like the agent runs above and
+		// unlike the corpus verb beside them, because this really is creating a
+		// resource: one fetch happened and one row records it.
+		//
+		// On /internal/v1 and it has to be. A person's live fetch from the
+		// console goes to `/api/v1/integrations/{id}:fetch` instead, because a
+		// user token can never carry an `internal:*` scope; the two paths write
+		// the same rows and neither is reachable by the other's caller. See the
+		// RPC's comment for why that asymmetry is deliberate.
+		//
+		// No {org_id}, and for the same reason RecordAgentRun has none: a fetch
+		// has exactly one organisation and it travels in the body, because this
+		// caller holds no session to derive an active organisation from.
+		"kindlast.platform.v1.IngestService.IngestEvidence": {
+			Method: "POST", Path: "/internal/v1/evidence",
+		},
+
 		// A colon verb over the findings collection, because narrating is an
 		// action across the findings that have no narrative yet rather than the
 		// creation of a thing. Same reasoning as the corpus RPC two entries up.

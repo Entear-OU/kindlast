@@ -130,6 +130,15 @@ type Dependencies struct {
 	// answers Unimplemented rather than panicking.
 	AgentRuns ingestservice.RunRecorder
 
+	// Evidence records what a machine fetched from a customer's system
+	// (ENT-231), on the same kindlast_agent pool.
+	//
+	// A separate field from AgentRuns for the reason that one is separate from
+	// Corpus: a dependency is a statement about what a caller may do, and
+	// "record that a run happened" and "write into an organisation's memory"
+	// are different permissions even when they travel on one connection pool.
+	Evidence ingestservice.EvidenceRecorder
+
 	// Narratives reads findings that have none and records what a run produced,
 	// on the kindlast_agent pool (ENT-245).
 	//
@@ -295,9 +304,10 @@ func New(deps Dependencies) (http.Handler, error) {
 	// agents, or run agents against a corpus somebody else loaded. The handler
 	// answers Unimplemented for whichever half it was not given, which is a
 	// better answer than a 404 on a path that does exist.
-	if deps.Corpus != nil || deps.AgentRuns != nil {
+	if deps.Corpus != nil || deps.AgentRuns != nil || deps.Evidence != nil {
 		mux.Handle(platformv1connect.NewIngestServiceHandler(
-			ingestservice.New(deps.Corpus, deps.AgentRuns, deps.Delegations, deps.Logger),
+			ingestservice.New(deps.Corpus, deps.AgentRuns, deps.Evidence,
+				deps.Delegations, deps.Logger),
 			internal))
 	}
 

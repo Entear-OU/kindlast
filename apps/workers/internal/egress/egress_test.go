@@ -209,6 +209,139 @@ func TestARedirectIsRefusedRatherThanFollowed(t *testing.T) {
 	}
 }
 
+// A NAME ON THE ALLOW-LIST THAT RESOLVES INTO THIS DEPLOYMENT'S OWN NETWORK IS
+// REFUSED, WITH NOTHING CONNECTED.
+//
+// This is the attack worth demonstrating and the reason the resolver is a
+// seam. On the bundled stack `postgres-app`, `redis`, `auth` and `model` all
+// answer on 172.16/12, some with no authentication worth the name, and the
+// gateway is on the same network. A customer typing
+// `http://postgres-app:5432/mcp` and having their operator permit that host is
+// the whole chain; the private-range refusal is what breaks it.
+//
+// Driven through a substituted resolver, because no real DNS server will
+// answer `postgres-app` with a container address on demand, and a test that
+// depended on one would only run inside compose.
+func TestANameResolvingIntoTheDeploymentsOwnNetworkIsRefused(t *testing.T) {
+	var dials atomic.Int64
+
+	// Every compose-internal target, with the address shape each really has.
+	for name, address := range map[string]string{
+		"postgres-app":      "172.18.0.4",
+		"redis":             "10.0.3.9",
+		"auth":              "192.168.16.2",
+		"metadata service":  "169.254.169.254",
+		"loopback":          "127.0.0.1",
+		"unspecified":       "0.0.0.0",
+		"ipv6 loopback":     "::1",
+		"ipv6 unique-local": "fd00::1",
+		"ipv6 link-local":   "fe80::1",
+	} {
+		allow := egress.Parse("internal.example.com", false).
+			WithResolver(func(context.Context, string) ([]net.IP, error) {
+				return []net.IP{net.ParseIP(address)}, nil
+			})
+
+		// The URL check passes: the host IS on the allow-list. Only the
+		// resolved address refuses it, which is why the check lives in the
+		// dialer as well.
+		if err := allow.Check("http://internal.example.com/mcp"); err != nil {
+			t.Fatalf("%s: the host is meant to be permitted by name here: %v", name, err)
+		}
+
+		client := allow.Client(2 * time.Second)
+		transport, _ := client.Transport.(*http.Transport)
+		inner := transport.DialContext
+		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			dials.Add(1)
+			return inner(ctx, network, addr)
+		}
+
+		request, err := http.NewRequestWithContext(
+			t.Context(), http.MethodGet, "http://internal.example.com/mcp", nil)
+		if err != nil {
+			t.Fatalf("building the request: %v", err)
+		}
+		response, err := client.Do(request)
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		if !errors.Is(err, egress.ErrNotAllowed) {
+			t.Errorf("%s (%s): got %v, want a refusal", name, address, err)
+		}
+	}
+}
+
+// The refusal happens BEFORE a connection exists, not after one is opened and
+// closed.
+//
+// The weaker implementation dials by name and inspects the peer afterwards. It
+// refuses the same requests and it has already completed a TCP handshake with
+// the forbidden address by the time it does, which is a port scanner for
+// anybody who can time the difference. This asserts the stronger property by
+// giving the resolver an address that nothing is listening on: a dial would
+// fail with a connection error, and a refusal says the dial never happened.
+func TestTheResolvedAddressIsRefusedBeforeAnythingIsDialled(t *testing.T) {
+	// A private address with no listener. If the implementation dialled first,
+	// the error would be a connection refusal rather than an allow-list one.
+	allow := egress.Parse("internal.example.com", false).
+		WithResolver(func(context.Context, string) ([]net.IP, error) {
+			return []net.IP{net.ParseIP("10.255.255.1")}, nil
+		})
+
+	client := allow.Client(2 * time.Second)
+	request, err := http.NewRequestWithContext(
+		t.Context(), http.MethodGet, "http://internal.example.com/mcp", nil)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+
+	start := time.Now()
+	response, err := client.Do(request)
+	if response != nil {
+		_ = response.Body.Close()
+	}
+
+	if !errors.Is(err, egress.ErrNotAllowed) {
+		t.Fatalf("got %v, want the address refused rather than dialled", err)
+	}
+	// A refusal that arrives in microseconds is one that skipped the network.
+	// Generous, because CI is slow, and still an order of magnitude below any
+	// real connection attempt to an unroutable address.
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("the refusal took %v, which is long enough to have dialled first", elapsed)
+	}
+}
+
+// A name answering with one permitted address AND one forbidden one is refused
+// whole.
+//
+// Picking the first would make which answer arrives first decide whether this
+// deployment is safe, and a resolver is free to return them in any order.
+func TestANameThatAlsoResolvesSomewhereForbiddenIsRefused(t *testing.T) {
+	allow := egress.Parse("mixed.example.com", false).
+		WithResolver(func(context.Context, string) ([]net.IP, error) {
+			return []net.IP{
+				net.ParseIP("93.184.216.34"),
+				net.ParseIP("169.254.169.254"),
+			}, nil
+		})
+
+	client := allow.Client(2 * time.Second)
+	request, err := http.NewRequestWithContext(
+		t.Context(), http.MethodGet, "http://mixed.example.com/mcp", nil)
+	if err != nil {
+		t.Fatalf("building the request: %v", err)
+	}
+	response, err := client.Do(request)
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if !errors.Is(err, egress.ErrNotAllowed) {
+		t.Fatalf("got %v, want the whole name refused", err)
+	}
+}
+
 // A permitted name resolving into loopback is refused when private
 // destinations are off, which is the DNS rebinding case the URL check cannot
 // see.

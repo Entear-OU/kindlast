@@ -22,6 +22,19 @@ var notServedByCoreAPI = map[protoreflect.FullName]string{
 	// registry would declare a scope for a method this binary does not route,
 	// which is the mirror-image mistake.
 	"kindlast.platform.v1.IntelligenceService": "served by apps/intelligence, core-api is the caller",
+	// Served by apps/workers, not by core-api, and for the same shape of
+	// reason: core-api is its CLIENT. It calls ListTools and CallTool outbound
+	// and answers neither.
+	//
+	// The boundary is the point rather than an accident of who wrote it.
+	// core-api holds the database credential and the key that seals customer
+	// credentials; the gateway is the process that opens a connection to an
+	// address a customer typed. Serving both in one binary would put
+	// server-side request forgery where it has the most to reach.
+	//
+	// apps/workers has its own copy of the scope and binding declaration tests,
+	// so these two RPCs are checked wherever they ARE served.
+	"kindlast.platform.v1.GatewayService": "served by apps/workers, core-api is the caller",
 }
 
 // Every service this binary could serve is in the registry, or is explicitly

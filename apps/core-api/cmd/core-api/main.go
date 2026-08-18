@@ -330,6 +330,9 @@ func run(logger *slog.Logger) error {
 		// deployment that runs no agents should answer Unimplemented here
 		// rather than accept a run record it cannot store.
 		AgentRuns: agentRunsDependency(outbox),
+		// What a machine fetched from a customer's system (ENT-231), on the
+		// same agent pool and behind the same typed-nil guard.
+		Evidence: evidenceDependency(outbox),
 		// Findings to narrate, on the same agent pool, and the drafter that
 		// explains them. The second is nil for a deployment with no model,
 		// which is supported rather than broken (ENT-245).
@@ -557,6 +560,13 @@ func agentRunsDependency(store *postgres.AgentStore) ingest.RunRecorder {
 
 // The same typed-nil guard, for the narrator's read and write of findings
 // (ENT-245).
+func evidenceDependency(store *postgres.AgentStore) ingest.EvidenceRecorder {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
 func narrativesDependency(store *postgres.AgentStore) narrative.Findings {
 	if store == nil {
 		return nil

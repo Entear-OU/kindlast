@@ -36,6 +36,9 @@ const (
 	// IngestServiceIngestCorpusProcedure is the fully-qualified name of the IngestService's
 	// IngestCorpus RPC.
 	IngestServiceIngestCorpusProcedure = "/kindlast.platform.v1.IngestService/IngestCorpus"
+	// IngestServiceIngestEvidenceProcedure is the fully-qualified name of the IngestService's
+	// IngestEvidence RPC.
+	IngestServiceIngestEvidenceProcedure = "/kindlast.platform.v1.IngestService/IngestEvidence"
 	// IngestServiceRecordAgentRunProcedure is the fully-qualified name of the IngestService's
 	// RecordAgentRun RPC.
 	IngestServiceRecordAgentRunProcedure = "/kindlast.platform.v1.IngestService/RecordAgentRun"
@@ -104,6 +107,45 @@ type IngestServiceClient interface {
 	// A refusal is a run and is recorded. A run that failed to record is not a
 	// run that did not happen, so the caller must treat a failure here as
 	// serious rather than as best-effort telemetry.
+	// Records what a machine fetched from a customer's own system (ENT-231,
+	// §26.4).
+	//
+	// # THE DOOR EVIDENCE COMES IN BY WHEN NOBODY IS SIGNED IN
+	//
+	// ENT-231 says evidence enters only through `IngestService`, and this is
+	// that door. The scheduled Watcher at build-order step 8 uses it, and so
+	// does any gateway-initiated fetch that runs for an organisation with no
+	// session behind it.
+	//
+	// # AND WHY THERE IS A SECOND DOOR ON THE CORE SURFACE
+	//
+	// Worth stating plainly rather than leaving somebody to find the asymmetry
+	// and assume it is a mistake. A live fetch a person asked for from the
+	// console arrives on a USER token, and a user token by design can never
+	// carry an `internal:*` scope. Routing it through here would mean either
+	// issuing internal scopes to people, which undoes what ENT-207 built, or
+	// writing without the person's identity, which loses `requested_by` on the
+	// one record where "which human asked" matters most.
+	//
+	// So: a machine ingests here, on `kindlast_agent`, org named in the message.
+	// A person's live fetch goes through `IntegrationsService.FetchNow`, on
+	// `kindlast_app`, under RLS and their own membership. Both write the same
+	// two rows with the same stamps, and neither is reachable by the other's
+	// caller. `MemoryService`'s header makes the identical argument for why a
+	// human corrects a fact on the core surface rather than through here.
+	//
+	// # WHAT IS ALREADY TRUE BY THE TIME THIS IS CALLED
+	//
+	// The content has been through the gateway: an endpoint on the egress
+	// allow-list, a tool the connection granted, and redaction applied before it
+	// crossed back. This RPC does not re-apply any of that and could not: it
+	// holds no allow-list and no policy, and a second redaction pass here would
+	// be a second implementation free to disagree with the first.
+	//
+	// What it does enforce is the shape: an observation names its connection and
+	// when it was observed, and a fetch record is written for every call
+	// including the ones that produced nothing.
+	IngestEvidence(context.Context, *connect.Request[v1.IngestEvidenceRequest]) (*connect.Response[v1.IngestEvidenceResponse], error)
 	RecordAgentRun(context.Context, *connect.Request[v1.RecordAgentRunRequest]) (*connect.Response[v1.RecordAgentRunResponse], error)
 }
 
@@ -124,6 +166,12 @@ func NewIngestServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(ingestServiceMethods.ByName("IngestCorpus")),
 			connect.WithClientOptions(opts...),
 		),
+		ingestEvidence: connect.NewClient[v1.IngestEvidenceRequest, v1.IngestEvidenceResponse](
+			httpClient,
+			baseURL+IngestServiceIngestEvidenceProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("IngestEvidence")),
+			connect.WithClientOptions(opts...),
+		),
 		recordAgentRun: connect.NewClient[v1.RecordAgentRunRequest, v1.RecordAgentRunResponse](
 			httpClient,
 			baseURL+IngestServiceRecordAgentRunProcedure,
@@ -136,12 +184,18 @@ func NewIngestServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 // ingestServiceClient implements IngestServiceClient.
 type ingestServiceClient struct {
 	ingestCorpus   *connect.Client[v1.IngestCorpusRequest, v1.IngestCorpusResponse]
+	ingestEvidence *connect.Client[v1.IngestEvidenceRequest, v1.IngestEvidenceResponse]
 	recordAgentRun *connect.Client[v1.RecordAgentRunRequest, v1.RecordAgentRunResponse]
 }
 
 // IngestCorpus calls kindlast.platform.v1.IngestService.IngestCorpus.
 func (c *ingestServiceClient) IngestCorpus(ctx context.Context, req *connect.Request[v1.IngestCorpusRequest]) (*connect.Response[v1.IngestCorpusResponse], error) {
 	return c.ingestCorpus.CallUnary(ctx, req)
+}
+
+// IngestEvidence calls kindlast.platform.v1.IngestService.IngestEvidence.
+func (c *ingestServiceClient) IngestEvidence(ctx context.Context, req *connect.Request[v1.IngestEvidenceRequest]) (*connect.Response[v1.IngestEvidenceResponse], error) {
+	return c.ingestEvidence.CallUnary(ctx, req)
 }
 
 // RecordAgentRun calls kindlast.platform.v1.IngestService.RecordAgentRun.
@@ -212,6 +266,45 @@ type IngestServiceHandler interface {
 	// A refusal is a run and is recorded. A run that failed to record is not a
 	// run that did not happen, so the caller must treat a failure here as
 	// serious rather than as best-effort telemetry.
+	// Records what a machine fetched from a customer's own system (ENT-231,
+	// §26.4).
+	//
+	// # THE DOOR EVIDENCE COMES IN BY WHEN NOBODY IS SIGNED IN
+	//
+	// ENT-231 says evidence enters only through `IngestService`, and this is
+	// that door. The scheduled Watcher at build-order step 8 uses it, and so
+	// does any gateway-initiated fetch that runs for an organisation with no
+	// session behind it.
+	//
+	// # AND WHY THERE IS A SECOND DOOR ON THE CORE SURFACE
+	//
+	// Worth stating plainly rather than leaving somebody to find the asymmetry
+	// and assume it is a mistake. A live fetch a person asked for from the
+	// console arrives on a USER token, and a user token by design can never
+	// carry an `internal:*` scope. Routing it through here would mean either
+	// issuing internal scopes to people, which undoes what ENT-207 built, or
+	// writing without the person's identity, which loses `requested_by` on the
+	// one record where "which human asked" matters most.
+	//
+	// So: a machine ingests here, on `kindlast_agent`, org named in the message.
+	// A person's live fetch goes through `IntegrationsService.FetchNow`, on
+	// `kindlast_app`, under RLS and their own membership. Both write the same
+	// two rows with the same stamps, and neither is reachable by the other's
+	// caller. `MemoryService`'s header makes the identical argument for why a
+	// human corrects a fact on the core surface rather than through here.
+	//
+	// # WHAT IS ALREADY TRUE BY THE TIME THIS IS CALLED
+	//
+	// The content has been through the gateway: an endpoint on the egress
+	// allow-list, a tool the connection granted, and redaction applied before it
+	// crossed back. This RPC does not re-apply any of that and could not: it
+	// holds no allow-list and no policy, and a second redaction pass here would
+	// be a second implementation free to disagree with the first.
+	//
+	// What it does enforce is the shape: an observation names its connection and
+	// when it was observed, and a fetch record is written for every call
+	// including the ones that produced nothing.
+	IngestEvidence(context.Context, *connect.Request[v1.IngestEvidenceRequest]) (*connect.Response[v1.IngestEvidenceResponse], error)
 	RecordAgentRun(context.Context, *connect.Request[v1.RecordAgentRunRequest]) (*connect.Response[v1.RecordAgentRunResponse], error)
 }
 
@@ -228,6 +321,12 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(ingestServiceMethods.ByName("IngestCorpus")),
 		connect.WithHandlerOptions(opts...),
 	)
+	ingestServiceIngestEvidenceHandler := connect.NewUnaryHandler(
+		IngestServiceIngestEvidenceProcedure,
+		svc.IngestEvidence,
+		connect.WithSchema(ingestServiceMethods.ByName("IngestEvidence")),
+		connect.WithHandlerOptions(opts...),
+	)
 	ingestServiceRecordAgentRunHandler := connect.NewUnaryHandler(
 		IngestServiceRecordAgentRunProcedure,
 		svc.RecordAgentRun,
@@ -238,6 +337,8 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 		switch r.URL.Path {
 		case IngestServiceIngestCorpusProcedure:
 			ingestServiceIngestCorpusHandler.ServeHTTP(w, r)
+		case IngestServiceIngestEvidenceProcedure:
+			ingestServiceIngestEvidenceHandler.ServeHTTP(w, r)
 		case IngestServiceRecordAgentRunProcedure:
 			ingestServiceRecordAgentRunHandler.ServeHTTP(w, r)
 		default:
@@ -251,6 +352,10 @@ type UnimplementedIngestServiceHandler struct{}
 
 func (UnimplementedIngestServiceHandler) IngestCorpus(context.Context, *connect.Request[v1.IngestCorpusRequest]) (*connect.Response[v1.IngestCorpusResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IngestService.IngestCorpus is not implemented"))
+}
+
+func (UnimplementedIngestServiceHandler) IngestEvidence(context.Context, *connect.Request[v1.IngestEvidenceRequest]) (*connect.Response[v1.IngestEvidenceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IngestService.IngestEvidence is not implemented"))
 }
 
 func (UnimplementedIngestServiceHandler) RecordAgentRun(context.Context, *connect.Request[v1.RecordAgentRunRequest]) (*connect.Response[v1.RecordAgentRunResponse], error) {

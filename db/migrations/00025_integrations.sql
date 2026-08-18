@@ -581,8 +581,47 @@ grant select (id, org_id, kind, display_name, endpoint_url, status,
               created_at, revoked_at)
   on public.integrations to kindlast_agent;
 grant select on public.integration_tools to kindlast_agent;
-grant select on public.integration_fetches to kindlast_agent;
 grant select on public.audit_evidence to kindlast_agent;
+
+------------------------------------------------------------------------------
+-- AND THE ONE WRITE THE PRODUCER ROLE GETS, WHICH IS THE INGEST PATH
+------------------------------------------------------------------------------
+-- `IngestService.IngestEvidence` records what a machine fetched: the scheduled
+-- Watcher at build-order step 8, and any gateway-initiated fetch that runs for
+-- an organisation nobody is signed in to. It runs on `kindlast_agent`, so that
+-- role needs insert on the two tables a fetch produces and on nothing else.
+--
+-- WHY THIS DOES NOT CONTRADICT 00020, WHICH GAVE THE AGENT SELECT ONLY.
+--
+-- 00020's argument is about what an organisation BELIEVES: "a profile the agent
+-- could edit is a profile the customer no longer owns". That stands, and
+-- `org_profile_facts` stays select-only for this role. What is added here is
+-- the ability to record an OBSERVATION, which is what `org_evidence` is for and
+-- what an agent fetching from a customer's tool is doing. Believing and
+-- observing are the two shapes 00020 separated on purpose, and only the second
+-- moves.
+--
+-- Insert and nothing else. No update, so a superseded observation is recorded
+-- by the console's role as 00020 arranged; no delete, so erasure stays a single
+-- gesture on `organisations`.
+grant select, insert on public.org_evidence to kindlast_agent;
+grant select, insert on public.integration_fetches to kindlast_agent;
+
+-- The insert policies are org-scoped through the GUC and carry no membership
+-- check, matching every other producer policy since 00008: the agent runs for
+-- organisations nobody is signed in to, so there is no member to check. Tenancy
+-- still binds it, because it can only write into the organisation its GUC
+-- names, and a caller that sets none writes nothing at all rather than
+-- everything.
+create policy org_evidence_agent_insert on public.org_evidence
+  for insert to kindlast_agent with check (
+    org_id = (select current_setting('app.current_org_id', true)::uuid)
+  );
+
+create policy integration_fetches_agent_insert on public.integration_fetches
+  for insert to kindlast_agent with check (
+    org_id = (select current_setting('app.current_org_id', true)::uuid)
+  );
 
 create policy integrations_agent on public.integrations
   for select to kindlast_agent using (true);
@@ -597,6 +636,8 @@ create policy audit_evidence_agent on public.audit_evidence
   for select to kindlast_agent using (true);
 
 -- +goose Down
+drop policy if exists integration_fetches_agent_insert on public.integration_fetches;
+drop policy if exists org_evidence_agent_insert on public.org_evidence;
 drop policy if exists audit_evidence_agent on public.audit_evidence;
 drop policy if exists integration_fetches_agent on public.integration_fetches;
 drop policy if exists integration_tools_agent on public.integration_tools;
@@ -619,6 +660,12 @@ revoke all on public.audit_evidence from kindlast_agent;
 revoke all on public.integration_fetches from kindlast_agent;
 revoke all on public.integration_tools from kindlast_agent;
 revoke all on public.integrations from kindlast_agent;
+
+-- Narrowed rather than revoked, because 00020 granted select here and this
+-- migration only widened it to insert. A blanket revoke would leave the agent
+-- unable to read evidence at all, which is 00020's grant and not this one's to
+-- take away.
+revoke insert on public.org_evidence from kindlast_agent;
 
 revoke all on public.audit_evidence from kindlast_app;
 revoke all on public.integration_fetches from kindlast_app;

@@ -14,7 +14,10 @@
 // # WHY THE CHECK IS IN THE DIALER AND NOT ONLY BEFORE THE REQUEST
 //
 // Checking the URL before calling the endpoint is necessary and not
-// sufficient. Two things get past it.
+// sufficient. Two things get past it, and this deployment is a bad place for
+// either: the gateway sits on a network where postgres, Redis, the
+// authorization server's management API and the model server all answer, some
+// of them unauthenticated.
 //
 // A REDIRECT. `http.Client` follows redirects by default, so a permitted host
 // answering `302 Location: http://169.254.169.254/` turns one allowed request
@@ -24,9 +27,23 @@
 // sending the customer's credential to whatever address the response named.
 //
 // DNS. A permitted host name can resolve to an address inside this
-// deployment's own network, deliberately or by accident. So the dial itself is
-// checked against the resolved IP, after resolution and before the connection
-// is used, which is the only point where the actual destination is known.
+// deployment's own network, deliberately or by accident, and a name that
+// resolved to a public address for a check can resolve to a private one a
+// moment later for the dial.
+//
+// # RESOLVE ONCE, CHECK, THEN DIAL THE ADDRESS THAT WAS CHECKED
+//
+// The dialer below looks the name up itself, refuses every address that comes
+// back if any of them is somewhere this deployment does not permit, and then
+// connects to a LITERAL ADDRESS from that same answer. No second lookup
+// happens, so there is no window for a rebind to move the target between the
+// check and the connection.
+//
+// The weaker version, dialling by name and inspecting `conn.RemoteAddr()`
+// afterwards, is nearly as safe and is not the same: it has already completed
+// a TCP handshake with the forbidden address by the time it refuses, which is
+// a port scanner for anybody who can time the difference. Refusing before the
+// connection exists costs one explicit resolve and removes that entirely.
 //
 // # WHAT "REFUSED BEFORE ANY REQUEST LEAVES" MEANS HERE
 //
@@ -78,12 +95,23 @@ type AllowList struct {
 	// this gateway at the instance metadata service, and the allow-list is the
 	// only thing between them and a set of cloud credentials.
 	//
-	// TRUE IS THE ORDINARY SELF-HOSTED SETTING, and that is why it exists
-	// rather than being a hard refusal. A self-hoster's MCP server is on their
-	// own network by definition, and on the bundled compose stack every
-	// service name resolves into 172.16/12. Refusing that outright would mean
-	// the feature only works for the deployment shape that needs it least.
+	// TRUE IS A DELIBERATE DECISION AN OPERATOR MAKES, and that is why it
+	// exists rather than being a hard refusal. A self-hoster's MCP server is on
+	// their own network by definition. It is NOT set on the bundled compose
+	// stack, because that stack is exactly the network this flag would open: a
+	// name like `postgres-app` resolves into 172.16/12, and refusing private
+	// destinations is what stops a customer-supplied URL reaching it.
 	allowPrivate bool
+
+	// resolve looks a host name up. A field so a test can present a name that
+	// resolves into this deployment's own network without needing a DNS server
+	// that will answer that way, which is the attack worth demonstrating and
+	// the one that is otherwise untestable.
+	//
+	// Never nil in practice: Parse fills it in. A nil one falls back to the
+	// real resolver rather than skipping the check, because a zero value that
+	// disabled the check would be the worst possible default.
+	resolve func(ctx context.Context, host string) ([]net.IP, error)
 }
 
 // Parse builds an allow-list from a comma-separated setting.
@@ -93,7 +121,11 @@ type AllowList struct {
 // permits it, and a port would invite the belief that a different port on the
 // same host is a different trust decision, which it is not.
 func Parse(setting string, allowPrivate bool) AllowList {
-	list := AllowList{hosts: map[string]struct{}{}, allowPrivate: allowPrivate}
+	list := AllowList{
+		hosts:        map[string]struct{}{},
+		allowPrivate: allowPrivate,
+		resolve:      lookup,
+	}
 	for _, raw := range strings.Split(setting, ",") {
 		entry := strings.ToLower(strings.TrimSpace(raw))
 		if entry == "" {
@@ -118,6 +150,18 @@ func (a AllowList) Empty() bool { return len(a.hosts) == 0 && len(a.suffixes) ==
 // AllowsPrivateDestinations reports whether a permitted name may resolve into
 // a private or loopback address.
 func (a AllowList) AllowsPrivateDestinations() bool { return a.allowPrivate }
+
+// WithResolver replaces how names are looked up.
+//
+// FOR TESTS ONLY, and it does not weaken anything: what it substitutes is the
+// source of the addresses, not the check applied to them. A test uses it to
+// present a name that resolves into this deployment's own network, which is
+// the attack worth demonstrating and which no real DNS server will answer with
+// on demand.
+func (a AllowList) WithResolver(resolve func(ctx context.Context, host string) ([]net.IP, error)) AllowList {
+	a.resolve = resolve
+	return a
+}
 
 // Permits reports whether a host name is on the list.
 func (a AllowList) Permits(host string) bool {
@@ -183,7 +227,7 @@ func (a AllowList) Client(timeout time.Duration) *http.Client {
 
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			host, _, err := net.SplitHostPort(address)
+			host, port, err := net.SplitHostPort(address)
 			if err != nil {
 				return nil, fmt.Errorf("%w: %s", ErrNotAllowed, address)
 			}
@@ -195,15 +239,39 @@ func (a AllowList) Client(timeout time.Duration) *http.Client {
 				return nil, fmt.Errorf("%w: %s", ErrNotAllowed, host)
 			}
 
-			conn, err := dialer.DialContext(ctx, network, address)
+			// RESOLVE ONCE, HERE, AND DIAL WHAT CAME BACK.
+			//
+			// Everything after this line uses a literal address from this one
+			// answer, so a second lookup cannot move the target between the
+			// check and the connection.
+			addresses, err := a.resolveHost(ctx, host)
 			if err != nil {
 				return nil, err
 			}
-			if err := a.checkResolved(conn.RemoteAddr()); err != nil {
-				_ = conn.Close()
-				return nil, err
+
+			// EVERY ADDRESS IS CHECKED, NOT ONLY THE ONE DIALLED. A name
+			// answering with one public address and one private one is the
+			// rebinding attack with the two answers delivered at once, and
+			// picking the first would make which one arrives first decide
+			// whether this deployment is safe.
+			for _, ip := range addresses {
+				if err := a.checkAddress(ip); err != nil {
+					return nil, err
+				}
 			}
-			return conn, nil
+
+			var lastErr error
+			for _, ip := range addresses {
+				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+			}
+			if lastErr == nil {
+				lastErr = fmt.Errorf("%w: %s resolved to nothing", ErrNotAllowed, host)
+			}
+			return nil, lastErr
 		},
 		// A small pool, because the population of endpoints is small and a
 		// large set of idle connections into customer systems is a liability
@@ -224,25 +292,65 @@ func (a AllowList) Client(timeout time.Duration) *http.Client {
 	}
 }
 
-// checkResolved refuses a connection whose peer is somewhere a customer's
-// endpoint has no business being.
+// resolveHost looks a name up, or reads a literal address straight out of the
+// URL.
 //
-// The addresses named here are the ones that turn an outbound fetch into a
-// read of this deployment's own infrastructure: loopback, the private ranges,
-// link-local (which is where every cloud provider's instance metadata service
-// lives), and the unspecified address.
-func (a AllowList) checkResolved(addr net.Addr) error {
-	tcp, ok := addr.(*net.TCPAddr)
-	if !ok {
-		return nil
+// A literal skips the resolver rather than being handed to it, because a
+// resolver asked for "169.254.169.254" would answer with it and the extra hop
+// buys nothing.
+func (a AllowList) resolveHost(ctx context.Context, host string) ([]net.IP, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		return []net.IP{ip}, nil
 	}
-	ip := tcp.IP
 
+	resolve := a.resolve
+	if resolve == nil {
+		// A zero-value AllowList reaching this far permits no host at all, so
+		// this is unreachable. Falling back to the real resolver rather than
+		// to nil, because "no resolver configured" must never read as "no
+		// addresses to check".
+		resolve = lookup
+	}
+
+	addresses, err := resolve(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s could not be resolved", ErrNotAllowed, host)
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("%w: %s resolved to nothing", ErrNotAllowed, host)
+	}
+	return addresses, nil
+}
+
+func lookup(ctx context.Context, host string) ([]net.IP, error) {
+	return net.DefaultResolver.LookupIP(ctx, "ip", host)
+}
+
+// checkAddress refuses an address a customer's endpoint has no business being
+// at.
+//
+// The ranges named here are the ones that turn an outbound fetch into a read of
+// this deployment's own infrastructure. On the bundled stack that is not
+// abstract: `postgres-app`, `redis`, `auth` and `model` all answer on
+// 172.16/12, some of them with no authentication worth the name, and the
+// gateway sits on the same network.
+//
+//	loopback      127.0.0.0/8 and ::1
+//	private       10/8, 172.16/12, 192.168/16 and fc00::/7 (Go's IsPrivate
+//	              covers the IPv6 unique-local range as well as the three
+//	              RFC 1918 ones)
+//	link-local    169.254/16 and fe80::/10, which is where every cloud
+//	              provider's instance metadata service lives
+//	unspecified   0.0.0.0 and ::
+func (a AllowList) checkAddress(ip net.IP) error {
 	// Link-local is refused even with private destinations allowed, and that
 	// asymmetry is the point. A self-hoster genuinely means 10.0.0.0/8 when
 	// they turn private destinations on; nobody means 169.254.169.254.
 	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 		return fmt.Errorf("%w: %s is link-local", ErrNotAllowed, ip)
+	}
+	if ip.IsInterfaceLocalMulticast() || ip.IsMulticast() {
+		return fmt.Errorf("%w: %s is multicast", ErrNotAllowed, ip)
 	}
 	if a.allowPrivate {
 		return nil

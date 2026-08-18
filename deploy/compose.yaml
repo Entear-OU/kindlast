@@ -848,17 +848,23 @@ services:
       # Whether a permitted name may resolve into a private or loopback
       # address.
       #
-      # TRUE HERE, FALSE BY DEFAULT IN THE BINARY, and the difference is the
-      # deployment shape rather than an inconsistency. On this stack every
-      # service name resolves into 172.16/12, and a self-hoster's MCP server is
-      # on their own network by definition, so refusing private destinations
-      # would make the feature work only for the deployment that needs it
-      # least. A hosted deployment must leave this off: without it, anybody who
-      # can type a URL can point the gateway at the instance metadata service.
+      # OFF HERE TOO, WHICH IS THE SETTING WORTH READING CAREFULLY.
+      #
+      # The tempting default is on, because a self-hoster's MCP server is on
+      # their own network by definition and every service name on this stack
+      # resolves into 172.16/12. That is exactly the reason it is off: this
+      # network is what the flag would open. `postgres-app`, `redis`, `auth`
+      # and `model` all answer here, some with no authentication worth the
+      # name, and a customer-supplied URL naming one of them is the whole
+      # attack. The private-range refusal is what breaks it.
+      #
+      # A self-hoster who genuinely runs an MCP server on their own network
+      # turns this on, having read that sentence. Nobody should turn it on to
+      # make a demo work.
       #
       # Link-local is refused either way, so 169.254.169.254 is unreachable
-      # even here.
-      KINDLAST_GATEWAY_ALLOW_PRIVATE_DESTINATIONS: ${KINDLAST_GATEWAY_ALLOW_PRIVATE_DESTINATIONS:-true}
+      # whatever this says.
+      KINDLAST_GATEWAY_ALLOW_PRIVATE_DESTINATIONS: ${KINDLAST_GATEWAY_ALLOW_PRIVATE_DESTINATIONS:-false}
 
       # The bounds that stand in for Temporal until build-order step 8: one
       # outbound call cannot exceed this, and one organisation cannot make more
