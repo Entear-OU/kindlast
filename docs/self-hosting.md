@@ -146,7 +146,6 @@ recording.
 
 | Variable | Why |
 |---|---|
-| `TAVILY_API_KEY` | Currently unused. Nothing calls `lib/websearch` since the Analyst was removed, and the stored corpus may have made it unnecessary; see ENT-240. Leave it unset unless you have restored a caller. |
 | `NEXT_PUBLIC_APP_URL` | Absolute origin for links in outbound email. Falls back to the request's forwarded host, which is usually wrong behind a proxy. |
 
 ### Optional
@@ -158,7 +157,17 @@ recording.
 | `EMAIL_FROM` | | A verified sender on your own domain |
 | `BILLING_PROVIDER` | `stripe` | Only relevant if you are charging for your instance |
 | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | | Billing only |
-| `WEBSEARCH_PROVIDER` | `tavily` | `firecrawl` is a stub |
+| `WEBSEARCH_PROVIDER` | `tavily` | Picks the `lib/websearch` provider. Nothing calls that module, so this changes nothing at runtime. |
+| `TAVILY_API_KEY` | | **Not required, whatever an older copy of this page told you.** Nothing calls `lib/websearch`, so leave it unset. |
+| `FIRECRAWL_API_KEY` | | The other `lib/websearch` provider, equally unused, and still an unimplemented stub. |
+
+**`TAVILY_API_KEY` used to be listed as required and it never was.** This page
+told you to go and get a third-party search key before your stack would work
+properly, and that was simply wrong: `lib/websearch` has had no caller since
+the Analyst was removed along with the Supabase-era console, so no request path
+ever reaches it and no key is ever read. If you obtained a Tavily key on the
+strength of the old table, you did not need it and you can drop it. Nothing
+degrades without it, because nothing used it.
 
 You can run a useful instance with `EMAIL_PROVIDER=console` and no billing
 configured at all. Findings will appear in the console, they simply will not be
