@@ -77,7 +77,9 @@ describe('the connection list', () => {
   it('shows the endpoint as text and never as a link', () => {
     render(<ConnectionList integrations={[integration()]} />)
 
-    expect(screen.getByText('https://tools.example.com/mcp')).toBeInTheDocument()
+    expect(
+      screen.getByText('https://tools.example.com/mcp'),
+    ).toBeInTheDocument()
     // A URL a customer typed, made clickable, would turn a console page into a
     // way to have somebody's browser fetch an arbitrary address.
     expect(

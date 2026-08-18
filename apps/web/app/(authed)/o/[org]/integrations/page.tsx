@@ -8,7 +8,11 @@ import { GrantsForm } from '@/components/integrations/grants-form'
 import { connectAction, revokeAction, updateGrantsAction } from './actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
-import { isActive, listFetches, listIntegrations } from '@/lib/integrations/client'
+import {
+  isActive,
+  listFetches,
+  listIntegrations,
+} from '@/lib/integrations/client'
 
 /**
  * The page that makes a connection something a customer controls (ENT-231,
@@ -29,6 +33,21 @@ import { isActive, listFetches, listIntegrations } from '@/lib/integrations/clie
  *
  * A page showing only the first would be a settings screen. It is the third
  * that makes the first two believable.
+ *
+ * # OUTSIDE THE `(needs-profile)` GROUP, WHICH IS A DECISION AND NOT AN
+ * # OVERSIGHT
+ *
+ * ENT-212's gate routes a member with no compliance profile into onboarding,
+ * and covers the surfaces whose "data is empty and whose writes are refused"
+ * without one. This is neither. Nothing here is derived from the profile, no
+ * write is refused for want of one, and the relationship runs the other way:
+ * integrations are how the profile gets filled in from a customer's own
+ * systems rather than from a form. Bouncing somebody out of here to answer
+ * eleven questions they could have answered by connecting a tool would be the
+ * gate working against the thing it exists for.
+ *
+ * It sits beside Settings, Regulation and Logs for the same reason each of
+ * those does.
  *
  * # THE REFUSALS ARE ON THE PAGE, NOT HIDDEN BEHIND A FILTER
  *
@@ -86,8 +105,8 @@ export default async function IntegrationsPage({
       <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
         Connect the systems Kindlast may read from, decide exactly which of
         their tools it may call, and see everything it has fetched. Nothing is
-        called unless you allow it, and what comes back is redacted before it
-        is stored.
+        called unless you allow it, and what comes back is redacted before it is
+        stored.
       </p>
 
       {unconfigured ? (

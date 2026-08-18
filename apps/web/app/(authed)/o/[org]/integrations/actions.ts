@@ -106,7 +106,8 @@ export async function connectAction(
     if (tools.length === 0) {
       return {
         status: 'error',
-        message: 'That endpoint offers no tools, so there is nothing to connect.',
+        message:
+          'That endpoint offers no tools, so there is nothing to connect.',
         displayName,
         endpointUrl,
       }
@@ -265,7 +266,9 @@ export async function revokeAction(
  * gateway reads the endpoint's own annotation again before every call and
  * takes the stricter of the two.
  */
-function readOfferedTools(raw: FormDataEntryValue | null): IntegrationTool[] | null {
+function readOfferedTools(
+  raw: FormDataEntryValue | null,
+): IntegrationTool[] | null {
   if (typeof raw !== 'string' || !raw) return null
 
   let parsed: unknown

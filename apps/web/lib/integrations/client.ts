@@ -23,8 +23,7 @@ import { call } from '@/lib/core-api/call'
 export type { Failure, Result } from '@/lib/core-api/call'
 
 export type IntegrationKind =
-  | 'INTEGRATION_KIND_UNSPECIFIED'
-  | 'INTEGRATION_KIND_MCP'
+  'INTEGRATION_KIND_UNSPECIFIED' | 'INTEGRATION_KIND_MCP'
 
 export type IntegrationStatus =
   | 'INTEGRATION_STATUS_UNSPECIFIED'

@@ -84,3 +84,31 @@ environment by the seed job.
 The user sign-in flow is authorization code with PKCE, which involves a
 login form and a redirect back to `web`. Use a browser for that. The
 client-credentials request exists so API work does not need one.
+
+## The gateway requests, which need a published port
+
+The two `Gateway:` requests reach `apps/workers` rather than core-api, on
+`gateway_base_url`. That service **publishes no port**: it answers core-api
+on the compose network and nothing outside it should reach the process that
+dials a customer's systems. So those two requests will not connect from a
+host shell as the stack ships.
+
+They are in the collection anyway, and deliberately. The gateway is the one
+piece of this system whose behaviour a reader most needs to be able to
+reproduce, and a collection that documented only the half core-api serves
+would leave the refusals, which are the interesting part, undescribed.
+
+To drive them, publish the port for as long as you need it:
+
+```yaml
+# deploy/compose.yaml, under `workers`. Not committed.
+ports:
+  - "127.0.0.1:8100:8100"
+```
+
+`gateway_token` in the environment matches the compose default and is a
+development-only value. A real deployment mounts
+`KINDLAST_GATEWAY_TOKEN_FILE` and publishes nothing.
+
+`integration_id` is empty until you have connected something. Take it from
+the response to `ConnectIntegration`.

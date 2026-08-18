@@ -445,55 +445,59 @@ describe.skipIf(!reachable)('one organisation cannot see another', () => {
   })
 })
 
-describe.skipIf(!reachable)('the producer role reads and writes nothing', () => {
-  it('cannot read a stored credential', async () => {
-    const connection = await connectSystem(orgA, `Sealed ${randomUUID()}`)
-    await migrator.query(
-      `update integrations
+describe.skipIf(!reachable)(
+  'the producer role reads and writes nothing',
+  () => {
+    it('cannot read a stored credential', async () => {
+      const connection = await connectSystem(orgA, `Sealed ${randomUUID()}`)
+      await migrator.query(
+        `update integrations
           set credential_ciphertext = $2, credential_key_id = 'test'
         where id = $1`,
-      [connection, Buffer.from('sealed-bytes')],
-    )
+        [connection, Buffer.from('sealed-bytes')],
+      )
 
-    // Column-level select. The agent holds no key, so a ciphertext would buy
-    // an attacker little; naming the columns costs one line and removes the
-    // argument entirely.
-    await expect(
-      agent.query(`select credential_ciphertext from integrations`),
-    ).rejects.toThrow(/permission denied/i)
+      // Column-level select. The agent holds no key, so a ciphertext would buy
+      // an attacker little; naming the columns costs one line and removes the
+      // argument entirely.
+      await expect(
+        agent.query(`select credential_ciphertext from integrations`),
+      ).rejects.toThrow(/permission denied/i)
 
-    const readable = await agent.query(
-      `select display_name from integrations where id = $1`,
-      [connection],
-    )
-    expect(readable.rows).toHaveLength(1)
-  })
-
-  it('cannot create, grant or revoke anything', async () => {
-    const connection = await connectSystem(orgA, `AgentWrite ${randomUUID()}`)
-
-    await expect(
-      agent.query(
-        `insert into integrations (org_id, kind, display_name, endpoint_url)
-         values ($1, 'mcp', 'agent made this', 'https://x.example.com/mcp')`,
-        [orgA],
-      ),
-    ).rejects.toThrow(/permission denied/i)
-
-    await expect(
-      agent.query(
-        `update integration_tools set granted = true where integration_id = $1`,
+      const readable = await agent.query(
+        `select display_name from integrations where id = $1`,
         [connection],
-      ),
-    ).rejects.toThrow(/permission denied/i)
+      )
+      expect(readable.rows).toHaveLength(1)
+    })
 
-    await expect(
-      agent.query(`update integrations set status = 'revoked' where id = $1`, [
-        connection,
-      ]),
-    ).rejects.toThrow(/permission denied/i)
-  })
-})
+    it('cannot create, grant or revoke anything', async () => {
+      const connection = await connectSystem(orgA, `AgentWrite ${randomUUID()}`)
+
+      await expect(
+        agent.query(
+          `insert into integrations (org_id, kind, display_name, endpoint_url)
+         values ($1, 'mcp', 'agent made this', 'https://x.example.com/mcp')`,
+          [orgA],
+        ),
+      ).rejects.toThrow(/permission denied/i)
+
+      await expect(
+        agent.query(
+          `update integration_tools set granted = true where integration_id = $1`,
+          [connection],
+        ),
+      ).rejects.toThrow(/permission denied/i)
+
+      await expect(
+        agent.query(
+          `update integrations set status = 'revoked' where id = $1`,
+          [connection],
+        ),
+      ).rejects.toThrow(/permission denied/i)
+    })
+  },
+)
 
 describe.skipIf(!reachable)('revocation is terminal and recorded', () => {
   it('records when and by whom, and refuses a revocation with no timestamp', async () => {

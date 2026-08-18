@@ -109,7 +109,10 @@ export function GrantsForm({
         ) : null}
       </form>
 
-      <form action={revokeActionFn} className="mt-4 border-t border-border/60 pt-3">
+      <form
+        action={revokeActionFn}
+        className="mt-4 border-t border-border/60 pt-3"
+      >
         <input type="hidden" name="integrationId" value={integration.id} />
         <button
           type="submit"
