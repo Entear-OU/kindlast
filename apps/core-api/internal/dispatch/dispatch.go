@@ -20,9 +20,11 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 )
 
-// Outbox is the store half: claim a message, deliver it, record the outcome.
+// Outbox is the store half: claim a message, deliver it, record the outcome,
+// and clear out what no longer needs keeping.
 type Outbox interface {
 	Drain(ctx context.Context, batch int, deliver postgres.Deliver) (postgres.DrainResult, error)
+	ReclaimOutbox(ctx context.Context, bodyRetention time.Duration, batch int) (postgres.ReclaimResult, error)
 }
 
 // Defaults chosen for a queue whose traffic is invitations.
@@ -38,6 +40,63 @@ type Outbox interface {
 const (
 	DefaultInterval = 10 * time.Second
 	DefaultBatch    = 20
+)
+
+// Retention on the outbox (ENT-242).
+//
+// # WHY THERE IS A PERIOD AT ALL, AND WHY IT IS SHORT
+//
+// `body_text` holds the rendered invitation, and the rendered invitation holds
+// the raw token in a path segment, because the accept link is the message.
+// 00003 stores only that token's hash and says why: a database dump must not
+// yield a working invitation. The outbox is the one place that rule is
+// suspended, and it was meant to be suspended only until the dispatcher drained
+// the row. Nothing drained it, so every address and every message body ever
+// sent was still there.
+//
+// # WHY SEVEN DAYS, RATHER THAN NONE AND RATHER THAN NINETY
+//
+// Not zero, because a delivered body answers one real question: "what did we
+// actually send this person", asked when somebody reports a link that did not
+// work. That complaint arrives within days.
+//
+// Not ninety, because after a week the body answers nothing actionable. Seven
+// days is `postgres.InvitationLifetime`, so the window is exactly as long as
+// the token inside it can still be used, and not one day longer. Aligning the
+// two is the point rather than a coincidence: the period the body is worth
+// keeping is the period the link still works.
+//
+// It is an upper bound rather than the usual case. The reclaim redacts at the
+// earlier of this window and the invitation ceasing to be acceptable, so an
+// invitation accepted ten minutes after it arrives has its body cleared on the
+// next pass. A spent link is worth nothing to anybody, and holding somebody's
+// address for a further week to keep it would be the wrong trade.
+//
+// # AND WHAT IS NOT RECLAIMED
+//
+// A message that has not been delivered and whose invitation can still be
+// accepted is never touched, at any window. The raw token exists nowhere else,
+// so clearing that body destroys an invitation somebody is waiting for and
+// nobody can tell which ones need reissuing. The predicate that protects it
+// lives in the database and takes no argument from here, which is deliberate:
+// this constant is a decision and could be edited by anybody, and it must not
+// be able to reach that case however it is edited.
+const DeliveredBodyRetention = 7 * 24 * time.Hour
+
+// Defaults for the reclaim pass itself.
+//
+// Hourly, because every window this job applies is measured in days: running it
+// more often would buy an accuracy nobody can perceive and cost a scan an hour.
+// Running it daily would mean a spent token sitting in the clear for most of a
+// day after the invitation it belongs to was accepted, which is the case the
+// second disjunct exists to close quickly.
+//
+// The batch bounds one pass. It is much larger than the delivery batch because
+// this is one indexed statement against a partial index sized to the backlog,
+// not a network conversation per row.
+const (
+	DefaultReclaimInterval = time.Hour
+	DefaultReclaimBatch    = 500
 )
 
 // Dispatcher drains an outbox onto a channel on a timer.

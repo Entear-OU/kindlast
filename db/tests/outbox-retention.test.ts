@@ -410,6 +410,51 @@ describe.skipIf(!reachable)('who may reclaim', () => {
   })
 })
 
+describe.skipIf(!reachable)('a message that can still be delivered', () => {
+  it('survives a reclaim with the body window at zero', async () => {
+    // THE TEST THIS SUITE EXISTS FOR, and the one whose failure is silent.
+    //
+    // The window is zero, which is the most aggressive request a caller can
+    // make, and this message must still be here with its token intact. What
+    // saves it is not a window at all: it is that an invitation which can still
+    // be accepted has a message that can still be usefully sent, and the raw
+    // token in that body exists nowhere else in the system. 00003 keeps only
+    // the hash. Blanking the body is not a retention decision, it is destroying
+    // the only copy of a credential the recipient is waiting for, and nobody
+    // would know which invitations needed reissuing.
+    //
+    // Zero rather than a short interval on purpose. A caller passing a window
+    // that is too short is the mistake this has to survive, so the test asks
+    // for the worst one there is.
+    //
+    // Last in the file deliberately: it is the only call that would redact the
+    // aged delivered fixture early, and the tests above measure that window.
+    const before = await row('live')
+    await reclaim('0')
+    const after = await row('live')
+
+    expect(after, 'a message whose invitation is still live was deleted').toBeDefined()
+    expect(after.status, 'a deliverable message was abandoned').toBe('pending')
+    expect(
+      after.body_text,
+      'the token was stripped from a message that has not been sent',
+    ).toContain(SECRET)
+    expect(after.recipient_email).toBe(LIVE)
+    expect(after.redacted_at, 'a pending message was recorded as redacted').toBeNull()
+    expect(after.body_text).toBe(before.body_text)
+  })
+
+  it('is still the only row the dispatcher can claim', async () => {
+    await reclaim('0')
+    const r = await agent.query(
+      `select recipient_email from transactional_outbox
+        where status = 'pending' and org_id = $1`,
+      [org],
+    )
+    expect(r.rows.map((x) => x.recipient_email)).toEqual([LIVE])
+  })
+})
+
 /**
  * Run a statement that must be refused, and return the error it raised, or null
  * if it was allowed through.
