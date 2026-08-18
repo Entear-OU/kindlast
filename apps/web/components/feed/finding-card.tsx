@@ -5,13 +5,31 @@ import { orgPath } from '@/lib/auth/org'
 import type { Citation, Finding } from '@/lib/findings/client'
 
 /**
- * One finding in the feed (ENT-203).
+ * One finding in the feed (ENT-203, ENT-162, ENT-164).
  *
- * The heading is `detected`: what the Watcher observed, in the customer's
- * terms. ENT-164 records that the old card put the narrative paragraph here
- * instead, which meant a heading three lines long. The narrative layer does not
- * exist yet and belongs to the Python service (ENT-218), so when it returns it
- * goes in the body, not the heading.
+ * # THE HEADING IS `detected` AND THE NARRATIVE IS BODY COPY
+ *
+ * `detected` is what the Watcher observed, in the customer's terms, and it is a
+ * short phrase. The narrative is one or two sentences the Analyst drafted, and
+ * it goes underneath. ENT-164 is what happens when those two share a column:
+ * the old narrative layer wrote prose over `detected`, so a card whose heading
+ * was a phrase became a heading three lines long. 00022 gave the prose its own
+ * column and this is the reading half of the same fix.
+ *
+ * # ONE BODY SLOT, AND THE NARRATIVE WINS IT
+ *
+ * The card has room for the heading and one line of body, which today holds the
+ * proposed action. When a narrative exists it takes that slot instead, because
+ * the baseline proposed action is the same sentence on every card and that
+ * sameness is literally what ENT-162 was filed about. The finding page shows
+ * both in full; the card shows whichever of the two actually distinguishes this
+ * finding from the one under it.
+ *
+ * A card with no narrative therefore renders exactly what it rendered before
+ * any of this existed. That is the case to protect rather than the exception:
+ * narration is an asynchronous job and Intelligence is an optional deployment
+ * profile, so most cards will never have one, and an empty box or a "narrative
+ * pending" line would turn the ordinary state into a defect report.
  */
 export function FindingCard({
   finding,
@@ -31,11 +49,22 @@ export function FindingCard({
           <StatusLabel status={finding.status} />
         </div>
 
-        <p className="mt-2 text-[15px] font-medium text-foreground">
+        {/* A heading element rather than a styled paragraph, so "this is the
+            heading" is something the markup states and a test can hold us to,
+            rather than a convention the next narrative layer can quietly
+            break. */}
+        <h3 className="mt-2 text-[15px] font-medium text-foreground">
           {finding.detected}
-        </p>
+        </h3>
 
-        {finding.proposedAction ? (
+        {finding.narrative ? (
+          <p
+            data-testid="finding-narrative"
+            className="mt-1 line-clamp-2 text-sm text-muted-foreground"
+          >
+            {finding.narrative}
+          </p>
+        ) : finding.proposedAction ? (
           <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
             {finding.proposedAction}
           </p>
@@ -44,6 +73,72 @@ export function FindingCard({
         <CitationLine citation={finding.citation} />
       </Link>
     </li>
+  )
+}
+
+/**
+ * The narrative on the finding page, in full, with who wrote it (ENT-162).
+ *
+ * # WHY THE REFUSAL IS HERE AND NOT ON THE CARD
+ *
+ * A refusal means a run was made and the guardrail ring rejected what came
+ * back, usually because the draft cited an article this finding is not about.
+ * It is worth showing: a refusal that leaves no trace is indistinguishable from
+ * never having run, and a customer deciding whether to trust a compliance
+ * product should be able to tell those apart.
+ *
+ * It is worth showing HERE. The feed is a list of the customer's compliance
+ * gaps, and a card on it saying what our pipeline could not do is a line about
+ * us in a place reserved for them. Somebody who has opened one finding is
+ * asking about that finding, and this is the answer to "is there more, and did
+ * anything try".
+ *
+ * # THE RUN IS NAMED, NOT LINKED
+ *
+ * `agent_runs` has a write path (`IngestService.RecordAgentRun`) and no read
+ * path, so there is no page for a run to link to. ENT-232 proposed adding one.
+ * Until it exists the id is shown as the reference it is, which is quotable in
+ * a support conversation, rather than as a link to nowhere.
+ */
+export function FindingNarrative({ finding }: { finding: Finding }) {
+  if (!finding.narrative && !finding.narrativeRefusal) return null
+
+  return (
+    <section className="mt-6">
+      <h2 className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
+        What this means
+      </h2>
+
+      {finding.narrative ? (
+        <p
+          data-testid="finding-narrative"
+          className="mt-2 text-[15px] text-foreground"
+        >
+          {finding.narrative}
+        </p>
+      ) : (
+        <p
+          data-testid="finding-narrative-refusal"
+          className="mt-2 text-sm text-muted-foreground"
+        >
+          The Analyst tried to explain this one and its draft was refused:{' '}
+          {finding.narrativeRefusal}. Nothing above was written by a model, so
+          nothing above changed when that happened.
+        </p>
+      )}
+
+      <p className="mt-2 text-xs text-muted-foreground">
+        {finding.narrative
+          ? 'Written by the Analyst'
+          : 'Attempted by the Analyst'}
+        {finding.agentRunId ? (
+          <>
+            , run <span className="font-mono">{finding.agentRunId}</span>
+          </>
+        ) : null}
+        .
+      </p>
+    </section>
   )
 }
 

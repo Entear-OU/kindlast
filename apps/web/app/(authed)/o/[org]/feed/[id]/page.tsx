@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
 import { ActControls } from '@/components/feed/act-controls'
+import { FindingNarrative } from '@/components/feed/finding-card'
 import { SeverityBadge, StatusLabel } from '@/components/feed/severity'
 import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
@@ -83,9 +84,18 @@ export default async function FindingPage({
         <StatusLabel status={finding.status} />
       </div>
 
+      {/* The heading is `detected` here for the same reason it is on the card:
+          it is a phrase the Watcher wrote, and the Analyst's prose goes in the
+          section below rather than over it (ENT-164). */}
       <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] text-foreground">
         {finding.detected}
       </h1>
+
+      {/* In full here, and clamped on the card. This is the page somebody
+          opened to understand one finding, so the explanation belongs above
+          the action it is the reason for. Renders nothing when no run has
+          happened, which is most findings. */}
+      <FindingNarrative finding={finding} />
 
       {finding.proposedAction ? (
         <section className="mt-6">

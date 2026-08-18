@@ -1,7 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { CitationLine, FindingCard } from '@/components/feed/finding-card'
+import {
+  CitationLine,
+  FindingCard,
+  FindingNarrative,
+} from '@/components/feed/finding-card'
 import { PipelineNote, PostureBand } from '@/components/feed/posture-band'
 import type { Finding } from '@/lib/findings/client'
 
@@ -33,6 +37,15 @@ const finding: Finding = {
     article: 30,
     obligationSlug: 'gdpr-art-30',
   },
+}
+
+// The same finding after the Analyst got to it (ENT-245 writes these three
+// columns and overwrites none of the ones above).
+const narrated: Finding = {
+  ...finding,
+  narrative:
+    'You keep customer orders and support tickets, so Article 30 wants a written record of both. Without it a regulator asking what you process has nothing to read.',
+  agentRunId: 'run-1',
 }
 
 describe('the posture band', () => {
@@ -129,6 +142,93 @@ describe('a finding card', () => {
   it('names the severity in words, not only in colour', () => {
     render(<FindingCard finding={finding} orgSlug="acme" />)
     expect(screen.getByText('critical')).toBeInTheDocument()
+  })
+
+  // ENT-162 and ENT-164 together, and the assertion both issues turn on.
+  //
+  // The narrative is prose. It goes in the body and the heading stays the short
+  // phrase the sweep wrote. Asserting only that the narrative appears somewhere
+  // would pass on the exact regression ENT-164 records, so the heading is
+  // checked for what it must not contain as well as for what it must.
+  it('puts the narrative in the body and never in the heading', () => {
+    render(<FindingCard finding={narrated} orgSlug="acme" />)
+
+    const heading = screen.getByRole('heading')
+    expect(heading).toHaveTextContent('No record of processing activities')
+    expect(heading).not.toHaveTextContent(/Article 30/)
+
+    const narrative = screen.getByTestId('finding-narrative')
+    expect(narrative).toHaveTextContent(/Article 30 wants a written record/)
+    expect(narrative.tagName).not.toMatch(/^H[1-6]$/)
+  })
+
+  // The common case, because narration is a job and most findings have not had
+  // one. A card with no narrative renders exactly what it rendered before any
+  // of this existed: no empty box, no skeleton, no "narrative pending".
+  it('renders a finding with no narrative exactly as it did before', () => {
+    render(<FindingCard finding={finding} orgSlug="acme" />)
+
+    expect(screen.queryByTestId('finding-narrative')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Create one covering your customer database.'),
+    ).toBeInTheDocument()
+  })
+
+  // A refusal is a fact about our pipeline rather than about their compliance,
+  // so it belongs on the page somebody opened about one finding. A feed where
+  // every card reports what we could not do is a feed about us.
+  it('keeps a refusal off the card', () => {
+    render(
+      <FindingCard
+        finding={{
+          ...finding,
+          narrativeRefusal: 'the draft cited GDPR Art. 50',
+          agentRunId: 'run-2',
+        }}
+        orgSlug="acme"
+      />,
+    )
+
+    expect(screen.queryByText(/Art\. 50/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/could not/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('the narrative on a finding page', () => {
+  it('renders the prose and says which agent wrote it', () => {
+    render(<FindingNarrative finding={narrated} />)
+
+    expect(
+      screen.getByText(/Article 30 wants a written record/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Analyst/)).toBeInTheDocument()
+    expect(screen.getByText(/run-1/)).toBeInTheDocument()
+  })
+
+  // The refusal surfaces here and only here. "We tried and the model cited an
+  // article that does not apply to you" is what somebody deciding whether to
+  // trust this product needs to be able to read, and a refusal that leaves no
+  // trace is indistinguishable from never having run.
+  it('says a run was refused rather than staying silent about it', () => {
+    render(
+      <FindingNarrative
+        finding={{
+          ...finding,
+          narrativeRefusal: 'the draft cited GDPR Art. 50',
+          agentRunId: 'run-2',
+        }}
+      />,
+    )
+
+    expect(screen.getByText(/Art\. 50/)).toBeInTheDocument()
+    // And it is explicit that nothing on the page was affected by the attempt,
+    // because that is the property that makes a refusal cost nothing.
+    expect(screen.getByText(/nothing above/i)).toBeInTheDocument()
+  })
+
+  it('renders nothing at all when no run has happened', () => {
+    const { container } = render(<FindingNarrative finding={finding} />)
+    expect(container).toBeEmptyDOMElement()
   })
 })
 
