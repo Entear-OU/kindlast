@@ -129,6 +129,26 @@ func run(logger *slog.Logger) error {
 			"when the access token carries no name or email")
 	}
 
+	// The credential for the one outbound call core-api makes as a client
+	// rather than answers as a server (ENT-245). Built here, next to the
+	// discovery it depends on, and failing at startup rather than at the first
+	// narration: a deployment that meant to narrate and cannot authenticate
+	// should say so while somebody is still watching the logs.
+	intelligenceCredentials, err := intelligenceTokens(cfg, provider, transport)
+	if err != nil {
+		return err
+	}
+	if cfg.IntelligenceURL != "" && intelligenceCredentials == nil {
+		// Not fatal, because a stack can legitimately be part-configured, but
+		// never silent: "Intelligence is configured" and "Intelligence can be
+		// called" differ by exactly this credential, and the difference is
+		// otherwise invisible until a narration pass reports every finding
+		// failed.
+		logger.Warn("an Intelligence URL is set but no internal client credential is, " +
+			"so findings will not be narrated; set KINDLAST_INTERNAL_CLIENT_FILE " +
+			"or KINDLAST_INTERNAL_CLIENT_ID and KINDLAST_INTERNAL_CLIENT_SECRET")
+	}
+
 	keys := oidc.NewKeySet(provider.JWKSURI, transport)
 	if err := keys.Warm(ctx); err != nil {
 		// Not fatal, deliberately. A freshly seeded Zitadel has generated no
@@ -276,7 +296,7 @@ func run(logger *slog.Logger) error {
 		// explains them. The second is nil for a deployment with no model,
 		// which is supported rather than broken (ENT-245).
 		Narratives: narrativesDependency(outbox),
-		Drafter:    drafterDependency(cfg.IntelligenceURL),
+		Drafter:    drafterDependency(cfg.IntelligenceURL, intelligenceCredentials),
 		Logger:     logger,
 	})
 	if err != nil {
@@ -510,14 +530,66 @@ func narrativesDependency(store *postgres.AgentStore) narrative.Findings {
 // cannot connect turns every narration pass into a pile of timeouts, where a
 // nil one answers `intelligence_available: false` in a millisecond.
 //
-// A plain http.Client with a generous timeout, because the thing on the other
-// end is a local model doing prompt evaluation on a CPU. The per-run budget
-// inside the harness is what should decide a run is too slow (ENT-238); a
-// timeout here would only decide this client is impatient.
-func drafterDependency(baseURL string) narrative.Drafter {
-	if baseURL == "" {
+// A generous timeout, because the thing on the other end is a local model doing
+// prompt evaluation on a CPU. The per-run budget inside the harness is what
+// should decide a run is too slow (ENT-238); a timeout here would only decide
+// this client is impatient.
+//
+// IT CARRIES A BEARER TOKEN, AND THE FIRST VERSION DID NOT. Intelligence
+// declares `internal:intelligence` on DraftNarrative and refuses an
+// unauthenticated call, so the original plain client made every narration fail
+// with "a bearer token is required". Nothing caught it: the service tests use a
+// fake drafter, the store tests never leave the database, and the two halves
+// had not met. Only driving the live stack surfaced it.
+//
+// A NIL TOKEN SOURCE IS ALSO NIL HERE, deliberately. A client that cannot
+// authenticate is not a degraded narrator, it is one that fails every call, and
+// `intelligence_available: false` is the honest answer for a deployment holding
+// no credential. The alternative reports Intelligence as present and then
+// refuses everything, which is the report that costs somebody an afternoon.
+func drafterDependency(baseURL string, tokens *oidc.ClientCredentials) narrative.Drafter {
+	if baseURL == "" || tokens == nil {
 		return nil
 	}
 	return platformv1connect.NewIntelligenceServiceClient(
-		&http.Client{Timeout: 10 * time.Minute}, baseURL)
+		&http.Client{
+			Timeout:   10 * time.Minute,
+			Transport: &oidc.Bearer{Source: tokens},
+		}, baseURL)
+}
+
+// intelligenceTokens builds the token source for the Intelligence call, or nil
+// when this deployment is not configured to make one (ENT-245).
+//
+// Nil rather than an error for a missing credential, matching every other
+// optional dependency here: a stack with no model profile has nothing to
+// authenticate to. An error is reserved for a credential that is present and
+// unusable, because that one is a misconfiguration somebody meant to get right
+// and should hear about at startup rather than at the first narration.
+func intelligenceTokens(cfg *config.Config, provider *oidc.Provider, transport *oidc.Transport) (*oidc.ClientCredentials, error) {
+	if cfg.IntelligenceURL == "" || cfg.InternalClientID == "" || cfg.InternalClientSecret == "" {
+		return nil, nil
+	}
+	if provider.TokenEndpoint == "" {
+		return nil, fmt.Errorf(
+			"intelligence is configured but the authorization server advertises no token_endpoint, so core-api cannot mint a token to call it")
+	}
+
+	return oidc.NewClientCredentials(oidc.ClientCredentialsConfig{
+		Endpoint: provider.TokenEndpoint,
+		ClientID: cfg.InternalClientID,
+		Secret:   cfg.InternalClientSecret,
+		Audience: cfg.OIDCAudience,
+		// The audience and the roles, and both are required. Requesting the
+		// audience without `...projects:roles` yields a token that
+		// authenticates perfectly and carries no scope, which Intelligence
+		// reports as permission denied and sends the reader to check grants
+		// that were already correct. The plural is not a typo.
+		Scopes: []string{
+			"openid",
+			"urn:zitadel:iam:org:projects:roles",
+			fmt.Sprintf("urn:zitadel:iam:org:project:id:%s:aud", cfg.OIDCAudience),
+		},
+		Transport: transport,
+	})
 }
