@@ -100,6 +100,10 @@ class CoreAPI:
             skill_version=run.skill_version,
             model=run.model,
             model_version=run.model_version,
+            # Who served it (ENT-236). The provider name and nothing else: the
+            # key that reached the provider is not in `AgentRun` at all, which
+            # is a stronger guarantee than remembering not to send it.
+            provider=run.provider,
             request_json="{}",
             tool_calls_json=run.tool_calls_json(),
             citations_json=run.citations_json(),

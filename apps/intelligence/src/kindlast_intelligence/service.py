@@ -24,6 +24,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Callable
 
 from connectrpc.errors import ConnectError
 from connectrpc.code import Code
@@ -58,6 +59,7 @@ class IntelligenceService:
         model_name: str,
         model_version: str,
         budget: Budget | None = None,
+        model_factory: Callable[..., ModelClient] | None = None,
     ) -> None:
         self._verifier = verifier
         self._model = model
@@ -65,6 +67,12 @@ class IntelligenceService:
         self._model_name = model_name
         self._model_version = model_version
         self._budget_template = budget
+        # How a per-run client is built when an organisation chose a provider
+        # (ENT-236). A seam rather than a direct call to `ModelClient`, so the
+        # tests can assert WHAT was built without a network, which is the only
+        # way to check that the key went to the endpoint it was meant for and
+        # that the bundled model was not quietly used instead.
+        self._model_factory = model_factory or ModelClient
 
     def draft_narrative(
         self,
@@ -93,13 +101,18 @@ class IntelligenceService:
                 "cite cannot produce a citable narrative",
             )
 
+        model, model_name, model_version, provider = self._model_for(
+            request.model_endpoint
+        )
+
         run = draft_narrative(
             signal=request.signal,
             obligations=obligations,
-            model=self._model,
+            model=model,
             validator=CitationValidator(OfferedObligations(obligations)),
-            model_name=self._model_name,
-            model_version=self._model_version,
+            model_name=model_name,
+            model_version=model_version,
+            provider=provider,
             # A fresh budget per run, from the template. Sharing one across
             # requests would let a busy morning refuse an afternoon's work.
             #
@@ -147,6 +160,59 @@ class IntelligenceService:
                 for r in run.rejected_citations
             ],
             agent_run_id=agent_run_id,
+        )
+
+    def _model_for(
+        self, endpoint: intelligence_pb2.ModelEndpoint
+    ) -> tuple[ModelClient, str, str, str]:
+        """Which model serves this run, and what the record should say.
+
+        # THE CREDENTIAL RULE, AND EXACTLY HOW MUCH OF IT MOVED
+
+        `AGENTS.md` says no third-party credential reaches this service. ENT-236
+        puts one in this field, and pretending otherwise would be worse than the
+        change, so here is the whole of it.
+
+        What is preserved is the part the rule exists for. This service cannot
+        OBTAIN a credential: it holds no database handle, sets no tenancy GUC,
+        reads no key from its own configuration, and has no way to ask for one.
+        core-api decides, inside the tenant own rows, which key it is entitled
+        to open, and hands over exactly one endpoint for exactly this run. The
+        key is held for the life of one client, is never written to the run
+        record, and reaches no log line.
+
+        What is given up is that the process is no longer credential-free by
+        construction. The stronger arrangement, proxying every completion
+        through core-api so the key never leaves Go, is written up in the PR: it
+        was not built because it routes every prompt and every token of a
+        customer compliance data through a second service that carries none of
+        it today, which trades one exposure for a larger one.
+
+        # AND NO FALLBACK, EVER
+
+        An organisation that chose a provider gets that provider or gets a
+        failed run. There is no branch below that answers a hosted request with
+        the bundled model, because a silent fallback would process a customer
+        findings somewhere other than where their own record of processing says,
+        and nothing in the product would say it happened.
+        """
+        if not endpoint.base_url:
+            return self._model, self._model_name, self._model_version, "instance"
+
+        client = self._model_factory(
+            endpoint.base_url,
+            api_key=endpoint.api_key or None,
+            model=endpoint.model or None,
+        )
+        # `provider-managed` rather than an invented digest. A local build
+        # records the weights digest because it knows it; a hosted provider
+        # serves whatever it is serving today and does not say, and a version
+        # string this service made up would be worse than one that says so.
+        return (
+            client,
+            endpoint.model or self._model_name,
+            "provider-managed",
+            endpoint.provider or "hosted",
         )
 
     def _authorise(self, ctx: RequestContext) -> None:
