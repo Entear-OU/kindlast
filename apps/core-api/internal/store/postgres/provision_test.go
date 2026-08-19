@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	"github.com/Entear-OU/kindlast/libs/chassis/subject"
 )
 
@@ -19,10 +20,7 @@ import (
 // unique index, a primary key, and what two transactions do to each other.
 
 func migratorDSN() string {
-	if dsn := os.Getenv("PG_MIGRATOR_URL"); dsn != "" {
-		return dsn
-	}
-	return "postgres://kindlast_migrator:migrator-dev-password@127.0.0.1:5433/kindlast"
+	return stackenv.DSN("migrator")
 }
 
 // migratorPool opens a pool as the migrator, which bypasses RLS, for the

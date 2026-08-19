@@ -503,8 +503,13 @@ jobs:
       # yet. Serialising is the honest statement that these are integration
       # tests over shared infrastructure rather than unit tests.
       #
-      # It does not help the case of two worktrees sharing one compose stack,
-      # which is ENT-250 and needs a stack per worktree.
+      # It does not help the case of two worktrees sharing one compose stack.
+      # That is a different collision with a different fix, and it landed in
+      # ENT-250: scripts/stack-env.sh derives a project name and a port block
+      # per worktree, so two branches address two databases. Neither mechanism
+      # substitutes for the other, and neither is needed here: a CI job is one
+      # checkout with one stack, so this workflow sets no COMPOSE_PROJECT_NAME
+      # and gets the default project and the default ports.
       - name: Go tests that need the stack
         env:
           KINDLAST_REQUIRE_STACK: "1"

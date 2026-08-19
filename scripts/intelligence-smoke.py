@@ -41,14 +41,22 @@ than beside it.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
-INTELLIGENCE = "http://localhost:8090"
-TOKEN_ENDPOINT = "http://localhost:8300/oauth/v2/token"
+# WHICH STACK (ENT-250). A worktree runs its own compose project on its own
+# ports, so the addresses and the container name are read rather than typed. In
+# a single checkout every default below is the port documented everywhere else,
+# so nothing changes for somebody with one clone. `eval
+# "$(./scripts/stack-env.sh)"` is what sets them in a worktree.
+PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "kindlast")
+INTELLIGENCE = f"http://localhost:{os.environ.get('KINDLAST_INTELLIGENCE_PORT', '8090')}"
+AUTH = f"http://localhost:{os.environ.get('KINDLAST_AUTH_PORT', '8300')}"
+TOKEN_ENDPOINT = f"{AUTH}/oauth/v2/token"
 
 # One obligation, and a signal that plainly matches it. Not a hard question:
 # this tests the harness, and the model's job here is only to produce something
@@ -100,7 +108,7 @@ def read_org_id() -> str:
         [
             "docker",
             "exec",
-            "kindlast-postgres-app",
+            f"{PROJECT}-postgres-app",
             "psql",
             "-U",
             "kindlast_migrator",

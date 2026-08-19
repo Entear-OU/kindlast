@@ -50,6 +50,13 @@ yarn-error.log*
 .env.*
 !.env.example
 
+# `deploy/.env` is already matched above, and is called out because it is
+# generated rather than hand-written: scripts/stack-env.sh puts this worktree's
+# compose project name and port block there, and compose reads it because it
+# sits beside compose.yaml (ENT-250). Committing one would give every checkout
+# the same ports again, which is the thing that change undid.
+deploy/.env
+
 # supabase CLI runtime state (also covered by supabase/.gitignore once ENT-41 lands)
 supabase/.temp/
 supabase/.branches/
