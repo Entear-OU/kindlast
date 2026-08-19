@@ -52,7 +52,7 @@ jobs:
     name: Lint, typecheck & unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -106,7 +106,7 @@ jobs:
     name: Local model service
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # THE DIGEST IS THE CACHE KEY, WHICH IS THE WHOLE TRICK.
       #
@@ -166,7 +166,7 @@ jobs:
     name: Intelligence (Python)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Pinned, for the same reason Bun, Go and buf are pinned above: a
       # toolchain that moves on its own changes what the tests below are
@@ -224,7 +224,7 @@ jobs:
     name: Intelligence end to end
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Same digest-as-key cache as the `model` job above, and the same 2b
       # tier, so the two jobs share the restore rather than each paying for a
@@ -326,7 +326,7 @@ jobs:
     name: Proto codegen & Go tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history, so `buf breaking` below can resolve main from the
           # local clone. Comparing against the remote URL would need
@@ -442,7 +442,7 @@ jobs:
     name: Compose stack & isolation tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
