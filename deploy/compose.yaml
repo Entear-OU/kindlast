@@ -5,7 +5,8 @@
 #     docker compose -f deploy/compose.yaml up -d
 #
 # brings up, in dependency order, all under the single `kindlast` compose
-# project:
+# project, and the last of them serves the product at
+# http://localhost:${KINDLAST_EDGE_PORT:-8000}:
 #
 #   postgres-app       pgvector/pg17. THE domain database. Roles are split by
 #                      deploy/postgres/init/01-roles.sh before anything else
@@ -51,9 +52,15 @@
 #                      credential and no third-party credential at rest: it is
 #                      handed one fetch at a time by core-api and returns what
 #                      it found.
-#   edge               Caddy. Terminates the stack's front door; today it
-#                      serves a health endpoint and reserves the routes web
-#                      and core-api will claim in build-order step 1.
+#   web               The console and the marketing site (ENT-241). A
+#                      production Next build, served from the standalone
+#                      output, publishing no port of its own: the browser
+#                      reaches it through `edge`. This is the service that
+#                      makes `up -d` give somebody the product rather than
+#                      everything the product needs.
+#   edge               Caddy. The stack's front door: a health endpoint,
+#                      core-api's Connect surface, the billing webhook, and
+#                      everything else to `web`.
 #
 # The model is opt-in, because it is gigabytes:
 #
@@ -214,7 +221,12 @@ services:
       PGPASSWORD: ${KINDLAST_MIGRATOR_PASSWORD:-migrator-dev-password}
       ZITADEL_URL: http://auth:8080
       ZITADEL_HOST_HEADER: "localhost:${KINDLAST_AUTH_PORT:-8300}"
+      # The two consoles that may complete a sign-in (ENT-241). The first is a
+      # dev server on the host, the second is the `web` container reached
+      # through the edge, and Zitadel refuses any redirect URI it was not
+      # given, so both are registered. seed.sh explains why both are real.
       WEB_REDIRECT_URI: ${KINDLAST_WEB_REDIRECT_URI:-http://localhost:3000/auth/callback}
+      WEB_REDIRECT_URI_EDGE: ${KINDLAST_WEB_REDIRECT_URI_CONTAINER:-http://localhost:${KINDLAST_EDGE_PORT:-8000}/auth/callback}
       # Mail. The credentials are arbitrary and never checked: mailpit below
       # runs with MP_SMTP_AUTH_ACCEPT_ANY. They exist because Zitadel refuses
       # to use a provider that has none, and reports the refusal as
@@ -421,10 +433,17 @@ services:
       # the browser's view rather than the compose network's: `web:3000` exists
       # only in here, and a link to it in somebody's inbox resolves nowhere.
       #
+      # THE EDGE, NOT PORT 3000, SINCE ENT-241. The console is a container
+      # behind `edge` and publishes no port of its own, so `localhost:3000`
+      # names a dev server that a self-hoster does not run and will never have
+      # started. Overridable, because a developer working against this stack
+      # with `bun run dev` wants their invitations pointing at 3000 and can say
+      # so in deploy/.env.
+      #
       # Required for inviting. InviteMember refuses rather than minting an
       # invitation whose link cannot be built, because the raw token exists for
       # one handler and a bad link cannot be repaired afterwards.
-      KINDLAST_APP_BASE_URL: http://localhost:${KINDLAST_WEB_PORT:-3000}
+      KINDLAST_APP_BASE_URL: ${KINDLAST_APP_BASE_URL:-http://localhost:${KINDLAST_EDGE_PORT:-8000}}
 
       # The dispatcher's mail submission address (ENT-219).
       #
@@ -880,11 +899,152 @@ services:
       timeout: 5s
       retries: 20
 
+  # The console and the marketing site (ENT-241), which is to say the product.
+  #
+  # Everything above this line is what the product needs. Until this service
+  # existed, `docker compose up -d` gave a self-hoster Postgres, an identity
+  # provider, a resource server, a gateway, mail and an edge, and nothing they
+  # could open in a browser. The only way to see Kindlast was `bun run dev`
+  # from a checkout with a Node toolchain, which is a developer workflow rather
+  # than a deployment.
+  #
+  # A PRODUCTION BUILD, NOT A CONTAINERISED `next dev`
+  #
+  # The image runs `next build` and serves the standalone output. That matters
+  # twice. A self-hoster running a compliance workspace gets the built app
+  # rather than a development server that compiles on demand. And a server
+  # component that compiles under `next dev` but fails under a production build
+  # now fails the image build, where before it was invisible to every check in
+  # this repository, because nothing here had ever produced the production
+  # output. See apps/web/Dockerfile for the whole argument.
+  #
+  # NO `ports`, WHICH IS THE SAME STATEMENT core-api MAKES
+  #
+  # The browser reaches the console through `edge` on
+  # http://localhost:${KINDLAST_EDGE_PORT:-8000}, and there is no second door.
+  # Two reasons, and the second is the practical one:
+  #
+  # The edge is the front door for the whole stack, so a deployment putting TLS,
+  # a real hostname or an access policy in front of Kindlast configures one
+  # thing rather than discovering later that half the traffic went around it.
+  #
+  # And publishing 3000 would take the port `bun run dev` binds. A developer
+  # running the dev server against this stack is the workflow scripts/web-env.sh
+  # exists for, and a container squatting on its port would break it. Both can
+  # run at once: the container behind the edge on 8000, the dev server on 3000,
+  # and the seed registers a redirect URI for each.
+  web:
+    container_name: kindlast-web
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      # The client id and secret it signs in with are written here by the seed,
+      # so this is a hard dependency rather than an ordering preference: without
+      # the file the process starts and every sign-in fails at the first
+      # redirect.
+      seed:
+        condition: service_completed_successfully
+      # Sessions live here. A console with no session store can render the
+      # marketing site and nothing else.
+      redis:
+        condition: service_healthy
+      # Healthy rather than started. Every authenticated page calls core-api on
+      # render, so a console that comes up first shows a wall of "unavailable"
+      # to whoever was waiting for the stack, which reads as a broken product
+      # rather than as a dependency still booting.
+      core-api:
+        condition: service_healthy
+    environment:
+      # THE SPLIT HORIZON, WHICH IS THE THING TO GET RIGHT HERE.
+      #
+      # `web` is the only service on this network that is both a server making
+      # calls to Zitadel and the origin a browser is sent away from and back
+      # to. So it needs the same three facts core-api needs, and it uses them
+      # for two different audiences.
+      #
+      # The issuer as tokens carry it, and as the browser reaches it. Discovery
+      # documents are compared against this value (RFC 8414 §3.3), and the
+      # authorization endpoint the browser is redirected to is rebased onto it,
+      # because `auth:8080` does not resolve on anybody's laptop.
+      KINDLAST_OIDC_ISSUER: http://localhost:${KINDLAST_AUTH_PORT:-8300}
+      # Where this container actually fetches that document from, because no
+      # `localhost:8300` exists on this network. It changes the address, never
+      # the trust: the document must still declare the issuer above or
+      # discovery is refused.
+      KINDLAST_OIDC_DISCOVERY_URL: http://auth:8080/.well-known/openid-configuration
+      # Zitadel routes by Host. Without this the request reaches the wrong
+      # virtual server rather than failing cleanly, which is a confusing
+      # afternoon rather than an error message.
+      KINDLAST_OIDC_HOST_HEADER: "localhost:${KINDLAST_AUTH_PORT:-8300}"
+
+      # The confidential client's credentials, from the file the seed writes.
+      #
+      # Zitadel generates the secret when it creates the application, so no
+      # value can be written here. scripts/web-env.sh solves the same problem
+      # for a host-run dev server by copying it out of this volume into
+      # .env.local; a container reads it in place. Setting
+      # KINDLAST_OIDC_CLIENT_ID and KINDLAST_OIDC_CLIENT_SECRET overrides it,
+      # which is what a deployment against its own authorization server does.
+      KINDLAST_OIDC_CLIENT_FILE: /machinekey/web-client.json
+
+      # Where the browser comes back to, and it must be an address the browser
+      # can reach: the edge, not `web:3000`. The seed registers this exact
+      # string with Zitadel, and an authorization server refuses a redirect URI
+      # it was not given, so these two values are one value in two places.
+      KINDLAST_WEB_REDIRECT_URI: ${KINDLAST_WEB_REDIRECT_URI_CONTAINER:-http://localhost:${KINDLAST_EDGE_PORT:-8000}/auth/callback}
+
+      # core-api, DIRECTLY, not through the edge.
+      #
+      # The dev server goes through the edge because core-api publishes no
+      # ports and the host has no other way in. This container is on the
+      # network, so it does not need one, and routing it through `edge` would
+      # make `edge` depend on `web` and `web` depend on `edge`, which compose
+      # will not start. The edge is the browser's front door rather than an
+      # internal service bus.
+      KINDLAST_CORE_API_URL: http://core-api:8080
+
+      KINDLAST_REDIS_URL: redis://redis:6379
+
+      # Google as an identity provider is off unless a deployment configures
+      # one. The sign-in page renders the button from this, and a button that
+      # leads to an IdP nobody registered is worse than no button.
+      KINDLAST_OIDC_GOOGLE_IDP: ${KINDLAST_OIDC_GOOGLE_IDP:-false}
+    volumes:
+      # Read-only: web reads the client credentials the seed wrote and has no
+      # business writing anything back.
+      - zitadel-machinekey:/machinekey:ro
+    healthcheck:
+      # Node probes itself, because the runtime image carries no curl and this
+      # is the one language guaranteed to be in it. /healthz answers liveness
+      # only, deliberately: see apps/web/app/healthz/route.ts for why a check
+      # that opened Redis would report the wrong service as unhealthy.
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 5s
+      timeout: 5s
+      # Generous, because this is a cold Node process reading an 80 MB
+      # standalone tree on a laptop that is also running two Postgres
+      # instances, an identity provider and possibly a language model.
+      retries: 30
+      start_period: 10s
+
   edge:
     container_name: kindlast-edge
     image: caddy:2-alpine
     depends_on:
       auth:
+        condition: service_healthy
+      # Healthy, not started (ENT-241). The edge's catch-all is the console
+      # now, and Caddy resolves an upstream lazily, so without this the first
+      # person through the door during a cold start gets a 502 from a proxy
+      # that is working perfectly. Waiting turns "the stack is up" into "the
+      # product answers", which is the promise the compose header makes.
+      web:
         condition: service_healthy
     volumes:
       - ./edge/Caddyfile:/etc/caddy/Caddyfile:ro

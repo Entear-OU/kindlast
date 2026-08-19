@@ -39,12 +39,18 @@ const reachable = await isStackReachable()
 /**
  * Tables the application may address without a policy of its own.
  *
- * `goose_db_version` is goose's migration bookkeeping. It carries no customer
- * data, is not part of the domain schema, and is swept into RLS only because
- * 00002's loop covers every table in `public`. Listing it here is a decision
- * rather than an oversight, and a new entry should have to argue for itself.
+ * Empty, and it should stay that way. It held `goose_db_version` until ENT-243:
+ * goose's migration bookkeeping carries no customer data, is not part of the
+ * domain schema, and was swept into RLS only because 00002's loop covers every
+ * table in `public`, so an exception looked like the honest answer. It was the
+ * wrong one for exactly the reason this file argues everywhere else. `00029`
+ * revoked the grant instead, and the table now fails closed at parse time like
+ * everything else the application has no business naming.
+ *
+ * A new entry has to argue why revoking is worse than excepting, which is a
+ * harder case than it sounds.
  */
-const ALLOWED = new Set(['goose_db_version'])
+const ALLOWED = new Set<string>()
 
 let superuser: Client
 
