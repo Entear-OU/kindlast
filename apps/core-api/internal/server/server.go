@@ -9,6 +9,8 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	auditservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/audit"
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
@@ -163,6 +165,19 @@ type Dependencies struct {
 	// operator.
 	Drafter narrativeservice.Drafter
 
+	// ModelChoices, ModelKeys and ModelProviders let the narration job honour an
+	// organisation's chosen provider (ENT-236).
+	//
+	// Three fields rather than one, because the narration job needs all three to
+	// honour a choice safely: the rows to read it from, the keyring to open the
+	// sealed credential with, and the operator's allow-list to re-check the
+	// provider against on every pass. Any one missing means the job narrates on
+	// the deployment's own endpoint, which is the default rather than a
+	// degradation.
+	ModelChoices   narrativeservice.ModelChoices
+	ModelKeys      *secrets.Keyring
+	ModelProviders []modelchoice.Provider
+
 	// Integrations serves the console's control over which customer systems
 	// Kindlast may reach (ENT-231).
 	//
@@ -173,6 +188,15 @@ type Dependencies struct {
 	// second looks unconfigured, and only one of those sends an operator to
 	// the right place.
 	Integrations corev1connect.IntegrationsServiceHandler
+
+	// ModelChoice serves where an organisation's model runs (ENT-236).
+	//
+	// Registered on every deployment, including one that permits no hosted
+	// provider, and that is deliberate. A stack with the surface missing tells
+	// a member nothing; a stack with it present answers "this deployment runs
+	// its own model and permits no other", which is the true and useful answer
+	// and the one somebody checking where their data is processed came for.
+	ModelChoice corev1connect.ModelServiceHandler
 
 	// Logger is what the internal handlers report to. An ingest that refused a
 	// pack has to say so somewhere a person will look, because its caller is a
@@ -274,6 +298,13 @@ func New(deps Dependencies) (http.Handler, error) {
 	if deps.Integrations != nil {
 		mux.Handle(corev1connect.NewIntegrationsServiceHandler(deps.Integrations, chain))
 	}
+	// Where this organisation's model runs (ENT-236). On the tenant chain: the
+	// choice belongs to one organisation, RLS is what keeps one customer's
+	// provider key out of another's console, and the owner check that guards
+	// the write reads the role the tenancy interceptor resolved.
+	if deps.ModelChoice != nil {
+		mux.Handle(corev1connect.NewModelServiceHandler(deps.ModelChoice, chain))
+	}
 
 	// The internal surface runs on a SHORTER chain: authentication, revocation
 	// and scope, but no tenancy. That is deliberate and it is the one place in
@@ -344,7 +375,10 @@ func New(deps Dependencies) (http.Handler, error) {
 	// an hour.
 	if deps.Narratives != nil {
 		mux.Handle(platformv1connect.NewNarrativeServiceHandler(
-			narrativeservice.New(deps.Narratives, deps.Drafter, deps.Logger), internal))
+			narrativeservice.New(deps.Narratives, deps.Drafter, deps.Logger,
+				narrativeservice.WithModelChoice(
+					deps.ModelChoices, deps.ModelKeys, deps.ModelProviders, nil)),
+			internal))
 	}
 
 	// Unauthenticated by design, and bound to the internal listener only.

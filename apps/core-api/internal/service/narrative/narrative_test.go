@@ -3,12 +3,15 @@ package narrative
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
 )
@@ -76,6 +79,9 @@ type fakeDrafter struct {
 	// The whole obligation context of the last call, so a test can assert what
 	// the model was actually given rather than only which slug it may cite.
 	context []*platformv1.ObligationContext
+	// Where the last call was told to send its model requests (ENT-236). Nil
+	// for an organisation on the deployment's own endpoint.
+	endpoint *platformv1.ModelEndpoint
 }
 
 func (d *fakeDrafter) DraftNarrative(
@@ -89,6 +95,7 @@ func (d *fakeDrafter) DraftNarrative(
 	}
 	d.offered = append(d.offered, slugs)
 	d.context = req.Msg.GetObligations()
+	d.endpoint = req.Msg.GetModelEndpoint()
 	if d.err != nil {
 		return nil, d.err
 	}
@@ -108,6 +115,22 @@ func finding() postgres.PendingFinding {
 		// ones the ROPA finding actually carries.
 		ObligationAppliesWhen: `{"role": "controller", "requires": ["ropa"]}`,
 	}
+}
+
+// fakeChoices answers with one organisation's chosen provider (ENT-236).
+type fakeChoices struct {
+	choice postgres.Choice
+	sealed postgres.Sealed
+	err    error
+}
+
+func (c *fakeChoices) ActiveModelChoiceForOrg(
+	context.Context, string,
+) (postgres.Choice, postgres.Sealed, error) {
+	if c.err != nil {
+		return postgres.Choice{}, postgres.Sealed{}, c.err
+	}
+	return c.choice, c.sealed, nil
 }
 
 func request(org string) *connect.Request[platformv1.NarrateFindingsRequest] {
@@ -353,5 +376,151 @@ func TestTheAuthoredSummaryStillReachesTheModelUnchanged(t *testing.T) {
 	if got := drafter.context[0].GetSummary(); got != f.ObligationSummary {
 		t.Fatalf("the model was given %q, want the stored summary %q",
 			got, f.ObligationSummary)
+	}
+}
+
+// --- An organisation's own provider (ENT-236) -------------------------------
+
+func testKeyring(t *testing.T) *secrets.Keyring {
+	t.Helper()
+	ring, err := secrets.NewKeyring("2026-08:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	if err != nil {
+		t.Fatalf("building a keyring: %v", err)
+	}
+	return ring
+}
+
+func publicLookup(context.Context, string) ([]netip.Addr, error) {
+	return []netip.Addr{netip.MustParseAddr("104.18.7.192")}, nil
+}
+
+func succeeding() *fakeDrafter {
+	return &fakeDrafter{response: &platformv1.DraftNarrativeResponse{
+		Outcome:    platformv1.DraftOutcome_DRAFT_OUTCOME_SUCCEEDED,
+		Narrative:  "You need a written record.",
+		AgentRunId: "11111111-1111-4111-8111-111111111111",
+	}}
+}
+
+func TestAChosenProviderReachesTheRun(t *testing.T) {
+	drafter := succeeding()
+	keys := testKeyring(t)
+
+	// Sealed the way the store holds it: with the row id as additional
+	// authenticated data, so this exercises the real open rather than a stub.
+	const rowID = "c0000000-0000-4000-8000-000000000001"
+	sealed, keyID, err := keys.Seal("sk-proj-abcdefgh1234", rowID)
+	if err != nil {
+		t.Fatalf("sealing: %v", err)
+	}
+
+	providers, err := modelchoice.ParseProviders("openai=api.openai.com")
+	if err != nil {
+		t.Fatalf("parsing providers: %v", err)
+	}
+
+	service := New(newFindings(finding()), drafter, nil, WithModelChoice(
+		&fakeChoices{
+			choice: postgres.Choice{
+				ID: rowID, Provider: "openai",
+				BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
+			},
+			sealed: postgres.Sealed{Ciphertext: sealed, KeyID: keyID},
+		},
+		keys, providers, publicLookup,
+	))
+
+	if _, err := service.NarrateFindings(t.Context(), request(org)); err != nil {
+		t.Fatalf("narrating: %v", err)
+	}
+
+	endpoint := drafter.endpoint
+	if endpoint == nil {
+		t.Fatal("the run was sent with no endpoint, so it went to the deployment's own model")
+	}
+	if endpoint.GetProvider() != "openai" || endpoint.GetBaseUrl() != "https://api.openai.com" {
+		t.Fatalf("the endpoint is %+v", endpoint)
+	}
+	if endpoint.GetApiKey() != "sk-proj-abcdefgh1234" {
+		t.Fatal("the sealed key did not open, so the run would reach the provider unauthenticated")
+	}
+}
+
+// THE ONE THAT MUST NOT BE A SILENT FALLBACK.
+//
+// An operator withdrawing the last provider leaves organisations holding a row
+// that names something no longer permitted. Narrating those on the deployment's
+// own model would be safer in one sense and wrong in the sense that counts:
+// their compliance record says one thing and the processing happened somewhere
+// else, with nothing in the product saying it changed.
+func TestAWithdrawnProviderFailsTheJobRatherThanQuietlyReverting(t *testing.T) {
+	drafter := succeeding()
+
+	service := New(newFindings(finding()), drafter, nil, WithModelChoice(
+		&fakeChoices{choice: postgres.Choice{
+			ID: "c0000000-0000-4000-8000-000000000001", Provider: "openai",
+			BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
+		}},
+		testKeyring(t),
+		// The operator has withdrawn everything.
+		nil, publicLookup,
+	))
+
+	_, err := service.NarrateFindings(t.Context(), request(org))
+	if err == nil {
+		t.Fatal("a withdrawn provider narrated anyway")
+	}
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("code is %v, want failed_precondition: %v", connect.CodeOf(err), err)
+	}
+	if drafter.calls != 0 {
+		t.Fatal("a run was attempted after the provider was withdrawn")
+	}
+}
+
+func TestAnEndpointThatNowResolvesInsideTheDeploymentFailsTheJob(t *testing.T) {
+	drafter := succeeding()
+	providers, err := modelchoice.ParseProviders("openai=api.openai.com")
+	if err != nil {
+		t.Fatalf("parsing providers: %v", err)
+	}
+
+	inside := func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("169.254.169.254")}, nil
+	}
+
+	service := New(newFindings(finding()), drafter, nil, WithModelChoice(
+		&fakeChoices{choice: postgres.Choice{
+			ID: "c0000000-0000-4000-8000-000000000001", Provider: "openai",
+			BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
+		}},
+		testKeyring(t), providers, inside,
+	))
+
+	if _, err := service.NarrateFindings(t.Context(), request(org)); err == nil {
+		t.Fatal("an endpoint resolving inside the deployment was dialled")
+	}
+	if drafter.calls != 0 {
+		t.Fatal("a run was attempted against an endpoint inside the deployment")
+	}
+}
+
+func TestAnOrganisationWithNoChoiceSendsNoEndpoint(t *testing.T) {
+	drafter := succeeding()
+	providers, err := modelchoice.ParseProviders("openai=api.openai.com")
+	if err != nil {
+		t.Fatalf("parsing providers: %v", err)
+	}
+
+	service := New(newFindings(finding()), drafter, nil, WithModelChoice(
+		&fakeChoices{err: postgres.ErrNoModelChoice},
+		testKeyring(t), providers, publicLookup,
+	))
+
+	if _, err := service.NarrateFindings(t.Context(), request(org)); err != nil {
+		t.Fatalf("narrating: %v", err)
+	}
+	if drafter.endpoint != nil {
+		t.Fatal("an organisation that chose nothing was given an endpoint")
 	}
 }

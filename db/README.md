@@ -200,6 +200,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_agent` | `notification_outbox` | insert, select, update |
 | `kindlast_agent` | `obligations` | select |
 | `kindlast_agent` | `org_evidence` | insert, select |
+| `kindlast_agent` | `org_model_config` | select (base_url, created_at, credential_ciphertext, credential_key_id, id, model, org_id, provider, status) |
 | `kindlast_agent` | `org_profile_facts` | select |
 | `kindlast_agent` | `regulatory_article_paragraphs` | select |
 | `kindlast_agent` | `regulatory_articles` | select |
@@ -229,6 +230,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_app` | `onboarding_messages` | delete, insert, select, update |
 | `kindlast_app` | `onboarding_sessions` | delete, insert, select, update |
 | `kindlast_app` | `org_evidence` | insert, select, update (superseded_by) |
+| `kindlast_app` | `org_model_config` | insert, select, update (credential_ciphertext, credential_key_id, revoked_at, revoked_by, status) |
 | `kindlast_app` | `org_profile_facts` | insert, select, update (valid_to) |
 | `kindlast_app` | `organisations` | delete, insert, select, update |
 | `kindlast_app` | `processing_activities` | delete, insert, select, update |

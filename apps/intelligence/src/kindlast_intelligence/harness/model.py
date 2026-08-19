@@ -4,6 +4,12 @@ ENT-235 makes that llama.cpp's `llama-server` by default, local and needing no
 API key. It could equally be vLLM on a GPU or a hosted provider, because the
 abstraction point is the wire format rather than the runtime. Which is why
 there is no llama.cpp in this file: the endpoint is configuration.
+
+ENT-236 makes it configuration PER ORGANISATION as well as per deployment, and
+this file needed two changes for it: a model name on the wire, because a hosted
+provider requires one and `llama-server` ignores it, and a note about where the
+key comes from. One client per run in that case, built from the endpoint
+core-api resolved and handed over, rather than the one built at boot.
 """
 
 from __future__ import annotations
@@ -46,11 +52,21 @@ class ModelClient:
         self,
         base_url: str,
         api_key: str | None = None,
+        model: str | None = None,
         timeout: float = 300.0,
         client: httpx.Client | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
+        # WHICH MODEL TO ASK FOR, AND WHY IT IS OPTIONAL.
+        #
+        # `llama-server` serves exactly one file and ignores the field, so the
+        # bundled path sends none and the request is one key shorter. Every
+        # hosted provider requires it, and sending nothing there is a 400 that
+        # reads as an authentication problem. So it is set for an organisation
+        # that chose a provider and absent otherwise, rather than defaulted to
+        # a name that would be a guess in both directions (ENT-236).
+        self._model = model
         self._client = client or httpx.Client(timeout=timeout)
 
     def complete(
@@ -73,6 +89,9 @@ class ModelClient:
             "temperature": temperature,
         }
 
+        if self._model is not None:
+            body["model"] = self._model
+
         if schema is not None:
             body["response_format"] = {
                 "type": "json_schema",
@@ -82,6 +101,12 @@ class ModelClient:
         headers = {"Content-Type": "application/json"}
         # Absent for a local model, and that absence is the product property
         # rather than a missing configuration (§18.1).
+        #
+        # PRESENT ONLY FOR AN ORGANISATION THAT CHOSE A HOSTED PROVIDER
+        # (ENT-236), in which case it arrived in that run's request and is held
+        # for the life of this client and no longer. It is in a header rather
+        # than the URL deliberately: a key in a URL is a key in every log line
+        # that URL appears in, including the ones this deployment writes.
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 

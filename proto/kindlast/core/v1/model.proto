@@ -1,0 +1,220 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Where an organisation's model runs (ENT-236, §26.6).
+//
+// # THE TOGGLE IS A COMPLIANCE EVENT, NOT A PREFERENCE
+//
+// The bundled stack serves its own model and needs no API key, which is what
+// lets a deployment holding a compliance record run with no outbound internet
+// at all. `docs/self-hosting.md` promises exactly that, and this service is
+// where a customer gives it up.
+//
+// From the moment a hosted provider is chosen, that organisation's compliance
+// profile, its findings and its DSAR content leave the deployment and are
+// processed by somebody else. For the customer that provider becomes a
+// sub-processor they are obliged to be able to name, and choosing it is a
+// processing decision they are obliged to be able to account for.
+//
+// So this service is shaped as a decision rather than as a setting, and three
+// things follow from that and are not decoration:
+//
+//   OWNER ONLY. Enforced in Go rather than by a scope, because a scope bounds
+//   what a CLIENT may do and this is about which HUMAN may do it. `model:write`
+//   is a human scope every signed-in person's token carries, exactly like
+//   `org:manage`, and the role check is what refuses.
+//
+//   THE CONSEQUENCE IS STATED BEFORE IT IS CONFIRMED. `GetModelSetting`
+//   returns the sentence, and `UseHostedModel` refuses a request that does not
+//   acknowledge it. A console cannot skip the warning by not rendering one, and
+//   a self-hoster's own client shows the same words rather than inventing them.
+//
+//   IT LEAVES A RECORD THE CUSTOMER CAN SHOW SOMEBODY. Every change writes an
+//   `audit_log` row through the same function every other decision goes
+//   through, so it lists, filters and exports with the rest of the record. The
+//   RPC hands the row's id back, so the console can say "recorded" and mean it.
+//
+// # NOTHING HERE DECIDES WHETHER THE OPTION EXISTS
+//
+// The operator does, in `KINDLAST_BYOK_PROVIDERS`. An empty setting is the
+// default and permits nothing, so "nobody at this company may point our
+// compliance data at an external API" is a line in a configuration file rather
+// than a policy every owner of every organisation has to be trusted to follow.
+// `GetModelSetting` reports the permitted list so the console offers what the
+// deployment allows instead of a free-text box that fails on submit.
+service ModelService {
+  // What is serving this organisation, what this deployment permits, and what
+  // the customer is told before changing it.
+  //
+  // Readable by every member rather than by owners only. "Where does our
+  // compliance data get processed" is a question anybody in the organisation
+  // may reasonably ask, and a product that answers it only for the person who
+  // can change it is one where nobody else can check.
+  rpc GetModelSetting(GetModelSettingRequest) returns (GetModelSettingResponse) {
+    option (kindlast.options.v1.required_scope) = "model:read";
+    option (google.api.http) = {get: "/api/v1/model"};
+  }
+
+  // Send this organisation's model calls to a hosted provider.
+  //
+  // Owner only, acknowledged, and recorded. The key is write-only: it is sealed
+  // before it reaches a column, is never returned by any RPC on this surface,
+  // and the response carries only its last four characters so somebody can tell
+  // which key is in place without the product being able to show them one.
+  //
+  // # SWITCHING PROVIDER REPLACES A ROW, IT DOES NOT EDIT ONE
+  //
+  // Calling this while a hosted provider is already active revokes that choice
+  // and inserts a new one, and the audit entry carries the old provider in
+  // `before` and the new one in `after`. The alternative, an update in place,
+  // would leave one row saying where the data goes now and nothing saying where
+  // it went last month, which is the question a customer will actually be
+  // asked.
+  //
+  // Calling it with the same provider and a new key is a rotation, and the
+  // audit row says `model_provider_rotated` rather than `model_provider_changed`
+  // because the sub-processor did not change and an event saying it did would be
+  // a false entry in a regulatory record. The row underneath is still replaced:
+  // a credential column that is never written twice is one that cannot be
+  // quietly swapped.
+  rpc UseHostedModel(UseHostedModelRequest) returns (UseHostedModelResponse) {
+    option (kindlast.options.v1.required_scope) = "model:write";
+    option (google.api.http) = {
+      post: "/api/v1/model:host"
+      body: "*"
+    };
+  }
+
+  // Go back to the model this deployment runs itself.
+  //
+  // # WHAT THIS DOES AND DOES NOT UNDO
+  //
+  // It stops anything further leaving, destroys the stored key in the same
+  // statement that revokes the choice, and records the reversal. It cannot
+  // reach what has already been sent: text a provider has processed is with
+  // that provider, subject to whatever the customer's contract with them says.
+  //
+  // That is stated in `revert_notice` rather than left implied, because a
+  // product that let somebody believe an off switch was a recall would be
+  // helping them mislead a regulator. What makes the exposure boundable is the
+  // other half of this feature: `agent_runs.provider` says which runs went
+  // where, so "everything between these two dates" is an answerable question.
+  rpc UseBundledModel(UseBundledModelRequest) returns (UseBundledModelResponse) {
+    option (kindlast.options.v1.required_scope) = "model:write";
+    option (google.api.http) = {
+      post: "/api/v1/model:bundle"
+      body: "*"
+    };
+  }
+}
+
+message GetModelSettingRequest {}
+
+message GetModelSettingResponse {
+  // What is serving this organisation now.
+  ModelSetting setting = 1;
+
+  // What this deployment permits at all. Empty means BYOK is switched off here,
+  // which is the default and is a supported deployment rather than a
+  // misconfiguration.
+  repeated PermittedProvider permitted_providers = 2;
+
+  // The sentence a person is shown before confirming, and the one they must
+  // acknowledge. Served rather than written into a console, so there is one
+  // copy of it. See the service comment.
+  string consequence_notice = 3;
+
+  // The sentence shown when reverting, which says what reverting cannot do.
+  string revert_notice = 4;
+}
+
+// ModelSetting is where this organisation's model calls go.
+message ModelSetting {
+  // False means the deployment's own model is serving, which is the default
+  // state of every organisation and the one where nothing leaves.
+  //
+  // A BOOLEAN RATHER THAN A `provider` OF "local", because there is no row for
+  // the bundled case and inventing a provider name for it would make the
+  // absence of a decision look like one.
+  bool hosted = 1;
+
+  // Empty unless `hosted`. The provider as the customer's sub-processor list
+  // will have to name it.
+  string provider = 2;
+  string base_url = 3;
+  string model = 4;
+
+  // The last four characters of the key, never the key. Empty when the provider
+  // needs none, or when the key was too short to take a safe hint from.
+  string credential_last_four = 5;
+
+  // When this became the setting, and who decided. `changed_by_user_id` is the
+  // person, and it is on the read surface deliberately: a decision whose author
+  // only the audit log knows is one the console cannot show beside the thing it
+  // decided.
+  google.protobuf.Timestamp changed_at = 6;
+  string changed_by_user_id = 7;
+}
+
+// PermittedProvider is one option the operator has allowed.
+message PermittedProvider {
+  string name = 1;
+  // The host an endpoint must have, exactly. A leading dot makes it a suffix,
+  // so a customer's own Azure resource is permitted without permitting every
+  // host ending in those characters.
+  string host = 2;
+}
+
+message UseHostedModelRequest {
+  // Must be one of `permitted_providers`. A name this deployment does not
+  // permit is refused rather than stored as text nobody will honour.
+  string provider = 1;
+
+  // Where the provider answers, OpenAI-compatible (ENT-235). HTTPS, and its
+  // host must match the provider's entry. Checked again at every use, because
+  // a provider an operator withdraws has to stop being reachable for the
+  // organisations that already chose it.
+  string base_url = 2;
+
+  // Which model to ask the provider for. Required, unlike the bundled server,
+  // which serves one file and ignores the field.
+  string model = 3;
+
+  // The API key. WRITE ONLY: no RPC on this surface returns it, nothing logs
+  // it, and it is sealed before it reaches a database column.
+  //
+  // May be empty, and empty is a real configuration rather than an omission: a
+  // provider on the customer's own network may authenticate by mutual TLS or by
+  // nothing at all.
+  string api_key = 4;
+
+  // The consequence, acknowledged.
+  //
+  // NOT A FORMALITY AND NOT A PROMPT. A request without it is refused with
+  // `failed_precondition` and the notice as the message, so the only way to
+  // make this change is to have been handed the sentence describing it. That is
+  // a control in code, which is where §26.6 wants it: the difference between a
+  // compliance event and a settings write is whether the person can be shown to
+  // have been told.
+  bool acknowledge_consequence = 5;
+}
+
+message UseHostedModelResponse {
+  ModelSetting setting = 1;
+
+  // The `audit_log` row this decision produced, so a console can link the
+  // change to the record of it rather than asserting one was made.
+  string audit_entry_id = 2;
+}
+
+message UseBundledModelRequest {}
+
+message UseBundledModelResponse {
+  ModelSetting setting = 1;
+  string audit_entry_id = 2;
+}

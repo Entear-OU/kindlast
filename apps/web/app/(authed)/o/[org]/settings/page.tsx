@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
 import { InviteForm } from '@/components/settings/invite-form'
@@ -109,6 +110,26 @@ export default async function SettingsPage({
             />
           )}
         </div>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          Model
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Which model reads this organisation&rsquo;s compliance data, and where
+          it runs. Sending it to a hosted provider makes that provider a
+          sub-processor you are responsible for recording, so it is a page of
+          its own rather than a switch here.
+        </p>
+        <p className="mt-4">
+          <Link
+            href={orgPath(slug, '/settings/model')}
+            className="text-sm text-foreground underline underline-offset-4"
+          >
+            Where this organisation is processed
+          </Link>
+        </p>
       </section>
 
       <section className="mt-12">

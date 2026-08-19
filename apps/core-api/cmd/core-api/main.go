@@ -25,6 +25,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/dispatch"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
+	modelchoicedomain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/gateway"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
@@ -32,6 +33,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	integrationsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/integrations"
+	modelchoiceservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelchoice"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
@@ -261,6 +263,28 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	// The hosted model providers this deployment permits (ENT-236, §26.6).
+	//
+	// Parsed here so a malformed entry stops the service with a message about
+	// the setting, rather than producing a deployment that quietly permits
+	// nothing while its configuration says otherwise. An EMPTY list is the
+	// default and it permits nothing on purpose: the bundled model needs no API
+	// key, and the property that a stack holding a compliance record can run
+	// with no outbound internet has to survive somebody inside the product
+	// deciding otherwise.
+	modelProviders, err := modelchoicedomain.ParseProviders(strings.Join(cfg.ModelProviders, ","))
+	if err != nil {
+		return fmt.Errorf("KINDLAST_BYOK_PROVIDERS: %w", err)
+	}
+	if len(modelProviders) > 0 && !integrationKeys.Configured() {
+		// Worth saying at boot rather than at the first attempt. Without a
+		// sealing key a provider that needs one is refused, so the operator has
+		// permitted something nobody can turn on.
+		logger.Warn("hosted model providers are permitted but no integration key is set, "+
+			"so a provider that needs an API key cannot be configured",
+			"providers", len(modelProviders))
+	}
+
 	// The policy gateway, when this deployment has one (ENT-231).
 	//
 	// NIL IS A SUPPORTED DEPLOYMENT and then IntegrationsService is not served
@@ -342,12 +366,23 @@ func run(logger *slog.Logger) error {
 		// which is supported rather than broken (ENT-245).
 		Narratives: narrativesDependency(outbox),
 		Drafter:    drafterDependency(cfg.IntelligenceURL, intelligenceCredentials),
+		// An organisation's own provider, honoured by the narration job
+		// (ENT-236). Absent unless all of the agent pool, a sealing key and a
+		// permitted provider list are present, because honouring a choice
+		// without the checks that make it safe is worse than not honouring it.
+		ModelChoices:   modelChoicesDependency(outbox),
+		ModelKeys:      integrationKeys,
+		ModelProviders: modelProviders,
 		// Same typed-nil trap as Corpus above, and the same shape of guard: a
 		// nil *gateway.Client assigned straight into the interface field would
 		// produce an interface that is not nil, the registration guard would
 		// pass, and every call would panic.
 		Integrations: integrationsDependency(gatewayClient, integrationKeys),
-		Logger:       logger,
+		// Where an organisation's model runs (ENT-236). Served on every
+		// deployment, including one permitting no provider, so a member always
+		// gets a true answer to "where is our compliance data processed".
+		ModelChoice: modelchoiceservice.New(modelProviders, integrationKeys, nil),
+		Logger:      logger,
 	})
 	if err != nil {
 		return err
@@ -572,6 +607,19 @@ func evidenceDependency(store *postgres.AgentStore) ingest.EvidenceRecorder {
 }
 
 func narrativesDependency(store *postgres.AgentStore) narrative.Findings {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+// modelChoicesDependency keeps a nil agent pool out of a non-nil interface.
+//
+// The same typed-nil trap every other optional dependency here guards against:
+// assigning a nil *AgentStore straight into the interface field produces an
+// interface that is not nil, so the guard downstream passes and the first call
+// panics.
+func modelChoicesDependency(store *postgres.AgentStore) narrative.ModelChoices {
 	if store == nil {
 		return nil
 	}

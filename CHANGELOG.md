@@ -14,6 +14,48 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **An organisation can choose its own model provider, and the choice is a
+  compliance event rather than a preference** (ENT-236).
+
+  The bundled stack runs its own model and needs no API key, which is what lets
+  a deployment holding a compliance record run with no outbound internet at
+  all. Pointing one organisation at a hosted provider is the act of giving that
+  up: from then on its compliance profile, its findings and its DSAR content
+  are processed by somebody else, which lengthens that customer's own
+  sub-processor list and is a processing decision they have to be able to
+  account for.
+
+  So it is shaped as a decision, not a switch:
+
+  - **Owner only**, and only when a person has been shown in plain language
+    what changes and confirmed it. The confirmation is enforced by core-api and
+    not by the console, so an API caller cannot skip the warning either.
+  - **It writes an `audit_log` row** through the same function every other
+    decision goes through, with the provider, the endpoint and who decided. It
+    lists, filters and exports with the rest of the record, so a customer asked
+    "since when has your findings text been going to a US provider" can answer
+    from their own audit log.
+  - **The choice cannot be edited**, only replaced. Switching provider revokes
+    one row and inserts another, so the sequence of rows is the history of
+    where that customer's data has been processed.
+  - **Every agent run records which provider served it**, so the period a
+    provider was in use is an answerable question rather than an inference.
+  - **Turning it back off destroys the stored key** in the same statement that
+    revokes the choice. It cannot reach content the provider already processed,
+    and the product says so rather than implying an off switch is a recall.
+
+  **For a self-hoster the important line is that this is off unless you switch
+  it on.** `KINDLAST_BYOK_PROVIDERS` is empty by default and an empty list
+  permits nobody, so "nobody at this company may point our compliance data at
+  an external API" stays enforceable in your configuration rather than being a
+  policy every organisation owner has to be trusted to follow. Entries are
+  written `name=host` (`openai=api.openai.com`), because the host is what an
+  endpoint is checked against; a leading dot makes an entry a suffix for a
+  customer's own subdomain. Endpoints must be HTTPS, must be on the host you
+  permitted, and must resolve to a public address, and all of that is checked
+  again on every use rather than once when it is saved.
+  [`docs/self-hosting.md`](./docs/self-hosting.md) has the whole of it.
+
 - **A public readiness assessment at `/readiness`** (ENT-189). A visitor
   answers the questions a data protection officer would ask, with no account
   and no sign-up, and gets back the obligations in the Kindlast corpus that

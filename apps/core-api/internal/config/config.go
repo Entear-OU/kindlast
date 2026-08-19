@@ -232,6 +232,29 @@ type Config struct {
 	// open. Comma separated, in the same `id:base64key` form.
 	IntegrationKeysOld []string
 
+	// ModelProviders is the hosted model providers this deployment permits, as
+	// `name=host` entries (ENT-236, §26.6).
+	//
+	// EMPTY IS THE DEFAULT AND IT PERMITS NOTHING. The bundled stack serves its
+	// own model and needs no API key, which is what lets a deployment holding a
+	// compliance record run with no outbound internet at all. That property has
+	// to survive an owner inside the product deciding otherwise, so "nobody
+	// here may point our compliance data at an external API" is the absence of
+	// this setting rather than a switch somebody has to remember to turn off.
+	//
+	// A HOST PER PROVIDER, NOT A BARE NAME. The host is what the endpoint check
+	// compares against, so a list of names alone would permit an organisation
+	// to name a permitted provider and point it anywhere. `openai=api.openai.com`
+	// says both halves; a leading dot makes it a suffix, so
+	// `azure=.openai.azure.com` permits a customer's own resource without
+	// permitting every host that ends in those characters.
+	//
+	// Parsed and refused at boot rather than at first use, because an entry an
+	// operator wrote wrongly should stop the service with a message rather than
+	// produce a deployment that permits nothing while its configuration says
+	// otherwise.
+	ModelProviders []string
+
 	// BillingWebhookSecret is the shared secret the provider signs with.
 	//
 	// Without it the webhook is not served, because the signature check is the
@@ -271,6 +294,7 @@ func Load() (*Config, error) {
 		// variable a process listing prints.
 		IntegrationKey:     fileOrValue("KINDLAST_INTEGRATION_KEY"),
 		IntegrationKeysOld: splitList(os.Getenv("KINDLAST_INTEGRATION_KEYS_OLD")),
+		ModelProviders:     splitList(os.Getenv("KINDLAST_BYOK_PROVIDERS")),
 
 		IngestDatabaseURL:  os.Getenv("KINDLAST_INGEST_DATABASE_URL"),
 		BillingDatabaseURL: os.Getenv("KINDLAST_BILLING_DATABASE_URL"),

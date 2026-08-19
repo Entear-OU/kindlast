@@ -264,6 +264,19 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.MemoryService.ListEvidence": {
 			Method: "GET", Path: "/api/v1/memory/evidence",
 		},
+		// ENT-236. One resource and two custom verbs, because "point this
+		// organisation at a hosted provider" and "bring it back" are decisions
+		// rather than field edits, and PUT on `/model` would describe them as
+		// the same operation with a different body.
+		"kindlast.core.v1.ModelService.GetModelSetting": {
+			Method: "GET", Path: "/api/v1/model",
+		},
+		"kindlast.core.v1.ModelService.UseHostedModel": {
+			Method: "POST", Path: "/api/v1/model:host",
+		},
+		"kindlast.core.v1.ModelService.UseBundledModel": {
+			Method: "POST", Path: "/api/v1/model:bundle",
+		},
 
 		// ENT-212, the first conversation. Singular `session`, for the same
 		// reason `UpdateOrganisation` and `GetDashboard` are: it addresses the
