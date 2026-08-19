@@ -4,8 +4,9 @@
 #
 #     docker compose -f deploy/compose.yaml up -d
 #
-# brings up, in dependency order, all under the single `kindlast` compose
-# project, and the last of them serves the product at
+# brings up, in dependency order, all under one compose project (`kindlast` by
+# default; see ONE STACK PER WORKTREE below), and the last of them serves the
+# product at
 # http://localhost:${KINDLAST_EDGE_PORT:-8000}:
 #
 #   postgres-app       pgvector/pg17. THE domain database. Roles are split by
@@ -69,8 +70,28 @@
 # Its file lives at deploy/models/ on the host, deliberately not in a named
 # volume, so `down -v` does not cost a 2.7 GB re-download.
 #
+# That bind mount is also what makes the model affordable per worktree: the
+# WEIGHTS are shared (one download for the machine, from the main checkout's
+# deploy/models), and only the SERVER is per project. Sharing one server across
+# projects was considered and rejected: `intelligence` reaches it as
+# `http://model:8080` on the project's own network, so sharing would mean
+# joining an external network and coupling two stacks' lifecycles, where
+# tearing down the first stack breaks the second. The model holds no state, so
+# the cost of not sharing is RAM while two `--profile model` stacks are up at
+# once, and the profile is opt-in precisely so that is a choice.
+#
 # Passwords: every default below is a LOCAL DEVELOPMENT value. Override via
 # environment or an env file for anything that leaves a laptop.
+#
+# ONE STACK PER WORKTREE (ENT-250). `name:` below is the DEFAULT project name,
+# and `COMPOSE_PROJECT_NAME` outranks it. A second checkout of this repository
+# would otherwise share this one's Postgres, which is how an unmerged branch's
+# migration reaches a sibling branch's test run. `scripts/stack-env.sh --write`
+# writes `deploy/.env` beside this file with a project name and a block of host
+# ports derived from the worktree path, and compose reads that file on its own.
+# Every published port and every container name below is written so that file
+# is the only thing that has to change. A single checkout sets none of it and
+# gets exactly the values documented everywhere else.
 
 name: kindlast
 
@@ -82,7 +103,7 @@ volumes:
 
 services:
   postgres-app:
-    container_name: kindlast-postgres-app
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-postgres-app
     image: pgvector/pgvector:pg17
     environment:
       POSTGRES_PASSWORD: ${KINDLAST_PG_SUPER_PASSWORD:-postgres-dev-password}
@@ -117,7 +138,7 @@ services:
       retries: 30
 
   migrate:
-    container_name: kindlast-migrate
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-migrate
     image: kukymbr/goose-docker:3.24.2
     restart: "no"
     depends_on:
@@ -131,7 +152,7 @@ services:
       GOOSE_COMMAND: up
 
   postgres-platform:
-    container_name: kindlast-postgres-platform
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-postgres-platform
     image: postgres:17-alpine
     environment:
       POSTGRES_PASSWORD: ${KINDLAST_PLATFORM_SUPER_PASSWORD:-platform-dev-password}
@@ -150,7 +171,7 @@ services:
   # The zitadel image runs as uid 1000 but a fresh named volume is created
   # root-owned; hand it over before auth first writes its PAT there.
   machinekey-init:
-    container_name: kindlast-machinekey-init
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-machinekey-init
     image: alpine:3.21
     restart: "no"
     command: ["chown", "-R", "1000:1000", "/machinekey"]
@@ -158,7 +179,7 @@ services:
       - zitadel-machinekey:/machinekey
 
   auth:
-    container_name: kindlast-auth
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-auth
     image: ghcr.io/zitadel/zitadel:v2.71.2
     depends_on:
       postgres-platform:
@@ -206,7 +227,7 @@ services:
       retries: 40
 
   seed:
-    container_name: kindlast-seed
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-seed
     image: alpine:3.21
     restart: "no"
     depends_on:
@@ -261,7 +282,7 @@ services:
   #   docker run --rm --network kindlast_default curlimages/curl \
   #     -s http://core-api:8080/healthz
   core-api:
-    container_name: kindlast-core-api
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-core-api
     build:
       context: ..
       dockerfile: apps/core-api/Dockerfile
@@ -477,7 +498,7 @@ services:
   # Nothing here ever reaches a real address, which is the point: a development
   # stack that can email actual people is a stack that eventually does.
   mailpit:
-    container_name: kindlast-mailpit
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-mailpit
     image: axllent/mailpit:v1.21
     restart: unless-stopped
     environment:
@@ -496,7 +517,7 @@ services:
       retries: 20
 
   redis:
-    container_name: kindlast-redis
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-redis
     image: redis:7-alpine
     command:
       - redis-server
@@ -528,7 +549,7 @@ services:
   # llama.cpp's own convenience path, `llama-server -hf <repo>`, is exactly the
   # runtime pull this avoids. It is fine for evaluating a model and wrong here.
   model-init:
-    container_name: kindlast-model-init
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-model-init
     image: curlimages/curl:8.21.0
     # BEHIND A PROFILE, SO A PLAIN `up -d` DOES NOT FETCH GIGABYTES.
     #
@@ -560,7 +581,14 @@ services:
       # `down -v`. With a named volume that instruction costs a 2.7 GB
       # re-download every single time, and the stack would feel permanently
       # slow for a reason nobody would guess. A host path survives it.
-      - ./models:/models
+      #
+      # `KINDLAST_MODEL_DIR` exists for the same reason (ENT-250). Each git
+      # worktree is its own directory, so `./models` would be a second empty
+      # directory and a second 2.7 GB download per worktree. scripts/stack-env.sh
+      # points every worktree at the MAIN checkout's deploy/models, so the
+      # weights are downloaded once per machine and the per-project cost is a
+      # server process rather than a file. Unset, it is `./models` as before.
+      - ${KINDLAST_MODEL_DIR:-./models}:/models
     environment:
       # ONE VARIABLE, BECAUSE THE THREE UNDERNEATH IT ARE A MATCHED TRIPLE.
       #
@@ -654,7 +682,7 @@ services:
         echo "model fetched and verified: $$target"
 
   model:
-    container_name: kindlast-model
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-model
     # Same profile as `model-init`. Starting a server with no weights would
     # only produce a container that restarts forever.
     profiles: ["model"]
@@ -666,7 +694,7 @@ services:
       model-init:
         condition: service_completed_successfully
     volumes:
-      - ./models:/models:ro
+      - ${KINDLAST_MODEL_DIR:-./models}:/models:ro
     command:
       # A symlink `model-init` points at whichever tier it just verified. The
       # server therefore has no opinion about which model it is serving, and
@@ -753,7 +781,7 @@ services:
       - "127.0.0.1:${KINDLAST_MODEL_PORT:-8081}:8080"
 
   intelligence:
-    container_name: kindlast-intelligence
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-intelligence
     build:
       context: ..
       dockerfile: apps/intelligence/Dockerfile
@@ -831,7 +859,7 @@ services:
   # nothing else should reach it at all; the shared secret below is defence in
   # depth behind that, not instead of it.
   workers:
-    container_name: kindlast-workers
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-workers
     build:
       context: ..
       dockerfile: apps/workers/Dockerfile
@@ -934,7 +962,7 @@ services:
   # run at once: the container behind the edge on 8000, the dev server on 3000,
   # and the seed registers a redirect URI for each.
   web:
-    container_name: kindlast-web
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-web
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
@@ -1034,7 +1062,7 @@ services:
       start_period: 10s
 
   edge:
-    container_name: kindlast-edge
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-edge
     image: caddy:2-alpine
     depends_on:
       auth:
