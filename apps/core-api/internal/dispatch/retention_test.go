@@ -73,8 +73,8 @@ func (r *reclaimRecorder) seen() []reclaimCall {
 // silentChannel is somewhere a message would go if there were one.
 type silentChannel struct{}
 
-func (silentChannel) Name() string                                   { return "test" }
-func (silentChannel) Send(context.Context, delivery.Message) error   { return nil }
+func (silentChannel) Name() string                                 { return "test" }
+func (silentChannel) Send(context.Context, delivery.Message) error { return nil }
 
 // runUntilReclaimed starts the loop, waits for the first reclaim, and stops.
 func runUntilReclaimed(t *testing.T, outbox *reclaimRecorder, d *Dispatcher) {
@@ -165,10 +165,7 @@ func TestAFailedReclaimDoesNotEndTheLoop(t *testing.T) {
 	}()
 
 	deadline := time.After(2 * time.Second)
-	for {
-		if len(outbox.seen()) >= 3 {
-			break
-		}
+	for len(outbox.seen()) < 3 {
 		select {
 		case <-deadline:
 			cancel()

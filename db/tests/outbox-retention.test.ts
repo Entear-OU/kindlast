@@ -263,7 +263,10 @@ describe.skipIf(!reachable)('a message that can no longer be delivered', () => {
     await reclaim('7 days')
 
     const r = await row('expired')
-    expect(r, 'an undelivered message was deleted rather than abandoned').toBeDefined()
+    expect(
+      r,
+      'an undelivered message was deleted rather than abandoned',
+    ).toBeDefined()
     // `failed` is 00014's word for giving up, and this is the first thing in
     // the codebase to write it. It matters beyond bookkeeping: the dispatcher
     // claims `status = 'pending'` and has no maximum attempt count, so without
@@ -306,7 +309,9 @@ describe.skipIf(!reachable)('a message that can no longer be delivered', () => {
         where body_text like $1 and status <> 'pending'`,
       [`%${SECRET}%`],
     )
-    expect(r.rows[0].n, 'a spent or expired token is still in the clear').toBe(0)
+    expect(r.rows[0].n, 'a spent or expired token is still in the clear').toBe(
+      0,
+    )
   })
 })
 
@@ -354,7 +359,10 @@ describe.skipIf(!reachable)('the redaction invariant', () => {
                'sent', now(), now())`,
       [org],
     )
-    expect(raised, 'a row claimed redaction with its body intact').not.toBeNull()
+    expect(
+      raised,
+      'a row claimed redaction with its body intact',
+    ).not.toBeNull()
     expect(raised?.code).toBe('23514')
   })
 })
@@ -433,14 +441,20 @@ describe.skipIf(!reachable)('a message that can still be delivered', () => {
     await reclaim('0')
     const after = await row('live')
 
-    expect(after, 'a message whose invitation is still live was deleted').toBeDefined()
+    expect(
+      after,
+      'a message whose invitation is still live was deleted',
+    ).toBeDefined()
     expect(after.status, 'a deliverable message was abandoned').toBe('pending')
     expect(
       after.body_text,
       'the token was stripped from a message that has not been sent',
     ).toContain(SECRET)
     expect(after.recipient_email).toBe(LIVE)
-    expect(after.redacted_at, 'a pending message was recorded as redacted').toBeNull()
+    expect(
+      after.redacted_at,
+      'a pending message was recorded as redacted',
+    ).toBeNull()
     expect(after.body_text).toBe(before.body_text)
   })
 

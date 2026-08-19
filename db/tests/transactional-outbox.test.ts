@@ -236,25 +236,35 @@ describe.skipIf(!reachable)('transactional outbox', () => {
     expect(r.rows).toHaveLength(0)
   })
 
-  it('the application cannot mark a message delivered', async () => {
+  it('the application cannot mark a message delivered, and is told so', async () => {
     // There is no update policy for kindlast_app, deliberately. `sent` is what
     // a regulator reads as evidence the invitation went out, and the thing that
     // serves requests must not be able to assert a delivery it did not perform.
     //
-    // The assertion is on the stored row, not on whether an error was raised.
-    // A missing UPDATE policy does not error: no row satisfies it, so the
-    // statement succeeds having changed nothing. That silence is exactly why
-    // this has to be checked against the row afterwards. An assertion that only
-    // looked for an exception would pass just as happily against a table that
-    // had granted the update.
+    // THIS TEST CHANGED SHAPE IN ENT-242, AND THE CHANGE IS THE POINT.
+    //
+    // It used to assert that the update touched zero rows, because that is what
+    // a missing policy does: the statement succeeds having changed nothing. The
+    // comment here used to explain that the silence was why the row had to be
+    // checked afterwards. It was right about the mechanism and it was
+    // describing a boundary that failed quietly, which for a table holding
+    // bearer tokens is the wrong kind.
+    //
+    // 00030 revoked the update grant that 00002's default privileges had
+    // attached and 00014's comment already claimed was absent, so the refusal
+    // now arrives at parse time as 42501. Both halves are still asserted: the
+    // error, and the row, because a test that only looked for an exception
+    // would pass against a table that raised for some other reason.
     const before = await rowByEmail(PENDING_A, orgA, ada)
 
     await setTenant(app, orgA, ada)
-    const updated = await app.query(
+    const error = await refused(
+      app,
       `update transactional_outbox set status = 'sent', sent_at = now() where id = $1`,
       [before.id],
     )
-    expect(updated.rowCount, 'the application updated a queued message').toBe(0)
+    expect(error, 'the application updated a queued message').not.toBeNull()
+    expect(error?.code).toBe('42501')
 
     const after = await rowByEmail(PENDING_A, orgA, ada)
     expect(
@@ -264,15 +274,20 @@ describe.skipIf(!reachable)('transactional outbox', () => {
     expect(after.sent_at).toBeNull()
   })
 
-  it('the application cannot delete a queued message', async () => {
+  it('the application cannot delete a queued message, and is told so', async () => {
+    // Same change, same reason. After 00030 nothing deletes from this table at
+    // all: retention is redaction, and the only removal is the cascade from
+    // `organisations`.
     const before = await rowByEmail(PENDING_A, orgA, ada)
 
     await setTenant(app, orgA, ada)
-    const deleted = await app.query(
+    const error = await refused(
+      app,
       `delete from transactional_outbox where id = $1`,
       [before.id],
     )
-    expect(deleted.rowCount, 'the application deleted a queued message').toBe(0)
+    expect(error, 'the application deleted a queued message').not.toBeNull()
+    expect(error?.code).toBe('42501')
 
     const after = await rowByEmail(PENDING_A, orgA, ada)
     expect(after, 'the message is gone').toBeDefined()
