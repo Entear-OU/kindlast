@@ -296,6 +296,21 @@ jobs:
       # fall back on: if the stack is not up, the steps above have already
       # failed, which is the property `test:db`'s self-skip costs on a laptop
       # and CI must not repeat.
+      #
+      # AND IT RUNS THE INSTANT THE SERVICE IS LISTENING, WHICH IS NOW LOAD
+      # BEARING. Do not put a sleep here, and do not wait for the JWKS to look
+      # ready: a stack that is seconds old is the condition this step exists to
+      # exercise, and it is the only condition under which ENT-253 was visible.
+      #
+      # That failure was a 401 on every CI run and a 200 on every laptop, for
+      # one reason: a freshly seeded Zitadel has generated no signing key yet,
+      # Intelligence warmed its key cache against that empty document, and the
+      # boot fetch started a refetch cooldown that then declined the one
+      # request that would have found the key. A day-old laptop stack is past
+      # the cooldown, so the first token drives the refetch and nothing is ever
+      # wrong. A wait added here would have made this job green while leaving
+      # every real deployment's first minute broken, which is the wrong way
+      # round: the fix belongs in the key cache, and it is there.
       - name: Draft a narrative end to end
         run: python3 scripts/intelligence-smoke.py
 
