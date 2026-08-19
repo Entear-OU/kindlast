@@ -3,9 +3,10 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	"os"
 	"testing"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 )
 
 // Tenancy proved against a real Postgres, as two different users, per §13.3
