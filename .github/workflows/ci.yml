@@ -122,7 +122,7 @@ jobs:
       # opens a socket. CI is then exercising the airgapped path on nearly
       # every run, which is the path a real deployment cares about most.
       - name: Restore the model
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deploy/models
           key: gguf-aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
@@ -230,7 +230,7 @@ jobs:
       # tier, so the two jobs share the restore rather than each paying for a
       # download. The comment there explains why the digest is the key.
       - name: Restore the model
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deploy/models
           key: gguf-aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
