@@ -9,6 +9,7 @@ import {
   discoverProvider,
   requireEnv,
 } from './oidc'
+import { clientCredentials } from './client-credentials'
 import { createPkce, randomToken } from './pkce'
 import { safeReturnTo } from './return-to'
 import { stashState } from './state'
@@ -97,7 +98,7 @@ export async function startAuthorization(
   })
 
   const url = new URL(browserAuthorizationEndpoint(provider))
-  url.searchParams.set('client_id', requireEnv('KINDLAST_OIDC_CLIENT_ID'))
+  url.searchParams.set('client_id', clientCredentials().clientId)
   url.searchParams.set('redirect_uri', redirectUri())
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('scope', SCOPES.join(' '))
@@ -144,8 +145,8 @@ export async function exchangeCode(
     code,
     redirect_uri: redirectUri(),
     code_verifier: verifier,
-    client_id: requireEnv('KINDLAST_OIDC_CLIENT_ID'),
-    client_secret: requireEnv('KINDLAST_OIDC_CLIENT_SECRET'),
+    client_id: clientCredentials().clientId,
+    client_secret: clientCredentials().clientSecret,
   })
 
   const response = await fetch(provider.tokenEndpoint, {
@@ -204,8 +205,8 @@ export async function refreshTokens(refreshToken: string): Promise<TokenSet> {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
-    client_id: requireEnv('KINDLAST_OIDC_CLIENT_ID'),
-    client_secret: requireEnv('KINDLAST_OIDC_CLIENT_SECRET'),
+    client_id: clientCredentials().clientId,
+    client_secret: clientCredentials().clientSecret,
   })
 
   const response = await fetch(provider.tokenEndpoint, {
@@ -258,8 +259,8 @@ export async function revokeToken(token: string): Promise<void> {
     },
     body: new URLSearchParams({
       token,
-      client_id: requireEnv('KINDLAST_OIDC_CLIENT_ID'),
-      client_secret: requireEnv('KINDLAST_OIDC_CLIENT_SECRET'),
+      client_id: clientCredentials().clientId,
+      client_secret: clientCredentials().clientSecret,
     }),
     cache: 'no-store',
   }).catch(() => {
