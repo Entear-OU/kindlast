@@ -116,6 +116,26 @@ Maintainers use a Linear-derived convention instead, documented in
 [`docs/maintainers.md`](./docs/maintainers.md). Both are accepted, and neither
 is enforced by CI.
 
+## Versioning and the changelog
+
+Kindlast follows [Semantic Versioning](https://semver.org), with one version
+for the whole product in `VERSION` at the root.
+[`docs/versioning.md`](./docs/versioning.md) has the policy, including what
+counts as a breaking change here and why a new required environment variable is
+one.
+
+**Two things a pull request may need.** If your change alters something a
+self-hoster or an integrator depends on, add an entry under `Unreleased` in
+[`CHANGELOG.md`](./CHANGELOG.md), written for somebody upgrading rather than
+for somebody reading the diff. And if it changes behaviour but breaks nothing,
+it still belongs there when they would want to know about it.
+
+**Do not bump the version in a feature pull request.** Releases are cut
+separately, and a branch that moves `VERSION` conflicts with every other branch
+that does. `bun run version:check` is what CI runs, and it only asserts that
+the manifests agree with `VERSION`; `bun run version:set X.Y.Z` is for cutting
+a release.
+
 ## What makes a pull request easy to review
 
 - A description explaining **why**, not just what. The diff already shows what.

@@ -13,6 +13,8 @@
     "start": "bun run --cwd apps/web start",
     "lint": "bun run --cwd apps/web lint",
     "format": "prettier --write .",
+    "version:check": "./scripts/version-check.sh",
+    "version:set": "./scripts/version-set.sh",
     "format:check": "prettier --check .",
     "typecheck": "bun run --cwd apps/web typecheck",
     "test": "bun run --cwd apps/web test",
