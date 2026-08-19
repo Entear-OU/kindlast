@@ -35,8 +35,13 @@ cd "$(dirname "$0")/.."
 COMPOSE_FILE="deploy/compose.yaml"
 TARGET="apps/web/.env.local"
 
+# The stack this worktree owns (ENT-250). In a single checkout these are the
+# documented defaults; in a worktree that ran scripts/stack-env.sh they are its
+# own block, and `docker compose` below picks the same project up from
+# deploy/.env without being told.
 AUTH_PORT="${KINDLAST_AUTH_PORT:-8300}"
 EDGE_PORT="${KINDLAST_EDGE_PORT:-8000}"
+REDIS_PORT="${KINDLAST_REDIS_PORT:-6379}"
 
 read_volume_file() {
   docker compose -f "$COMPOSE_FILE" run --rm --no-deps -T \
@@ -67,7 +72,7 @@ KINDLAST_WEB_REDIRECT_URI=http://localhost:3000/auth/callback
 # host as from another container, so there is no development-only shortcut.
 KINDLAST_CORE_API_URL=http://localhost:${EDGE_PORT}
 
-KINDLAST_REDIS_URL=redis://127.0.0.1:6379
+KINDLAST_REDIS_URL=redis://127.0.0.1:${REDIS_PORT}
 EOF
 
 echo "web-env: wrote $TARGET (client ${CLIENT_ID})"

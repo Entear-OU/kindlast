@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 )
 
 // The corpus write path, against the real schema (ENT-207).
@@ -36,10 +37,7 @@ import (
 func ingestStore(t *testing.T) *CorpusStore {
 	t.Helper()
 
-	dsn := os.Getenv("PG_INGEST_URL")
-	if dsn == "" {
-		dsn = "postgres://kindlast_ingest:ingest-dev-password@127.0.0.1:5433/kindlast"
-	}
+	dsn := stackenv.DSN("ingest")
 
 	store, err := NewCorpus(t.Context(), dsn)
 	if err != nil {
@@ -72,10 +70,7 @@ func cleanupCorpus(t *testing.T, celex string, slugs ...string) {
 	t.Cleanup(func() {
 		ctx := context.Background()
 
-		dsn := os.Getenv("PG_MIGRATOR_URL")
-		if dsn == "" {
-			dsn = "postgres://kindlast_migrator:migrator-dev-password@127.0.0.1:5433/kindlast"
-		}
+		dsn := stackenv.DSN("migrator")
 		conn, err := pgx.Connect(ctx, dsn)
 		if err != nil {
 			t.Errorf("cleaning up: %v", err)

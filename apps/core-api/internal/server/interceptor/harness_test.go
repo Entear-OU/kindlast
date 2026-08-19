@@ -23,6 +23,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
@@ -64,19 +65,9 @@ func unavailable(t *testing.T, format string, args ...any) {
 	t.Skipf(format, args...)
 }
 
-func appDSN() string {
-	if dsn := os.Getenv("PG_APP_URL"); dsn != "" {
-		return dsn
-	}
-	return "postgres://kindlast_app:app-dev-password@127.0.0.1:5433/kindlast"
-}
+func appDSN() string { return stackenv.DSN("app") }
 
-func redisAddr() string {
-	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
-		return addr
-	}
-	return "127.0.0.1:6379"
-}
+func redisAddr() string { return stackenv.RedisAddr() }
 
 var testKey = sync.OnceValue(func() *rsa.PrivateKey {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)

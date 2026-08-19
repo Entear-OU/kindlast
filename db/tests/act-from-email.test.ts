@@ -49,15 +49,14 @@ import {
   connect,
   setTenant,
   isStackReachable,
+  roleUrl,
   MIGRATOR_URL,
   APP_URL,
 } from './helpers/db'
 
 const reachable = await isStackReachable()
 
-const AGENT_URL =
-  process.env.PG_AGENT_URL ??
-  'postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast'
+const AGENT_URL = roleUrl('agent')
 
 const org = randomUUID()
 const ada = randomUUID() // owner, signed in, address verified

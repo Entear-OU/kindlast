@@ -33,6 +33,7 @@ import {
   connect,
   setTenant,
   isStackReachable,
+  roleUrl,
   MIGRATOR_URL,
   APP_URL,
 } from './helpers/db'
@@ -43,13 +44,9 @@ const reachable = await isStackReachable()
 // granting the agent subscription writes would make it a role that can invent a
 // finding AND grant itself a paid plan: a new capability rather than a wider
 // read. See 00017's header.
-const BILLING_URL =
-  process.env.PG_BILLING_URL ??
-  'postgres://kindlast_billing:billing-dev-password@127.0.0.1:5433/kindlast'
+const BILLING_URL = roleUrl('billing')
 
-const AGENT_URL =
-  process.env.PG_AGENT_URL ??
-  'postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast'
+const AGENT_URL = roleUrl('agent')
 
 const org = randomUUID()
 const ada = randomUUID()

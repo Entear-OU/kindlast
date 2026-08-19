@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 )
 
 // The applicability vocabulary declared in Go is the one the Watcher evaluates
@@ -51,10 +52,7 @@ import (
 func vocabularyConn(t *testing.T) *pgx.Conn {
 	t.Helper()
 
-	dsn := os.Getenv("PG_MIGRATOR_URL")
-	if dsn == "" {
-		dsn = "postgres://kindlast_migrator:migrator-dev-password@127.0.0.1:5433/kindlast"
-	}
+	dsn := stackenv.DSN("migrator")
 
 	conn, err := pgx.Connect(t.Context(), dsn)
 	if err != nil {

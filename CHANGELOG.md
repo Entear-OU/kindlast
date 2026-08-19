@@ -42,6 +42,21 @@ what they have to do about it, which no commit subject knows.
   notice, a retention position and an answer to a subject access request about
   the assessment itself, written down before the code rather than after it.
 
+### Changed
+
+- The local stack can run once per checkout instead of once per machine.
+  `deploy/compose.yaml` still defaults to the project name `kindlast` and to
+  the ports every instruction here names, so a self-hoster with one clone sees
+  no change at all. What is new is that `COMPOSE_PROJECT_NAME`, the
+  `KINDLAST_*_PORT` variables and `KINDLAST_MODEL_DIR` now reach every part of
+  the stack, including container names, so a second copy of the repository can
+  bring up a second stack that shares nothing with the first.
+  `scripts/stack-env.sh` derives a consistent set of those values, and
+  `docs/maintainers.md` explains it. Relevant to anyone running two
+  environments from one machine, and to anyone whose tooling assumed a
+  container was called `kindlast-postgres-app`: it still is, unless a project
+  name is set.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,

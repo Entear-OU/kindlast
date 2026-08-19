@@ -195,8 +195,70 @@ next one will be between two tables nobody has thought about yet. CI passes
 the flag on the stack-backed job for the same reason.
 
 A related failure that `-p 1` does **not** fix: two worktrees running suites
-against one shared compose stack. That is ENT-250, and it needs a stack per
-worktree.
+against one shared compose stack. That is the next section, and the two are
+siblings rather than alternatives. `-p 1` stops one worktree's packages
+colliding inside one database. A stack per worktree stops two worktrees
+colliding at all. Neither helps with the other's problem, and a machine running
+several branches at once wants both.
+
+## One compose stack per worktree
+
+```bash
+./scripts/stack-env.sh --write      # once per worktree
+docker compose -f deploy/compose.yaml up -d
+
+eval "$(./scripts/stack-env.sh)"    # once per shell, for the suites
+bun run test:db
+cd apps/core-api && go test -p 1 ./...
+```
+
+`--write` produces `deploy/.env`, which docker compose reads on its own because
+it sits beside the compose file. From then on every `docker compose -f
+deploy/compose.yaml ...` in that worktree addresses that worktree's stack, with
+no flags and nothing to remember. The `eval` is the other half: the test suites
+do not read `deploy/.env`, so they need the same values in the shell, plus the
+`PG_*_URL` and `REDIS_ADDR` names they already look for.
+
+`--summary` prints the block in a readable form when you want to know where
+Zitadel is, and `docker compose -f deploy/compose.yaml down` still tears down
+the right stack because the project name is in `deploy/.env` too.
+
+**Nothing changes in the main checkout.** It gets project `kindlast`, postgres
+on 5433, Zitadel on 8300 and the edge on 8000, exactly as `README.md` and
+`docs/self-hosting.md` describe. The derivation activates for linked worktrees
+only, so a self-hoster and anybody with a single clone never meets it. Running
+`--write` there is harmless and writes those same defaults.
+
+The project name and the ports come from a SHA-256 of the worktree's absolute
+path, which makes them stable: the same worktree gets the same block every
+time, so a stack outlives the shell that started it and `down` finds what `up`
+created. A hash is a probability rather than a guarantee, so `--write` also
+asks docker whether any derived port is already published by another project
+and says so; `KINDLAST_STACK_SLOT=<1..1024>` moves out of the way.
+
+The model is the one thing shared on purpose. `deploy/models` is a bind mount
+rather than a named volume so `down -v` does not cost a 2.7 GB re-download, and
+`scripts/stack-env.sh` points every worktree at the **main checkout's** copy
+through `KINDLAST_MODEL_DIR`. The weights are downloaded once per machine; only
+the llama-server process is per project, and the `model` profile is opt-in, so
+a second worktree that does not need inference simply does not start it.
+Sharing the server itself would mean joining an external docker network and
+coupling two stacks' lifecycles, where tearing the first one down breaks the
+second.
+
+Why this is a mechanism rather than a rule people follow. In one day on
+2026-08-18, five worktrees sharing one Postgres produced: a migration from an
+unmerged branch applied under three sibling branches running main's Go code,
+with three people separately reaching the same correct "not mine"; main going
+red because main's test and the shared schema disagreed over a column only an
+unmerged branch had added; a migration hand-applied through `psql` because
+goose refused the gap, leaving `goose_db_version` unaware of objects that
+existed; and a grant committed on the shared stack to prove a test could go
+red, because a rolled-back transaction is invisible to other sessions. None of
+those are careless. They are what sharing one database does.
+
+CI is unaffected and deliberately so: a job is one checkout with one stack, it
+sets no `COMPOSE_PROJECT_NAME`, and it gets the defaults.
 
 ## Migrations
 

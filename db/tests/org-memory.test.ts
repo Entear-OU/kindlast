@@ -36,15 +36,14 @@ import {
   connect,
   isStackReachable,
   setTenant,
+  roleUrl,
   MIGRATOR_URL,
   APP_URL,
 } from './helpers/db'
 
 const reachable = await isStackReachable()
 
-const AGENT_URL =
-  process.env.PG_AGENT_URL ??
-  'postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast'
+const AGENT_URL = roleUrl('agent')
 
 let migrator: Client
 let app: Client
@@ -199,14 +198,37 @@ describe.skipIf(!reachable)('the profile as of an instant', () => {
     const key = `basis_${randomUUID().slice(0, 8)}`
     const first = await record(orgA, key, 'consent')
 
-    // The instant a run would have stamped on `agent_runs.profile_as_of`.
-    const asOf = (await app.query(`select now() as t`)).rows[0].t
-
     await app.query(
-      `update org_profile_facts set valid_to = now() where id = $1`,
+      `update org_profile_facts set valid_to = clock_timestamp() where id = $1`,
       [first],
     )
     await record(orgA, key, 'legitimate-interest')
+
+    // The instant a run would have stamped on `agent_runs.profile_as_of`,
+    // taken FROM THE INTERVAL THE DATABASE ACTUALLY RECORDED rather than from
+    // a clock this test reads separately.
+    //
+    // The earlier version read `now()` between the write and the close and
+    // used that as the instant. That is the obvious way to write it and it is
+    // a race: the value has to land strictly inside an interval whose ends are
+    // set by two other statements, and when it did not, the reconstruction
+    // returned nothing. It failed in CI and passed locally, which is the worst
+    // way round, and a first attempt at pinning the close to `asOf` plus a
+    // millisecond did not fix it either.
+    //
+    // The midpoint cannot be outside the interval, whatever the clock did.
+    // What the test is actually for, that a closed fact is still what an
+    // earlier run is shown to have read, is asserted just as strongly and no
+    // longer depends on how fast the machine is.
+    const bounds = await app.query(
+      `select valid_from,
+              valid_from + (valid_to - valid_from) / 2 as midpoint,
+              valid_to
+         from org_profile_facts where id = $1`,
+      [first],
+    )
+    expect(bounds.rows[0].valid_to, 'the fact was never closed').not.toBeNull()
+    const asOf = bounds.rows[0].midpoint
 
     const then = await app.query(
       `select value from org_profile_facts
