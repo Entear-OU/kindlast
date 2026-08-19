@@ -26,7 +26,7 @@ from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dkindlast/core/v1/memory.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"$\n\nStringList\x12\x16\n\x06values\x18\x01 \x03(\tR\x06values\"\xb3\x01\n\tFactValue\x12\x14\n\x04text\x18\x01 \x01(\tH\x00R\x04text\x12\x32\n\x04list\x18\x02 \x01(\x0b\x32\x1c.kindlast.core.v1.StringListH\x00R\x04list\x12\x18\n\x06number\x18\x03 \x01(\x03H\x00R\x06number\x12\x39\n\ttri_state\x18\x04 \x01(\x0e\x32\x1a.kindlast.core.v1.TriStateH\x00R\x08triStateB\x07\n\x05value\"\x88\x02\n\x0bProfileFact\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x31\n\x05value\x18\x02 \x01(\x0b\x32\x1b.kindlast.core.v1.FactValueR\x05value\x12\x16\n\x06source\x18\x03 \x01(\tR\x06source\x12\x1f\n\x0b\x65vidence_id\x18\x04 \x01(\tR\nevidenceId\x12\x1d\n\nvalid_from\x18\x05 \x01(\tR\tvalidFrom\x12\x19\n\x08valid_to\x18\x06 \x01(\tR\x07validTo\x12\x1f\n\x0brecorded_by\x18\x07 \x01(\tR\nrecordedBy\"\x19\n\x17ListProfileFactsRequest\"O\n\x18ListProfileFactsResponse\x12\x33\n\x05\x66\x61\x63ts\x18\x01 \x03(\x0b\x32\x1d.kindlast.core.v1.ProfileFactR\x05\x66\x61\x63ts\"K\n\x15GetFactHistoryRequest\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\"M\n\x16GetFactHistoryResponse\x12\x33\n\x05\x66\x61\x63ts\x18\x01 \x03(\x0b\x32\x1d.kindlast.core.v1.ProfileFactR\x05\x66\x61\x63ts\"\x8f\x01\n\x12\x43orrectFactRequest\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x31\n\x05value\x18\x02 \x01(\x0b\x32\x1b.kindlast.core.v1.FactValueR\x05value\x12\x12\n\x04note\x18\x03 \x01(\tR\x04note\"b\n\x13\x43orrectFactResponse\x12\x31\n\x04\x66\x61\x63t\x18\x01 \x01(\x0b\x32\x1d.kindlast.core.v1.ProfileFactR\x04\x66\x61\x63t\x12\x18\n\x07\x63hanged\x18\x02 \x01(\x08R\x07\x63hanged\"\xed\x01\n\x08\x45vidence\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n\x06source\x18\x02 \x01(\tR\x06source\x12\x12\n\x04kind\x18\x03 \x01(\tR\x04kind\x12#\n\rconnection_id\x18\x04 \x01(\tR\x0c\x63onnectionId\x12\x1f\n\x0bobserved_at\x18\x05 \x01(\tR\nobservedAt\x12\x1d\n\nfetched_at\x18\x06 \x01(\tR\tfetchedAt\x12\x1b\n\tbody_json\x18\x07 \x01(\tR\x08\x62odyJson\x12#\n\rsuperseded_by\x18\x08 \x01(\tR\x0csupersededBy\"Q\n\x13ListEvidenceRequest\x12\x1b\n\tpage_size\x18\x01 \x01(\x05R\x08pageSize\x12\x1d\n\npage_token\x18\x02 \x01(\tR\tpageToken\"v\n\x14ListEvidenceResponse\x12\x36\n\x08\x65vidence\x18\x01 \x03(\x0b\x32\x1a.kindlast.core.v1.EvidenceR\x08\x65vidence\x12&\n\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken*\xe0\x04\n\x0eProfileFactKey\x12 \n\x1cPROFILE_FACT_KEY_UNSPECIFIED\x10\x00\x12\x1d\n\x19PROFILE_FACT_KEY_INDUSTRY\x10\x01\x12%\n!PROFILE_FACT_KEY_EU_JURISDICTIONS\x10\x02\x12$\n PROFILE_FACT_KEY_DATA_CATEGORIES\x10\x03\x12\"\n\x1ePROFILE_FACT_KEY_DATA_SUBJECTS\x10\x04\x12\x1f\n\x1bPROFILE_FACT_KEY_AI_SYSTEMS\x10\x05\x12\x1c\n\x18PROFILE_FACT_KEY_HAS_DPO\x10\x06\x12\x1d\n\x19PROFILE_FACT_KEY_HAS_ROPA\x10\x07\x12)\n%PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU\x10\x08\x12*\n&PROFILE_FACT_KEY_TRANSFER_DESTINATIONS\x10\t\x12 \n\x1cPROFILE_FACT_KEY_STAFF_COUNT\x10\n\x12)\n%PROFILE_FACT_KEY_HIGH_RISK_PROCESSING\x10\x0b\x12(\n$PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM\x10\x0c\x12+\n\'PROFILE_FACT_KEY_LARGE_SCALE_MONITORING\x10\r\x12!\n\x1dPROFILE_FACT_KEY_LAWFUL_BASES\x10\x0e\x12 \n\x1cPROFILE_FACT_KEY_VENDOR_LIST\x10\x0f*`\n\x08TriState\x12\x19\n\x15TRI_STATE_UNSPECIFIED\x10\x00\x12\x11\n\rTRI_STATE_YES\x10\x01\x12\x10\n\x0cTRI_STATE_NO\x10\x02\x12\x14\n\x10TRI_STATE_UNSURE\x10\x03\x32\xef\x04\n\rMemoryService\x12\x96\x01\n\x10ListProfileFacts\x12).kindlast.core.v1.ListProfileFactsRequest\x1a*.kindlast.core.v1.ListProfileFactsResponse\"+\x8a\xb5\x18\x0bmemory:read\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/memory/facts\x12\x9e\x01\n\x0eGetFactHistory\x12\'.kindlast.core.v1.GetFactHistoryRequest\x1a(.kindlast.core.v1.GetFactHistoryResponse\"9\x8a\xb5\x18\x0bmemory:read\x82\xd3\xe4\x93\x02$\x12\"/api/v1/memory/facts/{key}/history\x12\x93\x01\n\x0b\x43orrectFact\x12$.kindlast.core.v1.CorrectFactRequest\x1a%.kindlast.core.v1.CorrectFactResponse\"7\x8a\xb5\x18\x0cmemory:write\x82\xd3\xe4\x93\x02!\"\x1c/api/v1/memory/facts:correct:\x01*\x12\x8d\x01\n\x0cListEvidence\x12%.kindlast.core.v1.ListEvidenceRequest\x1a&.kindlast.core.v1.ListEvidenceResponse\".\x8a\xb5\x18\x0bmemory:read\x82\xd3\xe4\x93\x02\x19\x12\x17/api/v1/memory/evidenceB\xc3\x01\n\x14\x63om.kindlast.core.v1B\x0bMemoryProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dkindlast/core/v1/memory.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"$\n\nStringList\x12\x16\n\x06values\x18\x01 \x03(\tR\x06values\"\xb3\x01\n\tFactValue\x12\x14\n\x04text\x18\x01 \x01(\tH\x00R\x04text\x12\x32\n\x04list\x18\x02 \x01(\x0b\x32\x1c.kindlast.core.v1.StringListH\x00R\x04list\x12\x18\n\x06number\x18\x03 \x01(\x03H\x00R\x06number\x12\x39\n\ttri_state\x18\x04 \x01(\x0e\x32\x1a.kindlast.core.v1.TriStateH\x00R\x08triStateB\x07\n\x05value\"\x9c\x02\n\x0bProfileFact\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x31\n\x05value\x18\x02 \x01(\x0b\x32\x1b.kindlast.core.v1.FactValueR\x05value\x12\x16\n\x06source\x18\x03 \x01(\tR\x06source\x12\x1f\n\x0b\x65vidence_id\x18\x04 \x01(\tR\nevidenceId\x12\x1d\n\nvalid_from\x18\x05 \x01(\tR\tvalidFrom\x12\x19\n\x08valid_to\x18\x06 \x01(\tR\x07validTo\x12\x1f\n\x0brecorded_by\x18\x07 \x01(\tR\nrecordedBy\x12\x12\n\x04note\x18\x08 \x01(\tR\x04note\"\x19\n\x17ListProfileFactsRequest\"O\n\x18ListProfileFactsResponse\x12\x33\n\x05\x66\x61\x63ts\x18\x01 \x03(\x0b\x32\x1d.kindlast.core.v1.ProfileFactR\x05\x66\x61\x63ts\"K\n\x15GetFactHistoryRequest\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\"M\n\x16GetFactHistoryResponse\x12\x33\n\x05\x66\x61\x63ts\x18\x01 \x03(\x0b\x32\x1d.kindlast.core.v1.ProfileFactR\x05\x66\x61\x63ts\"\x8f\x01\n\x12\x43orrectFactRequest\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x31\n\x05value\x18\x02 \x01(\x0b\x32\x1b.kindlast.core.v1.FactValueR\x05value\x12\x12\n\x04note\x18\x03 \x01(\tR\x04note\"b\n\x13\x43orrectFactResponse\x12\x31\n\x04\x66\x61\x63t\x18\x01 \x01(\x0b\x32\x1d.kindlast.core.v1.ProfileFactR\x04\x66\x61\x63t\x12\x18\n\x07\x63hanged\x18\x02 \x01(\x08R\x07\x63hanged\"\xed\x01\n\x08\x45vidence\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n\x06source\x18\x02 \x01(\tR\x06source\x12\x12\n\x04kind\x18\x03 \x01(\tR\x04kind\x12#\n\rconnection_id\x18\x04 \x01(\tR\x0c\x63onnectionId\x12\x1f\n\x0bobserved_at\x18\x05 \x01(\tR\nobservedAt\x12\x1d\n\nfetched_at\x18\x06 \x01(\tR\tfetchedAt\x12\x1b\n\tbody_json\x18\x07 \x01(\tR\x08\x62odyJson\x12#\n\rsuperseded_by\x18\x08 \x01(\tR\x0csupersededBy\"Q\n\x13ListEvidenceRequest\x12\x1b\n\tpage_size\x18\x01 \x01(\x05R\x08pageSize\x12\x1d\n\npage_token\x18\x02 \x01(\tR\tpageToken\"v\n\x14ListEvidenceResponse\x12\x36\n\x08\x65vidence\x18\x01 \x03(\x0b\x32\x1a.kindlast.core.v1.EvidenceR\x08\x65vidence\x12&\n\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken*\xe0\x04\n\x0eProfileFactKey\x12 \n\x1cPROFILE_FACT_KEY_UNSPECIFIED\x10\x00\x12\x1d\n\x19PROFILE_FACT_KEY_INDUSTRY\x10\x01\x12%\n!PROFILE_FACT_KEY_EU_JURISDICTIONS\x10\x02\x12$\n PROFILE_FACT_KEY_DATA_CATEGORIES\x10\x03\x12\"\n\x1ePROFILE_FACT_KEY_DATA_SUBJECTS\x10\x04\x12\x1f\n\x1bPROFILE_FACT_KEY_AI_SYSTEMS\x10\x05\x12\x1c\n\x18PROFILE_FACT_KEY_HAS_DPO\x10\x06\x12\x1d\n\x19PROFILE_FACT_KEY_HAS_ROPA\x10\x07\x12)\n%PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU\x10\x08\x12*\n&PROFILE_FACT_KEY_TRANSFER_DESTINATIONS\x10\t\x12 \n\x1cPROFILE_FACT_KEY_STAFF_COUNT\x10\n\x12)\n%PROFILE_FACT_KEY_HIGH_RISK_PROCESSING\x10\x0b\x12(\n$PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM\x10\x0c\x12+\n\'PROFILE_FACT_KEY_LARGE_SCALE_MONITORING\x10\r\x12!\n\x1dPROFILE_FACT_KEY_LAWFUL_BASES\x10\x0e\x12 \n\x1cPROFILE_FACT_KEY_VENDOR_LIST\x10\x0f*`\n\x08TriState\x12\x19\n\x15TRI_STATE_UNSPECIFIED\x10\x00\x12\x11\n\rTRI_STATE_YES\x10\x01\x12\x10\n\x0cTRI_STATE_NO\x10\x02\x12\x14\n\x10TRI_STATE_UNSURE\x10\x03\x32\xef\x04\n\rMemoryService\x12\x96\x01\n\x10ListProfileFacts\x12).kindlast.core.v1.ListProfileFactsRequest\x1a*.kindlast.core.v1.ListProfileFactsResponse\"+\x8a\xb5\x18\x0bmemory:read\x82\xd3\xe4\x93\x02\x16\x12\x14/api/v1/memory/facts\x12\x9e\x01\n\x0eGetFactHistory\x12\'.kindlast.core.v1.GetFactHistoryRequest\x1a(.kindlast.core.v1.GetFactHistoryResponse\"9\x8a\xb5\x18\x0bmemory:read\x82\xd3\xe4\x93\x02$\x12\"/api/v1/memory/facts/{key}/history\x12\x93\x01\n\x0b\x43orrectFact\x12$.kindlast.core.v1.CorrectFactRequest\x1a%.kindlast.core.v1.CorrectFactResponse\"7\x8a\xb5\x18\x0cmemory:write\x82\xd3\xe4\x93\x02!\"\x1c/api/v1/memory/facts:correct:\x01*\x12\x8d\x01\n\x0cListEvidence\x12%.kindlast.core.v1.ListEvidenceRequest\x1a&.kindlast.core.v1.ListEvidenceResponse\".\x8a\xb5\x18\x0bmemory:read\x82\xd3\xe4\x93\x02\x19\x12\x17/api/v1/memory/evidenceB\xc3\x01\n\x14\x63om.kindlast.core.v1B\x0bMemoryProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -42,34 +42,34 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_MEMORYSERVICE'].methods_by_name['CorrectFact']._serialized_options = b'\212\265\030\014memory:write\202\323\344\223\002!\"\034/api/v1/memory/facts:correct:\001*'
   _globals['_MEMORYSERVICE'].methods_by_name['ListEvidence']._loaded_options = None
   _globals['_MEMORYSERVICE'].methods_by_name['ListEvidence']._serialized_options = b'\212\265\030\013memory:read\202\323\344\223\002\031\022\027/api/v1/memory/evidence'
-  _globals['_PROFILEFACTKEY']._serialized_start=1555
-  _globals['_PROFILEFACTKEY']._serialized_end=2163
-  _globals['_TRISTATE']._serialized_start=2165
-  _globals['_TRISTATE']._serialized_end=2261
+  _globals['_PROFILEFACTKEY']._serialized_start=1575
+  _globals['_PROFILEFACTKEY']._serialized_end=2183
+  _globals['_TRISTATE']._serialized_start=2185
+  _globals['_TRISTATE']._serialized_end=2281
   _globals['_STRINGLIST']._serialized_start=114
   _globals['_STRINGLIST']._serialized_end=150
   _globals['_FACTVALUE']._serialized_start=153
   _globals['_FACTVALUE']._serialized_end=332
   _globals['_PROFILEFACT']._serialized_start=335
-  _globals['_PROFILEFACT']._serialized_end=599
-  _globals['_LISTPROFILEFACTSREQUEST']._serialized_start=601
-  _globals['_LISTPROFILEFACTSREQUEST']._serialized_end=626
-  _globals['_LISTPROFILEFACTSRESPONSE']._serialized_start=628
-  _globals['_LISTPROFILEFACTSRESPONSE']._serialized_end=707
-  _globals['_GETFACTHISTORYREQUEST']._serialized_start=709
-  _globals['_GETFACTHISTORYREQUEST']._serialized_end=784
-  _globals['_GETFACTHISTORYRESPONSE']._serialized_start=786
-  _globals['_GETFACTHISTORYRESPONSE']._serialized_end=863
-  _globals['_CORRECTFACTREQUEST']._serialized_start=866
-  _globals['_CORRECTFACTREQUEST']._serialized_end=1009
-  _globals['_CORRECTFACTRESPONSE']._serialized_start=1011
-  _globals['_CORRECTFACTRESPONSE']._serialized_end=1109
-  _globals['_EVIDENCE']._serialized_start=1112
-  _globals['_EVIDENCE']._serialized_end=1349
-  _globals['_LISTEVIDENCEREQUEST']._serialized_start=1351
-  _globals['_LISTEVIDENCEREQUEST']._serialized_end=1432
-  _globals['_LISTEVIDENCERESPONSE']._serialized_start=1434
-  _globals['_LISTEVIDENCERESPONSE']._serialized_end=1552
-  _globals['_MEMORYSERVICE']._serialized_start=2264
-  _globals['_MEMORYSERVICE']._serialized_end=2887
+  _globals['_PROFILEFACT']._serialized_end=619
+  _globals['_LISTPROFILEFACTSREQUEST']._serialized_start=621
+  _globals['_LISTPROFILEFACTSREQUEST']._serialized_end=646
+  _globals['_LISTPROFILEFACTSRESPONSE']._serialized_start=648
+  _globals['_LISTPROFILEFACTSRESPONSE']._serialized_end=727
+  _globals['_GETFACTHISTORYREQUEST']._serialized_start=729
+  _globals['_GETFACTHISTORYREQUEST']._serialized_end=804
+  _globals['_GETFACTHISTORYRESPONSE']._serialized_start=806
+  _globals['_GETFACTHISTORYRESPONSE']._serialized_end=883
+  _globals['_CORRECTFACTREQUEST']._serialized_start=886
+  _globals['_CORRECTFACTREQUEST']._serialized_end=1029
+  _globals['_CORRECTFACTRESPONSE']._serialized_start=1031
+  _globals['_CORRECTFACTRESPONSE']._serialized_end=1129
+  _globals['_EVIDENCE']._serialized_start=1132
+  _globals['_EVIDENCE']._serialized_end=1369
+  _globals['_LISTEVIDENCEREQUEST']._serialized_start=1371
+  _globals['_LISTEVIDENCEREQUEST']._serialized_end=1452
+  _globals['_LISTEVIDENCERESPONSE']._serialized_start=1454
+  _globals['_LISTEVIDENCERESPONSE']._serialized_end=1572
+  _globals['_MEMORYSERVICE']._serialized_start=2284
+  _globals['_MEMORYSERVICE']._serialized_end=2907
 # @@protoc_insertion_point(module_scope)
