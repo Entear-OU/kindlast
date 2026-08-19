@@ -1,11 +1,11 @@
 import { test, expect, type Page } from '@playwright/test'
 import {
-import { onOrigin } from './fixtures/origin'
   createVerifiedUser,
   deleteUser,
   FIXTURE_PASSWORD,
   type FixtureUser,
 } from './fixtures/identity'
+import { onOrigin } from './fixtures/origin'
 
 /**
  * The console surfaces, in a real browser, signed in (ENT-207, ENT-210,

@@ -1,12 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
 import {
-import { onOrigin } from './fixtures/origin'
   countOrganisations,
   createVerifiedUser,
   deleteUser,
   FIXTURE_PASSWORD,
   type FixtureUser,
 } from './fixtures/identity'
+import { onOrigin } from './fixtures/origin'
 
 /**
  * The whole round trip, which is the part nothing else covers.

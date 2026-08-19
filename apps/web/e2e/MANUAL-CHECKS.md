@@ -127,20 +127,36 @@ docker compose -f deploy/compose.yaml up -d --build core-api
 Then check the specific surface the change touches. Green Go tests say the
 handler compiles, not that it is registered in the image that is serving.
 
-**The web half of this is not covered at all, and you should know that.**
-There is no `web` service in `deploy/compose.yaml`, so there is nothing to
-point a browser pass at except `bun run dev`. `next dev` is not
-`next build && next start`: a server component that compiles in dev and fails
-under a production build is invisible to every check in this repository. If
-you are about to ship something that matters, run the production build by hand
-and click through it:
+**The web half of this used to be uncovered, and since ENT-241 it is not.**
+`deploy/compose.yaml` has a `web` service now: a production Next build, served
+through the same edge, so there is something to point a browser pass at other
+than `bun run dev`. That matters because `next dev` is not
+`next build && next start`, and a server component that compiles in dev and
+fails when built used to be invisible to every check in this repository.
+
+The same currency rule applies to it as to core-api. After any change under
+`apps/web/`:
 
 ```bash
-bun run --cwd apps/web build && bun run --cwd apps/web start
+docker compose -f deploy/compose.yaml up -d --build web
 ```
 
-Giving compose a `web` service would fold this into the stack properly. That
-is real work rather than a note, and it is not scheduled.
+Then click through at `http://localhost:8000`. A failed build now stops the
+image existing rather than being discovered later, which is most of the value,
+but a green build still does not prove a page renders.
+
+The suite can be pointed at either console, and it is worth doing both before
+anything that matters ships:
+
+```bash
+bun run --cwd apps/web test:e2e                                  # the dev server
+KINDLAST_WEB_URL=http://localhost:8000 bun run --cwd apps/web test:e2e   # the built console
+```
+
+**What is still on you: whether the container is current.** `up -d --build web`
+rebuilds; forgetting it leaves you clicking through last week's console while
+your editor shows this week's code, which is exactly the trap the core-api half
+of this section describes.
 
 ## What is deliberately not here
 
