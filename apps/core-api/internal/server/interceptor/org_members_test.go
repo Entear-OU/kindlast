@@ -54,7 +54,7 @@ func buildOrgChain(t *testing.T, a *authServer) (
 	// A real base URL: InviteMember refuses without one (ENT-219), and these
 	// tests exercise inviting.
 	mux.Handle(corev1connect.NewOrgServiceHandler(
-		orgservice.New("http://console.test.invalid"), chain))
+		orgservice.New("http://console.test.invalid", a.profiles(t)), chain))
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
@@ -388,8 +388,19 @@ func joinAs(
 	forget(t, a.server.URL, claim)
 	t.Cleanup(func() { forget(t, a.server.URL, claim) })
 
+	// The address is served from userinfo and deliberately NOT put in the
+	// token, because that is what the bundled Zitadel does: an access token
+	// carries `sub` and scopes and no address at all.
+	//
+	// This is the shape of the bug that shipped. With an `email` claim on the
+	// token, AcceptInvitation reads it, matches, and passes, while the real
+	// deployment refuses every invitation because its tokens carry none. A
+	// fixture more conformant than the provider it stands in for is a fixture
+	// that certifies the wrong thing.
 	a.serveUserInfo(claim, map[string]any{
-		"name": label, "email": label + "@example.invalid",
+		"name":           label,
+		"email":          claim + "@example.invalid",
+		"email_verified": true,
 	})
 
 	token := fmt.Sprintf("fixture-token-%s-%d", label, time.Now().UnixNano())
@@ -414,10 +425,7 @@ func joinAs(
 
 	headers := map[string]string{
 		"Authorization": "Bearer " + a.tokenWithClaims(t,
-			mapClaims(a, claim, map[string]any{
-				"scope": orgScopes,
-				"email": claim + "@example.invalid",
-			})),
+			mapClaims(a, claim, map[string]any{"scope": orgScopes})),
 	}
 
 	// No organisation header: the invitee holds no membership anywhere yet, so

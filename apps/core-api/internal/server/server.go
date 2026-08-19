@@ -261,7 +261,7 @@ func New(deps Dependencies) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(deps.Profiles), chain))
-	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(deps.AppBaseURL), chain))
+	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(deps.AppBaseURL, deps.Profiles), chain))
 	mux.Handle(corev1connect.NewFindingsServiceHandler(findings.New(deps.BillingEnabled), chain))
 	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboard.New(), chain))
 	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(), chain))

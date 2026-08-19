@@ -162,12 +162,14 @@ what they have to do about it, which no commit subject knows.
   check what the recipient would see consumed it. The actual recipient then got
   a generic "this invitation cannot be used" and had to be invited again.
 
-  Acceptance is now bound to the invited address: it must match the verified
-  `email` claim on the caller's token, case-insensitively. A mismatch is
-  refused **and leaves the invitation unused**, so the intended recipient can
-  still accept. Refusals stay indistinguishable from expired, already accepted
-  and never existed, so the endpoint still cannot be used to discover which
-  tokens are real or who they were for.
+  Acceptance is now bound to the invited address, matched case-insensitively
+  against the caller's verified address as the authorization server states it:
+  the `email` claim when the token carries one, and the userinfo endpoint when
+  it does not, which is the case on the bundled Zitadel. A mismatch is refused
+  **and leaves the invitation unused**, so the intended recipient can still
+  accept. Refusals stay indistinguishable from expired, already accepted and
+  never existed, so the endpoint still cannot be used to discover which tokens
+  are real or who they were for.
 
   An unverified address is refused too. Without that, somebody could register
   as the invited address, skip the confirmation mail, and walk in.
