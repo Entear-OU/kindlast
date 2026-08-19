@@ -110,6 +110,21 @@ export default async function FactHistoryPage({
                 {fact.validFrom ? ` · from ${formatDay(fact.validFrom)}` : null}
                 {fact.validTo ? ` until ${formatDay(fact.validTo)}` : null}
               </p>
+
+              {/* Why, when somebody said why. The correction form asks for it
+                  and the column has always stored it, but nothing read it
+                  back, so the one part of the record that explains a change
+                  was invisible to everyone without a database client.
+
+                  Quoted rather than paraphrased, and rendered as the person's
+                  own words: this is testimony about a compliance record, and
+                  the whole value of it is that it is what they actually
+                  wrote. */}
+              {fact.note ? (
+                <p className="mt-2 border-l-2 border-border pl-3 text-xs text-muted-foreground italic">
+                  “{fact.note}”
+                </p>
+              ) : null}
             </li>
           ))}
         </ol>

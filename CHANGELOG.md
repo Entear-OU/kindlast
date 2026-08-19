@@ -124,6 +124,24 @@ what they have to do about it, which no commit subject knows.
 
 ### Fixed
 
+- **The reason somebody gave for correcting a fact was stored and never shown
+  again.** Correcting a fact asks why, and the placeholder suggests the shape
+  of a useful answer ("We appointed a DPO in June"). That sentence was written
+  to `org_profile_facts.note` and read back by nothing: `ProfileFact` had no
+  field for it, so no response carried it and no page could render it. The
+  question was asked, answered, and filed where only a database client could
+  reach it.
+
+  It is the part of the history that matters most. "What we used to think"
+  could already show that a value changed and when, which is the easy half; why
+  it changed is the half a person checking an older finding actually needs, and
+  it is the reason the field was asked for.
+
+  `ProfileFact` now carries `note`, and the history page renders it under the
+  entry it belongs to, in the words it was written in. Notes recorded before
+  this upgrade appear too: they were always stored, so nothing is lost and
+  nothing needs backfilling.
+
 - **The Watcher could not complete a single sweep, so no deployment has ever
   produced a finding.** Two of the Watcher's three detectors read the `dsars`
   table, and the role the sweep runs as, `kindlast_agent`, was never granted

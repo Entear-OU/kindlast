@@ -5124,6 +5124,21 @@ components:
                     description: |-
                         Which human recorded it, when a human did. Records who acted; never used
                          to decide what may be read.
+                note:
+                    type: string
+                    description: |-
+                        Why it was recorded, in the words of whoever recorded it.
+
+                         `CorrectFactRequest.note` has always accepted this and the column has
+                         always stored it, but no read returned it, so the sentence a person was
+                         asked for could not be read back by anybody without a database client.
+                         That is the wrong half of the contract to implement: the note is the only
+                         part of a correction that says WHY, and "we appointed a DPO in June" is
+                         exactly what makes a changed profile legible a year later, which is the
+                         reason CorrectFactRequest asks for it in the first place.
+
+                         Empty for most facts, and that is ordinary rather than missing: onboarding
+                         answers carry none, and the note is optional on a correction too.
             description: One fact as it was believed over one interval.
         Question:
             type: object
