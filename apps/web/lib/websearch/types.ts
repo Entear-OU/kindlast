@@ -25,13 +25,28 @@
  * where the one permitted outbound fetch would live: keeping the regulatory
  * corpus current. A named, configurable, auditable source that an operator
  * chose is a different thing from a library quietly calling a SaaS at citation
- * time, and the distinction is the whole point. The interface is already the
- * right shape for that job, so the work is to give it a consumer rather than
- * to redesign it.
+ * time, and the distinction is the whole point.
  *
- * Until ENT-240 lands that consumer, treat the module as unused. No runtime
- * path reaches it and no self-hoster needs a key for it, which is why
- * `TAVILY_API_KEY` is documented as optional and not as required.
+ * Both providers are now real, and the default names `firecrawl`, the only one
+ * that can run inside an air-gapped deployment. `index.ts` carries that
+ * reasoning.
+ *
+ * # WHAT IS STILL OPEN, AND IT IS NOT A CODE QUESTION
+ *
+ * Whether the corpus refresh actually consumes this interface has not been
+ * decided, and it should not be decided by whoever writes the refresh first.
+ * `fetchUrl` returns a page as markdown, which is the right shape for reading
+ * a document and the wrong shape for maintaining a corpus of articles,
+ * paragraphs, recitals and annexes: EUR-Lex publishes that structure as XML
+ * through Cellar, and scraping the rendered page back into it would be a
+ * parser with more ways to be subtly wrong than the thing it replaced. The
+ * options and their consequences are in the ENT-240 pull request. Until that
+ * is ruled on, this stays an interface with no consumer, and adding one is the
+ * decision rather than the implementation.
+ *
+ * So: treat the module as unused. No runtime path reaches it and no
+ * self-hoster needs a key or an instance for it, which is why every variable
+ * that configures it is documented as optional and none as required.
  *
  * # THE INTERFACE
  *

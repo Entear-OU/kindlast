@@ -36,15 +36,14 @@ import {
   connect,
   isStackReachable,
   setTenant,
+  roleUrl,
   MIGRATOR_URL,
   APP_URL,
 } from './helpers/db'
 
 const reachable = await isStackReachable()
 
-const AGENT_URL =
-  process.env.PG_AGENT_URL ??
-  'postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast'
+const AGENT_URL = roleUrl('agent')
 
 let migrator: Client
 let app: Client
@@ -199,20 +198,91 @@ describe.skipIf(!reachable)('the profile as of an instant', () => {
     const key = `basis_${randomUUID().slice(0, 8)}`
     const first = await record(orgA, key, 'consent')
 
-    // The instant a run would have stamped on `agent_runs.profile_as_of`.
-    const asOf = (await app.query(`select now() as t`)).rows[0].t
-
+    // CLOSE IT A KNOWN DISTANCE AFTER IT OPENED, RATHER THAN AT "NOW".
+    //
+    // This test needs an instant that is strictly inside the fact's validity
+    // interval, and it took three attempts to stop it depending on the clock.
+    //
+    // Reading `now()` between the write and the close was the first version. On
+    // CI the two landed on the same value, `valid_to > asOf` was false, and the
+    // reconstruction came back empty. Pinning the close to that instant plus a
+    // millisecond was the second, and failed identically. Taking the midpoint
+    // of the recorded interval was the third, and failed for the reason that
+    // makes all three the same bug: IF THE CLOSE LANDS IN THE SAME CLOCK TICK
+    // AS THE INSERT, THE INTERVAL IS ZERO LENGTH, and a zero-length interval
+    // has no inside. Its midpoint is both of its ends, and a half-open test
+    // excludes it.
+    //
+    // `clock_timestamp()` advances within a transaction, which is why ENT-228
+    // used it, but nothing promises it advances between two statements a
+    // millisecond apart on a host whose clock granularity is coarser than a
+    // laptop's. A CI runner is exactly such a host, which is why this failed
+    // only there.
+    //
+    // So the interval is constructed rather than observed, derived from
+    // `valid_from` inside the database so no clock is read at all.
+    //
+    // TWO MICROSECONDS, AND THE SIZE IS THE WHOLE DESIGN. It has to be more
+    // than zero, or the midpoint is not inside it, which is the bug above. It
+    // has to be less than the gap before the next write, or the successor's
+    // interval overlaps this one and the reconstruction matches both: a first
+    // attempt used one second and returned two rows for exactly that reason.
+    // `timestamptz` resolves to a microsecond, so two is the smallest width
+    // with an interior, and the next statement is a round trip to Postgres
+    // away, which is several orders of magnitude longer.
+    //
+    // `kindlast_app` may write `valid_to` and nothing else, so this is still
+    // the application's own permitted edit rather than a fixture built by the
+    // migrator.
     await app.query(
-      `update org_profile_facts set valid_to = now() where id = $1`,
+      `update org_profile_facts
+          set valid_to = valid_from + interval '2 microseconds'
+        where id = $1`,
       [first],
     )
     await record(orgA, key, 'legitimate-interest')
 
+    const bounds = await app.query(
+      `select valid_to > valid_from as has_width from org_profile_facts where id = $1`,
+      [first],
+    )
+
+    // The precondition every earlier version assumed and none checked. A
+    // zero-length interval has no interior, so if this goes red the
+    // reconstruction below is meaningless rather than merely wrong.
+    expect(
+      bounds.rows[0].has_width,
+      'the validity interval is zero length, so no instant is inside it',
+    ).toBe(true)
+
+    // THE INSTANT NEVER LEAVES POSTGRES, AND THAT IS THE FIX.
+    //
+    // Three earlier versions each computed the instant in SQL, read it into
+    // JavaScript, and passed it back as a parameter. That loses precision:
+    // `pg` returns `timestamptz` as a JavaScript `Date`, which resolves to a
+    // MILLISECOND, while the column resolves to a microsecond. Measured on a
+    // real row: `valid_from` at ...025152, midpoint at ...025153, and the
+    // value that came back through the driver was ...025000, truncated to the
+    // millisecond and therefore BELOW `valid_from`. So `valid_from <= asOf`
+    // was false and the reconstruction returned nothing.
+    //
+    // That is why it looked like a clock race and was not. Whether it failed
+    // depended on the sub-millisecond remainder of `valid_from`, which is
+    // effectively random per run and differs between a laptop and a CI runner,
+    // so the theories about `now()` and about clock granularity each fitted the
+    // evidence and each were wrong.
+    //
+    // Computing the midpoint in the same statement that uses it keeps full
+    // precision, and no timestamp crosses the driver in either direction.
     const then = await app.query(
       `select value from org_profile_facts
         where org_id = $1 and key = $2
-          and valid_from <= $3 and (valid_to is null or valid_to > $3)`,
-      [orgA, key, asOf],
+          and valid_from <= (select valid_from + (valid_to - valid_from) / 2
+                               from org_profile_facts where id = $3)
+          and (valid_to is null
+               or valid_to > (select valid_from + (valid_to - valid_from) / 2
+                                from org_profile_facts where id = $3))`,
+      [orgA, key, first],
     )
     const now = await app.query(
       `select value from org_profile_facts

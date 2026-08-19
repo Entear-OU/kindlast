@@ -12,8 +12,97 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
-Nothing released yet under this file. Entries accumulate here and move under a
-version heading when one is cut.
+### Added
+
+- **A public readiness assessment at `/readiness`** (ENT-189). A visitor
+  answers the questions a data protection officer would ask, with no account
+  and no sign-up, and gets back the obligations in the Kindlast corpus that
+  match their answers, each quoting the corpus entry and citing the regulation
+  behind it.
+
+  Three things a self-hoster should know about it, because they are properties
+  of the deployment rather than of the page:
+
+  - **It has no server side.** The corpus is compiled into the bundle at build
+    time and the applicability rules are a pure function in the browser. There
+    is no route handler, no server action and no call to `core-api`, so the
+    page adds no unauthenticated surface to your deployment, needs no rate
+    limit, and costs nothing per visitor beyond serving static output.
+  - **It stores nothing, anywhere.** Answers live in one React state hook for
+    the life of the tab. No database row, no cookie, no `localStorage`, no
+    query string, and no request. A refresh loses the assessment, deliberately.
+  - **Every statement of law on it is a corpus row, verbatim.** If you ship a
+    modified `data/corpus/`, this page renders your text. If you ship no
+    changes, it renders ours. Nothing on the page paraphrases a regulation, and
+    a test fails the build if a string ever tries to.
+
+  There is no email capture, which the issue asked for and which is held for a
+  second iteration: sending the summary means putting somebody's address and
+  their answers through a mail provider, and that needs a lawful basis, a
+  notice, a retention position and an answer to a subject access request about
+  the assessment itself, written down before the code rather than after it.
+
+- **Air-gapped operation is now checked by CI rather than asserted in the
+  docs** (ENT-240). `docs/self-hosting.md` has told you that a default install,
+  once built and running, makes no outbound request at all. That was an audit
+  of the source, and an audit is true on the day somebody writes it. Now every
+  pull request brings the whole stack up on a network with no route out and
+  fails if the console does not serve. Run it yourself with
+  `bun run test:airgap`, or bring your own stack up that way with
+  `docker compose -f deploy/compose.yaml -f deploy/compose.airgap.yaml up -d`
+  once the images are built. It does not cover pulling images or building the
+  console, which happen before the network closes and are named in the egress
+  table.
+
+### Changed
+
+- **The `lib/websearch` default provider is now Firecrawl, not Tavily**
+  (ENT-240), and Firecrawl is implemented rather than a stub that threw. This
+  changes nothing at runtime, because nothing in the product calls that module,
+  and it changes what a self-hoster is being pointed at when something does:
+  Firecrawl's engine is AGPL-3.0 and you can run it yourself, so it works
+  inside a deployment with no outbound internet, and Tavily's is hosted and
+  closed, so it cannot. Set `FIRECRAWL_API_URL` to your own instance, or
+  `FIRECRAWL_API_KEY` for the hosted API. With neither set the provider refuses
+  rather than quietly reaching for a SaaS. Nothing here is required and nothing
+  degrades if you ignore all of it.
+
+- The local stack can run once per checkout instead of once per machine.
+  `deploy/compose.yaml` still defaults to the project name `kindlast` and to
+  the ports every instruction here names, so a self-hoster with one clone sees
+  no change at all. What is new is that `COMPOSE_PROJECT_NAME`, the
+  `KINDLAST_*_PORT` variables and `KINDLAST_MODEL_DIR` now reach every part of
+  the stack, including container names, so a second copy of the repository can
+  bring up a second stack that shares nothing with the first.
+  `scripts/stack-env.sh` derives a consistent set of those values, and
+  `docs/maintainers.md` explains it. Relevant to anyone running two
+  environments from one machine, and to anyone whose tooling assumed a
+  container was called `kindlast-postgres-app`: it still is, unless a project
+  name is set.
+
+### Fixed
+
+- **Intelligence refused every request for the first minute of a fresh
+  deployment** (ENT-253). A newly seeded authorization server has generated no
+  signing key yet and serves an empty key set, which is correct rather than
+  broken: it makes the key when it issues its first token. Intelligence
+  fetched that empty set at boot, treated the fetch as having filled the cache,
+  and then refused the first token it was ever shown with a 401 that read as
+  "signed by a key I do not know". A minute later the cooldown lapsed and
+  everything worked, so this was only ever visible on a stack that was seconds
+  old, which is every stack a self-hoster starts for the first time.
+
+  The boot fetch no longer counts as the cache's one permitted refetch, so the
+  first token always reaches the network for a key it does not hold. `core-api`
+  already worked this way. Nothing to do on upgrade beyond taking the new
+  image.
+
+- **Intelligence exited rather than starting when it came up before the
+  authorization server.** Losing that race in a compose stack is ordinary, and
+  the container did not come back on its own. It now logs a warning and starts,
+  and the first token fetches the keys. A genuinely misconfigured issuer still
+  fails at boot with a message naming the issuer, which is the case worth
+  refusing to start for.
 
 ## [0.1.0]
 

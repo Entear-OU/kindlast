@@ -21,10 +21,15 @@ would go red for a reason that is somebody else's job to catch.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.request
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8081"
+# An argument wins, then this worktree's stack, then the documented default
+# (ENT-250). `KINDLAST_MODEL_PORT` is what compose publishes the server on, so
+# reading it here means one variable moves both ends.
+DEFAULT_PORT = os.environ.get("KINDLAST_MODEL_PORT", "8081")
+BASE = sys.argv[1] if len(sys.argv) > 1 else f"http://localhost:{DEFAULT_PORT}"
 
 REQUEST = {
     "messages": [
