@@ -71,10 +71,17 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # First, because it is the cheapest thing that can fail and the easiest
-      # to fix: `bun run format` and commit. Prettier's version is pinned in
-      # the lockfile, so this checks the same bytes a contributor's editor
-      # produces rather than whatever the registry offers today.
+      # Cheaper than any of the checks below and it fails for a reason nobody
+      # would guess from a diff: one version for the whole product, copied into
+      # the manifests, and a copy nobody checks is one that drifts.
+      - name: Version check
+        run: bun run version:check
+
+      # First of the code checks, because it is the cheapest thing that can
+      # fail and the easiest to fix: `bun run format` and commit. Prettier's
+      # version is pinned in the lockfile, so this checks the same bytes a
+      # contributor's editor produces rather than whatever the registry offers
+      # today.
       - name: Format check
         run: bun run format:check
 

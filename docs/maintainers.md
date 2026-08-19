@@ -217,3 +217,29 @@ through.
 Supabase was removed in ENT-200. Its 38 migrations are in git history at
 `supabase/migrations/`, last present in commit `db0bf83`, and they are the
 reference for the surfaces still to be rebuilt on core-api.
+
+## Cutting a release
+
+The policy is [`docs/versioning.md`](./versioning.md), which is written for
+everyone. What is maintainer-only is that only a maintainer does this, and the
+order matters:
+
+```bash
+git switch main && git pull
+# 1. Move the changelog's Unreleased entries under the new heading, with a date
+#    and the upgrade note if there is one, and commit that first.
+bun run version:set 0.2.0        # VERSION + both manifests, checked
+git commit -am "chore(release): 0.2.0"
+git push
+git tag -a v0.2.0 -m "v0.2.0" && git push origin v0.2.0
+```
+
+The changelog is edited before the bump rather than after, so the release
+commit is the version change and nothing else, and a reader can see at a glance
+that the tag and the notes were cut from the same tree.
+
+**Nothing is published.** No registry, no image push, no GitHub release
+artefact. A tag is the whole release today, because self-hosters build from the
+repository. When images start being published, the push belongs in a workflow
+triggered by the tag rather than in this list, so that what shipped is
+reproducible from what was tagged.

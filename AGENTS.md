@@ -438,6 +438,24 @@ Otherwise, including every external contributor:
 Both conventions are accepted. Neither is enforced by CI, so use judgement
 rather than treating it as a gate.
 
+### Versioning
+
+Semantic Versioning, one number for the whole product, in `VERSION` at the
+root. [`docs/versioning.md`](./docs/versioning.md) says what breaking means
+here, which is the part that is not obvious: the proto contract, the routed
+HTTP surface, configuration, the schema and the deployment shape are public,
+and internal Go and TypeScript modules are not.
+
+Two rules while writing a change:
+
+- **Never bump `VERSION` in a feature branch.** Releases are cut on their own,
+  and a branch that moves it conflicts with every other branch that does. CI
+  runs `bun run version:check`, which only asserts the manifests agree with
+  `VERSION`, so leaving it alone is always correct.
+- **Add a `CHANGELOG.md` entry under `Unreleased`** when a self-hoster or an
+  integrator would want to know. Written for somebody upgrading a system that
+  holds their compliance record, not summarising the diff.
+
 ### Things to do rather than ask about
 
 - Never push to `main`, force-push a shared branch, or merge a PR unless
