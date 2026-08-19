@@ -8,10 +8,10 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^26",
     "@types/pg": "^8.20.0",
     "pg": "^8.21.0",
-    "typescript": "^5",
+    "typescript": "^7",
     "vitest": "^4.1.0"
   }
 }
