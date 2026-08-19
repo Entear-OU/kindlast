@@ -398,8 +398,12 @@ func joinAs(
 	if err != nil {
 		t.Fatalf("opening a tenant transaction to invite %s: %v", label, err)
 	}
+	// Addressed to the subject rather than to the label, so it matches the
+	// `email` claim the token below carries. 00033 holds the caller to being
+	// the person the invitation names, so a fixture whose two halves disagree
+	// is a fixture inviting somebody else.
 	if _, err := tenant.CreateInvitation(
-		t.Context(), label+"@example.invalid", role, token,
+		t.Context(), claim+"@example.invalid", role, token,
 	); err != nil {
 		_ = tenant.Rollback(t.Context())
 		t.Fatalf("creating the invitation for %s: %v", label, err)
@@ -410,7 +414,10 @@ func joinAs(
 
 	headers := map[string]string{
 		"Authorization": "Bearer " + a.tokenWithClaims(t,
-			mapClaims(a, claim, map[string]any{"scope": orgScopes})),
+			mapClaims(a, claim, map[string]any{
+				"scope": orgScopes,
+				"email": claim + "@example.invalid",
+			})),
 	}
 
 	// No organisation header: the invitee holds no membership anywhere yet, so

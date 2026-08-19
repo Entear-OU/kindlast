@@ -65,6 +65,15 @@ export interface ProfileFact {
   /** Empty means this is what we believe now. */
   validTo?: string
   recordedBy?: string
+  /**
+   * Why it was recorded, in the words of whoever recorded it.
+   *
+   * Empty for most facts: onboarding answers carry none, and the note is
+   * optional on a correction. Present, it is the only part of the record that
+   * says why a value changed, which is the question a history page exists to
+   * answer.
+   */
+  note?: string
 }
 
 export interface Evidence {

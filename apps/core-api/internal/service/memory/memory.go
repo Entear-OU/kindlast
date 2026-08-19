@@ -327,6 +327,10 @@ func ToProto(fact domain.Fact) (*corev1.ProfileFact, error) {
 		EvidenceId: fact.EvidenceID,
 		ValidFrom:  fact.ValidFrom.Format(time.RFC3339Nano),
 		RecordedBy: fact.RecordedBy,
+		// The store has always selected this and the column has always held
+		// it; it stopped here, so the sentence a person was asked for on a
+		// correction reached the database and never came back out.
+		Note: fact.Note,
 	}
 	if fact.ValidTo != nil {
 		out.ValidTo = fact.ValidTo.Format(time.RFC3339Nano)

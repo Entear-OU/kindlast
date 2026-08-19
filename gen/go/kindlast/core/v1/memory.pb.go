@@ -402,7 +402,20 @@ type ProfileFact struct {
 	ValidTo   string `protobuf:"bytes,6,opt,name=valid_to,json=validTo,proto3" json:"valid_to,omitempty"`
 	// Which human recorded it, when a human did. Records who acted; never used
 	// to decide what may be read.
-	RecordedBy    string `protobuf:"bytes,7,opt,name=recorded_by,json=recordedBy,proto3" json:"recorded_by,omitempty"`
+	RecordedBy string `protobuf:"bytes,7,opt,name=recorded_by,json=recordedBy,proto3" json:"recorded_by,omitempty"`
+	// Why it was recorded, in the words of whoever recorded it.
+	//
+	// `CorrectFactRequest.note` has always accepted this and the column has
+	// always stored it, but no read returned it, so the sentence a person was
+	// asked for could not be read back by anybody without a database client.
+	// That is the wrong half of the contract to implement: the note is the only
+	// part of a correction that says WHY, and "we appointed a DPO in June" is
+	// exactly what makes a changed profile legible a year later, which is the
+	// reason CorrectFactRequest asks for it in the first place.
+	//
+	// Empty for most facts, and that is ordinary rather than missing: onboarding
+	// answers carry none, and the note is optional on a correction too.
+	Note          string `protobuf:"bytes,8,opt,name=note,proto3" json:"note,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -482,6 +495,13 @@ func (x *ProfileFact) GetValidTo() string {
 func (x *ProfileFact) GetRecordedBy() string {
 	if x != nil {
 		return x.RecordedBy
+	}
+	return ""
+}
+
+func (x *ProfileFact) GetNote() string {
+	if x != nil {
+		return x.Note
 	}
 	return ""
 }
@@ -1003,7 +1023,7 @@ const file_kindlast_core_v1_memory_proto_rawDesc = "" +
 	"\x04list\x18\x02 \x01(\v2\x1c.kindlast.core.v1.StringListH\x00R\x04list\x12\x18\n" +
 	"\x06number\x18\x03 \x01(\x03H\x00R\x06number\x129\n" +
 	"\ttri_state\x18\x04 \x01(\x0e2\x1a.kindlast.core.v1.TriStateH\x00R\btriStateB\a\n" +
-	"\x05value\"\x88\x02\n" +
+	"\x05value\"\x9c\x02\n" +
 	"\vProfileFact\x122\n" +
 	"\x03key\x18\x01 \x01(\x0e2 .kindlast.core.v1.ProfileFactKeyR\x03key\x121\n" +
 	"\x05value\x18\x02 \x01(\v2\x1b.kindlast.core.v1.FactValueR\x05value\x12\x16\n" +
@@ -1014,7 +1034,8 @@ const file_kindlast_core_v1_memory_proto_rawDesc = "" +
 	"valid_from\x18\x05 \x01(\tR\tvalidFrom\x12\x19\n" +
 	"\bvalid_to\x18\x06 \x01(\tR\avalidTo\x12\x1f\n" +
 	"\vrecorded_by\x18\a \x01(\tR\n" +
-	"recordedBy\"\x19\n" +
+	"recordedBy\x12\x12\n" +
+	"\x04note\x18\b \x01(\tR\x04note\"\x19\n" +
 	"\x17ListProfileFactsRequest\"O\n" +
 	"\x18ListProfileFactsResponse\x123\n" +
 	"\x05facts\x18\x01 \x03(\v2\x1d.kindlast.core.v1.ProfileFactR\x05facts\"K\n" +

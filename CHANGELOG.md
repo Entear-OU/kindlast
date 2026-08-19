@@ -146,12 +146,71 @@ what they have to do about it, which no commit subject knows.
   container was called `kindlast-postgres-app`: it still is, unless a project
   name is set.
 
+### Security
+
+- **An invitation could be redeemed by anybody who held the link, and
+  redeeming it granted the role it named.** `accept_invitation` matched on the
+  token hash alone and joined whoever was signed in, at the invited role,
+  without ever comparing the invitation's address to the caller. An invitation
+  to an `owner` seat, forwarded once or opened in a shared mailbox, made a
+  stranger an owner of somebody else's compliance record: able to read the
+  whole record, approve findings, invite others, export the audit log and send
+  the organisation's data to a hosted model provider.
+
+  There was a duller version of the same bug that needed no attacker. The
+  person who sent the invitation is usually signed in, so following the link to
+  check what the recipient would see consumed it. The actual recipient then got
+  a generic "this invitation cannot be used" and had to be invited again.
+
+  Acceptance is now bound to the invited address: it must match the verified
+  `email` claim on the caller's token, case-insensitively. A mismatch is
+  refused **and leaves the invitation unused**, so the intended recipient can
+  still accept. Refusals stay indistinguishable from expired, already accepted
+  and never existed, so the endpoint still cannot be used to discover which
+  tokens are real or who they were for.
+
+  An unverified address is refused too. Without that, somebody could register
+  as the invited address, skip the confirmation mail, and walk in.
+
+  **What to check on upgrade.** Existing pending invitations are unaffected and
+  keep working for the people they name. If you want to know whether this was
+  ever exercised on your deployment, `invitations` records both halves:
+
+  ```sql
+  select i.email as addressed_to, u.email as accepted_by, i.accepted_at, i.role
+    from invitations i
+    join user_identities u on u.user_id = i.accepted_by
+   where i.accepted_at is not null
+     and lower(u.email) is distinct from lower(i.email);
+  ```
+
+  Rows returned are invitations redeemed by somebody other than the addressee.
+  Most will be benign, an inviter opening their own link, but each one granted
+  a membership, so check them against `memberships` before dismissing them.
+
 ### Fixed
 
 - **Three actions read as column names in the log.** `create_ropa_manual`,
   `create_dsar_manual` and `update_ropa` were written by the backend and absent
   from the console's label table, so an auditor saw the raw value. They now read
   as sentences like every other row.
+- **The reason somebody gave for correcting a fact was stored and never shown
+  again.** Correcting a fact asks why, and the placeholder suggests the shape
+  of a useful answer ("We appointed a DPO in June"). That sentence was written
+  to `org_profile_facts.note` and read back by nothing: `ProfileFact` had no
+  field for it, so no response carried it and no page could render it. The
+  question was asked, answered, and filed where only a database client could
+  reach it.
+
+  It is the part of the history that matters most. "What we used to think"
+  could already show that a value changed and when, which is the easy half; why
+  it changed is the half a person checking an older finding actually needs, and
+  it is the reason the field was asked for.
+
+  `ProfileFact` now carries `note`, and the history page renders it under the
+  entry it belongs to, in the words it was written in. Notes recorded before
+  this upgrade appear too: they were always stored, so nothing is lost and
+  nothing needs backfilling.
 
 - **Signing out did not sign anybody out of the identity provider, and ended
   on a raw JSON error page.** The seed registered `${origin}/` as the web

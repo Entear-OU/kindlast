@@ -319,9 +319,20 @@ func (t *Tenant) Plan(ctx context.Context) (string, error) {
 // that is not a shortcut. The invitee is not a member of the organisation yet,
 // which is the entire point of an invitation, so no org-scoped policy can show
 // them the row naming them, and a policy permissive enough to try would show
-// every pending invitation to every authenticated stranger. Holding the token
-// is the authorization; the acting user comes from the GUC rather than from an
-// argument this code passes.
+// every pending invitation to every authenticated stranger.
+//
+// Holding the token is NOT the whole of the authorization, and 00033 is where
+// that changed. The token says which invitation; the verified `email` claim
+// says the caller is the person it was addressed to. Both are predicates in
+// the function's `where`, so a caller who holds a real token addressed to
+// somebody else selects no row: they are refused, and the invitation is not
+// consumed, so its actual recipient can still use it.
+//
+// The address is passed in rather than looked up, because §1.8 redeems the
+// invitation before the first GetCurrentUser and there is often no
+// `user_identities` row yet. It comes off the same verified token as the user
+// id in the GUC, so it is not a new thing to trust. The acting user still
+// comes from the GUC rather than from an argument this code passes.
 //
 // The token is hashed here and only the hash reaches the database, so the
 // value stored is useless to anyone reading a dump.
@@ -329,18 +340,18 @@ func (t *Tenant) Plan(ctx context.Context) (string, error) {
 // redirect into the organisation just joined, and that URL is built from the
 // slug. Returning without it would mean a second round trip on the one path
 // where the person is already waiting on a redirect.
-func (t *Tenant) AcceptInvitation(ctx context.Context, token string) (invitation org.Joined, err error) {
-	if token == "" {
+func (t *Tenant) AcceptInvitation(ctx context.Context, token, email string) (invitation org.Joined, err error) {
+	if token == "" || email == "" {
 		return org.Joined{}, ErrInvitationNotUsable
 	}
 
 	var orgID string
 
-	// coalesce, because the function returns null for the three not-usable
+	// coalesce, because the function returns null for the four not-usable
 	// cases and a null does not scan into a string.
 	err = t.tx.QueryRow(ctx, `
-		select coalesce(accept_invitation($1)::text, '')
-	`, HashInvitationToken(token)).Scan(&orgID)
+		select coalesce(accept_invitation($1, $2)::text, '')
+	`, HashInvitationToken(token), email).Scan(&orgID)
 	if err != nil {
 		return org.Joined{}, fmt.Errorf("postgres: accepting the invitation: %w", err)
 	}
