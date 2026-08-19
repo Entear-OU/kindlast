@@ -28,7 +28,28 @@ REFETCH_COOLDOWN_SECONDS = 60.0
 
 
 class KeySet:
-    """A cached JWKS, refetched when a token names a key it does not hold."""
+    """A cached JWKS, refetched when a token names a key it does not hold.
+
+    The whole subtlety of this class is when it goes back to the network, and
+    it is worth stating plainly because getting it wrong produces an outage
+    that looks like a signature bug.
+
+    A FRESHLY SEEDED ZITADEL SERVES `{"keys": []}`. It generates its signing key
+    lazily, on the first token it issues, so an empty set at boot is correct
+    rather than broken. A cache populated once at boot would therefore hold
+    nothing for the entire life of the process and reject every token that
+    followed, reporting each one as an unknown key rather than as an empty
+    cache. Hence the rule this class exists to enforce: **the boot fetch must
+    never be the last fetch.** `warm` is explicitly not counted as a refetch,
+    so the first token to arrive still gets one.
+
+    Not hypothetical, and not cheap: the first version counted it, and the
+    `Intelligence end to end` CI job failed on every run it ever executed while
+    passing on a laptop every time (ENT-253). CI's stack was seconds old and
+    the laptop's was a day old, so on the laptop the cooldown had long lapsed
+    and the first token drove the refetch that found the key. The Go side is
+    the same rule and the same reasoning, in `libs/chassis/oidc/jwks.go`.
+    """
 
     def __init__(
         self,
@@ -52,6 +73,11 @@ class KeySet:
         self._host_header = host_header
         self._client = client or httpx.Client(timeout=10.0)
         self._keys: dict[str, PyJWK] = {}
+        # `_refetched` is separate from `_last_fetch` on purpose, and the
+        # separation is the fix for ENT-253. A boot fetch updates neither, so
+        # the first token to name an unknown kid always reaches the network
+        # whatever `warm` did or failed to do. See the class docstring.
+        self._refetched = False
         self._last_fetch = 0.0
         # Fetching and swapping the map happen under one lock. Without it two
         # requests arriving on an unknown kid both fetch, which is the
@@ -61,10 +87,16 @@ class KeySet:
     def warm(self) -> None:
         """Fetch once at boot.
 
-        Failure here is deliberately not fatal to the caller's startup: an
-        authorization server that is slow to come up in a compose stack should
-        not permanently break a service that would have recovered on its first
-        request. `key_for` refetches on demand.
+        Raising here is deliberately not fatal to the caller's startup, and the
+        caller is what has to honour that: an authorization server that is slow
+        to come up in a compose stack should not permanently break a service
+        that would have recovered on its first request. `main.build_app` logs
+        and carries on for exactly that reason.
+
+        A warm neither starts the refetch cooldown nor counts as the one
+        refetch it permits. That single line is the difference between a
+        working stack and one that rejects every token it is ever shown; the
+        class docstring has the whole argument.
         """
         with self._lock:
             self._fetch_locked()
@@ -75,15 +107,48 @@ class KeySet:
             if key is not None:
                 return key
 
-            # Unknown kid. Refetch, but at most once per cooldown.
-            if time.monotonic() - self._last_fetch < REFETCH_COOLDOWN_SECONDS:
-                raise TokenInvalid(f"no signing key for kid {kid!r}")
+            # Unknown kid. Refetch, but at most once per cooldown, and always
+            # at least once whatever `warm` did.
+            if not self._may_refetch_locked():
+                raise TokenInvalid(
+                    f"no signing key for kid {kid!r} "
+                    f"(refetched within the last {REFETCH_COOLDOWN_SECONDS:g}s)"
+                )
 
-            self._fetch_locked()
+            # The outcome of the fetch does not change the bookkeeping. A
+            # failed or fruitless refetch still starts the cooldown, or a down
+            # authorization server would mean one outbound request per inbound
+            # request, which is the amplification this cache exists to prevent.
+            self._refetched = True
+            self._last_fetch = time.monotonic()
+            try:
+                self._fetch_locked()
+            except Exception as exc:  # noqa: BLE001 - a refusal, not a 500
+                # A transport failure escaping here would leave the verifier,
+                # which turns everything it catches into a refusal, and reach
+                # the handler as an unhandled exception: a 500 that tells a
+                # caller Intelligence is broken when the authorization server
+                # is the thing that is down.
+                raise TokenInvalid(
+                    f"no signing key for kid {kid!r}, and the refetch failed: {exc}"
+                ) from exc
+
             key = self._keys.get(kid) if kid else self._single_key_locked()
             if key is None:
                 raise TokenInvalid(f"no signing key for kid {kid!r}")
             return key
+
+    def _may_refetch_locked(self) -> bool:
+        """The one question this cache exists to get right.
+
+        The first miss always goes to the network, whatever `warm` did, because
+        `warm` may have cached an empty set from an authorization server that
+        had not generated its key yet, or may have failed outright. After that
+        the cooldown applies.
+        """
+        if not self._refetched:
+            return True
+        return time.monotonic() - self._last_fetch >= REFETCH_COOLDOWN_SECONDS
 
     def _single_key_locked(self) -> PyJWK | None:
         """The only key, when a token names none.
@@ -98,7 +163,9 @@ class KeySet:
         return None
 
     def _fetch_locked(self) -> None:
-        self._last_fetch = time.monotonic()
+        # Deliberately does NOT touch `_refetched` or `_last_fetch`. Only
+        # `key_for` records a refetch, so a boot warm cannot start the
+        # cooldown. See the class docstring.
         headers = {"Host": self._host_header} if self._host_header else None
         response = self._client.get(self._jwks_uri, headers=headers)
         response.raise_for_status()

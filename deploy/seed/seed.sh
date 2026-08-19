@@ -9,17 +9,15 @@
 #      written to /machinekey/web-client.json for the web app to pick up in
 #      dev. Idempotent: existing objects are left alone.
 #
-# Runs on alpine with tools installed at start; this is a dev/CI job, not a
-# production image.
+# Runs on the small image built by deploy/seed/Dockerfile, which carries psql,
+# curl and jq. This script used to install them itself with `apk add`, on every
+# single boot: a runtime fetch, and the one thing that stopped the stack coming
+# up with egress blocked (ENT-240). The Dockerfile explains the move.
 set -eu
-
-apk add --no-cache --quiet postgresql-client curl jq
 
 echo "seed: applying postgres-app fixtures"
 psql -v ON_ERROR_STOP=1 -q -f /seed.sql
 
-PAT="$(tr -d '[:space:]' < /machinekey/seed-bot-pat.txt)"
-AUTH="Authorization: Bearer ${PAT}"
 HOST="Host: ${ZITADEL_HOST_HEADER}"
 
 api() {
@@ -32,13 +30,56 @@ api() {
   fi
 }
 
+# WAIT UNTIL THE MANAGEMENT API ANSWERS THIS CREDENTIAL, RATHER THAN ASSUMING
+# IT DOES (ENT-240).
+#
+# `auth` reports healthy before Zitadel has finished setting the first instance
+# up, so the seed bot's token can be absent from the shared volume, or present
+# and not yet usable, at the moment this job starts. Nothing ever noticed,
+# because the job used to open with `apk add curl jq postgresql-client` and
+# those few seconds were doing the waiting.
+#
+# Taking that install out to make the stack run air-gapped removed the delay
+# too, and the failure it exposed is the quiet kind. Every call 401s, `curl -sf`
+# writes nothing, `jq` reads empty input and returns empty, and so every id
+# below comes out blank: the seed reports "created project" with no id, writes
+# an empty audience file, exits 0, and core-api then refuses to start because
+# KINDLAST_OIDC_AUDIENCE is empty. A few seconds of package installation were
+# the only thing between a working stack and that, which is a good argument for
+# waiting on purpose instead.
+PROJECT_QUERY='{"queries":[{"nameQuery":{"name":"kindlast","method":"TEXT_QUERY_METHOD_EQUALS"}}]}'
+PROJECT_SEARCH=""
+attempt=0
+while [ "$attempt" -lt 60 ]; do
+  # Re-read the token each time: on a cold volume the file appears late.
+  PAT="$(tr -d '[:space:]' < /machinekey/seed-bot-pat.txt 2>/dev/null || true)"
+  AUTH="Authorization: Bearer ${PAT}"
+  if [ -n "$PAT" ] &&
+    PROJECT_SEARCH="$(api POST /management/v1/projects/_search "$PROJECT_QUERY")"; then
+    break
+  fi
+  PROJECT_SEARCH=""
+  attempt=$((attempt + 1))
+  sleep 1
+done
+
+if [ -z "$PROJECT_SEARCH" ]; then
+  echo "seed: Zitadel never accepted the seed bot's token from" \
+    "/machinekey/seed-bot-pat.txt (waited 60s)" >&2
+  exit 1
+fi
+
 echo "seed: ensuring zitadel project 'kindlast'"
-PROJECT_ID="$(api POST /management/v1/projects/_search \
-  '{"queries":[{"nameQuery":{"name":"kindlast","method":"TEXT_QUERY_METHOD_EQUALS"}}]}' \
-  | jq -r '.result[0].id // empty')"
+PROJECT_ID="$(printf '%s' "$PROJECT_SEARCH" | jq -r '.result[0].id // empty')"
 
 if [ -z "$PROJECT_ID" ]; then
-  PROJECT_ID="$(api POST /management/v1/projects '{"name":"kindlast"}' | jq -r '.id')"
+  PROJECT_ID="$(api POST /management/v1/projects '{"name":"kindlast"}' | jq -r '.id // empty')"
+  # Loud, because the alternative is a stack that comes up with an empty
+  # audience and a core-api that will not start, three services away from here.
+  if [ -z "$PROJECT_ID" ]; then
+    echo "seed: creating the 'kindlast' project returned no id" >&2
+    exit 1
+  fi
   echo "seed: created project ${PROJECT_ID}"
 else
   echo "seed: project exists (${PROJECT_ID})"

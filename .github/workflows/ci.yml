@@ -296,6 +296,21 @@ jobs:
       # fall back on: if the stack is not up, the steps above have already
       # failed, which is the property `test:db`'s self-skip costs on a laptop
       # and CI must not repeat.
+      #
+      # AND IT RUNS THE INSTANT THE SERVICE IS LISTENING, WHICH IS NOW LOAD
+      # BEARING. Do not put a sleep here, and do not wait for the JWKS to look
+      # ready: a stack that is seconds old is the condition this step exists to
+      # exercise, and it is the only condition under which ENT-253 was visible.
+      #
+      # That failure was a 401 on every CI run and a 200 on every laptop, for
+      # one reason: a freshly seeded Zitadel has generated no signing key yet,
+      # Intelligence warmed its key cache against that empty document, and the
+      # boot fetch started a refetch cooldown that then declined the one
+      # request that would have found the key. A day-old laptop stack is past
+      # the cooldown, so the first token drives the refetch and nothing is ever
+      # wrong. A wait added here would have made this job green while leaving
+      # every real deployment's first minute broken, which is the wrong way
+      # round: the fix belongs in the key cache, and it is there.
       - name: Draft a narrative end to end
         run: python3 scripts/intelligence-smoke.py
 
@@ -503,8 +518,13 @@ jobs:
       # yet. Serialising is the honest statement that these are integration
       # tests over shared infrastructure rather than unit tests.
       #
-      # It does not help the case of two worktrees sharing one compose stack,
-      # which is ENT-250 and needs a stack per worktree.
+      # It does not help the case of two worktrees sharing one compose stack.
+      # That is a different collision with a different fix, and it landed in
+      # ENT-250: scripts/stack-env.sh derives a project name and a port block
+      # per worktree, so two branches address two databases. Neither mechanism
+      # substitutes for the other, and neither is needed here: a CI job is one
+      # checkout with one stack, so this workflow sets no COMPOSE_PROJECT_NAME
+      # and gets the default project and the default ports.
       - name: Go tests that need the stack
         env:
           KINDLAST_REQUIRE_STACK: "1"
@@ -537,3 +557,40 @@ jobs:
       - name: Stop the stack
         if: always()
         run: docker compose -f deploy/compose.yaml down -v
+
+  # Air-gapped operation, which docs/self-hosting.md states as a product
+  # property (ENT-240). The stack is brought up on a network with no route out
+  # and has to serve the console anyway.
+  #
+  # ITS OWN JOB, AND IT COSTS A SECOND BUILD OF THE SAME IMAGES. Folding it
+  # into `stack` would have saved that, and would have reported "tenant
+  # isolation" and "runs with no internet" as one signal. They fail for
+  # unrelated reasons and one of them is a claim made to operators on a
+  # documentation page, so it is worth a line of its own on a pull request.
+  #
+  # KINDLAST_REQUIRE_AIRGAP=1 for the reason the database suite is booted
+  # rather than allowed to skip: the script self-skips when the machine has no
+  # internet to block, which is right on a laptop and wrong here, where a quiet
+  # skip would mean the property was never checked and the run was still green.
+  airgap:
+    name: Air-gapped operation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The stack comes up and serves with egress blocked
+        env:
+          KINDLAST_REQUIRE_AIRGAP: "1"
+        run: ./scripts/airgap-check.sh
+
+      - name: Stack logs on failure
+        if: failure()
+        run: |
+          docker compose -f deploy/compose.yaml -f deploy/compose.airgap.yaml \
+            logs --tail 100 || true
+
+      - name: Stop the stack
+        if: always()
+        run: |
+          docker compose -f deploy/compose.yaml -f deploy/compose.airgap.yaml \
+            down -v || true

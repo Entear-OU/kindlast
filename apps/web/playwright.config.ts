@@ -19,6 +19,16 @@ import { defineConfig, devices } from '@playwright/test'
  * which is the production build a self-hoster runs (ENT-241):
  *
  *     KINDLAST_WEB_URL=http://localhost:8000 bun run --cwd apps/web test:e2e
+ *
+ * In a git worktree running its own stack (ENT-250) the edge is not on 8000,
+ * and `scripts/stack-env.sh` puts its address in KINDLAST_EDGE_URL:
+ *
+ *     eval "$(./scripts/stack-env.sh)"
+ *     KINDLAST_WEB_URL="$KINDLAST_EDGE_URL" bun run --cwd apps/web test:e2e
+ *
+ * KINDLAST_WEB_URL is deliberately not derived for you. It carries a second
+ * meaning below, "a console is already running, do not start one", so a script
+ * that set it silently would stop the dev-server path from ever running.
  */
 export default defineConfig({
   testDir: './e2e',
