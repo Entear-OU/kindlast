@@ -158,6 +158,52 @@ changes: your compliance profile, findings and DSAR content start leaving the
 deployment, and the provider becomes a processor you are responsible for
 recording.
 
+### Letting an organisation choose its own provider (ENT-236)
+
+`KINDLAST_MODEL_URL` above is a decision for the whole deployment. This is the
+other half: one organisation inside it choosing a hosted provider while the
+rest keep using the model you run.
+
+**It is off unless you switch it on, and that default is the point.** With
+`KINDLAST_BYOK_PROVIDERS` unset, nobody in this deployment can point their
+compliance data at an external API, whatever any of their owners decide. If
+"nobody at this company may do that" is your position, the way to hold it is to
+leave this alone, and nothing in the product can override it.
+
+```
+KINDLAST_BYOK_PROVIDERS=openai=api.openai.com,azure=.openai.azure.com
+```
+
+**`name=host`, not a bare name.** The host is what an endpoint is checked
+against, so a list of names alone would let an organisation pick a permitted
+provider and point the endpoint anywhere. A leading dot makes an entry a
+suffix, so `.openai.azure.com` permits a customer's own Azure resource without
+permitting every host that ends in those characters. A malformed entry stops
+core-api at boot rather than leaving you with a deployment that permits nothing
+while its configuration says otherwise.
+
+You also need `KINDLAST_INTEGRATION_KEY` set, because a provider key is sealed
+with the same keyring as an integration credential. Without one, a provider
+that needs a key is refused rather than stored in plaintext.
+
+**What happens then.** An owner, and only an owner, sees the choice under
+Settings, is shown in plain language what changes, and has to confirm it before
+anything is written. The change lands in that organisation's `audit_log`
+alongside every other decision, so it lists, filters and exports with the rest
+of their record, and every agent run from then on records which provider served
+it. Turning it back off destroys the stored key in the same statement that
+revokes the choice; it cannot reach content the provider has already processed,
+and the product says so rather than implying otherwise.
+
+**What is checked, and what is not.** Every endpoint is required to be HTTPS,
+to be on the host you permitted, and to resolve to a public address: private,
+loopback and link-local answers are refused, and one private answer among
+several refuses the lot. Those checks run again on every use rather than once
+when the endpoint is saved, so a provider you remove from this list stops being
+reachable for organisations that already chose it. What is not closed is DNS
+rebinding between the check and the request; what bounds it is that the host
+had to be on your list in the first place.
+
 ### Required for the full agent loop
 
 | Variable | Why |
@@ -207,7 +253,8 @@ you have to switch on.
 | Google Fonts | `bun run build` | Yes | Nothing to do at runtime. `next/font/google` downloads the files during the build and serves them from your own origin, so the running app never asks Google for anything |
 | Customer MCP servers, via the workers gateway | Request time | No | Nothing to do. `KINDLAST_GATEWAY_EGRESS_ALLOWLIST` is empty unless you set it, and an empty allow-list refuses every fetch |
 | Resend, for email | Sending a notification | No | The default is `EMAIL_PROVIDER=console`, which logs instead of sending |
-| A hosted model API | Every agent run | No | The default `KINDLAST_MODEL_URL` is `http://model:8080`, the llama.cpp service in your own stack |
+| A hosted model API, for the whole deployment | Every agent run | No | The default `KINDLAST_MODEL_URL` is `http://model:8080`, the llama.cpp service in your own stack |
+| A hosted model API, chosen by one organisation | Every agent run for that organisation | No | `KINDLAST_BYOK_PROVIDERS` is empty unless you set it, and an empty list permits no provider to anybody. See "Letting an organisation choose its own provider" above |
 | `va.vercel-scripts.com`, via `@vercel/analytics` | Page load, development builds only | Development only | See the note below |
 
 Two things that look like egress and are not. **Stripe** never receives a
