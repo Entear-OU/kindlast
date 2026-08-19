@@ -200,11 +200,31 @@ describe.skipIf(!reachable)('the profile as of an instant', () => {
     const first = await record(orgA, key, 'consent')
 
     // The instant a run would have stamped on `agent_runs.profile_as_of`.
-    const asOf = (await app.query(`select now() as t`)).rows[0].t
+    //
+    // `clock_timestamp()` rather than `now()`, and the close below takes an
+    // explicit instant rather than reading the clock again. Both changes are
+    // about the same hazard.
+    //
+    // `now()` is the TRANSACTION timestamp. These statements each run in their
+    // own implicit transaction, so two adjacent ones can be assigned the same
+    // microsecond on a fast machine. When that happened, `valid_to` equalled
+    // `asOf`, the half-open interval test `valid_to > asOf` was false, and the
+    // reconstruction returned nothing. It passed on a laptop against a busy
+    // shared database and failed in CI against a fresh one, which is the wrong
+    // way round for a test to fail and took a real CI run to see.
+    //
+    // Closing at `asOf` plus a millisecond removes the clock from the
+    // assertion entirely: the interval is known to contain `asOf` by
+    // construction rather than by winning a race. This is the same family as
+    // the zero-length interval ENT-228 hit when a close and an open shared one
+    // `now()`.
+    const asOf = (await app.query(`select clock_timestamp() as t`)).rows[0].t
 
     await app.query(
-      `update org_profile_facts set valid_to = now() where id = $1`,
-      [first],
+      `update org_profile_facts
+          set valid_to = $2::timestamptz + interval '1 millisecond'
+        where id = $1`,
+      [first, asOf],
     )
     await record(orgA, key, 'legitimate-interest')
 
