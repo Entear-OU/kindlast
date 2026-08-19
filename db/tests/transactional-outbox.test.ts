@@ -236,25 +236,55 @@ describe.skipIf(!reachable)('transactional outbox', () => {
     expect(r.rows).toHaveLength(0)
   })
 
+  /**
+   * Asserts the application did not change the outbox, whichever layer stopped
+   * it.
+   *
+   * Two ways that can hold, and it matters that both count. Without a grant the
+   * statement raises `42501` before the planner sees a policy. With a grant but
+   * no policy it succeeds having matched nothing, silently. 00014 believed it
+   * had the first and had the second; 00029 gave it the first. A test that
+   * insisted on the raise would go red the moment somebody re-granted, which is
+   * the opposite of what it should do, and one that insisted on the row count
+   * would have to swallow the raise. So take either, and let the caller's check
+   * on the stored row carry the real weight.
+   */
+  async function refusedOrTouchedNothing(
+    sql: string,
+    params: unknown[],
+    message: string,
+  ): Promise<void> {
+    try {
+      const r = await app.query(sql, params)
+      expect(r.rowCount, message).toBe(0)
+    } catch (error) {
+      expect((error as { code?: string }).code, message).toBe('42501')
+    }
+  }
+
   it('the application cannot mark a message delivered', async () => {
-    // There is no update policy for kindlast_app, deliberately. `sent` is what
-    // a regulator reads as evidence the invitation went out, and the thing that
-    // serves requests must not be able to assert a delivery it did not perform.
+    // There is no update policy for kindlast_app and, since 00029, no update
+    // grant either. `sent` is what a regulator reads as evidence the invitation
+    // went out, and the thing that serves requests must not be able to assert a
+    // delivery it did not perform.
     //
-    // The assertion is on the stored row, not on whether an error was raised.
-    // A missing UPDATE policy does not error: no row satisfies it, so the
-    // statement succeeds having changed nothing. That silence is exactly why
-    // this has to be checked against the row afterwards. An assertion that only
-    // looked for an exception would pass just as happily against a table that
-    // had granted the update.
+    // The primary assertion is on the stored row rather than on the error,
+    // and that was the whole point when 00014 wrote it: a missing policy does
+    // not raise, so a test looking only for an exception would have passed
+    // against a table that granted the update. 00014's comment said the grant
+    // was absent and it was not, which is the discrepancy ENT-243 fixed.
+    //
+    // So both are asserted now. `refusedOrTouchedNothing` accepts either
+    // spelling of the refusal, because the durable property is that the row
+    // does not move; the row check below is what proves it.
     const before = await rowByEmail(PENDING_A, orgA, ada)
 
     await setTenant(app, orgA, ada)
-    const updated = await app.query(
+    await refusedOrTouchedNothing(
       `update transactional_outbox set status = 'sent', sent_at = now() where id = $1`,
       [before.id],
+      'the application updated a queued message',
     )
-    expect(updated.rowCount, 'the application updated a queued message').toBe(0)
 
     const after = await rowByEmail(PENDING_A, orgA, ada)
     expect(
@@ -268,11 +298,11 @@ describe.skipIf(!reachable)('transactional outbox', () => {
     const before = await rowByEmail(PENDING_A, orgA, ada)
 
     await setTenant(app, orgA, ada)
-    const deleted = await app.query(
+    await refusedOrTouchedNothing(
       `delete from transactional_outbox where id = $1`,
       [before.id],
+      'the application deleted a queued message',
     )
-    expect(deleted.rowCount, 'the application deleted a queued message').toBe(0)
 
     const after = await rowByEmail(PENDING_A, orgA, ada)
     expect(after, 'the message is gone').toBeDefined()

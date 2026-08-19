@@ -155,6 +155,29 @@ else
   echo "seed: core-api-client already holds a grant (${MACHINE_GRANT})"
 fi
 
+# TWO REDIRECT URIS, BECAUSE THERE ARE TWO CONSOLES (ENT-241).
+#
+# An authorization server refuses any redirect URI it was not given, so this
+# list decides which consoles can complete a sign-in at all.
+#
+# WEB_REDIRECT_URI is the dev server on the host, which is what
+# scripts/web-env.sh writes into .env.local and what `bun run test:e2e` drives
+# by default. WEB_REDIRECT_URI_EDGE is the containerised console, which a
+# browser reaches through the edge rather than on a port of its own.
+#
+# Both, rather than one, because both are real and they coexist: a maintainer
+# runs the dev server against this stack while the stack serves the built
+# console on the edge, and neither should take the other's sign-in away.
+#
+# `unique` because a deployment that sets them to the same value should get one
+# entry rather than a duplicate.
+REDIRECT_URIS="$(jq -cn --arg dev "$WEB_REDIRECT_URI" --arg edge "$WEB_REDIRECT_URI_EDGE" \
+  '[$dev, $edge] | unique')"
+# Where sign-out may return somebody: each console's own origin, derived from
+# its callback rather than configured separately, so the two cannot drift.
+LOGOUT_URIS="$(jq -cn --arg dev "$WEB_REDIRECT_URI" --arg edge "$WEB_REDIRECT_URI_EDGE" \
+  '[$dev, $edge] | map(sub("auth/callback$"; "")) | unique')"
+
 echo "seed: ensuring 'web' OIDC client"
 APP_ID="$(api POST "/management/v1/projects/${PROJECT_ID}/apps/_search" \
   '{"queries":[{"nameQuery":{"name":"web","method":"TEXT_QUERY_METHOD_EQUALS"}}]}' \
@@ -163,8 +186,8 @@ APP_ID="$(api POST "/management/v1/projects/${PROJECT_ID}/apps/_search" \
 if [ -z "$APP_ID" ]; then
   RESPONSE="$(api POST "/management/v1/projects/${PROJECT_ID}/apps/oidc" "{
     \"name\": \"web\",
-    \"redirectUris\": [\"${WEB_REDIRECT_URI}\"],
-    \"postLogoutRedirectUris\": [\"http://localhost:3000/\"],
+    \"redirectUris\": ${REDIRECT_URIS},
+    \"postLogoutRedirectUris\": ${LOGOUT_URIS},
     \"responseTypes\": [\"OIDC_RESPONSE_TYPE_CODE\"],
     \"grantTypes\": [\"OIDC_GRANT_TYPE_AUTHORIZATION_CODE\", \"OIDC_GRANT_TYPE_REFRESH_TOKEN\"],
     \"appType\": \"OIDC_APP_TYPE_WEB\",
@@ -189,6 +212,34 @@ else
   api POST "/management/v1/projects/${PROJECT_ID}/apps/_search" \
     '{"queries":[{"nameQuery":{"name":"web","method":"TEXT_QUERY_METHOD_EQUALS"}}]}' \
     | jq -r '.result[0].oidcConfig.clientId // empty' > /machinekey/web-client-id.txt
+
+  # The redirect URIs are re-published too, and this branch is the one that
+  # matters most for ENT-241.
+  #
+  # A stack that is already up has a `web` client registered before the
+  # containerised console existed, so its only redirect URI is the dev
+  # server's. Creating the client is the path a clean checkout takes; every
+  # existing stack takes this one, and without it the console would be served
+  # and its sign-in refused with a redirect_uri mismatch. "It works on a fresh
+  # volume" is exactly the sort of fix that is not one.
+  #
+  # This replaces the OIDC configuration rather than patching it, because the
+  # API offers no patch, so every field the creation branch sets is repeated
+  # here. It does not touch the client secret, which has its own endpoint, so a
+  # re-run does not invalidate what web-client.json holds.
+  api PUT "/management/v1/projects/${PROJECT_ID}/apps/${APP_ID}/oidc_config" "{
+    \"redirectUris\": ${REDIRECT_URIS},
+    \"postLogoutRedirectUris\": ${LOGOUT_URIS},
+    \"responseTypes\": [\"OIDC_RESPONSE_TYPE_CODE\"],
+    \"grantTypes\": [\"OIDC_GRANT_TYPE_AUTHORIZATION_CODE\", \"OIDC_GRANT_TYPE_REFRESH_TOKEN\"],
+    \"appType\": \"OIDC_APP_TYPE_WEB\",
+    \"authMethodType\": \"OIDC_AUTH_METHOD_TYPE_BASIC\",
+    \"accessTokenType\": \"OIDC_TOKEN_TYPE_JWT\",
+    \"devMode\": true
+  }" > /dev/null \
+    && echo "seed: web client redirect URIs published ${REDIRECT_URIS}" \
+    || echo "seed: WARNING could not publish the web client redirect URIs"
+
   echo "seed: web client exists (${APP_ID})"
 fi
 
