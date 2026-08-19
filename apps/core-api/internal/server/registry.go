@@ -70,6 +70,11 @@ func Services() []protoreflect.ServiceDescriptor {
 		// membership and RLS like the rest of it. The service that actually
 		// dials out is GatewayService, which this binary does not serve.
 		corev1.File_kindlast_core_v1_integrations_proto,
+		// ModelService (ENT-236). Where an organisation's model runs, on
+		// `model:read` and `model:write`. Both are human scopes; what makes the
+		// write owner-only is a role check in Go, because a scope bounds what a
+		// client may do and this bounds which person may.
+		corev1.File_kindlast_core_v1_model_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the

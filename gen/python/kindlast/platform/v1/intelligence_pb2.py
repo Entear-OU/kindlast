@@ -26,7 +26,7 @@ from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xe1\x01\n\x15\x44raftNarrativeRequest\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x16\n\x06signal\x18\x02 \x01(\tR\x06signal\x12I\n\x0bobligations\x18\x03 \x03(\x0b\x32\'.kindlast.platform.v1.ObligationContextR\x0bobligations\x12.\n\x14on_behalf_of_user_id\x18\x04 \x01(\tR\x10onBehalfOfUserId\x12\x1e\n\ndelegation\x18\x05 \x01(\tR\ndelegation\"\x80\x01\n\x11ObligationContext\x12\x12\n\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n\x07summary\x18\x03 \x01(\tR\x07summary\x12\'\n\x0f\x61pplies_because\x18\x04 \x03(\tR\x0e\x61ppliesBecause\"\xc3\x02\n\x16\x44raftNarrativeResponse\x12<\n\x07outcome\x18\x01 \x01(\x0e\x32\".kindlast.platform.v1.DraftOutcomeR\x07outcome\x12\x1c\n\tnarrative\x18\x02 \x01(\tR\tnarrative\x12%\n\x0eoutcome_detail\x18\x03 \x01(\tR\routcomeDetail\x12-\n\x12resolved_citations\x18\x04 \x03(\tR\x11resolvedCitations\x12U\n\x12rejected_citations\x18\x05 \x03(\x0b\x32&.kindlast.platform.v1.RejectedCitationR\x11rejectedCitations\x12 \n\x0c\x61gent_run_id\x18\x06 \x01(\tR\nagentRunId\">\n\x10RejectedCitation\x12\x12\n\x04slug\x18\x01 \x01(\tR\x04slug\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason*\x7f\n\x0c\x44raftOutcome\x12\x1d\n\x19\x44RAFT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1b\n\x17\x44RAFT_OUTCOME_SUCCEEDED\x10\x01\x12\x19\n\x15\x44RAFT_OUTCOME_REFUSED\x10\x02\x12\x18\n\x14\x44RAFT_OUTCOME_FAILED\x10\x03\x32\xc6\x01\n\x13IntelligenceService\x12\xae\x01\n\x0e\x44raftNarrative\x12+.kindlast.platform.v1.DraftNarrativeRequest\x1a,.kindlast.platform.v1.DraftNarrativeResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/narratives:draft:\x01*B\xe5\x01\n\x18\x63om.kindlast.platform.v1B\x11IntelligenceProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xad\x02\n\x15\x44raftNarrativeRequest\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x16\n\x06signal\x18\x02 \x01(\tR\x06signal\x12I\n\x0bobligations\x18\x03 \x03(\x0b\x32\'.kindlast.platform.v1.ObligationContextR\x0bobligations\x12.\n\x14on_behalf_of_user_id\x18\x04 \x01(\tR\x10onBehalfOfUserId\x12\x1e\n\ndelegation\x18\x05 \x01(\tR\ndelegation\x12J\n\x0emodel_endpoint\x18\x06 \x01(\x0b\x32#.kindlast.platform.v1.ModelEndpointR\rmodelEndpoint\"u\n\rModelEndpoint\x12\x1a\n\x08provider\x18\x01 \x01(\tR\x08provider\x12\x19\n\x08\x62\x61se_url\x18\x02 \x01(\tR\x07\x62\x61seUrl\x12\x14\n\x05model\x18\x03 \x01(\tR\x05model\x12\x17\n\x07\x61pi_key\x18\x04 \x01(\tR\x06\x61piKey\"\x80\x01\n\x11ObligationContext\x12\x12\n\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n\x07summary\x18\x03 \x01(\tR\x07summary\x12\'\n\x0f\x61pplies_because\x18\x04 \x03(\tR\x0e\x61ppliesBecause\"\xc3\x02\n\x16\x44raftNarrativeResponse\x12<\n\x07outcome\x18\x01 \x01(\x0e\x32\".kindlast.platform.v1.DraftOutcomeR\x07outcome\x12\x1c\n\tnarrative\x18\x02 \x01(\tR\tnarrative\x12%\n\x0eoutcome_detail\x18\x03 \x01(\tR\routcomeDetail\x12-\n\x12resolved_citations\x18\x04 \x03(\tR\x11resolvedCitations\x12U\n\x12rejected_citations\x18\x05 \x03(\x0b\x32&.kindlast.platform.v1.RejectedCitationR\x11rejectedCitations\x12 \n\x0c\x61gent_run_id\x18\x06 \x01(\tR\nagentRunId\">\n\x10RejectedCitation\x12\x12\n\x04slug\x18\x01 \x01(\tR\x04slug\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason*\x7f\n\x0c\x44raftOutcome\x12\x1d\n\x19\x44RAFT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1b\n\x17\x44RAFT_OUTCOME_SUCCEEDED\x10\x01\x12\x19\n\x15\x44RAFT_OUTCOME_REFUSED\x10\x02\x12\x18\n\x14\x44RAFT_OUTCOME_FAILED\x10\x03\x32\xc6\x01\n\x13IntelligenceService\x12\xae\x01\n\x0e\x44raftNarrative\x12+.kindlast.platform.v1.DraftNarrativeRequest\x1a,.kindlast.platform.v1.DraftNarrativeResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/narratives:draft:\x01*B\xe5\x01\n\x18\x63om.kindlast.platform.v1B\x11IntelligenceProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,16 +36,18 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'\n\030com.kindlast.platform.v1B\021IntelligenceProtoP\001ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\242\002\003KPX\252\002\024Kindlast.Platform.V1\312\002\024Kindlast\\Platform\\V1\342\002 Kindlast\\Platform\\V1\\GPBMetadata\352\002\026Kindlast::Platform::V1'
   _globals['_INTELLIGENCESERVICE'].methods_by_name['DraftNarrative']._loaded_options = None
   _globals['_INTELLIGENCESERVICE'].methods_by_name['DraftNarrative']._serialized_options = b'\212\265\030\025internal:intelligence\202\323\344\223\002\"\"\035/internal/v1/narratives:draft:\001*'
-  _globals['_DRAFTOUTCOME']._serialized_start=877
-  _globals['_DRAFTOUTCOME']._serialized_end=1004
+  _globals['_DRAFTOUTCOME']._serialized_start=1072
+  _globals['_DRAFTOUTCOME']._serialized_end=1199
   _globals['_DRAFTNARRATIVEREQUEST']._serialized_start=129
-  _globals['_DRAFTNARRATIVEREQUEST']._serialized_end=354
-  _globals['_OBLIGATIONCONTEXT']._serialized_start=357
-  _globals['_OBLIGATIONCONTEXT']._serialized_end=485
-  _globals['_DRAFTNARRATIVERESPONSE']._serialized_start=488
-  _globals['_DRAFTNARRATIVERESPONSE']._serialized_end=811
-  _globals['_REJECTEDCITATION']._serialized_start=813
-  _globals['_REJECTEDCITATION']._serialized_end=875
-  _globals['_INTELLIGENCESERVICE']._serialized_start=1007
-  _globals['_INTELLIGENCESERVICE']._serialized_end=1205
+  _globals['_DRAFTNARRATIVEREQUEST']._serialized_end=430
+  _globals['_MODELENDPOINT']._serialized_start=432
+  _globals['_MODELENDPOINT']._serialized_end=549
+  _globals['_OBLIGATIONCONTEXT']._serialized_start=552
+  _globals['_OBLIGATIONCONTEXT']._serialized_end=680
+  _globals['_DRAFTNARRATIVERESPONSE']._serialized_start=683
+  _globals['_DRAFTNARRATIVERESPONSE']._serialized_end=1006
+  _globals['_REJECTEDCITATION']._serialized_start=1008
+  _globals['_REJECTEDCITATION']._serialized_end=1070
+  _globals['_INTELLIGENCESERVICE']._serialized_start=1202
+  _globals['_INTELLIGENCESERVICE']._serialized_end=1400
 # @@protoc_insertion_point(module_scope)

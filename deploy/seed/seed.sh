@@ -57,6 +57,7 @@ for role in \
   audit:read org:read org:manage \
   corpus:read \
   memory:read memory:write \
+  model:read model:write \
   integrations:read integrations:write \
   internal:ingest internal:intelligence internal:act-on-behalf
 do

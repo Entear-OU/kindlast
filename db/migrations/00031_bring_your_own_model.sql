@@ -35,8 +35,9 @@
 -- Moving is revoking one row and inserting another, and 00025 reached the same
 -- conclusion for the same reason about a connection's endpoint.
 --
--- What the application may change is the status (with its revocation stamps)
--- and the credential, which is rotation. A partial unique index keeps one
+-- What the application may change is the status and its revocation stamps, plus
+-- the credential columns, which exist in that grant only so a revoke can
+-- destroy the key in the same statement. A partial unique index keeps one
 -- active row per organisation so "switch" cannot silently become "two, and
 -- whichever the query ordered first".
 --
@@ -156,10 +157,11 @@ grant select, insert on public.org_model_config to kindlast_app;
 -- provider, NOT the endpoint, NOT the model. See the header: those three are
 -- the decision, and a decision that can be edited in place has no history.
 --
--- The credential columns are here rather than insert-only because rotating a
--- key is not a new processing decision: the sub-processor is unchanged, and
--- forcing a revoke-and-recreate for it would fill the record with events that
--- did not happen.
+-- The credential columns are here for one reason and it is not rotation: the
+-- revoke has to null them in the SAME statement that sets the status, or the
+-- check constraint below refuses it. Rotating a key is a revoke and an insert
+-- like every other change, which costs a row and buys the property that a
+-- credential column is never written twice.
 grant update (status, revoked_at, revoked_by,
               credential_ciphertext, credential_key_id)
   on public.org_model_config to kindlast_app;
