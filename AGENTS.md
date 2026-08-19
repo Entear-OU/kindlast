@@ -198,6 +198,26 @@ it, and the reason it sets credentials Mailpit does not want is written down in
 `deploy/seed/seed.sh`: Zitadel refuses a provider that has none and reports it
 as a config that does not exist.
 
+**Working in a git worktree? Give it its own stack first** (ENT-250):
+
+```bash
+./scripts/stack-env.sh --write      # once per worktree, writes deploy/.env
+docker compose -f deploy/compose.yaml up -d
+eval "$(./scripts/stack-env.sh)"    # once per shell, for the test suites
+```
+
+`deploy/compose.yaml` pins `name: kindlast`, so without this every worktree on
+the machine addresses one Postgres. That is not a tidiness problem: it is how
+an unmerged branch's migration reaches a sibling branch's test run, and it has
+already taken `main` red over a column that existed only because of a branch
+that had not merged. The script derives a project name and a block of host
+ports from the worktree path; compose reads `deploy/.env` on its own, and the
+`eval` puts the same values plus the DSNs in the shell. A single checkout gets
+today's defaults and needs none of it.
+[`docs/maintainers.md`](./docs/maintainers.md) has the longer version,
+including why this and `go test -p 1` are siblings that do not substitute for
+each other.
+
 ## Row level security, which is the thing to get right
 
 A plain Postgres container starts with a superuser, and **superusers bypass
