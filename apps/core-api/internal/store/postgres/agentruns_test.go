@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	"github.com/google/uuid"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 )
 
 // agentStore opens the producer pool, or skips.

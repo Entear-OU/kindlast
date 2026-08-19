@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 )
 
 // migratorConn opens a connection with enough privilege to stage a billing row.
