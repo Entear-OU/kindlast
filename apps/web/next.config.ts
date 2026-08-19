@@ -25,6 +25,31 @@ const nextConfig: NextConfig = {
    * deterministic.
    */
   outputFileTracingRoot: path.join(import.meta.dirname, '..', '..'),
+
+  /**
+   * `@swc/helpers` is traced by its CommonJS half and required by its ESM one.
+   *
+   * Next 16.3.1's `require-hook` resolves
+   * `@swc/helpers/esm/_interop_require_default.js` at runtime, while the trace
+   * only reaches `cjs/`. The package ships both, so the image ends up holding
+   * a `@swc/helpers` with `cjs` and `package.json` and no `esm`, and the
+   * container exits 1 on its first line with a module-not-found for a file
+   * that is present in `node_modules` on disk.
+   *
+   * It is invisible everywhere except the built image: lint, typecheck, the
+   * unit suite and `next dev` all pass, because every one of them reads the
+   * real `node_modules` rather than the traced copy. Caught by the compose
+   * stack, which is the reason ENT-241 put the console in it.
+   *
+   * Naming the whole package rather than the one file, because the runtime
+   * picks the helper it needs per module and the next bump will need a
+   * different one.
+   */
+  outputFileTracingIncludes: {
+    '**': [
+      '../../node_modules/.bun/@swc+helpers@*/node_modules/@swc/helpers/**',
+    ],
+  },
 }
 
 export default nextConfig
