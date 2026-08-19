@@ -61,17 +61,21 @@ type ModelServiceClient interface {
 	// and the response carries only its last four characters so somebody can tell
 	// which key is in place without the product being able to show them one.
 	//
-	// # SWITCHING PROVIDER IS TWO EVENTS, NOT AN EDIT
+	// # SWITCHING PROVIDER REPLACES A ROW, IT DOES NOT EDIT ONE
 	//
 	// Calling this while a hosted provider is already active revokes that choice
-	// and records a new one, so the audit log carries both. The alternative, an
-	// update in place, would leave one row saying where the data goes now and
-	// nothing saying where it went last month, which is the question a customer
-	// will actually be asked.
+	// and inserts a new one, and the audit entry carries the old provider in
+	// `before` and the new one in `after`. The alternative, an update in place,
+	// would leave one row saying where the data goes now and nothing saying where
+	// it went last month, which is the question a customer will actually be
+	// asked.
 	//
-	// Calling it with the same provider and a new key is a rotation and is
-	// recorded as one, because the sub-processor did not change and an event
-	// saying it did would be a false entry in a regulatory record.
+	// Calling it with the same provider and a new key is a rotation, and the
+	// audit row says `model_provider_rotated` rather than `model_provider_changed`
+	// because the sub-processor did not change and an event saying it did would be
+	// a false entry in a regulatory record. The row underneath is still replaced:
+	// a credential column that is never written twice is one that cannot be
+	// quietly swapped.
 	UseHostedModel(context.Context, *connect.Request[v1.UseHostedModelRequest]) (*connect.Response[v1.UseHostedModelResponse], error)
 	// Go back to the model this deployment runs itself.
 	//
@@ -161,17 +165,21 @@ type ModelServiceHandler interface {
 	// and the response carries only its last four characters so somebody can tell
 	// which key is in place without the product being able to show them one.
 	//
-	// # SWITCHING PROVIDER IS TWO EVENTS, NOT AN EDIT
+	// # SWITCHING PROVIDER REPLACES A ROW, IT DOES NOT EDIT ONE
 	//
 	// Calling this while a hosted provider is already active revokes that choice
-	// and records a new one, so the audit log carries both. The alternative, an
-	// update in place, would leave one row saying where the data goes now and
-	// nothing saying where it went last month, which is the question a customer
-	// will actually be asked.
+	// and inserts a new one, and the audit entry carries the old provider in
+	// `before` and the new one in `after`. The alternative, an update in place,
+	// would leave one row saying where the data goes now and nothing saying where
+	// it went last month, which is the question a customer will actually be
+	// asked.
 	//
-	// Calling it with the same provider and a new key is a rotation and is
-	// recorded as one, because the sub-processor did not change and an event
-	// saying it did would be a false entry in a regulatory record.
+	// Calling it with the same provider and a new key is a rotation, and the
+	// audit row says `model_provider_rotated` rather than `model_provider_changed`
+	// because the sub-processor did not change and an event saying it did would be
+	// a false entry in a regulatory record. The row underneath is still replaced:
+	// a credential column that is never written twice is one that cannot be
+	// quietly swapped.
 	UseHostedModel(context.Context, *connect.Request[v1.UseHostedModelRequest]) (*connect.Response[v1.UseHostedModelResponse], error)
 	// Go back to the model this deployment runs itself.
 	//
