@@ -3,6 +3,7 @@ import { startAuthorization } from '@/lib/auth/flow'
 import { acceptInvitation } from '@/lib/auth/client'
 import { orgPath } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
+import { publicOrigin } from '@/lib/auth/public-origin'
 
 /**
  * An invitation link.
@@ -39,7 +40,11 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params
-  const { origin } = request.nextUrl
+  const { origin: servedFrom } = request.nextUrl
+  // The origin a browser can reach, not the one this process is listening
+  // on. Behind the edge those differ, and a redirect to the second is a
+  // dead end (ENT-241). See lib/auth/public-origin.ts.
+  const origin = publicOrigin(servedFrom)
 
   if (!token) {
     return NextResponse.redirect(new URL('/sign-in', origin))

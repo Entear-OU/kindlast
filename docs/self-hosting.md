@@ -25,7 +25,7 @@ Set up scheduling. It is described below.
 |---|---|
 | Bun | 1.3 or later, for installing and running scripts |
 | Node.js | 22.13 or later, since Next.js runs on it |
-| Docker | For the bundled stack: Postgres, the OIDC provider, Redis, the edge |
+| Docker | For the bundled stack, which includes the console itself. On a host that only runs Kindlast, this is the only requirement in this table |
 | Postgres | 17 with pgvector, supplied by the stack |
 | Scheduler | Anything that can make an authenticated HTTP GET on a cron schedule |
 
@@ -40,8 +40,21 @@ docker compose -f deploy/compose.yaml up -d
 ```
 
 That gives you Postgres with the tenancy role split applied, migrations run by
-a job container that must exit zero, Zitadel serving OIDC discovery, Redis, and
-a Caddy edge. Tear it down with `down -v`.
+a job container that must exit zero, Zitadel serving OIDC discovery, Redis, the
+resource server, the integrations gateway, a Caddy edge, and **Kindlast itself
+at http://localhost:8000**. Tear it down with `down -v`.
+
+The console is a production Next build in its own container (ENT-241), so a
+host running this needs Docker and nothing else: no Bun, no Node, no checkout
+of this repository beyond the compose file and what it references. Until that
+service existed the stack gave you everything the product needs and not the
+product, and the only way to see Kindlast was to run a development server by
+hand, which is a maintainer's workflow rather than a deployment.
+
+It publishes no port of its own. The edge is the front door, so one address is
+the whole instance, and that is where you put TLS and a real hostname. It is
+also what keeps port 3000 free for `bun run dev`, which is the workflow the
+section below is about.
 
 **The role split is not decoration and should survive any substitution you
 make.** A plain Postgres superuser bypasses row level security entirely, and so
@@ -61,7 +74,10 @@ this table. What follows is the required-versus-optional split, which is the
 part that is hard to work out from the file alone.
 
 The web app's own OIDC settings are written by `./scripts/web-env.sh` from the
-running stack and should not be filled in by hand. The resource server has its
+running stack and should not be filled in by hand. That script is for a
+development server on the host: the containerised console needs none of it,
+because compose points it at the same file in the same volume the script copies
+out of. The resource server has its
 own settings, including how to point it at an IdP other than the bundled one,
 in [docs/core-api-configuration.md](./core-api-configuration.md). One thing
 there is worth knowing before you deploy rather than after: the OIDC issuer is
@@ -238,6 +254,10 @@ provider is the one that could not run air-gapped anyway, and **neither
 
 ## Build and run
 
+The stack builds and runs the console for you, so this section is for running
+it outside compose: on a platform that builds from source, or beside a stack
+you started with `--no-deps` for some reason of your own.
+
 ```bash
 bun install --frozen-lockfile
 bun run build
@@ -247,7 +267,31 @@ bun run start          # serves on :3000
 Put a reverse proxy in front of it for TLS. Set `NEXT_PUBLIC_APP_URL` to the
 public origin, not the internal one.
 
+To build the same image compose builds:
+
+```bash
+docker build -f apps/web/Dockerfile -t kindlast-web .
+```
+
+The build context is the repository root rather than `apps/web`, because the
+install is driven by the root manifest and its lockfile. `NEXT_PUBLIC_APP_URL`
+is the one setting that has to be supplied at build time, since Next inlines
+`NEXT_PUBLIC_*` into the compiled output; everything else, including the OIDC
+issuer and the OAuth client, is read at runtime so one image serves any
+deployment:
+
+```bash
+docker build -f apps/web/Dockerfile \
+  --build-arg NEXT_PUBLIC_APP_URL=https://compliance.example \
+  -t kindlast-web .
+```
+
 ## Running the web app against the self-managed stack
+
+The stack already serves the console at the edge, so this section is about the
+other console: a development server on port 3000, which is what you run when
+you are changing the app rather than operating it. Both can be up at once, and
+the seed registers an OAuth redirect URI for each so a sign-in works on either.
 
 The stack in `deploy/` runs its own identity provider, so the web app needs
 the OAuth client the seed job created in Zitadel. Those credentials are
@@ -278,6 +322,17 @@ stops existing in production.
 bun run --cwd apps/web test:e2e
 ```
 
+That drives the development server. To drive the console the stack itself
+serves, which is the artefact you would actually be running, name it:
+
+```bash
+KINDLAST_WEB_URL=http://localhost:8000 bun run --cwd apps/web test:e2e
+```
+
+The two are not interchangeable. `next dev` compiles on demand and forgives
+things a production build does not, so a page that only fails when built is
+invisible to the first command and caught by the second.
+
 This drives a real authorization code flow: a browser, Zitadel's hosted login,
 the redirect back, and the provisioning call that gives a new person their
 first organisation. It creates its own throwaway users through Zitadel's
@@ -305,7 +360,8 @@ accepted, so the values are arbitrary and development-only. Pointing at a real
 SMTP server means replacing them, along with `SMTP_HOST` and the sender
 address, in the `seed` service's environment.
 
-**The console is being rebuilt, so expect it to be absent.** The dashboard,
+**The console is served now, and it is still being rebuilt, so expect pages to
+be missing rather than the application.** The dashboard,
 feed, compliance records, settings, billing and onboarding pages were removed
 with Supabase: their tenancy was Supabase's `auth.uid()` row level security,
 and authentication no longer produces a Supabase session. What you get today is

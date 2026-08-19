@@ -179,8 +179,18 @@ docker compose -f deploy/compose.yaml up -d
 
 One command from a clean checkout gives a healthy stack: Postgres with the
 role split applied, migrations applied by a job container that must exit zero,
-Zitadel serving OIDC discovery on `localhost:8300`, Redis, and a Caddy edge.
-Tear down with `down -v`.
+Zitadel serving OIDC discovery on `localhost:8300`, Redis, the resource server,
+the integrations gateway, a Caddy edge, and **the console itself**, served at
+`localhost:8000` from a production Next build (ENT-241). Tear down with
+`down -v`.
+
+The console publishes no port of its own, deliberately. The edge is the front
+door, so `localhost:8000` is the whole product, and port 3000 stays free for
+`bun run dev`. Both can run at once, and the seed registers an OAuth redirect
+URI for each, so a sign-in works whichever one you are looking at.
+
+The model is opt-in, because it is gigabytes:
+`--profile model` brings up `model-init`, `model` and `intelligence`.
 
 Mail is delivered to Mailpit, readable at `localhost:8025`, so registration and
 verification complete rather than silently going nowhere. The seed configures

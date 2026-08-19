@@ -12,6 +12,7 @@ import {
   activeOrgFrom,
   getCurrentUser,
 } from '@/lib/auth/client'
+import { publicOrigin } from '@/lib/auth/public-origin'
 
 /**
  * The other end of the authorization request.
@@ -27,7 +28,11 @@ import {
  * channel. Only then does a session exist.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl
+  const { searchParams, origin: servedFrom } = request.nextUrl
+  // The origin a browser can reach, not the one this process is listening
+  // on. Behind the edge those differ, and a redirect to the second is a
+  // dead end (ENT-241). See lib/auth/public-origin.ts.
+  const origin = publicOrigin(servedFrom)
 
   // The user declined at the IdP, or the IdP refused. Not an error worth a
   // stack trace: it is a person changing their mind.

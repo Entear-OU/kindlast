@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 #
-# Write apps/web/.env.local from the running stack.
+# Write apps/web/.env.local from the running stack, for a DEVELOPMENT SERVER.
+#
+# Since ENT-241 the stack serves the console itself, in a container behind the
+# edge, and that console needs none of this: compose hands it
+# KINDLAST_OIDC_CLIENT_FILE pointing at the same volume this script copies out
+# of, so there is no host-side step between `up -d` and a working sign-in.
+#
+# This script is what `bun run dev` still needs, because a process on the host
+# cannot read a docker volume. Nothing here has become redundant; what changed
+# is that it is now one of two consoles rather than the only one, and it
+# configures the one you run when you are changing the app.
 #
 # The web app is a confidential OAuth client, so it needs the client id and
 # secret the seed job created in Zitadel. Those are written to a named docker

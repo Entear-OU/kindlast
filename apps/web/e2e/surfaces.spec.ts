@@ -5,6 +5,7 @@ import {
   FIXTURE_PASSWORD,
   type FixtureUser,
 } from './fixtures/identity'
+import { onOrigin } from './fixtures/origin'
 
 /**
  * The console surfaces, in a real browser, signed in (ENT-207, ENT-210,
@@ -50,7 +51,7 @@ async function skipSecondFactorOffer(page: Page) {
 
   const outcome = await Promise.race([
     page
-      .waitForURL(/localhost:3000/, { timeout: 20_000 })
+      .waitForURL(onOrigin(), { timeout: 20_000 })
       .then(() => 'returned' as const)
       .catch(() => 'neither' as const),
     skip
@@ -75,7 +76,7 @@ async function enterConsole(page: Page, user: FixtureUser) {
   await page.goto('/sign-in')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await signIn(page, user)
-  await page.waitForURL(/localhost:3000\/o\/[a-z0-9-]+$/, { timeout: 30_000 })
+  await page.waitForURL(onOrigin('/o/[a-z0-9-]+$'), { timeout: 30_000 })
 }
 
 async function signIn(page: Page, user: FixtureUser) {

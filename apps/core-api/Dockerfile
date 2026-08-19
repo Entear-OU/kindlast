@@ -25,6 +25,12 @@ WORKDIR /src
 # cache. go.work.sum is not committed, hence the glob rather than a plain copy.
 COPY go.work go.work.sum* ./
 COPY apps/core-api/go.mod apps/core-api/go.sum apps/core-api/
+# apps/workers is not built here and its manifest is still required, because
+# go.work names it and `go mod download` loads every module the workspace
+# lists before it downloads anything. Missing, the build fails with "cannot
+# load module apps/workers listed in go.work file", which reads like a
+# workspace problem rather than a missing COPY.
+COPY apps/workers/go.mod apps/workers/go.sum apps/workers/
 COPY gen/go/go.mod gen/go/go.sum gen/go/
 COPY libs/chassis/go.mod libs/chassis/go.sum libs/chassis/
 

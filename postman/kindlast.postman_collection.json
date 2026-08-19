@@ -17,8 +17,8 @@
     },
     {
       "key": "web_base_url",
-      "value": "http://localhost:3000",
-      "description": "The Next.js app, run with `bun run dev`."
+      "value": "http://localhost:8000",
+      "description": "The console, through the Caddy edge (ENT-241). compose runs it as a container built from a production Next build, and it publishes no port of its own, so the edge is the only way in and the value is the same as edge_base_url. Point this at http://localhost:3000 instead when you are driving a development server started with `bun run dev`, which is the other console and stays supported: the seed registers an OAuth redirect URI for both."
     },
     {
       "key": "api_base_url",
