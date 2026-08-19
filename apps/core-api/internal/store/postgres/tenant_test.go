@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	"os"
 	"testing"
 )
@@ -33,10 +34,7 @@ const testIssuer = "http://localhost:8300"
 func testStore(t *testing.T, options ...func(*Store)) *Store {
 	t.Helper()
 
-	dsn := os.Getenv("PG_APP_URL")
-	if dsn == "" {
-		dsn = "postgres://kindlast_app:app-dev-password@127.0.0.1:5433/kindlast"
-	}
+	dsn := stackenv.DSN("app")
 
 	store, err := New(t.Context(), dsn, testIssuer, options...)
 	if err != nil {

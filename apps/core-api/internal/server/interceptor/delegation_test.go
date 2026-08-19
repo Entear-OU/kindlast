@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	orgservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/org"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
@@ -673,10 +673,7 @@ func TestARunIsRecordedForAPersonOnlyWithThatPersonsDelegation(t *testing.T) {
 func requireAgentPool(t *testing.T) *postgres.AgentStore {
 	t.Helper()
 
-	dsn := os.Getenv("PG_AGENT_URL")
-	if dsn == "" {
-		dsn = "postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast"
-	}
+	dsn := stackenv.DSN("agent")
 	store, err := postgres.NewAgent(t.Context(), dsn)
 	if err != nil {
 		unavailable(t, "agent pool not reachable at %s (%v)", dsn, err)

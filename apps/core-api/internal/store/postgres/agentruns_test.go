@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	"github.com/google/uuid"
 )
 
@@ -19,10 +20,7 @@ import (
 func agentStore(t *testing.T) *AgentStore {
 	t.Helper()
 
-	dsn := os.Getenv("PG_AGENT_URL")
-	if dsn == "" {
-		dsn = "postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast"
-	}
+	dsn := stackenv.DSN("agent")
 
 	store, err := NewAgent(t.Context(), dsn)
 	if err != nil {

@@ -205,8 +205,11 @@ if [ "$CHECK" = "1" ] && command -v docker >/dev/null 2>&1; then
   conflicts=""
   for port in "$PG_APP_PORT" "$AUTH_PORT" "$MAILPIT_PORT" "$REDIS_PORT" \
     "$EDGE_PORT" "$MODEL_PORT" "$INTELLIGENCE_PORT"; do
+    # No `| head -1`: under `set -o pipefail` the SIGPIPE that head sends back
+    # is the pipeline's status, so a successful check would exit the script.
     owner="$(docker ps --filter "publish=${port}" \
-      --format '{{index .Labels "com.docker.compose.project"}}' 2>/dev/null | head -1)"
+      --format '{{index .Labels "com.docker.compose.project"}}' 2>/dev/null || true)"
+    owner="${owner%%$'\n'*}"
     if [ -n "$owner" ] && [ "$owner" != "$PROJECT" ]; then
       conflicts="${conflicts}  ${port} is published by project '${owner}'
 "
