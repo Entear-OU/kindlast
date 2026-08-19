@@ -351,7 +351,7 @@ func TestAnInvitedUserJoinsTheExistingOrganisationAndGetsNoPersonalOne(t *testin
 	if err != nil {
 		t.Fatalf("beginning: %v", err)
 	}
-	joined, err := tenant.AcceptInvitation(t.Context(), token)
+	joined, err := tenant.AcceptInvitation(t.Context(), token, "invited@example.com")
 	if err != nil {
 		t.Fatalf("accepting: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestAnInvitationCannotBeUsedTwice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("beginning: %v", err)
 	}
-	if _, err := first.AcceptInvitation(t.Context(), token); err != nil {
+	if _, err := first.AcceptInvitation(t.Context(), token, "reuse@example.com"); err != nil {
 		t.Fatalf("first accept: %v", err)
 	}
 	if err := first.Commit(t.Context()); err != nil {
@@ -430,9 +430,118 @@ func TestAnInvitationCannotBeUsedTwice(t *testing.T) {
 	}
 	defer second.Rollback(t.Context())
 
-	if _, err := second.AcceptInvitation(t.Context(), token); err == nil {
+	if _, err := second.AcceptInvitation(t.Context(), token, "reuse@example.com"); err == nil {
 		t.Fatal("an already-accepted invitation was accepted again")
 	}
+}
+
+// An invitation names a person, and only that person may redeem it (00033).
+//
+// The bug this pins was total: the old function matched on the token hash
+// alone, so any signed-in caller holding the link joined at the invited role.
+// An invitation to an `owner` seat, forwarded once, made a stranger an owner of
+// somebody else's compliance record.
+//
+// Two assertions, and the second is the one that is easy to leave out. Refusing
+// the wrong caller is not enough on its own: if the refusal still consumed the
+// row, the person it was addressed to could never use it, and an invitation
+// would be destroyed by the wrong person merely opening the link. The inviter
+// is usually signed in and is the most likely wrong person, so that is not a
+// hypothetical.
+func TestAnInvitationIsRefusedForAnAddressItWasNotSentTo(t *testing.T) {
+	store := testStore(t)
+	const wrongPerson = "test-subject-not-the-invitee"
+
+	cleanup(t, wrongPerson)
+	t.Cleanup(func() { cleanup(t, wrongPerson) })
+
+	token := fmt.Sprintf("invitation-wrong-person-%d", time.Now().UnixNano())
+	createInvitation(t, alphaOrg, "carol@example.com", org.RoleOwner, token, time.Hour)
+	t.Cleanup(func() { deleteInvitation(t, token) })
+
+	tenant, err := store.BeginTenant(t.Context(), wrongPerson, "")
+	if err != nil {
+		t.Fatalf("beginning: %v", err)
+	}
+	// Rolled back rather than committed, and deferred rather than called at the
+	// end. A refusal writes nothing, so there is nothing to commit; and if this
+	// test fails, it fails at the t.Fatal below, which returns without running
+	// any line after it. Leaving the transaction open there would leave the
+	// `for update` lock held, and the deferred deleteInvitation would block on
+	// it forever: the suite would hang instead of reporting a failure, which is
+	// the worst way for a security test to break.
+	defer tenant.Rollback(context.Background())
+
+	if _, err := tenant.AcceptInvitation(t.Context(), token, "mallory@example.com"); err == nil {
+		t.Fatal("an invitation addressed to carol@example.com was redeemed by mallory@example.com")
+	}
+
+	// Nothing was joined.
+	if memberships := membershipsOf(t, store, wrongPerson); len(memberships) != 0 {
+		t.Fatalf("the wrong caller holds %v, want nothing", memberships)
+	}
+
+	// And the invitation still works for the person it names.
+	const carol = "test-subject-carol"
+	cleanup(t, carol)
+	t.Cleanup(func() { cleanup(t, carol) })
+
+	hers, err := store.BeginTenant(t.Context(), carol, "")
+	if err != nil {
+		t.Fatalf("beginning as the invitee: %v", err)
+	}
+	joined, err := hers.AcceptInvitation(t.Context(), token, "carol@example.com")
+	if err != nil {
+		t.Fatalf("the invitee could not use her own invitation: %v", err)
+	}
+	if err := hers.Commit(t.Context()); err != nil {
+		t.Fatalf("committing: %v", err)
+	}
+	if joined.OrgID != alphaOrg {
+		t.Fatalf("joined %q, want %q", joined.OrgID, alphaOrg)
+	}
+}
+
+// The address is compared case-insensitively, because the alternative refuses
+// somebody who typed Carol@ where the inviter typed carol@. No mail provider
+// anybody uses treats those as different people.
+func TestTheInvitedAddressIsMatchedWithoutCase(t *testing.T) {
+	store := testStore(t)
+	const claim = "test-subject-mixed-case"
+
+	cleanup(t, claim)
+	t.Cleanup(func() { cleanup(t, claim) })
+
+	token := fmt.Sprintf("invitation-case-%d", time.Now().UnixNano())
+	createInvitation(t, alphaOrg, "Dana.Scully@Example.com", org.RoleMember, token, time.Hour)
+	t.Cleanup(func() { deleteInvitation(t, token) })
+
+	tenant, err := store.BeginTenant(t.Context(), claim, "")
+	if err != nil {
+		t.Fatalf("beginning: %v", err)
+	}
+	defer tenant.Rollback(t.Context())
+
+	if _, err := tenant.AcceptInvitation(t.Context(), token, "dana.scully@example.com"); err != nil {
+		t.Fatalf("a case-different address was refused: %v", err)
+	}
+}
+
+// membershipsOf reads back what a subject belongs to, through RLS.
+func membershipsOf(t *testing.T, store *Store, subjectClaim string) []org.Membership {
+	t.Helper()
+
+	tenant, err := store.BeginTenant(context.Background(), subjectClaim, "")
+	if err != nil {
+		t.Fatalf("beginning: %v", err)
+	}
+	defer tenant.Rollback(context.Background())
+
+	memberships, err := tenant.Memberships(context.Background())
+	if err != nil {
+		t.Fatalf("reading memberships: %v", err)
+	}
+	return memberships
 }
 
 // Expired, already used and never existed all answer the same way, so the
@@ -460,7 +569,7 @@ func TestAnExpiredOrUnknownInvitationIsRefused(t *testing.T) {
 			}
 			defer tenant.Rollback(t.Context())
 
-			if _, err := tenant.AcceptInvitation(t.Context(), testCase.token); err == nil {
+			if _, err := tenant.AcceptInvitation(t.Context(), testCase.token, "expired@example.com"); err == nil {
 				t.Fatalf("%s invitation was accepted", testCase.name)
 			}
 		})

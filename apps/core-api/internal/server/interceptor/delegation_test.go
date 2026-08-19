@@ -162,13 +162,19 @@ func revoke(t *testing.T, live *stack, m member, minted postgres.Delegation) {
 
 // joinExisting puts somebody who already has an organisation into a second one.
 //
-// Different from joinAs, which mints a new person: this is the consultant shape,
-// where one human is a member of several tenants and switches between them with
-// the organisation header. An invitation is redeemed by whoever holds the token
-// rather than by whoever it was addressed to (00003), which is what makes this
-// two calls rather than a new sign-in.
+// Different from joinAs, which mints a new person: this is the consultant
+// shape, where one human is a member of several tenants and switches between
+// them with the organisation header. It stays two calls rather than a new
+// sign-in because the person already exists; what changed in 00033 is who may
+// redeem the invitation.
+//
+// This used to say the invitation "is redeemed by whoever holds the token
+// rather than by whoever it was addressed to (00003)", and leaned on exactly
+// that: it invited one address and accepted with a token that claimed nothing.
+// That was the bug rather than a property, so the fixture now does what the
+// product does, and addresses the invitation to the person who redeems it.
 func joinExisting(
-	t *testing.T, live *stack, orgs corev1connect.OrgServiceClient,
+	t *testing.T, a *authServer, live *stack, orgs corev1connect.OrgServiceClient,
 	owner, joiner member, role string,
 ) {
 	t.Helper()
@@ -189,9 +195,21 @@ func joinExisting(
 		t.Fatalf("committing the invitation: %v", err)
 	}
 
+	// A token for the same person that carries the address the invitation
+	// names. `signIn` deliberately mints one with no profile claims, because
+	// other tests here turn on the console falling back to userinfo for a name,
+	// so this cannot simply be added there.
+	accepting := map[string]string{
+		"Authorization": "Bearer " + a.tokenWithClaims(t,
+			mapClaims(a, joiner.claim, map[string]any{
+				"scope": orgScopes,
+				"email": fmt.Sprintf("%s@example.invalid", joiner.claim),
+			})),
+	}
+
 	if _, err := orgs.AcceptInvitation(t.Context(), withHeaders(
 		connect.NewRequest(&corev1.AcceptInvitationRequest{Token: token}),
-		joiner.headers)); err != nil {
+		accepting)); err != nil {
 		t.Fatalf("%s accepting into the second organisation: %v", joiner.claim, err)
 	}
 }
@@ -326,7 +344,7 @@ func TestADelegationCannotCrossOrganisations(t *testing.T) {
 
 	ada := signIn(t, a, sessions, "deleg-ada", "Delegation Ada")
 	bob := signIn(t, a, sessions, "deleg-bob", "Delegation Bob")
-	joinExisting(t, live, orgs, bob, ada, "member")
+	joinExisting(t, a, live, orgs, bob, ada, "member")
 
 	minted := mintFor(t, live, ada, "analyst")
 
