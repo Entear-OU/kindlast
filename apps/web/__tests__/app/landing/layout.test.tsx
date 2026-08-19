@@ -43,16 +43,32 @@ describe('PublicLayout', () => {
     expect(container.innerHTML).not.toMatch(/href="#/)
   })
 
-  it('replaces the waitlist CTA with the repository', () => {
+  it('makes the readiness check the header call to action', () => {
+    // ENT-190 put the repository in this slot because the site had nothing to
+    // do but read. ENT-189 gave it something: an assessment that needs no
+    // account, so it takes the pill.
     render(
       <PublicLayout>
         <p>page body</p>
       </PublicLayout>,
     )
-    const cta = screen.getByRole('link', { name: /Read the source/i })
-    expect(cta).toHaveAttribute('href', 'https://github.com/Entear-OU/kindlast')
-    expect(cta).toHaveAttribute('target', '_blank')
-    expect(cta).toHaveAttribute('rel', expect.stringContaining('noopener'))
+    const cta = screen.getByRole('link', { name: /check where you stand/i })
+    expect(cta).toHaveAttribute('href', '/readiness')
+  })
+
+  it('still reaches the repository, as the icon beside it', () => {
+    render(
+      <PublicLayout>
+        <p>page body</p>
+      </PublicLayout>,
+    )
+    const repo = screen.getByRole('link', { name: /Kindlast on GitHub/i })
+    expect(repo).toHaveAttribute(
+      'href',
+      'https://github.com/Entear-OU/kindlast',
+    )
+    expect(repo).toHaveAttribute('target', '_blank')
+    expect(repo).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
   it('does not link to sign-in', () => {

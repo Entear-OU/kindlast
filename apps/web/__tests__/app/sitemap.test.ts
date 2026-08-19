@@ -17,6 +17,13 @@ describe('sitemap', () => {
     expect(paths).toContain('/features')
   })
 
+  it('lists the readiness assessment', () => {
+    // ENT-189. It is the only route on the public site that does something
+    // rather than explaining something, so it is the one worth arriving on
+    // from a search rather than reaching through the home page.
+    expect(urls().map((url) => new URL(url).pathname)).toContain('/readiness')
+  })
+
   it('keeps the login route', () => {
     expect(urls().map((url) => new URL(url).pathname)).toContain('/login')
   })

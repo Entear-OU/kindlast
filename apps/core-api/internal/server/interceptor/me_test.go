@@ -3,7 +3,6 @@ package interceptor_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/libs/chassis/subject"
@@ -27,10 +27,7 @@ import (
 // helper here. Hardcoding it would mean this one fixture path silently ignored
 // the environment CI and a non-default local setup both use.
 func migratorDSNForChain() string {
-	if dsn := os.Getenv("PG_MIGRATOR_URL"); dsn != "" {
-		return dsn
-	}
-	return "postgres://kindlast_migrator:migrator-dev-password@127.0.0.1:5433/kindlast"
+	return stackenv.DSN("migrator")
 }
 
 // forget removes a test subject's rows, as the migrator, so a run starts and

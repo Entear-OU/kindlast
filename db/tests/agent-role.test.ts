@@ -29,12 +29,12 @@ import {
   connect,
   setTenant,
   isStackReachable,
+  roleUrl,
   MIGRATOR_URL,
+  APP_URL,
 } from './helpers/db'
 
-const AGENT_URL =
-  process.env.PG_AGENT_URL ??
-  'postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast'
+const AGENT_URL = roleUrl('agent')
 
 // The agent role arrives with 00008 and an operator step. A stack that predates
 // it should skip rather than fail, the same way an absent stack does.
@@ -245,10 +245,7 @@ describe.skipIf(!reachable)('and the application still cannot produce', () => {
   // louder, which is the whole point of ENT-243. Both spellings are accepted
   // here because either one is the separation holding.
   it('kindlast_app still cannot insert a signal', async () => {
-    const app = await connect(
-      process.env.PG_APP_URL ??
-        'postgres://kindlast_app:app-dev-password@127.0.0.1:5433/kindlast',
-    )
+    const app = await connect(APP_URL)
     try {
       await setTenant(app, orgA, ada)
       await expect(
