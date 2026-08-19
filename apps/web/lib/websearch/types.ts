@@ -1,18 +1,43 @@
 /**
  * Provider-agnostic websearch / URL-fetch abstraction (ENT-98).
  *
- * The Analyst pulls verbatim regulatory text from a known `source_url` at
- * citation time — closing the loop on the progressive disclosure
- * architecture (ENT-32). Tavily and Firecrawl are the candidate providers;
- * locking call sites to one vendor is the lock-in this interface exists
- * to prevent. Concrete implementations live in `tavily.ts` and
- * `firecrawl.ts` and are selected by `index.ts` from the
- * `WEBSEARCH_PROVIDER` env var.
+ * # NOTHING CALLS THIS, WHICH IS RECORDED HERE RATHER THAN LEFT TO REDERIVE
  *
- * Interface is intentionally minimal: `fetchUrl` is enough for citation.
- * A `search(query)` method may be added later for the Watcher's
- * regulatory-change monitoring; appending to the interface won't break
- * existing callers.
+ * The abstraction had exactly one caller, `lib/corpus/resolve.ts`. It turned a
+ * citation key into a EUR-Lex ELI anchor and asked a provider to fetch the
+ * verbatim Official Journal text behind it. That resolver went with the
+ * Supabase-era console at `2a5c454`, so there has been no caller since.
+ *
+ * The purpose did not merely lose its caller, it was answered a different way.
+ * ENT-207 put the corpus in Postgres, and each obligation row carries a
+ * curated summary rather than Official Journal wording. The obligation page
+ * says so in as many words ("A summary, not the official wording") and links
+ * out to EUR-Lex instead. That is the better answer rather than a gap: the
+ * link is honest about provenance, it costs no egress, and ENT-218's citation
+ * validator already requires a citation to resolve to a **stored** obligation
+ * or be refused. `components/corpus/obligation-list.tsx` carries the full
+ * reasoning.
+ *
+ * # WHY IT IS STILL HERE
+ *
+ * ENT-240 rules that the seam stays and gets finished rather than retired,
+ * because air-gapped operation is now a stated product property and this is
+ * where the one permitted outbound fetch would live: keeping the regulatory
+ * corpus current. A named, configurable, auditable source that an operator
+ * chose is a different thing from a library quietly calling a SaaS at citation
+ * time, and the distinction is the whole point. The interface is already the
+ * right shape for that job, so the work is to give it a consumer rather than
+ * to redesign it.
+ *
+ * Until ENT-240 lands that consumer, treat the module as unused. No runtime
+ * path reaches it and no self-hoster needs a key for it, which is why
+ * `TAVILY_API_KEY` is documented as optional and not as required.
+ *
+ * # THE INTERFACE
+ *
+ * Intentionally minimal: `fetchUrl` is enough for citation. A `search(query)`
+ * method may be added later for the Watcher's regulatory-change monitoring,
+ * and appending to the interface will not break existing callers.
  */
 
 export type WebSearchProviderName = 'tavily' | 'firecrawl'
@@ -50,9 +75,9 @@ export interface WebSearchProvider {
 }
 
 /**
- * Thrown when a provider call fails for any reason — network error,
- * non-2xx HTTP, malformed response body, etc. The cause chain preserves
- * the underlying error so server logs can correlate.
+ * Thrown when a provider call fails for any reason: network error, non-2xx
+ * HTTP, malformed response body, and so on. The cause chain preserves the
+ * underlying error so server logs can correlate.
  */
 export class WebSearchProviderError extends Error {
   constructor(

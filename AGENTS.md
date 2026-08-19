@@ -198,8 +198,8 @@ every test green, and tenant isolation simply absent.
 So:
 
 - The application connects as `kindlast_app`: `NOSUPERUSER`, `NOBYPASSRLS`,
-  owns nothing, table-level grants only. Never change this to a role that
-  owns tables or bypasses RLS, however convenient it looks.
+  owns nothing, DML grants only and no DDL, no `TRUNCATE`. Never change this
+  to a role that owns tables or bypasses RLS, however convenient it looks.
 - `kindlast_migrator` owns the schema and runs migrations. The application
   never connects as it.
 - Every table in `public` has RLS enabled **and forced**.
@@ -213,9 +213,24 @@ So:
 isolation. Do not reintroduce a `user_id` column that means "whose data is
 this".
 
-If you add a tenant table, it needs `org_id`, `FORCE ROW LEVEL SECURITY`, and
-policies in the two-GUC form. `bun run test:db` asserts all of that over
-`pg_class` rather than trusting convention, and it will fail if you forget.
+If you add a tenant table, it needs `org_id`, `FORCE ROW LEVEL SECURITY`,
+policies in the two-GUC form, and **the grants it needs, written out**.
+`bun run test:db` asserts all of that over `pg_class` and
+`information_schema` rather than trusting convention, and it will fail if you
+forget.
+
+**Tables start closed** (ENT-243). No application role holds a default
+privilege, so a new table arrives with nothing attached to it and a missing
+grant is a `42501` the first time anything touches it. That is the reverse of
+how the schema behaved until `00029`: 00002 set a default granting
+`kindlast_app` all four DML commands, so every table since arrived open and a
+migration had to remember to revoke. Grant exactly the commands the
+application needs, and never rely on the absence of a policy to hold a
+boundary. With `FORCE ROW LEVEL SECURITY` a command with no policy touches no
+rows, which is a table the application can address and finds empty rather than
+one that is closed to it, and the difference shows up the day somebody adds
+the policy. `db/README.md` carries the generated role by table by command
+matrix.
 
 **Migration DDL is applied by goose or not at all.** Running a migration's SQL
 by hand through `psql` leaves the objects in place and `goose_db_version`

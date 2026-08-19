@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/corpuspack"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
 )
@@ -255,6 +257,41 @@ func TestReIngestingTheWholeCorpusChangesNothing(t *testing.T) {
 	// Idempotence over the real thing rather than a fixture. §20.3 makes this a
 	// scheduled singleton once Temporal lands, so the case that matters is the
 	// hundredth run rather than the first.
+	//
+	// # THE MEASUREMENT IS THE IDENTITY SET, NOT THE TABLE (ENT-252)
+	//
+	// This took `count(*)` over each corpus table until ENT-252, and that made
+	// it intermittently red for a reason with nothing to do with the corpus.
+	// `go test ./...` runs different packages in parallel, every package in
+	// apps/core-api connects to the same database, and
+	// internal/server/interceptor seeds an obligation citing the real GDPR
+	// CELEX and deletes it again. A whole-table count taken either side of this
+	// ingest attributes that sibling's row to this ingest. The tell was that the
+	// obligation count moved in both directions across runs, sixteen to
+	// seventeen and seventeen to sixteen, and an ingest cannot decrease a count.
+	//
+	// So the fingerprint below covers exactly the rows the repository names: the
+	// CELEX numbers in the document packs, and the slugs in the obligation,
+	// guideline and enforcement files, all read from the files. A sibling's
+	// fixture has a slug the repository does not contain, so it falls outside
+	// the measurement rather than being tolerated inside it.
+	//
+	// # THIS TIGHTENS THE COMPARISON RATHER THAN LOOSENING IT
+	//
+	// Worth being explicit about, because ENT-244 warned that making the flake
+	// go away by comparing less would restore the property ENT-207 removed: a
+	// test that passes without checking. The old snapshot was nine counts and
+	// one `max(updated_at)` over articles. The new one is a content digest of
+	// every column of every shipped row in all ten tables, `updated_at`
+	// included, so a re-ingest that rewrote an obligation summary in place is
+	// now caught where before a count of sixteen matching a count of sixteen
+	// said nothing about it.
+	//
+	// One thing is given up, deliberately, and it is named here so nobody
+	// mistakes it for an oversight: a second ingest inventing a row under a slug
+	// the repository does not contain would fall outside the identity set. That
+	// is a loader inventing rows rather than an ingest failing to be idempotent,
+	// and TestTheDatabaseHoldsWhatTheRepositorySays is where it belongs.
 	store := ingestStore(t)
 	dir := corpusDir(t)
 
@@ -276,37 +313,356 @@ func TestReIngestingTheWholeCorpusChangesNothing(t *testing.T) {
 	ingestAll()
 
 	conn := migratorConn(t)
-	snapshot := func() string {
-		var out string
-		err := conn.QueryRow(t.Context(), `
-			select
-				(select count(*) from regulatory_documents)::text || '/' ||
-				(select count(*) from regulatory_articles)::text || '/' ||
-				(select count(*) from regulatory_article_paragraphs)::text || '/' ||
-				(select count(*) from regulatory_recitals)::text || '/' ||
-				(select count(*) from regulatory_annexes)::text || '/' ||
-				(select count(*) from regulatory_annex_items)::text || '/' ||
-				(select count(*) from obligations)::text || '/' ||
-				(select count(*) from regulatory_guidelines)::text || '/' ||
-				(select count(*) from regulatory_enforcement_decisions)::text || '/' ||
-				(select coalesce(max(updated_at)::text, 'none') from regulatory_articles)
-		`).Scan(&out)
-		if err != nil {
-			t.Fatalf("snapshot: %v", err)
+	shipped := shippedIdentity(t, dir)
+
+	before := corpusFingerprint(t, conn, shipped)
+
+	// A digest over an empty selection is a green run that checked nothing, so
+	// what was selected is asserted before it is compared. This is the same
+	// guard rawObligations carries against an obligations file that parsed to
+	// no obligations, applied to the database side.
+	assertShippedRowsPresent(t, shipped, before)
+
+	ingestAll()
+	after := corpusFingerprint(t, conn, shipped)
+
+	for _, scope := range corpusScopes {
+		if before[scope.name] != after[scope.name] {
+			t.Errorf("a second ingest of the same corpus changed %s:\n  before %s\n  after  %s",
+				scope.name, before[scope.name], after[scope.name])
 		}
-		return out
+	}
+}
+
+// scopeState is what one table looked like at one instant: how many of the
+// shipped rows are there, and what they contain.
+type scopeState struct {
+	count  int
+	digest string
+}
+
+func (s scopeState) String() string {
+	return fmt.Sprintf("%d rows, digest %s", s.count, s.digest)
+}
+
+// shippedCorpus is the identity of every row the repository claims: what to
+// measure, named by natural key rather than by table.
+//
+// Read from the files rather than from corpuspack, for the reason rawObligation
+// spells out. The loader deciding which rows the drift guard looks at would let
+// a loader that silently dropped an obligation shrink both sides of the
+// comparison together.
+type shippedCorpus struct {
+	celexes     []string // regulations, and everything hanging off them
+	obligations []string // slugs
+	guidelines  []string // slugs
+	decisions   []string // slugs
+
+	// Summed across the document packs. The tables hanging off a document are
+	// selected by CELEX rather than by their own natural key, so the identity
+	// set does not say how many rows to expect and the files have to.
+	articles        int
+	paragraphs      int
+	recitals        int
+	annexes         int
+	annexItems      int
+	articleRecitals int
+}
+
+// corpusScope is one table, restricted to the rows the shipped corpus names.
+//
+// `rows` selects them and takes exactly one `text[]` parameter, which `key`
+// supplies. `want` is how many the repository says there are.
+//
+// `exact` says the count must match `want` rather than merely reach it. It
+// holds for the tables the identity set addresses directly (a document per
+// CELEX, an obligation per slug), and not for the ones hanging off a document:
+// there, as the articles subtest above reasons, another pack may legitimately
+// have added an article to a regulation this one also names, so the assertion
+// is that nothing the repository claims is missing.
+type corpusScope struct {
+	name  string
+	rows  string
+	key   func(shippedCorpus) []string
+	want  func(shippedCorpus) int
+	exact bool
+}
+
+// The ten tables the ingest writes. `regulatory_article_recitals` is here and
+// was not in the count snapshot this replaces: the link rows are written by the
+// same transaction and are as capable of churning as anything else.
+var corpusScopes = []corpusScope{
+	{
+		name:  "documents",
+		rows:  `select * from regulatory_documents where celex_number = any($1::text[])`,
+		key:   func(s shippedCorpus) []string { return s.celexes },
+		want:  func(s shippedCorpus) int { return len(s.celexes) },
+		exact: true,
+	},
+	{
+		name: "articles",
+		rows: `select a.* from regulatory_articles a
+		         join regulatory_documents d on d.id = a.document_id
+		        where d.celex_number = any($1::text[])`,
+		key:  func(s shippedCorpus) []string { return s.celexes },
+		want: func(s shippedCorpus) int { return s.articles },
+	},
+	{
+		name: "article paragraphs",
+		rows: `select p.* from regulatory_article_paragraphs p
+		         join regulatory_articles a on a.id = p.article_id
+		         join regulatory_documents d on d.id = a.document_id
+		        where d.celex_number = any($1::text[])`,
+		key:  func(s shippedCorpus) []string { return s.celexes },
+		want: func(s shippedCorpus) int { return s.paragraphs },
+	},
+	{
+		name: "recitals",
+		rows: `select r.* from regulatory_recitals r
+		         join regulatory_documents d on d.id = r.document_id
+		        where d.celex_number = any($1::text[])`,
+		key:  func(s shippedCorpus) []string { return s.celexes },
+		want: func(s shippedCorpus) int { return s.recitals },
+	},
+	{
+		name: "article to recital links",
+		rows: `select l.* from regulatory_article_recitals l
+		         join regulatory_articles a on a.id = l.article_id
+		         join regulatory_documents d on d.id = a.document_id
+		        where d.celex_number = any($1::text[])`,
+		key:  func(s shippedCorpus) []string { return s.celexes },
+		want: func(s shippedCorpus) int { return s.articleRecitals },
+	},
+	{
+		name: "annexes",
+		rows: `select x.* from regulatory_annexes x
+		         join regulatory_documents d on d.id = x.document_id
+		        where d.celex_number = any($1::text[])`,
+		key:  func(s shippedCorpus) []string { return s.celexes },
+		want: func(s shippedCorpus) int { return s.annexes },
+	},
+	{
+		name: "annex items",
+		rows: `select i.* from regulatory_annex_items i
+		         join regulatory_annexes x on x.id = i.annex_id
+		         join regulatory_documents d on d.id = x.document_id
+		        where d.celex_number = any($1::text[])`,
+		key:  func(s shippedCorpus) []string { return s.celexes },
+		want: func(s shippedCorpus) int { return s.annexItems },
+	},
+	{
+		name:  "obligations",
+		rows:  `select * from obligations where slug = any($1::text[])`,
+		key:   func(s shippedCorpus) []string { return s.obligations },
+		want:  func(s shippedCorpus) int { return len(s.obligations) },
+		exact: true,
+	},
+	{
+		name:  "guidelines",
+		rows:  `select * from regulatory_guidelines where slug = any($1::text[])`,
+		key:   func(s shippedCorpus) []string { return s.guidelines },
+		want:  func(s shippedCorpus) int { return len(s.guidelines) },
+		exact: true,
+	},
+	{
+		name:  "enforcement decisions",
+		rows:  `select * from regulatory_enforcement_decisions where slug = any($1::text[])`,
+		key:   func(s shippedCorpus) []string { return s.decisions },
+		want:  func(s shippedCorpus) int { return len(s.decisions) },
+		exact: true,
+	},
+}
+
+// corpusFingerprint reads a count and a content digest per scope.
+//
+// The digest is over the whole row rather than a chosen column list, so a
+// column added by a later migration is covered without anyone remembering to
+// come back here. It includes `updated_at`, which is the property the `where`
+// on every `do update` in corpus_write.go exists to hold: an unchanged row is
+// not touched, so its timestamp does not move.
+func corpusFingerprint(t *testing.T, conn *pgx.Conn, shipped shippedCorpus) map[string]scopeState {
+	t.Helper()
+
+	out := make(map[string]scopeState, len(corpusScopes))
+	for _, scope := range corpusScopes {
+		var state scopeState
+		// The interpolated half is a constant in this file and the identity set
+		// is a bound parameter, which is the split that matters.
+		query := fmt.Sprintf(`
+			select count(*),
+			       coalesce(md5(string_agg(r::text, E'\n' order by r::text)), 'no rows')
+			  from (%s) as r`, scope.rows)
+		err := conn.QueryRow(t.Context(), query, scope.key(shipped)).Scan(&state.count, &state.digest)
+		if err != nil {
+			t.Fatalf("fingerprinting %s: %v", scope.name, err)
+		}
+		out[scope.name] = state
+	}
+	return out
+}
+
+// assertShippedRowsPresent stops the comparison from being vacuous.
+//
+// Two digests over nothing are equal, so without this a corpus that failed to
+// ingest at all would report the strongest possible green. It is the same guard
+// rawObligations carries on the file side, and the reason the articles subtest
+// refuses a manifest that lists no regulations.
+func assertShippedRowsPresent(t *testing.T, shipped shippedCorpus, fingerprint map[string]scopeState) {
+	t.Helper()
+
+	// The identity set itself, before anything is asked of the database. A
+	// repository naming no obligations would make the obligations digest an
+	// agreement about the empty set.
+	switch {
+	case len(shipped.celexes) == 0:
+		t.Fatal("the manifest lists no regulations, so nothing here would be measured")
+	case len(shipped.obligations) == 0:
+		t.Fatal("the repository names no obligations")
+	case len(shipped.guidelines) == 0:
+		t.Fatal("the repository names no guidelines")
+	case len(shipped.decisions) == 0:
+		t.Fatal("the repository names no enforcement decisions")
+	case shipped.articles == 0 || shipped.recitals == 0:
+		t.Fatal("the regulations carry no articles or no recitals, so the tables hanging off them measure nothing")
 	}
 
-	before := snapshot()
-	ingestAll()
-	after := snapshot()
+	for _, scope := range corpusScopes {
+		want, got := scope.want(shipped), fingerprint[scope.name]
+		if scope.exact && got.count != want {
+			t.Fatalf("the repository names %d %s and the database holds %s", want, scope.name, got)
+		}
+		if !scope.exact && got.count < want {
+			t.Fatalf("the repository names %d %s and the database holds %s", want, scope.name, got)
+		}
+	}
+}
 
-	// The last component is the newest `updated_at` across every article, so
-	// this asserts both halves at once: no new rows, and no timestamp churn on
-	// a run that changed nothing.
-	if before != after {
-		t.Fatalf("a second ingest of the same corpus changed the database:\n  before %s\n  after  %s",
-			before, after)
+// shippedIdentity reads the identity set out of the corpus files.
+//
+// The manifest supplies which files exist, as the articles subtest already does
+// for the same reason ENT-233 gives: adding a regulation is an edit to
+// packs.json rather than to Go. What each file CONTAINS is parsed here rather
+// than through corpuspack, because that is the half a broken loader could
+// otherwise agree with itself about.
+func shippedIdentity(t *testing.T, dir string) shippedCorpus {
+	t.Helper()
+
+	manifest, err := corpuspack.LoadManifest(dir)
+	if err != nil {
+		t.Fatalf("loading the manifest: %v", err)
+	}
+
+	var shipped shippedCorpus
+	for _, entry := range manifest.Packs {
+		switch entry.Kind {
+		case corpuspack.KindDocument:
+			document := rawDocument(t, dir, entry.File)
+			shipped.celexes = append(shipped.celexes, document.Document.CelexNumber)
+			shipped.recitals += len(document.Recitals)
+			shipped.annexes += len(document.Annexes)
+			shipped.articleRecitals += len(document.ArticleRecitals)
+			shipped.articles += len(document.Articles)
+			for _, article := range document.Articles {
+				shipped.paragraphs += len(article.Paragraphs)
+			}
+			for _, annex := range document.Annexes {
+				shipped.annexItems += len(annex.Items)
+			}
+		case corpuspack.KindObligations:
+			for _, obligation := range rawObligations(t, dir) {
+				shipped.obligations = append(shipped.obligations, obligation.Slug)
+			}
+		case corpuspack.KindGuidelines:
+			shipped.guidelines = append(shipped.guidelines, rawSlugs(t, dir, entry.File, "guidelines")...)
+		case corpuspack.KindEnforcement:
+			shipped.decisions = append(shipped.decisions, rawSlugs(t, dir, entry.File, "decisions")...)
+		default:
+			t.Fatalf("pack %q has kind %q, which this test does not measure", entry.ID, entry.Kind)
+		}
+	}
+	return shipped
+}
+
+// rawDocumentPack is the shape of a regulation file, read for identity and
+// size only.
+//
+// Deliberately not corpuspack's type, and deliberately not the whole shape:
+// summaries and headings are compared field by field in the subtest above,
+// which is where content belongs. This exists to answer "which regulation, and
+// how many rows does it claim", and it answers it from the file so that a
+// loader dropping half a document cannot shrink both sides of the comparison
+// at once.
+type rawDocumentPack struct {
+	Document struct {
+		CelexNumber string `json:"celexNumber"`
+	} `json:"document"`
+	Articles []struct {
+		Paragraphs []struct{} `json:"paragraphs"`
+	} `json:"articles"`
+	Recitals []struct{} `json:"recitals"`
+	Annexes  []struct {
+		Items []struct{} `json:"items"`
+	} `json:"annexes"`
+	ArticleRecitals []struct{} `json:"articleRecitals"`
+}
+
+func rawDocument(t *testing.T, dir, name string) rawDocumentPack {
+	t.Helper()
+
+	var parsed rawDocumentPack
+	rawJSON(t, dir, name, &parsed)
+
+	if parsed.Document.CelexNumber == "" {
+		t.Fatalf("%s names no CELEX number", name)
+	}
+	if len(parsed.Articles) == 0 {
+		t.Fatalf("%s parsed to no articles", name)
+	}
+	return parsed
+}
+
+// rawSlugs reads the slugs out of one array in a flat pack, independently of
+// the loader.
+func rawSlugs(t *testing.T, dir, name, field string) []string {
+	t.Helper()
+
+	var parsed map[string]json.RawMessage
+	rawJSON(t, dir, name, &parsed)
+
+	body, ok := parsed[field]
+	if !ok {
+		t.Fatalf("%s has no %q array", name, field)
+	}
+
+	var entries []struct {
+		Slug string `json:"slug"`
+	}
+	if err := json.Unmarshal(body, &entries); err != nil {
+		t.Fatalf("parsing %s of %s: %v", field, name, err)
+	}
+	if len(entries) == 0 {
+		t.Fatalf("%s parsed to no %s", name, field)
+	}
+
+	slugs := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Slug == "" {
+			t.Fatalf("%s carries an entry with no slug", name)
+		}
+		slugs = append(slugs, entry.Slug)
+	}
+	return slugs
+}
+
+func rawJSON(t *testing.T, dir, name string, into any) {
+	t.Helper()
+
+	blob, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatalf("reading %s: %v", name, err)
+	}
+	if err := json.Unmarshal(blob, into); err != nil {
+		t.Fatalf("parsing %s: %v", name, err)
 	}
 }
 
