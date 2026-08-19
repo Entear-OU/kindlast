@@ -145,6 +145,20 @@ it is a different piece of work from adding a cron. If it is ever built, the
 deletion itself has to be recorded somewhere that is not the table being
 deleted from.
 
+**The other half of this decision is
+[`docs/backup-and-restore.md`](../docs/backup-and-restore.md), and the two
+belong together.** Everything above is about refusing to delete the record. A
+dead volume produces exactly the outcome that refusal exists to prevent, so a
+schema this careful about retention and silent about loss would be rigorous in
+one direction only. The runbook covers what is irreplaceable, why
+`postgres-app` and `postgres-platform` are one backup unit rather than two, and
+the verification that matters here: a restore is checked by asserting RLS is
+still enabled and forced on every table, not by counting rows, because a
+restore that silently dropped row level security would look correct in a row
+count and be a data breach. Measured on 2026-08-18, it does not: 43 tables, 43
+forced, 136 policies and the append-only trigger all survive a dump and
+restore.
+
 One open question, deliberately not answered here: `before` and `after` hold
 whatever the acted-on row contained, which for a DSAR includes a data subject's
 name. An erasure request reaching those payloads needs a decision about whether

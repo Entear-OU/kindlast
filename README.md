@@ -187,7 +187,7 @@ apps/web/app/
 apps/web/lib/
 ├── auth/               # OIDC client, PKCE, Redis sessions, the core-api client
 ├── email/              # Swappable email provider seam
-└── websearch/          # Verbatim regulatory text fetch at citation time
+└── websearch/          # URL-fetch provider seam. No caller today (ENT-240)
 
 data/corpus/            # GDPR, AI Act, EDPB and enforcement source data
 db/migrations/          # Squashed baseline for the self-managed stack (goose)
