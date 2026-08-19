@@ -138,9 +138,13 @@ describe('scripts/stack-env.sh', () => {
     // one's project name. This test exists because that is what it did: the
     // disjointness case above went red the first time the suite was run from
     // an evaluated shell, which is the shell every developer will be in.
-    const out = execFileSync(SCRIPT, ['--derive', '--root', '/tmp/kindlast-worktree-alpha'], {
-      encoding: 'utf8',
-    })
+    const out = execFileSync(
+      SCRIPT,
+      ['--derive', '--root', '/tmp/kindlast-worktree-alpha'],
+      {
+        encoding: 'utf8',
+      },
+    )
     expect(out).not.toContain('KINDLAST_STACK_SLOT')
   })
 })
