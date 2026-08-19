@@ -105,7 +105,11 @@ afterAll(async () => {
 
 describe.skipIf(!reachable)('the choice is a record, not a setting', () => {
   it('refuses to repoint an existing choice at another endpoint', async () => {
-    const id = await chooseHosted(app, orgA, `openai-${randomUUID().slice(0, 8)}`)
+    const id = await chooseHosted(
+      app,
+      orgA,
+      `openai-${randomUUID().slice(0, 8)}`,
+    )
 
     await expect(
       app.query(
@@ -116,13 +120,17 @@ describe.skipIf(!reachable)('the choice is a record, not a setting', () => {
     ).rejects.toThrow(/permission denied/i)
 
     await expect(
-      app.query(`update org_model_config set provider = 'somebody-else' where id = $1`, [
-        id,
-      ]),
+      app.query(
+        `update org_model_config set provider = 'somebody-else' where id = $1`,
+        [id],
+      ),
     ).rejects.toThrow(/permission denied/i)
 
     await expect(
-      app.query(`update org_model_config set model = 'another-model' where id = $1`, [id]),
+      app.query(
+        `update org_model_config set model = 'another-model' where id = $1`,
+        [id],
+      ),
     ).rejects.toThrow(/permission denied/i)
 
     // And the row still says what it said.
@@ -136,7 +144,11 @@ describe.skipIf(!reachable)('the choice is a record, not a setting', () => {
   })
 
   it('allows one active choice per organisation and no more', async () => {
-    const first = await chooseHosted(app, orgA, `first-${randomUUID().slice(0, 8)}`)
+    const first = await chooseHosted(
+      app,
+      orgA,
+      `first-${randomUUID().slice(0, 8)}`,
+    )
 
     await expect(
       chooseHosted(app, orgA, `second-${randomUUID().slice(0, 8)}`),
@@ -152,14 +164,24 @@ describe.skipIf(!reachable)('the choice is a record, not a setting', () => {
       [first, ada],
     )
 
-    const second = await chooseHosted(app, orgA, `second-${randomUUID().slice(0, 8)}`)
+    const second = await chooseHosted(
+      app,
+      orgA,
+      `second-${randomUUID().slice(0, 8)}`,
+    )
     expect(second).toBeTruthy()
 
-    await migrator.query(`delete from org_model_config where org_id = $1`, [orgA])
+    await migrator.query(`delete from org_model_config where org_id = $1`, [
+      orgA,
+    ])
   })
 
   it('refuses to keep a credential on a revoked choice', async () => {
-    const id = await chooseHosted(app, orgA, `keeper-${randomUUID().slice(0, 8)}`)
+    const id = await chooseHosted(
+      app,
+      orgA,
+      `keeper-${randomUUID().slice(0, 8)}`,
+    )
 
     await expect(
       app.query(
@@ -172,7 +194,11 @@ describe.skipIf(!reachable)('the choice is a record, not a setting', () => {
   })
 
   it('gives nobody a delete, so reverting cannot erase the record', async () => {
-    const id = await chooseHosted(app, orgA, `undeletable-${randomUUID().slice(0, 8)}`)
+    const id = await chooseHosted(
+      app,
+      orgA,
+      `undeletable-${randomUUID().slice(0, 8)}`,
+    )
 
     await expect(
       app.query(`delete from org_model_config where id = $1`, [id]),
@@ -209,7 +235,9 @@ describe.skipIf(!reachable)('one organisation never sees another key', () => {
     )
     expect(seeded.rows[0].n).toBe(1)
 
-    await migrator.query(`delete from org_model_config where org_id = $1`, [orgB])
+    await migrator.query(`delete from org_model_config where org_id = $1`, [
+      orgB,
+    ])
   })
 
   it('refuses to write a choice into an organisation the caller is not in', async () => {
@@ -219,7 +247,11 @@ describe.skipIf(!reachable)('one organisation never sees another key', () => {
 
 describe.skipIf(!reachable)('the producer role reads what a run needs', () => {
   it('reads the endpoint and the sealed credential, and not who chose it', async () => {
-    const id = await chooseHosted(app, orgA, `agentread-${randomUUID().slice(0, 8)}`)
+    const id = await chooseHosted(
+      app,
+      orgA,
+      `agentread-${randomUUID().slice(0, 8)}`,
+    )
 
     const r = await agent.query(
       `select provider, base_url, model, credential_ciphertext, credential_key_id
@@ -232,7 +264,9 @@ describe.skipIf(!reachable)('the producer role reads what a run needs', () => {
     // `created_by` is not the producer's business: it decides nothing about a
     // run and naming the columns costs one line.
     await expect(
-      agent.query(`select created_by from org_model_config where id = $1`, [id]),
+      agent.query(`select created_by from org_model_config where id = $1`, [
+        id,
+      ]),
     ).rejects.toThrow(/permission denied/i)
 
     await migrator.query(`delete from org_model_config where id = $1`, [id])
@@ -251,7 +285,9 @@ describe.skipIf(!reachable)('the producer role reads what a run needs', () => {
 
 describe.skipIf(!reachable)('a run says which provider served it', () => {
   it('defaults an agent run to the instance model rather than guessing', async () => {
-    await agent.query(`select set_config('app.current_org_id', $1, false)`, [orgA])
+    await agent.query(`select set_config('app.current_org_id', $1, false)`, [
+      orgA,
+    ])
     const r = await agent.query(
       `insert into agent_runs
          (org_id, skill, skill_version, model, model_version,
