@@ -8,6 +8,7 @@ import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { getFinding } from '@/lib/findings/client'
+import { effortSentence } from '@/lib/findings/effort'
 
 import { approve, reject, snooze } from '../actions'
 
@@ -105,9 +106,9 @@ export default async function FindingPage({
           <p className="mt-2 text-[15px] text-foreground">
             {finding.proposedAction}
           </p>
-          {finding.effortEstimate ? (
+          {effortSentence(finding.effortEstimate) ? (
             <p className="mt-1 text-sm text-muted-foreground">
-              Roughly {finding.effortEstimate} of work.
+              {effortSentence(finding.effortEstimate)}
             </p>
           ) : null}
         </section>
