@@ -9,11 +9,11 @@
 #      written to /machinekey/web-client.json for the web app to pick up in
 #      dev. Idempotent: existing objects are left alone.
 #
-# Runs on alpine with tools installed at start; this is a dev/CI job, not a
-# production image.
+# Runs on the small image built by deploy/seed/Dockerfile, which carries psql,
+# curl and jq. This script used to install them itself with `apk add`, on every
+# single boot: a runtime fetch, and the one thing that stopped the stack coming
+# up with egress blocked (ENT-240). The Dockerfile explains the move.
 set -eu
-
-apk add --no-cache --quiet postgresql-client curl jq
 
 echo "seed: applying postgres-app fixtures"
 psql -v ON_ERROR_STOP=1 -q -f /seed.sql

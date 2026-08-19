@@ -42,7 +42,30 @@ what they have to do about it, which no commit subject knows.
   notice, a retention position and an answer to a subject access request about
   the assessment itself, written down before the code rather than after it.
 
+- **Air-gapped operation is now checked by CI rather than asserted in the
+  docs** (ENT-240). `docs/self-hosting.md` has told you that a default install,
+  once built and running, makes no outbound request at all. That was an audit
+  of the source, and an audit is true on the day somebody writes it. Now every
+  pull request brings the whole stack up on a network with no route out and
+  fails if the console does not serve. Run it yourself with
+  `bun run test:airgap`, or bring your own stack up that way with
+  `docker compose -f deploy/compose.yaml -f deploy/compose.airgap.yaml up -d`
+  once the images are built. It does not cover pulling images or building the
+  console, which happen before the network closes and are named in the egress
+  table.
+
 ### Changed
+
+- **The `lib/websearch` default provider is now Firecrawl, not Tavily**
+  (ENT-240), and Firecrawl is implemented rather than a stub that threw. This
+  changes nothing at runtime, because nothing in the product calls that module,
+  and it changes what a self-hoster is being pointed at when something does:
+  Firecrawl's engine is AGPL-3.0 and you can run it yourself, so it works
+  inside a deployment with no outbound internet, and Tavily's is hosted and
+  closed, so it cannot. Set `FIRECRAWL_API_URL` to your own instance, or
+  `FIRECRAWL_API_KEY` for the hosted API. With neither set the provider refuses
+  rather than quietly reaching for a SaaS. Nothing here is required and nothing
+  degrades if you ignore all of it.
 
 - The local stack can run once per checkout instead of once per machine.
   `deploy/compose.yaml` still defaults to the project name `kindlast` and to

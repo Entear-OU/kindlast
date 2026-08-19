@@ -219,6 +219,7 @@ you have to switch on.
 | Resend, for email | Sending a notification | No | The default is `EMAIL_PROVIDER=console`, which logs instead of sending |
 | A hosted model API | Every agent run | No | The default `KINDLAST_MODEL_URL` is `http://model:8080`, the llama.cpp service in your own stack |
 | `va.vercel-scripts.com`, via `@vercel/analytics` | Page load, development builds only | Development only | See the note below |
+| A Firecrawl or Tavily instance, via `lib/websearch` | Never today | No | Nothing calls the module. Configured with neither `FIRECRAWL_API_URL` nor a key, it refuses rather than reaching for a hosted API, and the default provider is the one you can run yourself |
 
 Two things that look like egress and are not. **Stripe** never receives a
 request from this stack: billing is applied by verifying a signed webhook that
@@ -254,13 +255,37 @@ operator configured rather than ambient traffic:
 
 Neither is on by default and neither is needed to run the console.
 
-Two caveats worth having in writing. First, **the mode is not yet proven by a
-test.** The stack is not currently booted with egress blocked in CI, so treat
-the claim above as an audit of the code rather than a guarantee, and ENT-240
-tracks turning it into a test. Second, `lib/websearch` is the seam through
-which the corpus refresh would fetch. It has no caller today, its Tavily
-provider is the one that could not run air-gapped anyway, and **neither
-`TAVILY_API_KEY` nor `FIRECRAWL_API_KEY` is required for anything.**
+**The mode is proven by a test rather than by an audit** (ENT-240). It used to
+be the latter: somebody had read the source and believed it, which is true on
+the day it is written and silent every day after. Now CI brings the whole stack
+up on a network with no route out and checks that the console still answers:
+
+```bash
+bun run test:airgap
+```
+
+That is `scripts/airgap-check.sh`, and it takes a few minutes because it brings
+your stack up twice. What it does is worth knowing before you trust it. It
+brings the stack up normally, so images are pulled and `web` is built, and
+those are the install-time fetches in the table above. Then, from a container
+on the stack's own network, it reaches a public address and requires that to
+**succeed**: a machine with no internet cannot demonstrate anything by failing
+to reach the internet, so a run that cannot pass this step skips rather than
+reporting a pass it did not earn. Then it recreates the same stack with
+`deploy/compose.airgap.yaml`, which marks the network `internal: true`, and
+requires the same request to **fail** and the console to still serve.
+
+Two things it does not cover, both deliberate. Pulling images and building the
+console happen before the network is closed, because they are the install-time
+egress the table names. And it does not watch for a service that tries to reach
+out and copes quietly with being refused: it proves the stack works without
+egress, not that nothing ever attempts any.
+
+One more thing to know: `lib/websearch` is the seam through which a corpus
+refresh would fetch. It has no caller today. Its default provider is Firecrawl,
+which you can run yourself and therefore inside the air-gap, and **nothing it
+reads is required for anything**, so an unconfigured deployment fetches
+nothing.
 
 ## Build and run
 

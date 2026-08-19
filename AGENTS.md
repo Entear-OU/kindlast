@@ -140,6 +140,7 @@ bun run typecheck        # tsc, through the workspace so the version is pinned
 bun run test:unit        # unit and component tests, no services needed
 bun run test:e2e         # the sign-in round trip, needs the compose stack
 bun run test:db          # database isolation suite, needs the compose stack
+bun run test:airgap      # the stack serves with egress blocked, needs docker
 ```
 
 Use `bun run typecheck`, not `bunx tsc`. `bunx` resolves a compiler from the
@@ -419,6 +420,7 @@ Three test suites, and they are not interchangeable:
 | `test:unit` | nothing | TypeScript modules and components |
 | `test:e2e` | the compose stack | the sign-in round trip, in a real browser |
 | `test:db` | the compose stack | tenant isolation and privileges |
+| `test:airgap` | docker, and internet to block | the stack serves with no route out |
 
 The database suite **self-skips when its stack is unreachable**, so a green
 local run does not prove it ran. CI boots the stack and fails loudly if it

@@ -228,7 +228,12 @@ services:
 
   seed:
     container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-seed
-    image: alpine:3.21
+    # Built rather than pulled, because this job needs psql, curl and jq and
+    # used to install them on every boot. That was a runtime fetch, and it was
+    # what stopped the stack reaching a healthy state with egress blocked
+    # (ENT-240). deploy/seed/Dockerfile carries the reasoning.
+    build:
+      context: ./seed
     restart: "no"
     depends_on:
       migrate:
