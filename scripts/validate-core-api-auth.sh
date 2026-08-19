@@ -20,7 +20,18 @@ cd "$(dirname "$0")/.." || exit 1
 
 COMPOSE="docker compose -f deploy/compose.yaml"
 AUTH="http://localhost:${KINDLAST_AUTH_PORT:-8300}"
-NET=kindlast_default
+
+# Every docker resource this script addresses by name carries the compose
+# project as a prefix, and since ENT-250 that project is per worktree. Reading
+# it from deploy/.env, the same file compose reads, is what stops this script
+# inspecting a container belonging to a different branch's stack and reporting
+# on it as though it were the one it just brought up. Unset, it is `kindlast`
+# and nothing changes for a single checkout.
+if [ -z "${COMPOSE_PROJECT_NAME:-}" ] && [ -f deploy/.env ]; then
+  COMPOSE_PROJECT_NAME="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' deploy/.env | tail -1)"
+fi
+PROJECT="${COMPOSE_PROJECT_NAME:-kindlast}"
+NET="${PROJECT}_default"
 CURL_IMG=curlimages/curl:8.11.1
 CALL='http://core-api:8080/kindlast.core.v1.SessionService/GetCurrentUser'
 
@@ -37,7 +48,7 @@ note()  { printf '        %s\n' "$*"; }
 incurl() { docker run --rm --network "$NET" "$CURL_IMG" "$@"; }
 
 # In a container, so no local psql/jq/go version matters for this one.
-volread() { docker run --rm -v kindlast_zitadel-machinekey:/m alpine:3.21 cat "/m/$1" 2>/dev/null; }
+volread() { docker run --rm -v "${PROJECT}_zitadel-machinekey:/m" alpine:3.21 cat "/m/$1" 2>/dev/null; }
 
 FRESH=0
 [ "${1:-}" = "--fresh" ] && FRESH=1
@@ -57,7 +68,7 @@ if ! $COMPOSE up -d >/dev/null 2>&1; then
 fi
 
 for _ in $(seq 1 60); do
-  status="$(docker inspect kindlast-core-api --format '{{.State.Health.Status}}' 2>/dev/null || echo none)"
+  status="$(docker inspect "${PROJECT}-core-api" --format '{{.State.Health.Status}}' 2>/dev/null || echo none)"
   [ "$status" = "healthy" ] && break
   sleep 2
 done
@@ -65,7 +76,7 @@ if [ "$status" = "healthy" ]; then
   pass "core-api is healthy"
 else
   fail "core-api never became healthy (status: ${status})"
-  note "logs: docker logs kindlast-core-api"
+  note "logs: docker logs ${PROJECT}-core-api"
   exit 1
 fi
 
@@ -145,7 +156,7 @@ fi
 # ---------------------------------------------------------------------------
 step "4. The whole chain, over the compose network"
 
-published="$(docker inspect kindlast-core-api --format '{{json .NetworkSettings.Ports}}')"
+published="$(docker inspect "${PROJECT}-core-api" --format '{{json .NetworkSettings.Ports}}')"
 if [ "$published" = "{}" ] || [ "$published" = "null" ]; then
   pass "core-api publishes no port (${published})"
   note "true of this phase rather than of the design: web, mobile and third"
