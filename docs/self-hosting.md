@@ -146,7 +146,6 @@ recording.
 
 | Variable | Why |
 |---|---|
-| `TAVILY_API_KEY` | Currently unused. Nothing calls `lib/websearch` since the Analyst was removed, and the stored corpus may have made it unnecessary; see ENT-240. Leave it unset unless you have restored a caller. |
 | `NEXT_PUBLIC_APP_URL` | Absolute origin for links in outbound email. Falls back to the request's forwarded host, which is usually wrong behind a proxy. |
 
 ### Optional
@@ -158,11 +157,84 @@ recording.
 | `EMAIL_FROM` | | A verified sender on your own domain |
 | `BILLING_PROVIDER` | `stripe` | Only relevant if you are charging for your instance |
 | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | | Billing only |
-| `WEBSEARCH_PROVIDER` | `tavily` | `firecrawl` is a stub |
+| `WEBSEARCH_PROVIDER` | `tavily` | Picks the `lib/websearch` provider. Nothing calls that module, so this changes nothing at runtime. |
+| `TAVILY_API_KEY` | | **Not required, whatever an older copy of this page told you.** Nothing calls `lib/websearch`, so leave it unset. |
+| `FIRECRAWL_API_KEY` | | The other `lib/websearch` provider, equally unused, and still an unimplemented stub. |
+
+**`TAVILY_API_KEY` used to be listed as required and it never was.** This page
+told you to go and get a third-party search key before your stack would work
+properly, and that was simply wrong: `lib/websearch` has had no caller since
+the Analyst was removed along with the Supabase-era console, so no request path
+ever reaches it and no key is ever read. If you obtained a Tavily key on the
+strength of the old table, you did not need it and you can drop it. Nothing
+degrades without it, because nothing used it.
 
 You can run a useful instance with `EMAIL_PROVIDER=console` and no billing
 configured at all. Findings will appear in the console, they simply will not be
 emailed.
+
+## What leaves the deployment
+
+This is the whole egress surface in one place, so you can see it without
+grepping for it. It is here because a compliance record is exactly the kind of
+data whose operator should be able to answer "what does this thing phone home
+to" without reading the source.
+
+**A default install, once it is built and running, makes no outbound request
+at all.** Everything below is either a one-off at install time, or something
+you have to switch on.
+
+| What | When | On by default | How to do without it |
+|---|---|---|---|
+| Docker image pulls | First `up` | Yes | Mirror the images into your own registry and pull from there |
+| Model weights, via `model-init` | First `up --profile model` | Only with the profile | Put the `.gguf` in `deploy/models/` yourself. `model-init` then verifies what it finds and never opens a socket |
+| Google Fonts | `bun run build` | Yes | Nothing to do at runtime. `next/font/google` downloads the files during the build and serves them from your own origin, so the running app never asks Google for anything |
+| Customer MCP servers, via the workers gateway | Request time | No | Nothing to do. `KINDLAST_GATEWAY_EGRESS_ALLOWLIST` is empty unless you set it, and an empty allow-list refuses every fetch |
+| Resend, for email | Sending a notification | No | The default is `EMAIL_PROVIDER=console`, which logs instead of sending |
+| A hosted model API | Every agent run | No | The default `KINDLAST_MODEL_URL` is `http://model:8080`, the llama.cpp service in your own stack |
+| `va.vercel-scripts.com`, via `@vercel/analytics` | Page load, development builds only | Development only | See the note below |
+
+Two things that look like egress and are not. **Stripe** never receives a
+request from this stack: billing is applied by verifying a signed webhook that
+Stripe sends to you, so the traffic is inbound. **The regulatory corpus** is
+committed to the repository as JSON under `data/corpus/` and loaded into
+Postgres locally, so nothing is fetched to answer a question about the law. The
+obligation page links out to EUR-Lex rather than fetching it, which is a link
+your browser follows if you click it and not a request the server makes.
+
+**The analytics component deserves a straight answer**, because `<Analytics />`
+sits unconditionally in `app/layout.tsx` and that looks worse than it is. In a
+production build it loads `/_vercel/insights/script.js` and posts events to
+`/_vercel/insights/event`, both on your own origin. Those paths exist only
+because Vercel's edge answers them, so on a self-hosted deployment they 404 and
+no data reaches anyone. Development builds are the exception: there the script
+comes from `va.vercel-scripts.com`. If you would rather not rely on a 404,
+delete the component from the layout. Nothing else references it.
+
+### Air-gapped operation
+
+**Running with no outbound internet is a supported mode and a deliberate
+property rather than an accident.** It is worth stating because it disciplines
+future decisions: the next feature that reaches for a hosted API should know it
+is spending something.
+
+Exactly two things are ever permitted to leave, and both are inbound fetches an
+operator configured rather than ambient traffic:
+
+1. **Keeping the regulatory corpus current.** The law changes and a deployment
+   that cannot learn that is worse than one that can.
+2. **The organisation's own data, arriving over MCP**, through the workers
+   gateway and its allow-list.
+
+Neither is on by default and neither is needed to run the console.
+
+Two caveats worth having in writing. First, **the mode is not yet proven by a
+test.** The stack is not currently booted with egress blocked in CI, so treat
+the claim above as an audit of the code rather than a guarantee, and ENT-240
+tracks turning it into a test. Second, `lib/websearch` is the seam through
+which the corpus refresh would fetch. It has no caller today, its Tavily
+provider is the one that could not run air-gapped anyway, and **neither
+`TAVILY_API_KEY` nor `FIRECRAWL_API_KEY` is required for anything.**
 
 ## Build and run
 
