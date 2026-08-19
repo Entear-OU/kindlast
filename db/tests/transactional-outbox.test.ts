@@ -31,17 +31,14 @@ import {
   connect,
   setTenant,
   isStackReachable,
+  roleUrl,
   MIGRATOR_URL,
   APP_URL,
 } from './helpers/db'
 
 const reachable = await isStackReachable()
 
-// Matches agent-role.test.ts rather than importing from helpers/db, because the
-// agent DSN is not part of the shared helper surface there either.
-const AGENT_URL =
-  process.env.PG_AGENT_URL ??
-  'postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast'
+const AGENT_URL = roleUrl('agent')
 
 // Two organisations. Ada owns the first, Miko is a plain member of it, and Bob
 // owns the second and must never be visible to the other two.

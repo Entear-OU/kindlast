@@ -30,6 +30,14 @@ docker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/web-client.json
 docker run --rm -v kindlast_zitadel-machinekey:/k alpine cat /k/core-api-client.json
 ```
 
+The volume is named for the compose project, and since ENT-250 that project is
+per git worktree. In a single checkout it is `kindlast` and the commands above
+are exact. In a worktree running its own stack, take the prefix from
+`deploy/.env` (or `docker volume ls | grep zitadel-machinekey`) and change the
+host and port in the environment file to match `./scripts/stack-env.sh
+--summary`, or the collection will authenticate against a different branch's
+Zitadel.
+
 Two things about the client-credentials request are worth knowing before it
 confuses you, both measured against this stack rather than taken from a doc.
 

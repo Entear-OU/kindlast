@@ -27,7 +27,15 @@ const run = promisify(execFile)
  * now sets credentials Mailpit does not need for exactly this reason.
  */
 
-const ZITADEL_URL = process.env.KINDLAST_AUTH_URL ?? 'http://localhost:8300'
+// Which Zitadel, for a machine that may be running several (ENT-250). A
+// worktree's stack publishes auth on its own port, and this fixture creating a
+// user in a sibling branch's identity provider would leave that branch's suite
+// with a person it never made. `scripts/stack-env.sh` exports both names; the
+// second is the one compose itself reads, so setting only that still lands
+// here. In a single checkout it is 8300, as documented everywhere else.
+const ZITADEL_URL =
+  process.env.KINDLAST_AUTH_URL ??
+  `http://localhost:${process.env.KINDLAST_AUTH_PORT ?? '8300'}`
 // Absolute, because docker resolves -f against the working directory and this
 // file sits four levels below the repository root.
 const COMPOSE_FILE = path.resolve(__dirname, '../../../../deploy/compose.yaml')

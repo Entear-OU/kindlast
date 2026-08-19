@@ -35,10 +35,16 @@ logger = logging.getLogger(__name__)
 def build_app():
     """Wire the service, or refuse to start.
 
-    Discovery and JWKS warming happen here rather than on the first request, so
-    a deployment pointed at an unreachable issuer fails at boot with a message
-    about the issuer, instead of at 3am with a refused token that looks like a
-    client problem.
+    Discovery happens here rather than on the first request, so a deployment
+    pointed at an unreachable issuer fails at boot with a message about the
+    issuer, instead of at 3am with a refused token that looks like a client
+    problem.
+
+    Warming the key cache is the other half and is NOT the same kind of check.
+    A discovery document that cannot be read is a configuration mistake; a JWKS
+    that cannot be read yet is usually just a stack starting up, and a freshly
+    seeded Zitadel legitimately serves no keys at all. So one is fatal and the
+    other is a warning (ENT-253).
     """
     logging.basicConfig(
         level=os.getenv("KINDLAST_LOG_LEVEL", "INFO"),
@@ -70,7 +76,22 @@ def build_app():
         reachable_at=config["discovery_url"],
         host_header=config["host_header"],
     )
-    keys.warm()
+    try:
+        keys.warm()
+    except Exception as exc:  # noqa: BLE001 - a boot race, not a misconfiguration
+        # NOT FATAL, DELIBERATELY, and the same call core-api makes for the
+        # same reason. `auth` and this service come up together in a compose
+        # stack, so losing that race is ordinary; the first token to arrive
+        # drives the refetch that finds the key. Exiting here would turn a
+        # startup ordering detail into a container that never comes back.
+        #
+        # A misconfigured issuer still fails at boot, loudly: `discover` above
+        # is the check that catches it, and it does raise.
+        logger.warning(
+            "could not warm the JWKS cache at boot, so the first token will "
+            "drive a refetch: %s",
+            exc,
+        )
 
     # Environment first, then the volume the seed writes into, because the
     # project id and the client secret are generated per environment and have

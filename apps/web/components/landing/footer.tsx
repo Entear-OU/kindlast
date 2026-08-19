@@ -67,6 +67,12 @@ export function Footer() {
                   the footer of every other page. */}
               <nav className="flex flex-col gap-3.5">
                 <Link
+                  href="/readiness"
+                  className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150"
+                >
+                  Readiness check
+                </Link>
+                <Link
                   href="/how-it-works"
                   className="text-[15px] font-medium tracking-[-0.01em] text-white/42 hover:text-white transition-colors duration-150"
                 >

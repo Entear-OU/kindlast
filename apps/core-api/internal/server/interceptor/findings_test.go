@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	dashboardservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	findingsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 )
@@ -61,10 +61,7 @@ const readScopes = "openid profile findings:read dashboard:read"
 const actScopes = "openid profile findings:read findings:act dashboard:read"
 
 func migratorDSN() string {
-	if dsn := os.Getenv("PG_MIGRATOR_URL"); dsn != "" {
-		return dsn
-	}
-	return "postgres://kindlast_migrator:migrator-dev-password@127.0.0.1:5433/kindlast"
+	return stackenv.DSN("migrator")
 }
 
 // seeder is a migrator connection.
