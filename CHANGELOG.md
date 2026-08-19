@@ -57,6 +57,30 @@ what they have to do about it, which no commit subject knows.
   container was called `kindlast-postgres-app`: it still is, unless a project
   name is set.
 
+### Fixed
+
+- **Intelligence refused every request for the first minute of a fresh
+  deployment** (ENT-253). A newly seeded authorization server has generated no
+  signing key yet and serves an empty key set, which is correct rather than
+  broken: it makes the key when it issues its first token. Intelligence
+  fetched that empty set at boot, treated the fetch as having filled the cache,
+  and then refused the first token it was ever shown with a 401 that read as
+  "signed by a key I do not know". A minute later the cooldown lapsed and
+  everything worked, so this was only ever visible on a stack that was seconds
+  old, which is every stack a self-hoster starts for the first time.
+
+  The boot fetch no longer counts as the cache's one permitted refetch, so the
+  first token always reaches the network for a key it does not hold. `core-api`
+  already worked this way. Nothing to do on upgrade beyond taking the new
+  image.
+
+- **Intelligence exited rather than starting when it came up before the
+  authorization server.** Losing that race in a compose stack is ordinary, and
+  the container did not come back on its own. It now logs a warning and starts,
+  and the first token fetches the keys. A genuinely misconfigured issuer still
+  fails at boot with a message naming the issuer, which is the case worth
+  refusing to start for.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,
