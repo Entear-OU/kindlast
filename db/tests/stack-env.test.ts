@@ -128,6 +128,19 @@ describe('scripts/stack-env.sh', () => {
     )
     // Slot 7 is the seventh block of eight from 20800.
     expect(forced).toContain("export KINDLAST_PG_APP_PORT='20848'")
-    expect(forced).toContain("export KINDLAST_STACK_SLOT='7'")
+  })
+
+  it('does not export the slot it resolved, so evaluating it is not sticky', () => {
+    // KINDLAST_STACK_SLOT is an input: it forces a slot when a hash collides.
+    // Echoing the resolved slot back out under the same name would mean a
+    // shell that evaluated this in one worktree, then moved to another and
+    // evaluated it again, got the FIRST worktree's ports under the second
+    // one's project name. This test exists because that is what it did: the
+    // disjointness case above went red the first time the suite was run from
+    // an evaluated shell, which is the shell every developer will be in.
+    const out = execFileSync(SCRIPT, ['--derive', '--root', '/tmp/kindlast-worktree-alpha'], {
+      encoding: 'utf8',
+    })
+    expect(out).not.toContain('KINDLAST_STACK_SLOT')
   })
 })

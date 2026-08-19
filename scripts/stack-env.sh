@@ -277,9 +277,17 @@ fi
 # the containerised console explicitly instead:
 #
 #     KINDLAST_WEB_URL="$KINDLAST_EDGE_URL" bun run test:e2e
+#
+# KINDLAST_STACK_SLOT is not exported either, and for a sharper reason. It is an
+# INPUT: it forces a slot when a hash collides. Echoing the resolved slot back
+# out under the same name makes it sticky, so a shell that evaluated this in one
+# worktree and then evaluated it again in another would hand the second worktree
+# the FIRST one's ports, under the second one's project name. That is precisely
+# the collision this script exists to prevent, arriving through the script
+# itself. The resolved slot is in `--summary` and in the deploy/.env header,
+# which are places to read it rather than places that redefine it.
 cat <<EOF
 export COMPOSE_PROJECT_NAME='${PROJECT}'
-export KINDLAST_STACK_SLOT='${SLOT}'
 export KINDLAST_PG_APP_PORT='${PG_APP_PORT}'
 export KINDLAST_AUTH_PORT='${AUTH_PORT}'
 export KINDLAST_MAILPIT_PORT='${MAILPIT_PORT}'
