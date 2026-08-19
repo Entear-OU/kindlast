@@ -124,6 +124,33 @@ what they have to do about it, which no commit subject knows.
 
 ### Fixed
 
+- **The Watcher could not complete a single sweep, so no deployment has ever
+  produced a finding.** Two of the Watcher's three detectors read the `dsars`
+  table, and the role the sweep runs as, `kindlast_agent`, was never granted
+  anything on it. Every sweep failed on the first detector with
+  `permission denied for table dsars` and returned an internal error, so no
+  organisation ever got a finding, a feed entry, a notification or an Article
+  30 record.
+
+  It stayed hidden because nothing runs a sweep on a schedule yet, so the only
+  way to trigger one is `SweepService.RunSweep` by hand, and a console that has
+  never swept shows the same empty feed as one whose every sweep failed. The
+  message on the feed, "the Watcher has not run for this organisation", was
+  literally true and read as a state rather than as a symptom.
+
+  The agent now holds `select` on `dsars` and nothing more, under a policy of
+  the same shape as its other tenant tables: org equality against the one GUC a
+  sweep sets, so a sweep pointed at one organisation still cannot see another's
+  requests. The grant alone would not have been enough, and would have been
+  worse: `dsars` forces row level security and its only select policy also
+  requires a member, which a sweep deliberately does not set, so the sweep
+  would have succeeded while silently finding no deadline for anybody.
+
+  On upgrade, apply migrations and then run a sweep per organisation to
+  populate feeds that have been empty. `db/tests/agent-role.test.ts` now calls
+  `run_watcher()` as the agent itself, so the next detector that reads a table
+  nobody granted fails on the commit that adds it.
+
 - **Intelligence refused every request for the first minute of a fresh
   deployment** (ENT-253). A newly seeded authorization server has generated no
   signing key yet and serves an empty key set, which is correct rather than
