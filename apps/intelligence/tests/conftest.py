@@ -50,6 +50,22 @@ class AuthServer:
         self._thread.start()
         self.jwks_requests = 0
 
+        # A FRESHLY SEEDED ZITADEL SERVES `{"keys": []}` (ENT-253).
+        #
+        # It generates its signing key lazily, on the first token it issues, so
+        # an empty set is a correct answer rather than a broken server. Set
+        # this to False to be that server: the cache's whole job is to notice
+        # it was warmed against nothing and go back to the network when a token
+        # names a key it does not hold.
+        self.serves_keys = True
+
+        # What `/keys` answers with. 500 is the other half of the same
+        # question: a refetch that fails must refuse the token rather than
+        # raise a transport error out of the verifier, and must still start the
+        # cooldown so an unreachable authorization server does not get one
+        # outbound request per inbound one.
+        self.keys_status = 200
+
     @property
     def issuer(self) -> str:
         return f"http://127.0.0.1:{self.port}"
@@ -108,11 +124,19 @@ class AuthServer:
                     }
                 elif self.path == "/keys":
                     server.jwks_requests += 1
+                    if server.keys_status != 200:
+                        self.send_response(server.keys_status)
+                        self.end_headers()
+                        return
                     body = {
-                        "keys": [
-                            server._jwk(server.signing_key, "key-1"),
-                            server._jwk(server.other_key, "key-2"),
-                        ]
+                        "keys": (
+                            [
+                                server._jwk(server.signing_key, "key-1"),
+                                server._jwk(server.other_key, "key-2"),
+                            ]
+                            if server.serves_keys
+                            else []
+                        )
                     }
                 else:
                     self.send_response(404)

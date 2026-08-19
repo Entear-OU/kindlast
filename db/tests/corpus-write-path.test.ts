@@ -30,17 +30,18 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { Client } from 'pg'
-import { connect, isStackReachable, MIGRATOR_URL, APP_URL } from './helpers/db'
+import {
+  connect,
+  isStackReachable,
+  roleUrl,
+  MIGRATOR_URL,
+  APP_URL,
+} from './helpers/db'
 
 const reachable = await isStackReachable()
 
-const INGEST_URL =
-  process.env.PG_INGEST_URL ??
-  'postgres://kindlast_ingest:ingest-dev-password@127.0.0.1:5433/kindlast'
-
-const AGENT_URL =
-  process.env.PG_AGENT_URL ??
-  'postgres://kindlast_agent:agent-dev-password@127.0.0.1:5433/kindlast'
+const INGEST_URL = roleUrl('ingest')
+const AGENT_URL = roleUrl('agent')
 
 /** The ten tables that hold the law rather than a customer's data. */
 const CORPUS_TABLES = [

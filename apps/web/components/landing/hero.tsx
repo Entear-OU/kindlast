@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import { GitHubMark } from '@/components/icons/github-mark'
 import { HeroLattice } from '@/components/landing/hero-lattice'
 import { GITHUB_REPO_URL, LICENSE_SPDX } from '@/lib/links'
@@ -96,19 +97,32 @@ export function Hero() {
             before anything changes.
           </p>
 
-          {/* Action. Reading the source is the only ask: there is nothing to
-              sign up for yet, and the repository is the product claim. */}
-          <div className="mt-11">
+          {/* Action. ENT-189 gave the site something to DO for the first time
+              since the waitlist went, so the readiness check takes the primary
+              slot and reading the source moves beside it. Both are honest asks
+              and neither is a form: the check needs no account and sends
+              nothing, and the repository is still the product claim. */}
+          <div className="mt-11 flex flex-col items-center gap-4 sm:flex-row">
+            <Link
+              href="/readiness"
+              className="inline-flex items-center gap-2.5 rounded-full bg-[#00C9A7] px-7 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-[#052E28] transition-all duration-150 hover:bg-[#2AD6BA] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+            >
+              Check where you stand
+            </Link>
             <a
               href={GITHUB_REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2.5 rounded-full bg-white px-7 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-[#0D1B2A] transition-all duration-150 hover:bg-white/90 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7]"
+              className="inline-flex items-center gap-2.5 rounded-full border border-white/25 px-7 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-white/10 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7]"
             >
               <GitHubMark size={18} />
               Read the source
             </a>
           </div>
+
+          <p className="mt-5 text-[14px] font-medium tracking-[-0.005em] text-white/40">
+            No account, and your answers never leave the page.
+          </p>
 
           {/* What the shape of the product actually guarantees */}
           <div className="mt-14 flex flex-wrap justify-center gap-x-10 gap-y-3">

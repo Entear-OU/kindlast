@@ -140,6 +140,7 @@ bun run typecheck        # tsc, through the workspace so the version is pinned
 bun run test:unit        # unit and component tests, no services needed
 bun run test:e2e         # the sign-in round trip, needs the compose stack
 bun run test:db          # database isolation suite, needs the compose stack
+bun run test:airgap      # the stack serves with egress blocked, needs docker
 ```
 
 Use `bun run typecheck`, not `bunx tsc`. `bunx` resolves a compiler from the
@@ -197,6 +198,26 @@ verification complete rather than silently going nowhere. The seed configures
 it, and the reason it sets credentials Mailpit does not want is written down in
 `deploy/seed/seed.sh`: Zitadel refuses a provider that has none and reports it
 as a config that does not exist.
+
+**Working in a git worktree? Give it its own stack first** (ENT-250):
+
+```bash
+./scripts/stack-env.sh --write      # once per worktree, writes deploy/.env
+docker compose -f deploy/compose.yaml up -d
+eval "$(./scripts/stack-env.sh)"    # once per shell, for the test suites
+```
+
+`deploy/compose.yaml` pins `name: kindlast`, so without this every worktree on
+the machine addresses one Postgres. That is not a tidiness problem: it is how
+an unmerged branch's migration reaches a sibling branch's test run, and it has
+already taken `main` red over a column that existed only because of a branch
+that had not merged. The script derives a project name and a block of host
+ports from the worktree path; compose reads `deploy/.env` on its own, and the
+`eval` puts the same values plus the DSNs in the shell. A single checkout gets
+today's defaults and needs none of it.
+[`docs/maintainers.md`](./docs/maintainers.md) has the longer version,
+including why this and `go test -p 1` are siblings that do not substitute for
+each other.
 
 ## Row level security, which is the thing to get right
 
@@ -399,6 +420,7 @@ Three test suites, and they are not interchangeable:
 | `test:unit` | nothing | TypeScript modules and components |
 | `test:e2e` | the compose stack | the sign-in round trip, in a real browser |
 | `test:db` | the compose stack | tenant isolation and privileges |
+| `test:airgap` | docker, and internet to block | the stack serves with no route out |
 
 The database suite **self-skips when its stack is unreachable**, so a green
 local run does not prove it ran. CI boots the stack and fails loudly if it

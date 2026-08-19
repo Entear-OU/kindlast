@@ -40,15 +40,30 @@ than beside it.
 
 from __future__ import annotations
 
+import base64
 import json
+import os
 import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
-INTELLIGENCE = "http://localhost:8090"
-TOKEN_ENDPOINT = "http://localhost:8300/oauth/v2/token"
+# WHICH STACK (ENT-250). A worktree runs its own compose project on its own
+# ports, so the addresses and the container name are read rather than typed. In
+# a single checkout every default below is the port documented everywhere else,
+# so nothing changes for somebody with one clone. `eval
+# "$(./scripts/stack-env.sh)"` is what sets them in a worktree.
+PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "kindlast")
+INTELLIGENCE = f"http://localhost:{os.environ.get('KINDLAST_INTELLIGENCE_PORT', '8090')}"
+AUTH = f"http://localhost:{os.environ.get('KINDLAST_AUTH_PORT', '8300')}"
+TOKEN_ENDPOINT = f"{AUTH}/oauth/v2/token"
+JWKS_ENDPOINT = f"{AUTH}/oauth/v2/keys"
+# Derived rather than typed, for the reason above. Written out once here
+# because it was the one name ENT-250 missed, so a worktree's smoke run read
+# the DEFAULT stack's credentials and refused a token that was perfectly good
+# for a Zitadel it was not talking to.
+INTELLIGENCE_CONTAINER = f"{PROJECT}-intelligence"
 
 # One obligation, and a signal that plainly matches it. Not a hard question:
 # this tests the harness, and the model's job here is only to produce something
@@ -77,7 +92,7 @@ def fail(message: str) -> None:
 
 def _in_container(path: str) -> str:
     result = subprocess.run(
-        ["docker", "exec", "kindlast-intelligence", "cat", path],
+        ["docker", "exec", INTELLIGENCE_CONTAINER, "cat", path],
         capture_output=True,
         text=True,
         check=False,
@@ -100,7 +115,7 @@ def read_org_id() -> str:
         [
             "docker",
             "exec",
-            "kindlast-postgres-app",
+            f"{PROJECT}-postgres-app",
             "psql",
             "-U",
             "kindlast_migrator",
@@ -160,14 +175,34 @@ def mint(client_id: str, client_secret: str, audience: str) -> str:
         data=body,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        token = json.load(response).get("access_token")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            token = json.load(response).get("access_token")
+    except urllib.error.HTTPError as error:
+        # The body carries `error` and `error_description`, which is the whole
+        # of what went wrong. Without this the failure is a traceback ending in
+        # "HTTP Error 400: Bad Request", which names neither the grant nor the
+        # client nor the scope that was refused.
+        fail(
+            f"the authorization server refused the client-credentials grant "
+            f"with {error.code}: {_body(error)}\n"
+            f"  client_id     {client_id}\n"
+            f"  audience      {audience}\n"
+            f"  token endpoint {TOKEN_ENDPOINT}"
+        )
     if not token:
         fail("the authorization server returned no access_token")
     return token
 
 
-def draft(token: str | None, org_id: str) -> tuple[int, dict]:
+def _body(error: urllib.error.HTTPError) -> str:
+    try:
+        return error.read().decode(errors="replace").strip()[:2000]
+    except OSError:
+        return "(the response body could not be read)"
+
+
+def draft(token: str | None, org_id: str) -> tuple[int, dict, str]:
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -188,9 +223,120 @@ def draft(token: str | None, org_id: str) -> tuple[int, dict]:
     # would only decide this script is impatient.
     try:
         with urllib.request.urlopen(request, timeout=300) as response:
-            return response.status, json.load(response)
+            return response.status, json.load(response), ""
     except urllib.error.HTTPError as error:
-        return error.code, {}
+        # THE BODY, NOT ONLY THE CODE. A Connect error carries a `code` and a
+        # `message`, and those two are the difference between "the token was
+        # refused" (authenticity: the key, the audience, the issuer or the
+        # expiry) and "token does not carry 'internal:intelligence'"
+        # (authority: the role grant never reached the token). Throwing the
+        # body away is what left ENT-253 with a bare 401 and three equally
+        # plausible explanations.
+        return error.code, {}, _body(error)
+
+
+# --- WHAT THE LOG SAYS WHEN THIS GOES RED -----------------------------------
+#
+# THE FAILURE MESSAGE IS THE ONLY THING A READER GETS. This is a gate on a
+# stack that no longer exists by the time anybody opens the run, so whatever is
+# not printed here is not recoverable at all.
+#
+# The version this replaced printed `an authenticated draft returned 401,
+# expected 200`, and that one line was consistent with at least three different
+# causes: a signing key the service could not find, an audience minted for the
+# wrong project, and a role grant that never reached the token. It cost a day
+# to tell them apart, and the answer turned out to be the first (ENT-253).
+#
+# So a refusal now prints the four facts that separate them:
+#
+#   * the Connect code and message, which say authenticity or authority;
+#   * the token's own header and claims, unverified, so `kid`, `aud`, `iss` and
+#     `exp` are readable without a debugger;
+#   * the kids the authorization server is serving RIGHT NOW, because the
+#     ENT-253 failure is exactly "the token's kid is in this list and was not
+#     in the service's cache";
+#   * the service's own refusal line, which names the check that bit.
+#
+# The token itself is never printed. The claims are not secret and the
+# signature is the credential.
+
+
+def _claims(token: str) -> tuple[dict, dict]:
+    """Read a JWT's header and payload without verifying anything.
+
+    Deliberately not `jwt.decode`: this script runs on whatever Python the
+    runner has and takes no dependency to stay that way. Nothing here trusts
+    the result, which is the only reason reading an unverified token is
+    acceptable at all; it is being printed for a human, not acted on.
+    """
+
+    def segment(part: str) -> dict:
+        padded = part + "=" * (-len(part) % 4)
+        return json.loads(base64.urlsafe_b64decode(padded))
+
+    try:
+        header, payload, _ = token.split(".")
+        return segment(header), segment(payload)
+    except (ValueError, json.JSONDecodeError):
+        return {}, {}
+
+
+def _served_kids() -> str:
+    try:
+        with urllib.request.urlopen(JWKS_ENDPOINT, timeout=10) as response:
+            document = json.load(response)
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as error:
+        return f"(the JWKS at {JWKS_ENDPOINT} could not be read: {error})"
+    kids = [str(key.get("kid", "")) for key in document.get("keys", [])]
+    return ", ".join(k for k in kids if k) or "(none: the server is serving an empty key set)"
+
+
+def _refusals() -> str:
+    """The service's own account of it, which names the check that bit."""
+    result = subprocess.run(
+        ["docker", "logs", "--tail", "50", INTELLIGENCE_CONTAINER],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    lines = [
+        line
+        for line in (result.stdout + result.stderr).splitlines()
+        if "refusing a token" in line or "WARNING" in line or "ERROR" in line
+    ]
+    return "\n".join(f"    {line}" for line in lines[-5:]) or "    (none logged)"
+
+
+def diagnose(token: str, audience: str, status: int, body: str) -> None:
+    header, payload = _claims(token)
+    aud = payload.get("aud")
+    roles = sorted(
+        name
+        for claim, value in payload.items()
+        if claim in ("scope", "scp") or claim.endswith(":roles")
+        for name in (value.split() if isinstance(value, str) else value or ())
+    )
+    report = [
+        f"an authenticated draft returned {status}, expected 200",
+        f"  service said     {body or '(no body)'}",
+        f"  token kid        {header.get('kid', '(none)')}",
+        f"  token aud        {aud}",
+        f"  token iss        {payload.get('iss')}",
+        f"  token authority  {', '.join(roles) or '(no scope or roles claim)'}",
+        f"  audience asked   {audience}",
+        f"  kids served now  {_served_kids()}",
+        "  the service's last refusals:",
+        _refusals(),
+        "",
+        "  401 is authenticity and 403 is authority. A 401 whose kid IS in the",
+        "  list above is the ENT-253 shape: the key set was warmed before the",
+        "  authorization server had generated its key, and did not go back for",
+        "  it. A 401 with a mismatched aud or iss is configuration. A 403 is a",
+        "  role grant that never reached the token, so check that the seed",
+        "  granted internal:intelligence and that the mint asked for the plural",
+        "  urn:zitadel:iam:org:projects:roles scope.",
+    ]
+    fail("\n".join(report))
 
 
 def main() -> None:
@@ -198,13 +344,17 @@ def main() -> None:
     token = mint(client_id, client_secret, audience)
     org_id = read_org_id()
 
-    status, payload = draft(token, org_id)
+    status, payload, body = draft(token, org_id)
     if status != 200:
-        fail(f"an authenticated draft returned {status}, expected 200")
+        diagnose(token, audience, status, body)
 
     outcome = payload.get("outcome", "DRAFT_OUTCOME_UNSPECIFIED")
     if outcome not in ("DRAFT_OUTCOME_SUCCEEDED", "DRAFT_OUTCOME_REFUSED"):
-        fail(f"outcome was {outcome}: the harness broke rather than decided")
+        fail(
+            f"outcome was {outcome}: the harness broke rather than decided\n"
+            f"  detail {payload.get('outcomeDetail') or '(none)'}\n"
+            f"  the service's last refusals:\n{_refusals()}"
+        )
 
     if not payload.get("agentRunId"):
         fail("no agent_run_id: the run happened and its provenance was not stored")
@@ -220,7 +370,7 @@ def main() -> None:
     # THE ASSERTION THE UNIT SUITE STRUCTURALLY CANNOT MAKE. It proves the
     # verifier rejects a bad token; only a running service proves the verifier
     # is in front of the handler rather than beside it.
-    status, _ = draft(token=None, org_id=org_id)
+    status, _, _ = draft(token=None, org_id=org_id)
     if status not in (401, 403):
         fail(f"a call with no token returned {status}, and must be refused")
     print(f"intelligence-smoke: unauthenticated call refused with {status}")

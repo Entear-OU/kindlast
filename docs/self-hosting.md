@@ -173,9 +173,10 @@ recording.
 | `EMAIL_FROM` | | A verified sender on your own domain |
 | `BILLING_PROVIDER` | `stripe` | Only relevant if you are charging for your instance |
 | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | | Billing only |
-| `WEBSEARCH_PROVIDER` | `tavily` | Picks the `lib/websearch` provider. Nothing calls that module, so this changes nothing at runtime. |
+| `WEBSEARCH_PROVIDER` | `firecrawl` | Picks the `lib/websearch` provider. Nothing calls that module, so this changes nothing at runtime. |
+| `FIRECRAWL_API_URL` | | Base URL of your own Firecrawl instance, `http://firecrawl:3002` for the self-hosted image. The only websearch configuration that can run air-gapped. |
+| `FIRECRAWL_API_KEY` | | A key for Firecrawl's hosted API instead. The self-hosted image runs with authentication off, so it usually needs no key. |
 | `TAVILY_API_KEY` | | **Not required, whatever an older copy of this page told you.** Nothing calls `lib/websearch`, so leave it unset. |
-| `FIRECRAWL_API_KEY` | | The other `lib/websearch` provider, equally unused, and still an unimplemented stub. |
 
 **`TAVILY_API_KEY` used to be listed as required and it never was.** This page
 told you to go and get a third-party search key before your stack would work
@@ -184,6 +185,15 @@ the Analyst was removed along with the Supabase-era console, so no request path
 ever reaches it and no key is ever read. If you obtained a Tavily key on the
 strength of the old table, you did not need it and you can drop it. Nothing
 degrades without it, because nothing used it.
+
+**The websearch default is now Firecrawl** (ENT-240), and that is a statement
+about this stack rather than a preference between two vendors. Firecrawl's
+engine is AGPL-3.0 and you can run it yourself; Tavily's is closed and hosted,
+with no self-hosting path, so a deployment with no outbound internet cannot use
+it at all. Configured with neither an instance URL nor a key, the provider
+refuses rather than quietly reaching for a hosted API. Still: nothing calls the
+module, so this is the shape the seam will have when something does, not a
+thing you have to configure today.
 
 You can run a useful instance with `EMAIL_PROVIDER=console` and no billing
 configured at all. Findings will appear in the console, they simply will not be
@@ -209,6 +219,7 @@ you have to switch on.
 | Resend, for email | Sending a notification | No | The default is `EMAIL_PROVIDER=console`, which logs instead of sending |
 | A hosted model API | Every agent run | No | The default `KINDLAST_MODEL_URL` is `http://model:8080`, the llama.cpp service in your own stack |
 | `va.vercel-scripts.com`, via `@vercel/analytics` | Page load, development builds only | Development only | See the note below |
+| A Firecrawl or Tavily instance, via `lib/websearch` | Never today | No | Nothing calls the module. Configured with neither `FIRECRAWL_API_URL` nor a key, it refuses rather than reaching for a hosted API, and the default provider is the one you can run yourself |
 
 Two things that look like egress and are not. **Stripe** never receives a
 request from this stack: billing is applied by verifying a signed webhook that
@@ -244,13 +255,37 @@ operator configured rather than ambient traffic:
 
 Neither is on by default and neither is needed to run the console.
 
-Two caveats worth having in writing. First, **the mode is not yet proven by a
-test.** The stack is not currently booted with egress blocked in CI, so treat
-the claim above as an audit of the code rather than a guarantee, and ENT-240
-tracks turning it into a test. Second, `lib/websearch` is the seam through
-which the corpus refresh would fetch. It has no caller today, its Tavily
-provider is the one that could not run air-gapped anyway, and **neither
-`TAVILY_API_KEY` nor `FIRECRAWL_API_KEY` is required for anything.**
+**The mode is proven by a test rather than by an audit** (ENT-240). It used to
+be the latter: somebody had read the source and believed it, which is true on
+the day it is written and silent every day after. Now CI brings the whole stack
+up on a network with no route out and checks that the console still answers:
+
+```bash
+bun run test:airgap
+```
+
+That is `scripts/airgap-check.sh`, and it takes a few minutes because it brings
+your stack up twice. What it does is worth knowing before you trust it. It
+brings the stack up normally, so images are pulled and `web` is built, and
+those are the install-time fetches in the table above. Then, from a container
+on the stack's own network, it reaches a public address and requires that to
+**succeed**: a machine with no internet cannot demonstrate anything by failing
+to reach the internet, so a run that cannot pass this step skips rather than
+reporting a pass it did not earn. Then it recreates the same stack with
+`deploy/compose.airgap.yaml`, which marks the network `internal: true`, and
+requires the same request to **fail** and the console to still serve.
+
+Two things it does not cover, both deliberate. Pulling images and building the
+console happen before the network is closed, because they are the install-time
+egress the table names. And it does not watch for a service that tries to reach
+out and copes quietly with being refused: it proves the stack works without
+egress, not that nothing ever attempts any.
+
+One more thing to know: `lib/websearch` is the seam through which a corpus
+refresh would fetch. It has no caller today. Its default provider is Firecrawl,
+which you can run yourself and therefore inside the air-gap, and **nothing it
+reads is required for anything**, so an unconfigured deployment fetches
+nothing.
 
 ## Build and run
 
