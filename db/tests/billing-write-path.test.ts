@@ -288,15 +288,25 @@ describe.skipIf(!reachable)(
     })
 
     it('cannot upgrade an existing one', async () => {
+      // This used to assert a row count of zero, and the comment explaining why
+      // was right at the time: there was no update policy for kindlast_app but
+      // there was an update grant, so the statement parsed and matched nothing.
+      // A test looking only for an exception would have passed against a table
+      // that granted it, which is why the row count was the honest assertion.
+      //
+      // 00029 revoked the grant (ENT-243), so the refusal is now a 42501 before
+      // the planner ever reaches a policy. That is the stronger of the two
+      // failures, and it is the one worth pinning: an upgrade path that
+      // reappears has to get past a privilege rather than past a policy nobody
+      // is looking at.
       await setTenant(app, org, ada)
-      const updated = await app.query(
+      const error = await refused(
+        app,
         `update subscriptions set plan = 'pro' where org_id = $1`,
         [org],
       )
-      // No update policy for kindlast_app, so this matches zero rows rather than
-      // raising. Asserted on the row count for exactly that reason: a test
-      // looking only for an exception would pass against a table that granted it.
-      expect(updated.rowCount, 'the application updated a subscription').toBe(0)
+      expect(error, 'the application updated a subscription').not.toBeNull()
+      expect(error?.code, 'refused, but not by the privilege').toBe('42501')
     })
 
     it('reads its own organisation plan and no other', async () => {

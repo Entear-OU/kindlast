@@ -237,6 +237,13 @@ describe.skipIf(!reachable)('and it can produce but not decide', () => {
 describe.skipIf(!reachable)('and the application still cannot produce', () => {
   // The property 00008 must not have weakened. If this ever passes, the
   // separation the agent role exists for has been undone somewhere else.
+  //
+  // It used to be refused by row level security: 00002 granted the app insert
+  // on every table, so the write parsed, found no policy admitting it and
+  // touched nothing. 00029 took the grant away, so the refusal is now a 42501
+  // at parse time instead. Same property, one layer earlier and considerably
+  // louder, which is the whole point of ENT-243. Both spellings are accepted
+  // here because either one is the separation holding.
   it('kindlast_app still cannot insert a signal', async () => {
     const app = await connect(
       process.env.PG_APP_URL ??
@@ -250,7 +257,7 @@ describe.skipIf(!reachable)('and the application still cannot produce', () => {
            values ($1, $2, 'profile_gap', 'App signal', $3)`,
           [orgA, profileA, `app-${randomUUID()}`],
         ),
-      ).rejects.toThrow(/row-level security/i)
+      ).rejects.toThrow(/permission denied|row-level security/i)
     } finally {
       await app.end()
     }
