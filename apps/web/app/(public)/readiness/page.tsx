@@ -46,7 +46,7 @@ export default function ReadinessPage() {
   return (
     <>
       <section
-        className="relative overflow-hidden pb-14 pt-16 sm:pb-16 sm:pt-24"
+        className="relative overflow-hidden pb-12 pt-10 sm:pb-16 sm:pt-16"
         style={{ backgroundColor: '#F5F4F0' }}
       >
         <div className="relative mx-auto max-w-5xl px-6 lg:px-8">
@@ -57,8 +57,16 @@ export default function ReadinessPage() {
             {HERO_EYEBROW}
           </p>
 
-          <div className="mt-7 grid items-end gap-10 lg:grid-cols-[1.1fr_1fr]">
-            <h1 className="max-w-[16ch] text-[2.75rem] font-black leading-[0.94] tracking-[-0.04em] text-[#0D1B2A] text-balance sm:text-[4rem]">
+          {/* The hero is deliberately smaller than the site's other three.
+              Those pages are the argument and this one is the thing itself, so
+              the headline hands over to the first question rather than
+              competing with it for the fold. */}
+          <div className="mt-7 grid items-end gap-10 lg:grid-cols-[1.25fr_1fr]">
+            {/* No `text-balance` here, deliberately: the line break is explicit
+                so that the accent colour lands on a whole clause, and letting
+                the browser rebalance around it produces a stray two-word first
+                line at some widths and not others. */}
+            <h1 className="text-[2.25rem] font-black leading-[1.0] tracking-[-0.04em] text-[#0D1B2A] sm:text-[3.125rem]">
               {HERO_LEAD}
               <br />
               <span style={{ color: '#00796B' }}>{HERO_LEAD_ACCENT}</span>
@@ -78,8 +86,7 @@ export default function ReadinessPage() {
                 className="font-mono text-[11px] font-medium uppercase tracking-[0.16em]"
                 style={{ color: 'rgba(13,27,42,0.38)' }}
               >
-                {OBLIGATIONS.length} obligations &middot; GDPR and EU AI Act
-                &middot; About two minutes
+                {`${OBLIGATIONS.length} obligations · GDPR and EU AI Act · About two minutes`}
               </p>
             </div>
           </div>

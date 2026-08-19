@@ -111,7 +111,7 @@ export function QuestionCard({
       </div>
 
       <h2
-        className="mt-6 max-w-[22ch] text-[1.75rem] font-black leading-[1.06] tracking-[-0.035em] text-balance sm:text-[2.375rem]"
+        className="mt-6 text-[1.75rem] font-black leading-[1.06] tracking-[-0.035em] text-balance sm:max-w-[22ch] sm:text-[2.375rem]"
         style={{ color: INK }}
       >
         {question.prompt}

@@ -18,6 +18,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 0.9,
     },
+    // ENT-189. The one thing on the site a visitor can do rather than read, so
+    // it ranks with `/how-it-works` rather than below the explainers.
+    {
+      url: `${baseUrl}/readiness`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
     {
       url: `${baseUrl}/why`,
       lastModified: new Date(),

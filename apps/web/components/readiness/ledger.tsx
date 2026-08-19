@@ -33,6 +33,7 @@ import { ledgerCounts, type LedgerRow } from '@/lib/readiness/evaluate'
  */
 
 const TEAL = '#00C9A7'
+const TEAL_INK = '#00796B'
 const INK = '#0D1B2A'
 
 function Marker({ state }: { state: LedgerRow['state'] }) {
@@ -67,6 +68,34 @@ const STATE_WORD: Record<LedgerRow['state'], string> = {
   applies: 'Matched',
   pending: 'Still open',
   narrowed: 'Set aside',
+}
+
+/**
+ * The three counts, on their own.
+ *
+ * Below `lg` the column falls under the question, so a visitor on a phone would
+ * answer the whole interview without ever seeing the corpus move, and the
+ * column is the point. This is the same information as one line, placed above
+ * the question there, and it carries the live region for both.
+ */
+export function LedgerSummary({
+  rows,
+  className,
+}: {
+  rows: readonly LedgerRow[]
+  className?: string
+}) {
+  const counts = ledgerCounts(rows)
+  return (
+    <p
+      aria-live="polite"
+      className={`font-mono text-[11px] font-medium uppercase tracking-[0.14em] ${className ?? ''}`}
+      style={{ color: 'rgba(13,27,42,0.45)' }}
+    >
+      <span style={{ color: TEAL_INK }}>{counts.applies} matched</span> &middot;{' '}
+      {counts.narrowed} set aside &middot; {counts.pending} still open
+    </p>
+  )
 }
 
 export function Ledger({ rows }: { rows: readonly LedgerRow[] }) {
@@ -122,10 +151,11 @@ export function Ledger({ rows }: { rows: readonly LedgerRow[] }) {
         })}
       </ol>
 
-      {/* `aria-live` so somebody using a screen reader hears the column move
-          when an answer changes it, rather than discovering it at the end. */}
+      {/* `aria-hidden`, because `LedgerSummary` above the question carries the
+          same three numbers with the live region on it, and two live regions
+          announcing the same change is worse than one. */}
       <p
-        aria-live="polite"
+        aria-hidden="true"
         className="mt-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em]"
         style={{ color: 'rgba(13,27,42,0.45)' }}
       >

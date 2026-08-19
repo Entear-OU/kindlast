@@ -87,6 +87,7 @@ export function SiteHeader() {
   const toggleRef = useRef<HTMLButtonElement>(null)
 
   const hasDarkHero = DARK_HERO_ROUTES.has(pathname ?? '')
+  const onReadiness = pathname === '/readiness'
   // Once the panel is open it sits on its own solid surface, so the bar has to
   // stop pretending it is floating over a photograph.
   const overDarkHero = hasDarkHero && !scrolled && !menuOpen
@@ -195,17 +196,37 @@ export function SiteHeader() {
                 but read, so the pill pointed at GitHub and duplicated the icon
                 beside it; the readiness check is now the one action a visitor
                 can take, and the icon still carries the repository. */}
-            <Link
-              href="/readiness"
-              className={[
-                'hidden whitespace-nowrap rounded-full px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] transition-all duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7] sm:inline-flex',
-                overDarkHero
-                  ? 'bg-white text-[#0D1B2A] hover:bg-white/90'
-                  : 'bg-[#0D1B2A] text-white hover:bg-[#162537]',
-              ].join(' ')}
-            >
-              Check where you stand
-            </Link>
+            {/* On `/readiness` itself the pill would point at the page the
+                reader is already on, so the repository takes the slot back
+                there. A call to action that does nothing is worse than one
+                fewer call to action. */}
+            {onReadiness ? (
+              <a
+                href={GITHUB_REPO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={[
+                  'hidden whitespace-nowrap rounded-full px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] transition-all duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7] sm:inline-flex',
+                  overDarkHero
+                    ? 'bg-white text-[#0D1B2A] hover:bg-white/90'
+                    : 'bg-[#0D1B2A] text-white hover:bg-[#162537]',
+                ].join(' ')}
+              >
+                Read the source
+              </a>
+            ) : (
+              <Link
+                href="/readiness"
+                className={[
+                  'hidden whitespace-nowrap rounded-full px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] transition-all duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7] sm:inline-flex',
+                  overDarkHero
+                    ? 'bg-white text-[#0D1B2A] hover:bg-white/90'
+                    : 'bg-[#0D1B2A] text-white hover:bg-[#162537]',
+                ].join(' ')}
+              >
+                Check where you stand
+              </Link>
+            )}
 
             {/* Below `md` the nav above is hidden, so without this the footer
                 was the only route between pages on a phone. */}

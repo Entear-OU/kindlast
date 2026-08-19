@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { Ledger } from '@/components/readiness/ledger'
+import { Ledger, LedgerSummary } from '@/components/readiness/ledger'
 import { QuestionCard } from '@/components/readiness/question-card'
 import { Summary } from '@/components/readiness/summary'
 import { NO_TRANSMISSION } from '@/lib/readiness/copy'
@@ -49,6 +49,20 @@ import {
 export function Assessment() {
   const [answers, setAnswers] = useState<Answers>({})
   const [done, setDone] = useState(false)
+  const resultRef = useRef<HTMLDivElement>(null)
+
+  // The interview and the result occupy the same place in the page, so
+  // finishing leaves the reader wherever the last question happened to sit,
+  // with the hero above them and a ten-thousand-pixel result below. Put the
+  // top of the result where the question was.
+  //
+  // `scrollIntoView` is guarded because jsdom does not implement it, and a
+  // component test that has to stub a browser API to render is a component
+  // that will surprise somebody later.
+  useEffect(() => {
+    if (!done) return
+    resultRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+  }, [done])
 
   const rows = useMemo(() => ledger(answers), [answers])
   const question = useMemo(() => nextQuestion(answers), [answers])
@@ -83,7 +97,7 @@ export function Assessment() {
 
   if (done) {
     return (
-      <div className="mx-auto max-w-5xl px-6 lg:px-8">
+      <div ref={resultRef} className="mx-auto max-w-5xl px-6 lg:px-8">
         <Summary assessment={assess(answers)} onRestart={restart} />
       </div>
     )
@@ -93,6 +107,11 @@ export function Assessment() {
     <div className="mx-auto max-w-5xl px-6 lg:px-8">
       <div className="grid gap-14 lg:grid-cols-[1fr_19rem] lg:gap-16">
         <div>
+          {/* On a phone the column below is a scroll away, so the counts lead
+              here instead: a visitor should see the corpus narrowing while
+              they answer, not discover it afterwards. */}
+          <LedgerSummary rows={rows} className="mb-7 lg:hidden" />
+
           {question ? (
             <QuestionCard
               // Remounted per question, so a multi-select never opens with the
