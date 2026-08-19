@@ -79,9 +79,28 @@ Kindlast is in active development. Being straight about what exists:
 | Weekly briefing and deadline alerts | Built |
 | Regulatory corpus: GDPR, AI Act, EDPB, enforcement decisions | Built |
 | Billing | Built |
+| Agent harness: guardrail ring, budgets, per-run records a customer can read | Built |
+| Organisation memory: what we believe, correctable, with its history | Built |
+| Integrations gateway: customer-supplied MCP endpoints, egress allow-list | Built |
+| Bring your own model provider, as a recorded compliance event | Built |
+| Public readiness assessment, no account needed | Built |
 | Watcher: continuous regulatory monitoring | Partial |
 | Executor: automated record updates | Partial |
+| Durable workflows for long-running agent work | Planned |
 | Comms over WhatsApp and Slack | Planned |
+
+**The console was rebuilt and is back.** It was removed along with Supabase,
+because its tenancy was Supabase's `auth.uid()` row level security and
+authentication no longer produces a Supabase session. Every surface has since
+returned on `core-api`: onboarding, the feed and finding detail, compliance
+records (ROPA, AI systems, DSARs), the agent rail, the regulation browser, the
+audit log, organisation memory, integrations, settings and billing.
+
+Every authenticated route lives under `/o/{slug}/`, and that is a tenancy
+boundary rather than a URL style: the organisation comes from the path on every
+request and is never remembered between them, so a consultant with three tabs
+open cannot change what two of them are showing by switching the third. A slug
+you do not belong to is a 404, not a 403.
 
 Expect breaking changes. If you are evaluating this for production use, talk to
 us first.
@@ -95,11 +114,22 @@ Where this is heading next is in the [roadmap](./docs/ROADMAP.md).
 | Framework | Next.js 16 (App Router) |
 | UI | shadcn/ui + Tailwind CSS v4 |
 | API | Go, Connect RPC, protobuf contract |
+| Egress gateway | Go, a separate module and process from the API |
 | Database | Postgres with pgvector, forced row level security |
 | Identity | OIDC (Zitadel in the bundled stack), authorization code with PKCE |
-| AI | Vercel AI SDK |
-| Validation | Zod |
-| Testing | Vitest, React Testing Library, Playwright, Go `testing` |
+| Inference | llama.cpp serving a pinned GGUF, **local by default, no API key** |
+| Agent harness | Python, LangGraph, one scope and no database handle |
+| Package manager | Bun (never npm or yarn) |
+| Validation | Zod, and typed schemas the model output is validated against |
+| Testing | Vitest, React Testing Library, Playwright, Go `testing`, pytest |
+
+**On inference specifically**, because it is the least obvious choice here: the
+stack runs its own model and needs no API key to do it. That is what lets a
+deployment holding a compliance record run with no outbound internet at all,
+and there is a CI job that proves it rather than a paragraph that claims it. An
+organisation can point at a hosted provider instead, and that switch is
+recorded as a compliance event rather than a setting, because it changes who
+processes the customer's data.
 
 ## Quickstart
 
@@ -116,7 +146,7 @@ git clone https://github.com/Entear-OU/kindlast.git
 cd kindlast
 bun install
 
-docker compose -f deploy/compose.yaml up -d   # Postgres, Zitadel, Redis, core-api, edge
+docker compose -f deploy/compose.yaml up -d   # the whole stack, console included
 ./scripts/web-env.sh                          # writes apps/web/.env.local from the stack
 
 bun run dev
@@ -187,40 +217,88 @@ apps/web/app/
 apps/web/lib/
 ├── auth/               # OIDC client, PKCE, Redis sessions, the core-api client
 ├── email/              # Swappable email provider seam
+├── readiness/          # The public assessment: corpus bundled, no server side
 └── websearch/          # URL-fetch provider seam. No caller today (ENT-240)
 
+apps/core-api/          # Go. The only writer to the domain schema
+apps/workers/           # Go. The policy gateway, and the only process that
+                        #   dials an address a customer supplied
+apps/intelligence/      # Python. The agent harness: skills, guardrail ring,
+                        #   budgets, evals. No database handle, one scope
+
+libs/chassis/           # Infrastructure only: OIDC, scopes, HTTP rules
+proto/                  # The contract. Source of truth for service boundaries
+gen/                    # Generated from proto, committed, CI fails on drift
 data/corpus/            # GDPR, AI Act, EDPB and enforcement source data
 db/migrations/          # Squashed baseline for the self-managed stack (goose)
 db/tests/               # Database isolation suite (RLS security boundary)
 deploy/                 # compose.yaml, Postgres role split, Zitadel, Caddy
-docs/                   # Self-hosting, maintainer workflow, brand
+scripts/                # stack-env.sh, smoke and air-gap checks
+postman/                # HTTP collection, the executable description of the API
+docs/                   # Self-hosting, maintainers, backup and restore, brand
 ```
+
+**Four processes, and the split is a security boundary rather than a
+preference.** `core-api` owns the schema and is the only thing that writes to
+it. `workers` is the only thing that dials a customer's address, so an SSRF
+allow-list has one place to live. `intelligence` runs the models and holds no
+database handle, no shell and no filesystem write, so a prompt injection has
+nothing to reach for. `web` holds a session and talks to `core-api`.
 
 ### The local backend stack
 
-The self-managed stack (Postgres with the tenancy role split, Zitadel as the
-OIDC provider, Redis, Caddy) comes up with one command and seeds itself:
+The whole product comes up with one command and seeds itself: Postgres with the
+tenancy role split, migrations applied by a job that must exit zero, Zitadel as
+the OIDC provider, Redis, Mailpit, the resource server, the integrations
+gateway, a Caddy edge, and **the console itself**, served from a production
+build at `localhost:8000`.
 
 ```bash
 docker compose -f deploy/compose.yaml up -d
 bun run test:db   # the database isolation suite, against that stack
 ```
 
+The model is opt-in because it is gigabytes. `--profile model` adds the model
+fetcher, `llama-server` and the agent harness:
+
+```bash
+docker compose -f deploy/compose.yaml --profile model up -d
+```
+
+Working in more than one checkout, run `./scripts/stack-env.sh --write` in each
+first. Without it every checkout addresses the same Postgres, which is how an
+unmerged branch's migration reaches a sibling branch's test run.
+
 ## Testing
 
 The project follows test-driven development, and it is not decorative. Failing
 test first, minimum implementation, then refactor green.
 
-Note that the database suite self-skips when the local stack is unreachable, so
-a green `bun run test` locally does not necessarily mean it ran. CI boots the
-stack and fails loudly if it is missing.
+| Suite | Needs | Covers |
+|---|---|---|
+| `bun run test:unit` | nothing | TypeScript modules and components |
+| `bun run test:db` | the stack | tenant isolation, privileges, the grant surface |
+| `bun run test:e2e` | the stack and a browser | the sign-in round trip |
+| `bun run test:airgap` | the stack | that it runs with no outbound internet |
+| `go test ./... -p 1` | the stack | the Go services. `-p 1` is not optional, see below |
+| `uv run pytest` | nothing | the agent harness and its guardrails |
 
-The compliance console (dashboard, feed, records, settings, billing) is being
-rebuilt. It was removed with Supabase, because its tenancy was Supabase's
-`auth.uid()` row level security and authentication no longer produces a
-Supabase session. What exists today is the marketing site, the sign-in flow and
-an organisation's own page at `/o/{slug}/`; the rest returns surface by surface
-on `core-api`.
+Note that the database suite **self-skips when the local stack is
+unreachable**, so a green run locally does not necessarily mean it ran. Check
+the test count. CI boots the stack and fails loudly if it is missing.
+
+`go test ./...` runs packages in parallel and they share one database, so a
+sibling package writing to a table another is measuring produces failures that
+look like the code under test. `-p 1` serialises them, and CI pins it.
+
+Two properties are asserted rather than described, because both are the kind
+that look fine until they are not. **Tenant isolation** is checked over
+`pg_class` and `information_schema` rather than trusted from a migration
+comment, so a table that arrives without forced row level security, or with a
+privilege nothing admits, fails the suite. **The air gap** is checked by
+running the stack on a network with no route out and watching it come up, which
+caught a boot script that had been fetching packages at runtime and quietly
+falsifying the claim.
 
 ## Working with LLMs in this repository
 
