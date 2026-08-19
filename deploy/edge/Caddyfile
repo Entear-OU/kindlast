@@ -63,7 +63,34 @@
 		reverse_proxy core-api:8080
 	}
 
+	# Everything else is the console and the marketing site (ENT-241).
+	#
+	# This block used to answer 404 with "web and core-api arrive at
+	# build-order step 1". That was an honest description of a stack that
+	# brought up every dependency and none of the product, and the note is
+	# rewritten rather than deleted because the decision it deferred is the
+	# one being made here: this is that step, and web is now a container in
+	# this compose project like everything else.
+	#
+	# A CATCH-ALL RATHER THAN A LIST OF PATHS
+	#
+	# The opposite of the two blocks above, and deliberately so. core-api is
+	# routed by explicit prefix because its REST surface is not open yet and a
+	# wildcard would open it by accident. web is a website: its paths are
+	# every marketing page, every console route under /o/{slug}/, the auth
+	# redirect endpoints, the invitation and unsubscribe links in sent mail,
+	# and the Next.js asset paths under /_next. Enumerating those would be a
+	# list that goes stale the first time somebody adds a page, and the
+	# failure would be a 404 on a real route rather than anything safe.
+	#
+	# Ordering is what keeps this honest: Caddy matches `handle` blocks most
+	# specific first, so the routes above win and this one takes the rest.
+	#
+	# Note that /healthz above is the STACK's health, answered by Caddy
+	# itself, so it never reaches web. web has its own /healthz, which is what
+	# its container healthcheck probes on the compose network. Two questions,
+	# two answers, and the one an operator watches from outside is this one.
 	handle {
-		respond "kindlast edge: no routes yet (web and core-api arrive at build-order step 1)" 404
+		reverse_proxy web:3000
 	}
 }
