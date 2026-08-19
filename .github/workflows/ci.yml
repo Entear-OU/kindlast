@@ -64,7 +64,7 @@ jobs:
       # Node is still required. Bun is the installer and task runner here, but
       # Next.js builds and Vitest both run on Node, so the toolchain needs both.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -435,7 +435,7 @@ jobs:
           bun-version: 1.3.14
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
