@@ -1,0 +1,65 @@
+# Dependabot, told which package manager this repository actually uses.
+#
+# WHY THIS FILE EXISTS, AND WHAT HAPPENED WITHOUT IT
+#
+# There was no configuration here, so Dependabot's automatic security updates
+# detected `package.json` and inferred the `npm_and_yarn` ecosystem. That
+# ecosystem does not know about `bun.lock`, so PR #199 bumped `next` in the
+# manifest and left the lockfile untouched. Every job that runs
+# `bun install --frozen-lockfile` then failed on main with:
+#
+#     error: lockfile had changes, but lockfile is frozen
+#
+# The bump itself was wanted, and it was a security update. The breakage was
+# purely that the manifest and the lockfile stopped agreeing, which is exactly
+# the property AGENTS.md asks a human to preserve ("commit the manifest and the
+# lockfile in the same commit, or the next person's install resolves something
+# different from yours"). An automated contributor has to be told the same rule,
+# and the way to tell it is the ecosystem name.
+#
+# `bun` rather than `npm_and_yarn`, so updates carry `bun.lock` with them.
+version: 2
+
+updates:
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Grouped, because this is a Bun workspace: a bump that touches the root
+    # and a workspace separately would produce two PRs whose lockfiles conflict
+    # with each other, and the second would need a rebase to be mergeable.
+    groups:
+      javascript:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "gomod"
+    directory: "/apps/core-api"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    directory: "/apps/workers"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    directory: "/libs/chassis"
+    schedule:
+      interval: "weekly"
+
+  # gen/go is generated and committed, and its runtime library version is a
+  # matched pair with the codegen plugin in buf.gen.yaml. Bumping one without
+  # the other produces generated code that expects a different runtime, so this
+  # module is deliberately left out: it moves when somebody re-runs
+  # `buf generate`, not when a bot raises a patch.
+
+  - package-ecosystem: "uv"
+    directory: "/apps/intelligence"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
