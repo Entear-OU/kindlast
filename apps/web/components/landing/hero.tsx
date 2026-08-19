@@ -105,7 +105,7 @@ export function Hero() {
           <div className="mt-11 flex flex-col items-center gap-4 sm:flex-row">
             <Link
               href="/readiness"
-              className="inline-flex items-center gap-2.5 rounded-full bg-[#00C9A7] px-7 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-[#052E28] transition-all duration-150 hover:bg-[#2AD6BA] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              className="inline-flex items-center gap-2.5 rounded-full bg-[#00C9A7] px-7 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-[#2AD6BA] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
               Check where you stand
             </Link>
