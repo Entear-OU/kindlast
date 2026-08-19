@@ -11,8 +11,15 @@ const nextConfig: NextConfig = {
    * image has to carry the whole of `node_modules`, most of which exists to
    * compile output that is already compiled. `apps/web/Dockerfile` copies
    * exactly the three things this emits.
+   *
+   * Not on Vercel, though. Vercel's build pipeline runs its own output
+   * tracing and packages the result itself; with `standalone` set, its build
+   * fails on a missing `.next/next-server.js.nft.json`, because standalone
+   * relocates the trace files it expects to read in place. Vercel sets
+   * `VERCEL=1` in every build, the Docker build sets nothing, so each
+   * environment gets the output mode its packager expects.
    */
-  output: 'standalone',
+  output: process.env.VERCEL ? undefined : 'standalone',
 
   /**
    * The trace root is the monorepo root, not this workspace.
