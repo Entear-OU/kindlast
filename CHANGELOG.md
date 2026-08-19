@@ -14,6 +14,30 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **Changes to who can reach a compliance record are now in the audit log.**
+  Renaming the organisation, inviting somebody, changing a member's role and
+  removing a member each write a row, with what the value was before and what
+  it became. Until now every decision about a finding was recorded and every
+  change to who was allowed to make one was not, so the log could show that a
+  person approved something and not how they came to be in the organisation,
+  at what authority, or when it was taken away. That is the first question an
+  auditor asks.
+
+  The standard was already set: choosing a hosted model provider writes a row
+  (ENT-236) on exactly this reasoning. Membership was the larger gap.
+
+  New `action_type` values, which anything parsing the CSV export should
+  expect: `rename_organisation`, `invite_member`, `change_member_role`,
+  `remove_member`. An invitation records the address and the role offered and
+  never the token, which is a capability and would otherwise be re-issued to
+  everybody who can read the log. A rename that changes nothing writes no row.
+
+  **Accepting an invitation is not yet recorded**, and is the remaining half.
+  The audit log's insert policy binds a row to an active organisation and a
+  membership, and somebody redeeming an invitation has neither until the moment
+  they join, so it needs the row written inside `accept_invitation` itself
+  rather than beside it. Left for its own change rather than bolted on here.
+
 - **An organisation can choose its own model provider, and the choice is a
   compliance event rather than a preference** (ENT-236).
 
@@ -122,32 +146,6 @@ what they have to do about it, which no commit subject knows.
   container was called `kindlast-postgres-app`: it still is, unless a project
   name is set.
 
-### Added
-
-- **Changes to who can reach a compliance record are now in the audit log.**
-  Renaming the organisation, inviting somebody, changing a member's role and
-  removing a member each write a row, with what the value was before and what
-  it became. Until now every decision about a finding was recorded and every
-  change to who was allowed to make one was not, so the log could show that a
-  person approved something and not how they came to be in the organisation,
-  at what authority, or when it was taken away. That is the first question an
-  auditor asks.
-
-  The standard was already set: choosing a hosted model provider writes a row
-  (ENT-236) on exactly this reasoning. Membership was the larger gap.
-
-  New `action_type` values, which anything parsing the CSV export should
-  expect: `rename_organisation`, `invite_member`, `change_member_role`,
-  `remove_member`. An invitation records the address and the role offered and
-  never the token, which is a capability and would otherwise be re-issued to
-  everybody who can read the log. A rename that changes nothing writes no row.
-
-  **Accepting an invitation is not yet recorded**, and is the remaining half.
-  The audit log's insert policy binds a row to an active organisation and a
-  membership, and somebody redeeming an invitation has neither until the moment
-  they join, so it needs the row written inside `accept_invitation` itself
-  rather than beside it. Left for its own change rather than bolted on here.
-
 ### Fixed
 
 - **Three actions read as column names in the log.** `create_ropa_manual`,
@@ -155,6 +153,30 @@ what they have to do about it, which no commit subject knows.
   from the console's label table, so an auditor saw the raw value. They now read
   as sentences like every other row.
 
+- **Signing out did not sign anybody out of the identity provider, and ended
+  on a raw JSON error page.** The seed registered `${origin}/` as the web
+  client's post-logout redirect URI, while `/auth/logout` asks to return to
+  `${origin}/sign-in`. An authorization server matches that list exactly, so
+  Zitadel refused every sign-out with
+  `{"error":"invalid_request","error_description":"post_logout_redirect_uri invalid"}`
+  and left the person on its own domain looking at the JSON.
+
+  The visible half was the harmless half. Refusing the request means
+  `end_session` never ran, so the provider's session survived, while `web` had
+  already destroyed its own session and cleared its cookie. The person looks
+  signed out, and the next click on "Continue" signs them straight back in
+  without ever asking for a password, which on a shared machine hands the
+  workspace to whoever sits down next.
+
+  The seed now derives `${origin}/sign-in` from each console's callback, so
+  what is registered and what is requested cannot drift, and `journey.spec.ts`
+  drives a real sign-out: it asserts both that the browser lands back on
+  `/sign-in` and that signing in again reaches a password prompt.
+
+  **Self-hosters must re-run the seed** for an existing stack to pick this up
+  (`docker compose -f deploy/compose.yaml run --rm seed`). The seed republishes
+  the client's OIDC configuration on every run, so no manual change in Zitadel
+  is needed.
 - **The Watcher could not complete a single sweep, so no deployment has ever
   produced a finding.** Two of the Watcher's three detectors read the `dsars`
   table, and the role the sweep runs as, `kindlast_agent`, was never granted

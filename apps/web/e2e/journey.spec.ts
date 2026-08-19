@@ -174,4 +174,49 @@ test.describe('the signup journey', () => {
     await expect(page).toHaveURL(/\/o\/an-organisation-that-is-not-mine$/)
     await expect(page.getByTestId('active-org')).toHaveCount(0)
   })
+
+  // Sign-out, driven rather than asserted about.
+  //
+  // auth.spec.ts already covers the two ways sign-out must refuse: a GET, and
+  // a POST with no CSRF token. Both are about requests that should not end a
+  // session, and neither of them ever ends one, so the path a person actually
+  // takes had no test at all. It was broken the whole time: the seed
+  // registered `${origin}/` as the post-logout URI while `endSessionUrl` asks
+  // for `${origin}/sign-in`, and an authorization server matches that list
+  // exactly.
+  //
+  // Two assertions, because the visible half is the less important one.
+  // Landing back on /sign-in only says the redirect was allowed. What matters
+  // is that `end_session` actually ran, and the way to know is to try to sign
+  // in again: if the provider still holds the session, "Continue" walks
+  // straight back into the workspace without ever asking for a password.
+  // That is the state this test exists to make impossible, and the reason
+  // RP-initiated logout is in the product at all.
+  test('signing out ends the session at the provider, not only here', async ({
+    page,
+  }) => {
+    await page.goto('/sign-in')
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    await signIn(page, user)
+    await page.waitForURL(onOrigin('/o/[a-z0-9-]+$'), { timeout: 30_000 })
+
+    await page.getByRole('button', { name: 'Sign out' }).first().click()
+
+    // Back on our own origin. A post-logout URI the provider was not given
+    // leaves the browser on the provider's domain showing raw JSON, so this
+    // fails on the URL rather than on anything subtle.
+    await page.waitForURL(onOrigin('/sign-in'), { timeout: 30_000 })
+
+    // And the provider forgot them. Asking to sign in again has to reach a
+    // credential prompt; arriving back in the workspace means end_session
+    // never ran.
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    await expect(
+      page
+        .locator(
+          'input[name="loginName"], input[type="email"], input[type="password"]',
+        )
+        .first(),
+    ).toBeVisible({ timeout: 20_000 })
+  })
 })
