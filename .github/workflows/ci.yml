@@ -64,7 +64,7 @@ jobs:
       # Node is still required. Bun is the installer and task runner here, but
       # Next.js builds and Vitest both run on Node, so the toolchain needs both.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -122,7 +122,7 @@ jobs:
       # opens a socket. CI is then exercising the airgapped path on nearly
       # every run, which is the path a real deployment cares about most.
       - name: Restore the model
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deploy/models
           key: gguf-aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
@@ -230,7 +230,7 @@ jobs:
       # tier, so the two jobs share the restore rather than each paying for a
       # download. The comment there explains why the digest is the key.
       - name: Restore the model
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deploy/models
           key: gguf-aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
@@ -450,7 +450,7 @@ jobs:
           bun-version: 1.3.14
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
