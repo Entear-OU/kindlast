@@ -576,7 +576,7 @@ jobs:
     name: Air-gapped operation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: The stack comes up and serves with egress blocked
         env:
