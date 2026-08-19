@@ -302,7 +302,12 @@ function gapNote(token: GapToken, answers: Answers): string {
         ? 'You said you do not know whether a data protection officer has been appointed.'
         : 'You said no data protection officer has been appointed.'
     case 'ai_register':
-      return 'You said AI is in use, and Kindlast has nothing written down about which systems those are.'
+      // NOT "Kindlast has nothing written down about which systems those are".
+      // That sentence implied this page holds a record about the reader, on a
+      // surface whose whole claim is that it writes nothing down, and it put
+      // the gap on us rather than on them. Its two siblings above are about the
+      // visitor, and so is this one now.
+      return 'You said AI is in use, and nothing you told us shows those systems are written down.'
     case 'transfer_safeguards':
       return 'You did not name anywhere the information goes.'
     default:

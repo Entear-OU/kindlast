@@ -242,6 +242,35 @@ describe('assess', () => {
     expect(ropa?.gapNotes.length).toBeGreaterThan(0)
   })
 
+  it('writes every gap about the visitor, and implies no record of them', () => {
+    // The page's promise is that it writes nothing down, so a gap sentence
+    // claiming Kindlast holds something about this visitor contradicts the
+    // surface it is rendered on. The `ai_register` note used to read "Kindlast
+    // has nothing written down about which systems those are", which both
+    // implied a record and put the gap on us rather than on them.
+    //
+    // A sheet answered so that every gap token fires at once, so this covers
+    // all four rather than whichever the typical startup happens to trip.
+    const everyGap = assess({
+      ...typicalStartup(),
+      has_ropa: 'no',
+      has_dpo: 'no',
+      // Article 37 carries the `dpo` token and narrows itself on this, so
+      // without it that gap never fires and the test would cover three.
+      large_scale_monitoring: 'yes',
+      transfers_outside_eu: 'yes',
+      transfer_destinations: [],
+      ai_systems: ['assistants'],
+    })
+
+    const notes = everyGap.applies.flatMap((a) => a.gapNotes)
+    expect(notes.length).toBeGreaterThanOrEqual(4)
+    for (const note of notes) {
+      expect(note, note).toMatch(/^You /)
+      expect(note, note).not.toMatch(/Kindlast/)
+    }
+  })
+
   it('raises no gap where the visitor said the control is in place', () => {
     const result = assess({ ...typicalStartup(), has_ropa: 'yes' })
     const ropa = result.applies.find(
