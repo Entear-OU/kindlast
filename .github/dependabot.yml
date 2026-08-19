@@ -29,6 +29,38 @@ updates:
     # and a workspace separately would produce two PRs whose lockfiles conflict
     # with each other, and the second would need a rebase to be mergeable.
     groups:
+      # The lint toolchain moves as its own pull request, and it is listed
+      # FIRST because Dependabot assigns a dependency to the first group whose
+      # patterns match.
+      #
+      # WHY IT IS SEPARATE, FROM TWO CONSECUTIVE FAILURES RATHER THAN A
+      # PREFERENCE
+      #
+      # #207 carried nineteen updates and died on TypeScript 7.0, which
+      # `typescript-eslint` cannot load. Holding that one major produced #217
+      # with eighteen, which died on a different pair:
+      #
+      #     TypeError: Error while loading rule 'react/display-name':
+      #     contextOrFilename.getFilename is not a function
+      #
+      # That is `eslint-plugin-react` against a newer ESLint API. Two runs, two
+      # incompatibilities, both inside the lint toolchain and neither anywhere
+      # near the code the product runs.
+      #
+      # This ecosystem is mid-migration and will keep doing that, so it gets a
+      # pull request that is allowed to sit red without holding back the
+      # dependencies the product actually runs on. Chasing each break one
+      # `ignore` entry at a time is how the config becomes a list of
+      # workarounds nobody dares remove.
+      lint-toolchain:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "@typescript-eslint/*"
+          - "prettier"
+          - "prettier-*"
       javascript:
         patterns: ["*"]
     open-pull-requests-limit: 5
