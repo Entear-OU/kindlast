@@ -10,6 +10,7 @@ import {
 } from '@/lib/auth/session'
 import { safeEqual } from '@/lib/auth/pkce'
 import { CSRF_COOKIE } from '@/lib/auth/csrf'
+import { publicOrigin } from '@/lib/auth/public-origin'
 
 /**
  * Sign out. POST only, and this is not pedantry.
@@ -25,7 +26,11 @@ import { CSRF_COOKIE } from '@/lib/auth/csrf'
  * redirect that quietly does nothing.
  */
 export async function POST(request: NextRequest) {
-  const { origin } = request.nextUrl
+  const { origin: servedFrom } = request.nextUrl
+  // The origin a browser can reach, not the one this process is listening
+  // on. Behind the edge those differ, and a redirect to the second is a
+  // dead end (ENT-241). See lib/auth/public-origin.ts.
+  const origin = publicOrigin(servedFrom)
 
   // Double-submit CSRF: the token is in an httpOnly-free cookie and must be
   // echoed in the form body. A cross-site POST can cause the browser to send

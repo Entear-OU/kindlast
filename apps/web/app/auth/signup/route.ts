@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { startAuthorization } from '@/lib/auth/flow'
+import { publicOrigin } from '@/lib/auth/public-origin'
 
 /**
  * Start registration.
@@ -11,7 +12,11 @@ import { startAuthorization } from '@/lib/auth/flow'
  * password handling to review (§1.7).
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl
+  const { searchParams, origin: servedFrom } = request.nextUrl
+  // The origin a browser can reach, not the one this process is listening
+  // on. Behind the edge those differ, and a redirect to the second is a
+  // dead end (ENT-241). See lib/auth/public-origin.ts.
+  const origin = publicOrigin(servedFrom)
 
   try {
     const url = await startAuthorization({
