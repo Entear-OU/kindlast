@@ -16,10 +16,24 @@ describe('Hero', () => {
     expect(screen.getByText(/GDPR and EU AI Act/i)).toBeInTheDocument()
   })
 
-  it('renders "Read the source" as the primary call to action', () => {
-    // ENT-190 removed the waitlist. The repository is public under AGPL-3.0,
-    // so reading the source is the honest primary ask: there is nothing to
-    // sign up for yet, and the code is the product claim.
+  it('makes the readiness check the primary call to action', () => {
+    // ENT-190 removed the waitlist and left the repository as the only ask,
+    // because there was nothing to sign up for. ENT-189 added something a
+    // visitor can actually do without signing up for anything, so it leads and
+    // the repository stays beside it.
+    render(<Hero />)
+    const cta = screen.getByRole('link', { name: /check where you stand/i })
+    expect(cta).toHaveAttribute('href', '/readiness')
+  })
+
+  it('promises no account and no transmission next to that button', () => {
+    // The claim is the reason somebody clicks it, and it is only true because
+    // the assessment has no server side at all.
+    render(<Hero />)
+    expect(screen.getByText(/never leave the page/i)).toBeInTheDocument()
+  })
+
+  it('keeps the repository as the second ask', () => {
     render(<Hero />)
     const cta = screen.getByRole('link', { name: /Read the source/i })
     expect(cta).toHaveAttribute('href', 'https://github.com/Entear-OU/kindlast')
