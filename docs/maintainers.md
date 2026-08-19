@@ -35,6 +35,87 @@ passes, which is what makes stacked branch chains practical. See
 It never merges a PR from a fork, and applying a label needs triage access, so
 the label cannot be self-applied by an outside contributor.
 
+The header of that workflow says native auto-merge was unavailable because
+"this repo's plan doesn't offer branch protection". **That is no longer true**:
+the repository is public, so rulesets are free, and two are active (below).
+Replacing the custom workflow with `gh pr merge --auto` is now possible and is
+worth doing once required status checks exist, since native auto-merge needs a
+required check to gate on.
+
+## Branch protection
+
+Two rulesets apply to the default branch. Read them with:
+
+```bash
+gh api repos/Entear-OU/kindlast/rules/branches/main --jq '[.[] | .type]'
+```
+
+| Ruleset | Rules | Why |
+|---|---|---|
+| `Copilot review for default branch` | `deletion`, `non_fast_forward`, `copilot_code_review` | Predates this section |
+| `main` | `deletion`, `non_fast_forward`, `pull_request` | Added 2026-08-19 |
+
+The overlap on `deletion` and `non_fast_forward` is deliberate rather than
+sloppy: the two rulesets have separate lifetimes, and the day somebody deletes
+the Copilot one to stop the review requests, main should not silently lose its
+force-push protection with it.
+
+**The rule that changed something is `pull_request`.** Force-push and deletion
+were already blocked. Direct pushes to main were not, so `AGENTS.md`'s "never
+push to `main`" was a convention every agent was trusted to follow. It is now
+enforced by the server. Required approvals are **zero**, which is honest for a
+single-maintainer repository: the gate is that a change arrives as a pull
+request with its conversations resolved, not that a second human signed it off.
+
+**Nobody can bypass, including the repository owner** (`bypass_actors` is
+empty). That is the point, and it has a cost: see below.
+
+### Required status checks are deliberately absent
+
+They are the obvious next rule and adding them today would freeze the
+repository. Every CI job currently fails in three seconds with zero steps and
+the annotation *"The job was not started because recent account payments have
+failed or your spending limit needs to be increased"*. A required check that
+can never pass is a branch nothing can ever merge into.
+
+**Add them when billing is restored.** The job names, which are what the API
+wants and are easy to get subtly wrong:
+
+```
+Lint, typecheck & unit tests
+Proto codegen & Go tests
+Compose stack & isolation tests
+Intelligence (Python)
+Intelligence end to end
+Local model service
+```
+
+Consider whether all six should gate. `Local model service` and
+`Intelligence end to end` pull a multi-gigabyte model and are the slowest by
+far, so requiring them makes every merge wait on them.
+
+### Lifting protection for a history rewrite
+
+`non_fast_forward` blocks the force-push that ENT-174's secret purge needs, and
+there is no bypass actor, so the rewrite cannot simply be pushed. The procedure:
+
+1. Set **both** rulesets to `"enforcement": "disabled"`. One is not enough; both
+   carry `non_fast_forward`.
+2. Do the rewrite and force-push.
+3. Set both back to `"active"` **in the same sitting**, before anything else.
+
+```bash
+gh api repos/Entear-OU/kindlast/rulesets/21024087 --method PUT -f enforcement=disabled
+gh api repos/Entear-OU/kindlast/rulesets/15442181 --method PUT -f enforcement=disabled
+# ... rewrite, force-push ...
+gh api repos/Entear-OU/kindlast/rulesets/21024087 --method PUT -f enforcement=active
+gh api repos/Entear-OU/kindlast/rulesets/15442181 --method PUT -f enforcement=active
+```
+
+Anyone who has cloned or forked will need to re-clone after a rewrite, which for
+a public repository is a real cost and part of why ENT-174 is worth deciding on
+rather than drifting.
+
 ## MCP servers
 
 `.mcp.json` at the repo root is committed and auto-loaded by Claude Code. It
