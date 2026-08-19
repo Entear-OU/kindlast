@@ -88,11 +88,18 @@ type Option func(*Service)
 
 // WithModelChoice makes this service honour an organisation's chosen provider.
 //
-// All of them are needed together and a partial set is treated as absent,
-// because honouring a choice means opening a sealed key (the keyring), checking
-// the provider is still permitted (the list) and checking the endpoint is still
-// outside (the resolver). Any one missing would mean honouring a choice without
-// the check that makes it safe, which is worse than not honouring it.
+// A nil store or a nil keyring is treated as absent, because honouring a choice
+// means reading it and opening a sealed key, and doing either without the other
+// is not a degraded version of this feature but a broken one.
+//
+// AN EMPTY PROVIDER LIST IS NOT ABSENT, AND THAT IS THE SUBTLE ONE. The obvious
+// reading is that a deployment permitting nothing has no work for this to do,
+// so it should not be wired. That is wrong in the one direction that matters:
+// an operator can withdraw the last provider while an organisation still has a
+// row, and an unwired resolver would then narrate that organisation on the
+// deployment's own model, silently, with nothing saying its choice had stopped
+// being honoured. Wired with an empty list, the same case fails loudly, because
+// `Permitted` refuses every name.
 func WithModelChoice(
 	choices ModelChoices,
 	keys *secrets.Keyring,
@@ -100,7 +107,7 @@ func WithModelChoice(
 	lookup modelchoice.Lookup,
 ) Option {
 	return func(s *Service) {
-		if choices == nil || keys == nil || len(providers) == 0 {
+		if choices == nil || keys == nil {
 			return
 		}
 		if lookup == nil {
