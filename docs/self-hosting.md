@@ -173,9 +173,10 @@ recording.
 | `EMAIL_FROM` | | A verified sender on your own domain |
 | `BILLING_PROVIDER` | `stripe` | Only relevant if you are charging for your instance |
 | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` | | Billing only |
-| `WEBSEARCH_PROVIDER` | `tavily` | Picks the `lib/websearch` provider. Nothing calls that module, so this changes nothing at runtime. |
+| `WEBSEARCH_PROVIDER` | `firecrawl` | Picks the `lib/websearch` provider. Nothing calls that module, so this changes nothing at runtime. |
+| `FIRECRAWL_API_URL` | | Base URL of your own Firecrawl instance, `http://firecrawl:3002` for the self-hosted image. The only websearch configuration that can run air-gapped. |
+| `FIRECRAWL_API_KEY` | | A key for Firecrawl's hosted API instead. The self-hosted image runs with authentication off, so it usually needs no key. |
 | `TAVILY_API_KEY` | | **Not required, whatever an older copy of this page told you.** Nothing calls `lib/websearch`, so leave it unset. |
-| `FIRECRAWL_API_KEY` | | The other `lib/websearch` provider, equally unused, and still an unimplemented stub. |
 
 **`TAVILY_API_KEY` used to be listed as required and it never was.** This page
 told you to go and get a third-party search key before your stack would work
@@ -184,6 +185,15 @@ the Analyst was removed along with the Supabase-era console, so no request path
 ever reaches it and no key is ever read. If you obtained a Tavily key on the
 strength of the old table, you did not need it and you can drop it. Nothing
 degrades without it, because nothing used it.
+
+**The websearch default is now Firecrawl** (ENT-240), and that is a statement
+about this stack rather than a preference between two vendors. Firecrawl's
+engine is AGPL-3.0 and you can run it yourself; Tavily's is closed and hosted,
+with no self-hosting path, so a deployment with no outbound internet cannot use
+it at all. Configured with neither an instance URL nor a key, the provider
+refuses rather than quietly reaching for a hosted API. Still: nothing calls the
+module, so this is the shape the seam will have when something does, not a
+thing you have to configure today.
 
 You can run a useful instance with `EMAIL_PROVIDER=console` and no billing
 configured at all. Findings will appear in the console, they simply will not be
