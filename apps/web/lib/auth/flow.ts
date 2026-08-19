@@ -10,6 +10,7 @@ import {
   requireEnv,
 } from './oidc'
 import { clientCredentials } from './client-credentials'
+import { fetchWithHost } from './host-fetch'
 import { createPkce, randomToken } from './pkce'
 import { safeReturnTo } from './return-to'
 import { stashState } from './state'
@@ -149,15 +150,18 @@ export async function exchangeCode(
     client_secret: clientCredentials().clientSecret,
   })
 
-  const response = await fetch(provider.tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...hostHeader(),
+  // fetchWithHost, not fetch: `Host` is a forbidden header name, so the global
+  // fetch drops it and the request reaches whichever virtual server answers for
+  // the address it was sent to. See lib/auth/host-fetch.ts.
+  const response = await fetchWithHost(
+    provider.tokenEndpoint,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
     },
-    body,
-    cache: 'no-store',
-  })
+    hostHeader(),
+  )
 
   if (!response.ok) {
     // The body can contain the client secret's error context; log the status
@@ -209,15 +213,18 @@ export async function refreshTokens(refreshToken: string): Promise<TokenSet> {
     client_secret: clientCredentials().clientSecret,
   })
 
-  const response = await fetch(provider.tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...hostHeader(),
+  // fetchWithHost, not fetch: `Host` is a forbidden header name, so the global
+  // fetch drops it and the request reaches whichever virtual server answers for
+  // the address it was sent to. See lib/auth/host-fetch.ts.
+  const response = await fetchWithHost(
+    provider.tokenEndpoint,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
     },
-    body,
-    cache: 'no-store',
-  })
+    hostHeader(),
+  )
 
   if (!response.ok) {
     // Status only. The body carries client context, and this one is reached
@@ -251,28 +258,32 @@ export async function revokeToken(token: string): Promise<void> {
   const provider = await discoverProvider()
   if (!provider.revocationEndpoint) return
 
-  await fetch(provider.revocationEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...hostHeader(),
+  await fetchWithHost(
+    provider.revocationEndpoint,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        token,
+        client_id: clientCredentials().clientId,
+        client_secret: clientCredentials().clientSecret,
+      }),
     },
-    body: new URLSearchParams({
-      token,
-      client_id: clientCredentials().clientId,
-      client_secret: clientCredentials().clientSecret,
-    }),
-    cache: 'no-store',
-  }).catch(() => {
+    hostHeader(),
+  ).catch(() => {
     // Sign-out must not fail because the IdP is unreachable. The session is
     // already gone from Redis by this point, so the user is signed out here
     // whatever the authorization server says.
   })
 }
 
-function hostHeader(): Record<string, string> {
-  const host = process.env.KINDLAST_OIDC_HOST_HEADER
-  return host ? { Host: host } : {}
+/**
+ * The Host the authorization server routes by, when it differs from the
+ * address this process reaches it at. Undefined for a deployment where the two
+ * are the same, which is every deployment that is not the bundled stack.
+ */
+function hostHeader(): string | undefined {
+  return process.env.KINDLAST_OIDC_HOST_HEADER
 }
 
 function redirectUri(): string {

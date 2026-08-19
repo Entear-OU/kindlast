@@ -12,6 +12,8 @@
  * refuses.
  */
 
+import { fetchWithHost } from './host-fetch'
+
 export interface Provider {
   issuer: string
   authorizationEndpoint: string
@@ -66,10 +68,12 @@ async function fetchProvider(): Promise<Provider> {
     `${trimSlash(issuer)}${DISCOVERY_PATH}`
   const hostHeader = process.env.KINDLAST_OIDC_HOST_HEADER
 
-  const response = await fetch(discoveryUrl, {
-    headers: hostHeader ? { Host: hostHeader } : undefined,
-    cache: 'no-store',
-  })
+  // fetchWithHost rather than fetch, and the difference is not cosmetic: the
+  // Fetch specification forbids setting `Host`, so the global fetch drops it
+  // without saying so and the request arrives claiming the address it was sent
+  // to. Zitadel then answers 404, which reads as a missing document rather
+  // than as a dropped header. See lib/auth/host-fetch.ts.
+  const response = await fetchWithHost(discoveryUrl, {}, hostHeader)
   if (!response.ok) {
     cached = null
     throw new Error(

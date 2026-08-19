@@ -14,6 +14,11 @@ import { defineConfig, devices } from '@playwright/test'
  *
  *     docker compose -f deploy/compose.yaml up -d
  *     bun run --cwd apps/web test:e2e
+ *
+ * That drives the dev server. To drive the console the stack itself serves,
+ * which is the production build a self-hoster runs (ENT-241):
+ *
+ *     KINDLAST_WEB_URL=http://localhost:8000 bun run --cwd apps/web test:e2e
  */
 export default defineConfig({
   testDir: './e2e',
@@ -35,10 +40,19 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
 
-  webServer: {
-    command: 'bun run dev',
-    url: process.env.KINDLAST_WEB_URL ?? 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // A dev server, but only when nobody named a console to drive.
+  //
+  // KINDLAST_WEB_URL means "this one is already running", and it is how the
+  // suite is pointed at the container the compose stack serves. Starting
+  // `bun run dev` in that case would compile the app a second time, bind port
+  // 3000 nobody asked for, and leave the run testing whichever of the two
+  // answered first.
+  webServer: process.env.KINDLAST_WEB_URL
+    ? undefined
+    : {
+        command: 'bun run dev',
+        url: 'http://localhost:3000',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
 })

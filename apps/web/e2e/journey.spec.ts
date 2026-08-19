@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import {
+import { onOrigin } from './fixtures/origin'
   countOrganisations,
   createVerifiedUser,
   deleteUser,
@@ -41,7 +42,7 @@ async function skipSecondFactorOffer(page: Page) {
 
   const outcome = await Promise.race([
     page
-      .waitForURL(/localhost:3000/, { timeout: 20_000 })
+      .waitForURL(onOrigin(), { timeout: 20_000 })
       .then(() => 'returned' as const)
       .catch(() => 'neither' as const),
     skip
@@ -111,7 +112,7 @@ test.describe('the signup journey', () => {
     // Back on our origin, past the callback, and resolved through /workspace
     // into the organisation's own URL. The proxy would have bounced us to
     // /sign-in without a session that survived the navigation.
-    await page.waitForURL(/localhost:3000\/o\/[a-z0-9-]+$/, { timeout: 30_000 })
+    await page.waitForURL(onOrigin('/o/[a-z0-9-]+$'), { timeout: 30_000 })
 
     const cookies = await page.context().cookies()
     expect(cookies.some((c) => c.name.startsWith('kindlast'))).toBe(true)
@@ -142,7 +143,7 @@ test.describe('the signup journey', () => {
 
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
     await signIn(page, user)
-    await page.waitForURL(/localhost:3000\/o\/[a-z0-9-]+$/, { timeout: 30_000 })
+    await page.waitForURL(onOrigin('/o/[a-z0-9-]+$'), { timeout: 30_000 })
 
     expect(await countOrganisations()).toBe(before)
 
@@ -163,7 +164,7 @@ test.describe('the signup journey', () => {
     await page.goto('/sign-in')
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
     await signIn(page, user)
-    await page.waitForURL(/localhost:3000\/o\/[a-z0-9-]+$/, { timeout: 30_000 })
+    await page.waitForURL(onOrigin('/o/[a-z0-9-]+$'), { timeout: 30_000 })
 
     const response = await page.goto('/o/an-organisation-that-is-not-mine')
 

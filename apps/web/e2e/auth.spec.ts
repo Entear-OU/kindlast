@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { WEB_HOST } from './fixtures/origin'
 
 /**
  * The auth flow, driven through a real browser.
@@ -77,7 +78,7 @@ test.describe('hand-off to the identity provider', () => {
       expect(authorize.has('code_verifier')).toBe(false)
     }
 
-    expect(url.host).not.toBe('localhost:3000')
+    expect(url.host).not.toBe(WEB_HOST)
   })
 })
 
