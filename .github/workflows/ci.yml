@@ -557,3 +557,40 @@ jobs:
       - name: Stop the stack
         if: always()
         run: docker compose -f deploy/compose.yaml down -v
+
+  # Air-gapped operation, which docs/self-hosting.md states as a product
+  # property (ENT-240). The stack is brought up on a network with no route out
+  # and has to serve the console anyway.
+  #
+  # ITS OWN JOB, AND IT COSTS A SECOND BUILD OF THE SAME IMAGES. Folding it
+  # into `stack` would have saved that, and would have reported "tenant
+  # isolation" and "runs with no internet" as one signal. They fail for
+  # unrelated reasons and one of them is a claim made to operators on a
+  # documentation page, so it is worth a line of its own on a pull request.
+  #
+  # KINDLAST_REQUIRE_AIRGAP=1 for the reason the database suite is booted
+  # rather than allowed to skip: the script self-skips when the machine has no
+  # internet to block, which is right on a laptop and wrong here, where a quiet
+  # skip would mean the property was never checked and the run was still green.
+  airgap:
+    name: Air-gapped operation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The stack comes up and serves with egress blocked
+        env:
+          KINDLAST_REQUIRE_AIRGAP: "1"
+        run: ./scripts/airgap-check.sh
+
+      - name: Stack logs on failure
+        if: failure()
+        run: |
+          docker compose -f deploy/compose.yaml -f deploy/compose.airgap.yaml \
+            logs --tail 100 || true
+
+      - name: Stop the stack
+        if: always()
+        run: |
+          docker compose -f deploy/compose.yaml -f deploy/compose.airgap.yaml \
+            down -v || true
