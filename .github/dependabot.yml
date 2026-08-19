@@ -32,6 +32,30 @@ updates:
       javascript:
         patterns: ["*"]
     open-pull-requests-limit: 5
+    ignore:
+      # TypeScript majors are held, and the grouping above is why this is
+      # needed rather than optional.
+      #
+      # The first grouped run raised #207 with nineteen updates, one of which
+      # was TypeScript 7.0. `typescript-eslint` does not support it yet and
+      # fails to load at all:
+      #
+      #     Error: typescript-eslint does not support TS 7.0.
+      #
+      # So `bun run lint` exits 2 and the whole group is unmergeable. That is
+      # the cost of grouping: one incompatible package holds the other eighteen
+      # hostage, where ungrouped they would land and it alone would sit red.
+      #
+      # Grouping is still right for this repository, because it is a Bun
+      # workspace and separate bumps produce lockfiles that conflict with each
+      # other. Holding the one package that breaks is the cheaper half of the
+      # trade.
+      #
+      # Minor and patch TypeScript updates still come through. Remove this
+      # entry when `typescript-eslint` supports 7.x, which is the only thing
+      # blocking it.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "gomod"
     directory: "/apps/core-api"
