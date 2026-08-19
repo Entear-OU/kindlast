@@ -189,11 +189,14 @@ export function SiteHeader() {
 
             {/* Hidden at the narrowest widths, where the wordmark, the icon and
                 a worded pill cannot share 390px without wrapping. The mobile
-                panel carries this call to action instead. */}
-            <a
-              href={GITHUB_REPO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+                panel carries this call to action instead.
+
+                ENT-189 changed what the pill says. The site had nothing to do
+                but read, so the pill pointed at GitHub and duplicated the icon
+                beside it; the readiness check is now the one action a visitor
+                can take, and the icon still carries the repository. */}
+            <Link
+              href="/readiness"
               className={[
                 'hidden whitespace-nowrap rounded-full px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] transition-all duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7] sm:inline-flex',
                 overDarkHero
@@ -201,8 +204,8 @@ export function SiteHeader() {
                   : 'bg-[#0D1B2A] text-white hover:bg-[#162537]',
               ].join(' ')}
             >
-              Read the source
-            </a>
+              Check where you stand
+            </Link>
 
             {/* Below `md` the nav above is hidden, so without this the footer
                 was the only route between pages on a phone. */}
@@ -244,12 +247,20 @@ export function SiteHeader() {
                 </Link>
               ))}
 
+              <Link
+                href="/readiness"
+                onClick={() => setMenuOpen(false)}
+                className="mt-5 inline-flex items-center justify-center rounded-full bg-[#0D1B2A] px-6 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-[#162537] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7]"
+              >
+                Check where you stand
+              </Link>
+
               <a
                 href={GITHUB_REPO_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setMenuOpen(false)}
-                className="mt-5 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#0D1B2A] px-6 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-[#162537] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7]"
+                className="mt-3 inline-flex items-center justify-center gap-2.5 rounded-full border border-black/10 px-6 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-[#0D1B2A] transition-all duration-150 hover:bg-black/[0.04] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7]"
               >
                 <GitHubMark size={18} />
                 Read the source

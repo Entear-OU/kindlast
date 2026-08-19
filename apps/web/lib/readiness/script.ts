@@ -130,7 +130,7 @@ export const SCRIPT: readonly Question[] = [
       { value: 'location', label: 'Location or movement data' },
       { value: 'employment', label: 'Employment and HR records' },
       { value: 'behaviour', label: 'Behaviour, usage or tracking data' },
-      { value: 'children', label: "Information about children" },
+      { value: 'children', label: 'Information about children' },
       { value: NONE, label: 'None of this', exclusive: true },
     ],
   },
@@ -154,7 +154,8 @@ export const SCRIPT: readonly Question[] = [
       { value: 'public_task', label: 'We carry out a public task' },
       {
         value: 'legitimate_interests',
-        label: 'We have a business reason and weighed it against their interests',
+        label:
+          'We have a business reason and weighed it against their interests',
       },
       { value: UNSURE, label: 'I could not say', exclusive: true },
     ],
@@ -297,6 +298,17 @@ export function questionFor(key: string): Question | undefined {
   return SCRIPT.find((q) => q.key === key)
 }
 
+/** The options a list question offers, or nothing if it is not a list question. */
+export function optionsFor(key: string): readonly Option[] {
+  const question = questionFor(key)
+  return question?.kind === 'multi' ? question.options : []
+}
+
+/** How an option reads back in a sentence, or the token if nothing offers it. */
+export function optionLabel(key: string, value: string): string {
+  return optionsFor(key).find((o) => o.value === value)?.label ?? value
+}
+
 /** The tokens a list answer holds, ignoring the two sentinels. */
 export function named(answers: Answers, key: string): readonly string[] {
   const value = answers[key]
@@ -351,7 +363,10 @@ export function nextQuestion(answers: Answers): Question | undefined {
 }
 
 /** How far through, for a progress indicator that does not lie when a branch closes. */
-export function progress(answers: Answers): { answered: number; total: number } {
+export function progress(answers: Answers): {
+  answered: number
+  total: number
+} {
   const questions = applicableQuestions(answers)
   return {
     answered: questions.filter((q) => answers[q.key] !== undefined).length,

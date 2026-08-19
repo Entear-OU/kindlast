@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
 import { OBLIGATIONS } from '@/lib/readiness/corpus'
-import { assess, gapSatisfied, obligationApplies } from '@/lib/readiness/evaluate'
+import {
+  assess,
+  gapSatisfied,
+  ledger,
+  ledgerCounts,
+  obligationApplies,
+} from '@/lib/readiness/evaluate'
 import {
   SCRIPT,
   UNSURE,
   applicableQuestions,
   emptyAnswers,
+  optionsFor,
   type Answers,
 } from '@/lib/readiness/script'
 
@@ -173,9 +180,9 @@ describe('gapSatisfied, ported from watcher_gap_satisfied', () => {
   })
 
   it('treats an AI register as satisfied only when no AI is in use', () => {
-    expect(gapSatisfied('ai_register', { ...NOTHING, ai_systems: ['none'] })).toBe(
-      true,
-    )
+    expect(
+      gapSatisfied('ai_register', { ...NOTHING, ai_systems: ['none'] }),
+    ).toBe(true)
     expect(
       gapSatisfied('ai_register', { ...NOTHING, ai_systems: ['assistants'] }),
     ).toBe(false)
@@ -228,14 +235,18 @@ describe('assess', () => {
 
   it('raises the gaps the visitor named themselves', () => {
     const result = assess(typicalStartup())
-    const ropa = result.applies.find((a) => a.obligation.slug === 'gdpr-art-30-ropa')
+    const ropa = result.applies.find(
+      (a) => a.obligation.slug === 'gdpr-art-30-ropa',
+    )
     expect(ropa?.gaps).toContain('ropa')
     expect(ropa?.gapNotes.length).toBeGreaterThan(0)
   })
 
   it('raises no gap where the visitor said the control is in place', () => {
     const result = assess({ ...typicalStartup(), has_ropa: 'yes' })
-    const ropa = result.applies.find((a) => a.obligation.slug === 'gdpr-art-30-ropa')
+    const ropa = result.applies.find(
+      (a) => a.obligation.slug === 'gdpr-art-30-ropa',
+    )
     expect(ropa?.gaps).toEqual([])
   })
 
@@ -294,8 +305,7 @@ describe('the script', () => {
     ).filter((b): b is string => typeof b === 'string')
     expect(narrowed.length).toBeGreaterThan(0)
 
-    const question = SCRIPT.find((q) => q.key === 'lawful_bases')
-    const offered = new Set((question?.options ?? []).map((o) => o.value))
+    const offered = new Set(optionsFor('lawful_bases').map((o) => o.value))
     for (const basis of narrowed) {
       expect(offered.has(basis)).toBe(true)
     }
@@ -360,6 +370,47 @@ describe('the script', () => {
     const slugs = new Set(OBLIGATIONS.map((o) => o.slug))
     for (const question of SCRIPT) {
       if (question.basis) expect(slugs.has(question.basis)).toBe(true)
+    }
+  })
+})
+
+describe('ledger', () => {
+  it('opens with the obligations nothing could narrow, and the rest pending', () => {
+    const rows = ledger(emptyAnswers())
+    const counts = ledgerCounts(rows)
+    expect(counts.narrowed).toBe(0)
+    expect(counts.applies).toBeGreaterThan(0)
+    expect(counts.pending).toBeGreaterThan(0)
+    expect(counts.applies + counts.pending).toBe(OBLIGATIONS.length)
+  })
+
+  it('never reports an obligation as narrowed before its question is asked', () => {
+    // The page's claim is that it did not guess, and showing an unanswered
+    // obligation as decided either way breaks it.
+    for (const row of ledger(emptyAnswers())) {
+      expect(row.state).not.toBe('narrowed')
+    }
+  })
+
+  it('closes an obligation the moment an answer rules it out', () => {
+    const rows = ledger({ ...NOTHING, high_risk_processing: 'no' })
+    const dpia = rows.find((r) => r.obligation.slug === 'gdpr-art-35-dpia')
+    expect(dpia?.state).toBe('narrowed')
+    expect(dpia?.reason).toContain('You said')
+  })
+
+  it('leaves nothing pending once every question is answered', () => {
+    expect(ledgerCounts(ledger(typicalStartup())).pending).toBe(0)
+  })
+
+  it('agrees with assess on a finished answer sheet', () => {
+    // Two code paths reading the same clauses. If they ever disagree, the
+    // visitor watched one verdict resolve and was shown another.
+    const answers = typicalStartup()
+    const verdict = assess(answers)
+    const applying = new Set(verdict.applies.map((a) => a.obligation.slug))
+    for (const row of ledger(answers)) {
+      expect(row.state === 'applies').toBe(applying.has(row.obligation.slug))
     }
   })
 })

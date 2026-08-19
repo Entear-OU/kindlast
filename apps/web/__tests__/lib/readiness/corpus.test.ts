@@ -98,8 +98,9 @@ describe('the detector itself', () => {
   it('catches the shapes the code critic catches', () => {
     expect(assertsLaw('Article 30 requires a written record.')).toBe(true)
     expect(assertsLaw('This applies to every controller.')).toBe(true)
-    expect(assertsLaw('Controllers must appoint a data protection officer.'))
-      .toBe(true)
+    expect(
+      assertsLaw('Controllers must appoint a data protection officer.'),
+    ).toBe(true)
     expect(assertsLaw('Small companies are exempt from this.')).toBe(true)
     expect(assertsLaw('It applies regardless of headcount.')).toBe(true)
     expect(assertsLaw('See Recital 47 for the reasoning.')).toBe(true)
@@ -121,7 +122,9 @@ describe('the detector itself', () => {
   it('allows the second person, exactly as the Python critic does', () => {
     // "You" is this organisation, which is what a page written for a visitor is
     // entitled to talk about. "Controllers must" is the corpus's sentence.
-    expect(assertsLaw('You told us you have not appointed anybody.')).toBe(false)
+    expect(assertsLaw('You told us you have not appointed anybody.')).toBe(
+      false,
+    )
   })
 
   it('declares at least one pattern per shape it claims to detect', () => {

@@ -47,6 +47,7 @@ import {
   UNSURE,
   named,
   picked,
+  optionLabel,
   questionFor,
   tri,
   type Answers,
@@ -59,6 +60,8 @@ import {
  */
 interface Condition {
   readonly met: boolean
+  /** The answer this clause reads, so a page can tell "no" from "not yet". */
+  readonly reads: string
   /** Shown on the card when this obligation reached the visitor. */
   readonly whenMet: string
   /** Shown instead when this clause is what narrowed it away. */
@@ -120,14 +123,11 @@ function affirms(answers: Answers, key: string): boolean {
 }
 
 /** How a tri-state answer reads back in a sentence about the visitor. */
-function said(
-  answers: Answers,
-  key: string,
-  claim: string,
-): { met: boolean; whenMet: string; whenUnmet: string } {
+function said(answers: Answers, key: string, claim: string): Condition {
   const value = tri(answers, key)
   return {
     met: affirms(answers, key),
+    reads: key,
     whenMet:
       value === 'unsure'
         ? `You said you do not know whether ${claim}.`
@@ -156,6 +156,7 @@ function conditions(obligation: Obligation, answers: Answers): Condition[] {
     const inUse = ai.length > 0 && !ai.every((token) => token === NONE)
     out.push({
       met: inUse,
+      reads: 'ai_systems',
       whenMet: ai.includes(UNSURE)
         ? 'You said you could not say what AI is in use, which is not the same as none.'
         : 'You said AI is in use.',
@@ -174,6 +175,7 @@ function conditions(obligation: Obligation, answers: Answers): Condition[] {
     const value = tri(answers, 'transfers_outside_eu')
     out.push({
       met: value === 'yes',
+      reads: 'transfers_outside_eu',
       whenMet: 'You said personal information leaves the EU or the EEA.',
       whenUnmet:
         value === 'unsure'
@@ -217,11 +219,10 @@ function conditions(obligation: Obligation, answers: Answers): Condition[] {
   if (when.lawful_basis_includes) {
     const bases = named(answers, 'lawful_bases')
     const basis = when.lawful_basis_includes
-    const label =
-      questionFor('lawful_bases')?.options.find((o) => o.value === basis)
-        ?.label ?? basis
+    const label = optionLabel('lawful_bases', basis)
     out.push({
       met: bases.includes(basis),
+      reads: 'lawful_bases',
       whenMet: `You said one of your grounds is that ${lowerFirst(label)}.`,
       whenUnmet: `You did not name "${label}" among the grounds you rely on.`,
     })
@@ -232,6 +233,7 @@ function conditions(obligation: Obligation, answers: Answers): Condition[] {
     const engages = vendors.length > 0 && !vendors.every((t) => t === NONE)
     out.push({
       met: engages,
+      reads: 'vendor_list',
       whenMet: vendors.includes(UNSURE)
         ? 'You said you could not say who handles personal information for you, which is not the same as nobody.'
         : 'You named other companies that handle personal information for you.',
@@ -364,5 +366,61 @@ export function assess(answers: Answers): Assessment {
     narrowed,
     total: OBLIGATIONS.length,
     withGaps: applies.filter((a) => a.gaps.length > 0).length,
+  }
+}
+
+/**
+ * Where every obligation stands part way through, for the live corpus column.
+ *
+ * # WHY "PENDING" IS A THIRD STATE AND NOT A ROUNDING
+ *
+ * `assess` has two outcomes because a finished answer sheet has two: an
+ * obligation reached you or an answer narrowed it away. Half way through the
+ * interview there is a third, and collapsing it into either one is a lie the
+ * visitor can catch. Showing an unanswered obligation as narrowed says we
+ * decided; showing it as applying says we decided the other way. Neither is
+ * true before the question is asked, and the page's whole claim is that we did
+ * not guess.
+ *
+ * So a clause that is unmet because its answer has not been given yet leaves
+ * the obligation open, and a clause that is unmet because of an answer that WAS
+ * given closes it. Where both are true the answer wins, because something the
+ * visitor actually said already rules it out and re-opening it would be
+ * theatre.
+ */
+export type LedgerState = 'applies' | 'narrowed' | 'pending'
+
+export interface LedgerRow {
+  readonly obligation: Obligation
+  readonly state: LedgerState
+  /** Present for `narrowed`: the answer that closed it. */
+  readonly reason?: string
+}
+
+export function ledger(answers: Answers): readonly LedgerRow[] {
+  return OBLIGATIONS.map((obligation) => {
+    const clauses = conditions(obligation, answers)
+    const closed = clauses.find((c) => !c.met && answers[c.reads] !== undefined)
+    if (closed) {
+      return {
+        obligation,
+        state: 'narrowed' as const,
+        reason: closed.whenUnmet,
+      }
+    }
+    if (clauses.some((c) => !c.met)) {
+      return { obligation, state: 'pending' as const }
+    }
+    return { obligation, state: 'applies' as const }
+  })
+}
+
+export function ledgerCounts(
+  rows: readonly LedgerRow[],
+): Record<LedgerState, number> {
+  return {
+    applies: rows.filter((r) => r.state === 'applies').length,
+    narrowed: rows.filter((r) => r.state === 'narrowed').length,
+    pending: rows.filter((r) => r.state === 'pending').length,
   }
 }
