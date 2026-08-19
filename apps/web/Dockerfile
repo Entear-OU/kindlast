@@ -61,6 +61,28 @@ RUN bun install --frozen-lockfile
 
 COPY apps/web apps/web
 
+# The regulatory corpus, which is a BUILD INPUT to this workspace and not only
+# data core-api ingests (ENT-189).
+#
+# `/readiness` renders the obligation summaries verbatim, and it imports
+# `data/corpus/*.json` directly rather than fetching them, because the page is
+# unauthenticated and CorpusService is not. That makes the JSON part of the
+# module graph, so a context without it fails the build with three "module not
+# found" lines and no hint that the fix is a COPY.
+#
+# It is worth being explicit about why the import is not "reach outside the
+# workspace, which is untidy". The alternative was a second copy of the
+# regulatory text inside apps/web, and a second copy is the thing
+# `corpus.test.ts` exists to prevent: what a page says the law requires has to
+# be the same bytes core-api ingested, or a self-hoster who edits the corpus
+# gets one answer in the product and a different one on their own marketing
+# site.
+#
+# Copied after apps/web deliberately. The corpus changes far less often than
+# the console does, but putting it later keeps the layer that changes most
+# often last, and this is one small directory.
+COPY data/corpus data/corpus
+
 # The one value Next inlines at build time rather than reading at runtime.
 #
 # `NEXT_PUBLIC_*` is substituted into the output during compilation, so it

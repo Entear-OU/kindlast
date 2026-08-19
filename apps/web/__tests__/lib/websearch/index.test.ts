@@ -4,13 +4,13 @@ import { getWebSearchProvider } from '@/lib/websearch'
 import { WebSearchProviderError } from '@/lib/websearch/types'
 
 /**
- * Factory selection coverage (ENT-98).
+ * Factory selection coverage (ENT-98, default moved in ENT-240).
  *
  * `getWebSearchProvider()` reads `WEBSEARCH_PROVIDER` from env and picks the
- * matching impl. Defaults to `tavily` when unset, which these tests pin as it
- * stands rather than as it should end up: ENT-240 moves the default to
- * `firecrawl`, the only provider that can run air-gapped, in the same change
- * that implements it. Mis-spelled env values fail loud rather than silently
+ * matching impl. It defaults to `firecrawl`, the only provider that can run
+ * inside an air-gapped deployment, and these tests pin that: a default that
+ * quietly went back to the hosted-only provider would take the product
+ * property with it. Mis-spelled env values fail loud rather than silently
  * defaulting, because a typo should not reach production and quietly change
  * where regulatory text is fetched from.
  */
@@ -27,12 +27,12 @@ describe('getWebSearchProvider', () => {
     process.env = { ...ORIGINAL_ENV }
   })
 
-  it('defaults to tavily when WEBSEARCH_PROVIDER is unset', () => {
+  it('defaults to firecrawl when WEBSEARCH_PROVIDER is unset', () => {
     delete process.env.WEBSEARCH_PROVIDER
-    process.env.TAVILY_API_KEY = 'tvly-test-key'
+    process.env.FIRECRAWL_API_URL = 'http://firecrawl:3002'
 
     const provider = getWebSearchProvider()
-    expect(provider.name).toBe('tavily')
+    expect(provider.name).toBe('firecrawl')
   })
 
   it('returns tavily when WEBSEARCH_PROVIDER=tavily', () => {
@@ -43,12 +43,20 @@ describe('getWebSearchProvider', () => {
     expect(provider.name).toBe('tavily')
   })
 
-  it('returns firecrawl stub when WEBSEARCH_PROVIDER=firecrawl', () => {
+  it('returns firecrawl when WEBSEARCH_PROVIDER=firecrawl', () => {
     process.env.WEBSEARCH_PROVIDER = 'firecrawl'
-    process.env.FIRECRAWL_API_KEY = 'fc-test-key'
+    process.env.FIRECRAWL_API_URL = 'http://firecrawl:3002'
 
     const provider = getWebSearchProvider()
     expect(provider.name).toBe('firecrawl')
+  })
+
+  it('builds firecrawl from a key alone, for the hosted API', () => {
+    process.env.WEBSEARCH_PROVIDER = 'firecrawl'
+    delete process.env.FIRECRAWL_API_URL
+    process.env.FIRECRAWL_API_KEY = 'fc-test-key'
+
+    expect(getWebSearchProvider().name).toBe('firecrawl')
   })
 
   it('throws when WEBSEARCH_PROVIDER is set to an unknown value (no silent fallback)', () => {
@@ -65,6 +73,18 @@ describe('getWebSearchProvider', () => {
     expect(() => getWebSearchProvider()).toThrow(WebSearchProviderError)
   })
 
+  it('throws when firecrawl has neither an instance URL nor a key', () => {
+    // The default provider with no configuration at all refuses rather than
+    // silently reaching for the hosted API, which is the behaviour the
+    // air-gap position asks for: a source an operator named, or nothing.
+    process.env.WEBSEARCH_PROVIDER = 'firecrawl'
+    delete process.env.FIRECRAWL_API_URL
+    delete process.env.FIRECRAWL_API_KEY
+
+    expect(() => getWebSearchProvider()).toThrow(WebSearchProviderError)
+    expect(() => getWebSearchProvider()).toThrow(/FIRECRAWL_API_URL/)
+  })
+
   it('accepts an explicit override (useful for tests / DI)', () => {
     process.env.WEBSEARCH_PROVIDER = 'tavily'
     process.env.TAVILY_API_KEY = 'env-key'
@@ -75,5 +95,16 @@ describe('getWebSearchProvider', () => {
       apiKey: 'explicit-key',
     })
     expect(provider.name).toBe('tavily')
+  })
+
+  it('accepts an explicit firecrawl base URL, overriding the env var', () => {
+    process.env.WEBSEARCH_PROVIDER = 'firecrawl'
+    process.env.FIRECRAWL_API_URL = 'http://from-env:3002'
+
+    const provider = getWebSearchProvider({
+      provider: 'firecrawl',
+      baseUrl: 'http://explicit:3002',
+    })
+    expect(provider.name).toBe('firecrawl')
   })
 })

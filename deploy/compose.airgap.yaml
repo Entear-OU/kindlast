@@ -1,0 +1,35 @@
+# Air-gapped operation, as a thing the stack does rather than a thing the docs
+# claim (ENT-240).
+#
+#     docker compose -f deploy/compose.yaml -f deploy/compose.airgap.yaml up -d
+#
+# `docs/self-hosting.md` says a default install, once built and running, makes
+# no outbound request at all, and that a deployment holding a compliance record
+# can run with no outbound internet. Until this file existed, that was an audit
+# of the source: somebody had read the code and believed it. An audit does not
+# survive the next feature, and the next feature that reaches for a hosted API
+# is exactly what the property is there to discipline.
+#
+# ONE LINE, AND IT IS THE WHOLE MECHANISM. A Docker bridge network normally
+# NATs out through the host, which is how every container here would reach the
+# internet. `internal: true` removes that gateway: the containers still resolve
+# and reach each other by name, and nothing they send leaves the machine. It is
+# the network the property describes, applied to the stack the product ships.
+#
+# WHAT IT DOES NOT COVER, deliberately, because both happen before this file is
+# relevant: pulling images and building `web`. Those are install-time fetches,
+# they are named in the egress table in `docs/self-hosting.md`, and an operator
+# mirroring images into their own registry is doing the supported thing. Bring
+# the stack up once without this override so everything is built and pulled,
+# then bring it up again with it. `scripts/airgap-check.sh` does exactly that
+# and then proves the result.
+#
+# THE MODEL PROFILE IS THE INTERESTING CASE and it works the same way, as long
+# as the weights are already in `deploy/models/`: `model-init` verifies what it
+# finds and never opens a socket. That is the configuration a real air-gapped
+# install runs, so `--profile model` is worth adding to the command above when
+# you have the file.
+
+networks:
+  default:
+    internal: true
