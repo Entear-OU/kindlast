@@ -126,6 +126,51 @@ message DraftNarrativeRequest {
   // Empty for a scheduled sweep. A skill given no delegation has no tools that
   // reach a tenant's data, which is the Analyst today: it declares none.
   string delegation = 5;
+
+  // Where this run's model calls go, when the organisation has chosen a hosted
+  // provider (ENT-236, §26.6).
+  //
+  // # WHY THE CALLER PASSES THIS RATHER THAN THE HARNESS LOOKING IT UP
+  //
+  // The same rule as the obligations above (§26.2), and here it is load
+  // bearing rather than stylistic. Intelligence holds no database handle and no
+  // tenancy GUC, so it has no way to decide which organisation's key it is
+  // entitled to and no way to be wrong about it: core-api resolves the choice
+  // inside the tenant's own rows, opens the sealed credential with the key only
+  // it holds, and hands over exactly one endpoint for exactly this run.
+  //
+  // # AND WHY THIS IS A REAL RELAXATION OF A RULE, SAID OUT LOUD
+  //
+  // `AGENTS.md` says no third-party credential reaches the Python service. This
+  // puts one in a request to it, and pretending otherwise would be worse than
+  // the change. What is preserved is the part the rule exists for: Intelligence
+  // cannot OBTAIN a credential, cannot enumerate them, cannot persist one, and
+  // holds this one for the life of one call. What is given up is that the
+  // process is no longer credential-free by construction.
+  //
+  // The alternative considered was proxying every completion through core-api
+  // or the workers gateway so the key never leaves Go. It is stronger and it is
+  // written up in the PR; it was not built here because it puts every prompt
+  // and every token of a customer's compliance data through a second service
+  // that currently carries none of it, which trades one exposure for a larger
+  // one.
+  //
+  // Absent means the deployment's own endpoint, which is the default and the
+  // case where nothing leaves.
+  ModelEndpoint model_endpoint = 6;
+}
+
+// ModelEndpoint is one organisation's chosen provider, for one run.
+//
+// NEVER RECORDED AS PART OF THE RUN. `api_key` does not reach `agent_runs`,
+// does not reach a trace, and does not reach a log line. What the run records
+// is `provider`, which is what a sub-processor record needs and is not a
+// secret.
+message ModelEndpoint {
+  string provider = 1;
+  string base_url = 2;
+  string model = 3;
+  string api_key = 4;
 }
 
 // ObligationContext is one obligation as the model sees it.

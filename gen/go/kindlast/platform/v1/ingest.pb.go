@@ -191,7 +191,24 @@ type RecordAgentRunRequest struct {
 	// string. That is the mistake the records store made with `check_violation`
 	// messages, which `AGENTS.md` names as one of the reasons decisions moved out
 	// of plpgsql.
-	RefusalJson   string `protobuf:"bytes,17,opt,name=refusal_json,json=refusalJson,proto3" json:"refusal_json,omitempty"`
+	RefusalJson string `protobuf:"bytes,17,opt,name=refusal_json,json=refusalJson,proto3" json:"refusal_json,omitempty"`
+	// Who served this run's model calls (ENT-236).
+	//
+	// `instance` for the deployment's own endpoint, otherwise the organisation's
+	// chosen provider.
+	//
+	// # WHY `model` AND `model_version` COULD NOT ANSWER THIS
+	//
+	// Both come from the Intelligence container's environment, so they are
+	// constants of the DEPLOYMENT: an organisation switching to a hosted provider
+	// changes neither, and the run before and the run after read identically.
+	// Provenance that cannot distinguish "processed here" from "processed by a
+	// third party" is missing exactly the distinction a customer's sub-processor
+	// record is about.
+	//
+	// Empty is read as `instance` rather than refused, so an older Intelligence
+	// build against a newer core-api records something true rather than nothing.
+	Provider      string `protobuf:"bytes,18,opt,name=provider,proto3" json:"provider,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -341,6 +358,13 @@ func (x *RecordAgentRunRequest) GetDelegation() string {
 func (x *RecordAgentRunRequest) GetRefusalJson() string {
 	if x != nil {
 		return x.RefusalJson
+	}
+	return ""
+}
+
+func (x *RecordAgentRunRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
 	}
 	return ""
 }
@@ -1987,7 +2011,7 @@ var File_kindlast_platform_v1_ingest_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"\n" +
-	"!kindlast/platform/v1/ingest.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xdd\x05\n" +
+	"!kindlast/platform/v1/ingest.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xf9\x05\n" +
 	"\x15RecordAgentRunRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x14\n" +
 	"\x05skill\x18\x02 \x01(\tR\x05skill\x12#\n" +
@@ -2010,7 +2034,8 @@ const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"\n" +
 	"delegation\x18\x10 \x01(\tR\n" +
 	"delegation\x12!\n" +
-	"\frefusal_json\x18\x11 \x01(\tR\vrefusalJson\"\xa8\x01\n" +
+	"\frefusal_json\x18\x11 \x01(\tR\vrefusalJson\x12\x1a\n" +
+	"\bprovider\x18\x12 \x01(\tR\bprovider\"\xa8\x01\n" +
 	"\rAgentRunUsage\x12!\n" +
 	"\finput_tokens\x18\x01 \x01(\x05R\vinputTokens\x12.\n" +
 	"\x13cached_input_tokens\x18\x02 \x01(\x05R\x11cachedInputTokens\x12#\n" +

@@ -318,6 +318,20 @@ rules that bite most often when writing code:
   writes, no shell, no database handle, no third-party credential in the
   Python service. Third-party data enters through the workers gateway or not
   at all.
+
+  **One recorded exception, and it is the only one** (ENT-236). An
+  organisation that has chosen a hosted model provider has its API key passed
+  into that run's `DraftNarrative` request, because the model call is the
+  Python service's whole job and core-api is the only process that can decide
+  whose key it is entitled to open. The half of the rule that still holds is
+  the half it exists for: Intelligence cannot OBTAIN a credential. It reads
+  none from configuration, declares no library that could fetch one, holds no
+  database handle to look one up in, and cannot ask for a key belonging to an
+  organisation core-api did not hand it. It receives one, for one call, and
+  writes it nowhere. `apps/intelligence/tests/test_model_endpoint.py` and
+  `test_no_third_party_credential.py` are where that is asserted rather than
+  assumed. Do not read this as room for a second exception: a credential
+  arriving any other way is the rule being broken.
 - **A citation must resolve to a stored obligation or be refused.** Validate
   model output against a typed schema before it reaches `IngestService`.
 - **Every run has budgets** (tokens, model calls, tool calls, recursion) and
