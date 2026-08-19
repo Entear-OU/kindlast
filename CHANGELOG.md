@@ -122,6 +122,48 @@ what they have to do about it, which no commit subject knows.
   container was called `kindlast-postgres-app`: it still is, unless a project
   name is set.
 
+### Security
+
+- **An invitation could be redeemed by anybody who held the link, and
+  redeeming it granted the role it named.** `accept_invitation` matched on the
+  token hash alone and joined whoever was signed in, at the invited role,
+  without ever comparing the invitation's address to the caller. An invitation
+  to an `owner` seat, forwarded once or opened in a shared mailbox, made a
+  stranger an owner of somebody else's compliance record: able to read the
+  whole record, approve findings, invite others, export the audit log and send
+  the organisation's data to a hosted model provider.
+
+  There was a duller version of the same bug that needed no attacker. The
+  person who sent the invitation is usually signed in, so following the link to
+  check what the recipient would see consumed it. The actual recipient then got
+  a generic "this invitation cannot be used" and had to be invited again.
+
+  Acceptance is now bound to the invited address: it must match the verified
+  `email` claim on the caller's token, case-insensitively. A mismatch is
+  refused **and leaves the invitation unused**, so the intended recipient can
+  still accept. Refusals stay indistinguishable from expired, already accepted
+  and never existed, so the endpoint still cannot be used to discover which
+  tokens are real or who they were for.
+
+  An unverified address is refused too. Without that, somebody could register
+  as the invited address, skip the confirmation mail, and walk in.
+
+  **What to check on upgrade.** Existing pending invitations are unaffected and
+  keep working for the people they name. If you want to know whether this was
+  ever exercised on your deployment, `invitations` records both halves:
+
+  ```sql
+  select i.email as addressed_to, u.email as accepted_by, i.accepted_at, i.role
+    from invitations i
+    join user_identities u on u.user_id = i.accepted_by
+   where i.accepted_at is not null
+     and lower(u.email) is distinct from lower(i.email);
+  ```
+
+  Rows returned are invitations redeemed by somebody other than the addressee.
+  Most will be benign, an inviter opening their own link, but each one granted
+  a membership, so check them against `memberships` before dismissing them.
+
 ### Fixed
 
 - **Signing out did not sign anybody out of the identity provider, and ended

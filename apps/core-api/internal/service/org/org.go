@@ -24,7 +24,7 @@ import (
 // accepting is what this handler needs of the request's transaction, declared
 // where it is used rather than exported from the store (§21.6).
 type accepting interface {
-	AcceptInvitation(ctx context.Context, token string) (domain.Joined, error)
+	AcceptInvitation(ctx context.Context, token, email string) (domain.Joined, error)
 }
 
 // Service implements corev1connect.OrgServiceHandler.
@@ -43,9 +43,28 @@ func (s *Service) AcceptInvitation(
 	ctx context.Context,
 	req *connect.Request[corev1.AcceptInvitationRequest],
 ) (*connect.Response[corev1.AcceptInvitationResponse], error) {
-	if _, ok := interceptor.ClaimsFrom(ctx); !ok {
+	claims, ok := interceptor.ClaimsFrom(ctx)
+	if !ok {
 		return nil, connect.NewError(connect.CodeInternal,
 			errors.New("handler reached with no verified identity"))
+	}
+
+	// An invitation names a person, and this is where the caller is held to
+	// being that person (00033). The claim is used rather than anything the
+	// request carries: the token has been verified, the request body has not.
+	//
+	// An unverified address is refused, and the distinction is the whole
+	// control. Matching on an address the provider has not confirmed would let
+	// somebody register as the invited address, skip the confirmation mail,
+	// and walk in: exactly the escalation this closes, one step longer.
+	//
+	// NotFound rather than something more specific, matching the store's one
+	// answer below. A caller learning "your email is not verified" from an
+	// invitation endpoint has learned that the token was real, which is the
+	// oracle 00003 built this path to avoid.
+	if claims.Email == "" || !claims.EmailVerified {
+		return nil, connect.NewError(connect.CodeNotFound,
+			errors.New("this invitation cannot be used"))
 	}
 
 	tenant, ok := interceptor.TenantFrom(ctx)
@@ -59,11 +78,12 @@ func (s *Service) AcceptInvitation(
 			errors.New("the tenant transaction cannot accept invitations"))
 	}
 
-	joined, err := store.AcceptInvitation(ctx, req.Msg.GetToken())
+	joined, err := store.AcceptInvitation(ctx, req.Msg.GetToken(), claims.Email)
 	if errors.Is(err, postgres.ErrInvitationNotUsable) {
-		// One answer for expired, already accepted and never existed. The
-		// caller who legitimately holds a token needs no more than this, and
-		// anyone guessing tokens learns nothing from it.
+		// One answer for expired, already accepted, never existed and
+		// addressed to somebody else. The caller who legitimately holds a
+		// token needs no more than this, and anyone guessing tokens learns
+		// nothing from it, including who a token was for.
 		return nil, connect.NewError(connect.CodeNotFound,
 			errors.New("this invitation cannot be used"))
 	}
