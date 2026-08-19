@@ -33,6 +33,8 @@ A monorepo. The Next.js app is one workspace among several, not the root.
 ```
 apps/web/            The Next.js app: console, marketing site, API routes
 apps/core-api/       Go resource server. Owns the domain schema
+apps/workers/        Go policy gateway. The only process that dials a customer
+apps/intelligence/   Python agent harness. No database handle, one scope
 libs/chassis/        Infrastructure only. No business types, ever
 gen/go/              Generated proto code, committed, CI fails on drift
 proto/               The contract, single source of truth for service boundaries
@@ -41,7 +43,8 @@ db/tests/            Database isolation suite (the RLS security boundary)
 deploy/              compose.yaml, Postgres role split, Zitadel, Caddy
 data/corpus/         GDPR, AI Act, EDPB and enforcement source data
 postman/             HTTP collection for the local stack
-docs/                Self-hosting, maintainer workflow, brand
+scripts/             stack-env.sh (a stack per worktree), smoke and check scripts
+docs/                Self-hosting, maintainer workflow, backup and restore, brand
 ```
 
 **Supabase is gone** (ENT-200). There is one backend now: the self-managed
@@ -140,6 +143,7 @@ bun run typecheck        # tsc, through the workspace so the version is pinned
 bun run test:unit        # unit and component tests, no services needed
 bun run test:e2e         # the sign-in round trip, needs the compose stack
 bun run test:db          # database isolation suite, needs the compose stack
+bun run test:airgap      # proves the stack runs with no outbound internet
 bun run test:airgap      # the stack serves with egress blocked, needs docker
 ```
 
@@ -162,9 +166,24 @@ committed and CI fails on drift, so run `buf generate` and commit the result
 whenever a proto changes.
 
 `golangci-lint` is pinned too, and CI installs the same version. One
-`.golangci.yml` at the root serves all three modules; the reasoning for each
-enabled linter is in that file rather than here, because that is where
-somebody disagreeing with one will be looking.
+`.golangci.yml` at the root serves all four Go modules (`apps/core-api`,
+`apps/workers`, `gen/go`, `libs/chassis`); the reasoning for each enabled
+linter is in that file rather than here, because that is where somebody
+disagreeing with one will be looking.
+
+**`go.work` names every module, and a container build has to copy every
+manifest it names**, even for a module it does not build. `go mod download`
+loads the whole workspace before it downloads anything, so a missing `go.mod`
+fails with "cannot load module ... listed in go.work file", which reads as a
+workspace problem rather than a missing `COPY`. That is not hypothetical:
+adding `apps/workers` broke both image builds on main until the Dockerfiles
+caught up, and a local `go build` cannot catch it because the files are already
+on disk.
+
+**Run the Go suite with `-p 1`.** `go test ./...` runs packages in parallel and
+they share one database, so a sibling package writing to a table another is
+measuring produces failures that look like the code under test. See
+`docs/maintainers.md`.
 
 Both formatters are checked by CI and neither is checked by review. If a diff
 is nothing but layout, run `bun run format` or `golangci-lint fmt` rather than
