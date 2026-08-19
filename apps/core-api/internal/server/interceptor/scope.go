@@ -90,6 +90,15 @@ var HumanScopes = []string{
 	// this product exists to make possible rather than a privileged operation.
 	"memory:read",
 	"memory:write",
+	// Where this organisation's model runs (ENT-236). The read is every
+	// member's, because "where does our compliance data get processed" is a
+	// question anybody in the organisation may ask. The write is a human scope
+	// too, for the reason `integrations:write` is: choosing your own
+	// sub-processor is the customer exercising control rather than a privileged
+	// operation. What narrows it to an owner is a role check in the handler,
+	// which is where a role threshold belongs.
+	"model:read",
+	"model:write",
 	"notifications:read",
 	"notifications:write",
 	// The first conversation (ENT-212). The read is separate from the write

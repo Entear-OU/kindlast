@@ -97,6 +97,20 @@ class AgentRun(BaseModel):
     skill_version: str
     model: str
     model_version: str
+
+    # WHO SERVED THIS RUN (ENT-236).
+    #
+    # `instance` for the deployment own endpoint, otherwise the organisation
+    # chosen provider. It is a separate field from `model` because the two
+    # answer different questions: `model` is what was asked for, and this is
+    # whose infrastructure processed the customer text, which is the fact a
+    # sub-processor record needs.
+    #
+    # `instance` rather than `local` as the default, because ENT-235 makes the
+    # deployment endpoint configurable and `local` would be a claim this field
+    # cannot back.
+    provider: str = "instance"
+
     outcome: Outcome
     outcome_detail: str = ""
     narrative: str = ""
@@ -189,6 +203,7 @@ def draft_narrative(
     validator: CitationValidator,
     model_name: str,
     model_version: str,
+    provider: str = "instance",
     budget: Budget | None = None,
     queued_at: datetime | None = None,
 ) -> AgentRun:
@@ -214,6 +229,7 @@ def draft_narrative(
         skill_version=analyst.VERSION,
         model=model_name,
         model_version=model_version,
+        provider=provider,
         outcome=Outcome.FAILED,
         queued_at=queued_at or started,
         started_at=started,

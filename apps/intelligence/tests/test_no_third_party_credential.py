@@ -26,6 +26,25 @@ Against the manifest and the source text rather than by importing and probing,
 for the reason that file gives: a package that is not declared cannot be
 imported by accident later, and a setting that is not read cannot be set by
 accident either.
+
+# WHAT ENT-236 CHANGED, AND WHAT IT DID NOT
+
+One thing changed and it is worth stating here rather than only in the file
+that changed it. An organisation may choose a hosted model provider, and its
+API key then arrives in one field of one `DraftNarrative` request, is used for
+that call, and is not held. `AGENTS.md` says no third-party credential reaches
+this service, so that is a real relaxation and not a reading of the rule.
+
+What these tests keep is the half that did not move, which is the half the rule
+exists for: this service still cannot OBTAIN a credential. It reads none from
+its configuration, declares no library that could fetch one, holds no database
+handle to look one up in, and has no way to ask for a key belonging to an
+organisation core-api did not hand it. It can only receive one, for one call,
+from the one caller that is entitled to decide.
+
+`test_model_endpoint.py` carries the other half: that the received key is used
+for that call and leaves no trace, and that a provider refusing it fails the run
+rather than quietly falling back to the deployment own model.
 """
 
 from __future__ import annotations
@@ -180,26 +199,75 @@ def test_the_only_credential_it_holds_is_its_own_client():
 
 
 def test_no_source_file_opens_a_connection_to_an_arbitrary_host():
-    """Outbound HTTP is to configured addresses only.
+    """Outbound HTTP is to core-api, to the model, and to nothing else.
 
-    The model and core-api are both configured endpoints this service is told
-    about at boot. What must not exist is a request built from a URL that
-    arrived in a message, which is what an integration inside the harness would
-    look like: a tool argument becoming a host.
+    core-api is a configured endpoint this service is told about at boot. The
+    model is that too, until ENT-236: an organisation that chose a hosted
+    provider has its endpoint resolved by core-api and handed over in the
+    request, which is the ONE message-derived URL this service dials.
+
+    That one is bounded elsewhere and not by this test, and the boundary is
+    worth naming because it is not here. core-api checks the provider against
+    the operator allow-list and resolves the host, refusing private, loopback
+    and link-local addresses, on every use rather than once at write time. This
+    service performs no such check and must not be relied on to: it receives an
+    endpoint that has already been decided.
+
+    What must still not exist is a request built from any OTHER message field,
+    which is what an integration inside the harness would look like: a tool
+    argument becoming a host.
     """
     offenders = []
 
     for path in SRC.rglob("*.py"):
         text = path.read_text()
         # A request whose URL comes from a request field rather than from
-        # configuration. Crude on purpose: the point is to make the pattern
-        # visible in review, not to prove absence by static analysis.
-        for marker in ("request.endpoint", "msg.endpoint", "params['url']", 'params["url"]'):
+        # configuration or from the one endpoint core-api resolves. Crude on
+        # purpose: the point is to make the pattern visible in review, not to
+        # prove absence by static analysis.
+        for marker in (
+            "request.endpoint",
+            "msg.endpoint",
+            "request.base_url",
+            "params['url']",
+            'params["url"]',
+        ):
             if marker in text:
                 offenders.append(f"{path.name}: {marker}")
 
     assert not offenders, (
-        f"a request URL taken from a message: {offenders}. Only the gateway "
-        "dials an address a customer supplied, and it checks one against an "
-        "egress allow-list before any packet leaves."
+        f"a request URL taken from a message: {offenders}. The only one is "
+        "`model_endpoint`, which core-api resolved and checked; a customer own "
+        "system is dialled by the gateway, behind an egress allow-list."
+    )
+
+
+def test_the_provider_key_arrives_in_a_request_and_never_in_configuration():
+    """The ENT-236 exception, bounded rather than merely documented.
+
+    A provider key exists in this process only for the length of one call, and
+    only because core-api put it in that call. The property that keeps this from
+    growing into "this service holds credentials" is that there is no other
+    door: no environment variable, no file, no lookup. Asserting the absence of
+    the doors is stronger than asserting the presence of good behaviour.
+    """
+    offenders = []
+
+    for path in SRC.rglob("*.py"):
+        text = path.read_text()
+        for marker in (
+            "KINDLAST_MODEL_API_KEY",
+            "KINDLAST_PROVIDER_KEY",
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "AZURE_OPENAI_KEY",
+        ):
+            if marker in text:
+                offenders.append(f"{path.name}: {marker}")
+
+    assert not offenders, (
+        f"a provider key read from the environment: {offenders}. The only key "
+        "this service ever sees arrives in a DraftNarrative request, for one "
+        "call, from core-api, which is the only process holding the key that "
+        "seals them (ENT-236)."
     )

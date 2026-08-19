@@ -1105,6 +1105,118 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /api/v1/model:
+        get:
+            tags:
+                - ModelService
+            description: |-
+                What is serving this organisation, what this deployment permits, and what
+                 the customer is told before changing it.
+
+                 Readable by every member rather than by owners only. "Where does our
+                 compliance data get processed" is a question anybody in the organisation
+                 may reasonably ask, and a product that answers it only for the person who
+                 can change it is one where nobody else can check.
+            operationId: ModelService_GetModelSetting
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetModelSettingResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/model:bundle:
+        post:
+            tags:
+                - ModelService
+            description: |-
+                Go back to the model this deployment runs itself.
+
+                 # WHAT THIS DOES AND DOES NOT UNDO
+
+                 It stops anything further leaving, destroys the stored key in the same
+                 statement that revokes the choice, and records the reversal. It cannot
+                 reach what has already been sent: text a provider has processed is with
+                 that provider, subject to whatever the customer's contract with them says.
+
+                 That is stated in `revert_notice` rather than left implied, because a
+                 product that let somebody believe an off switch was a recall would be
+                 helping them mislead a regulator. What makes the exposure boundable is the
+                 other half of this feature: `agent_runs.provider` says which runs went
+                 where, so "everything between these two dates" is an answerable question.
+            operationId: ModelService_UseBundledModel
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UseBundledModelRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UseBundledModelResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/model:host:
+        post:
+            tags:
+                - ModelService
+            description: |-
+                Send this organisation's model calls to a hosted provider.
+
+                 Owner only, acknowledged, and recorded. The key is write-only: it is sealed
+                 before it reaches a column, is never returned by any RPC on this surface,
+                 and the response carries only its last four characters so somebody can tell
+                 which key is in place without the product being able to show them one.
+
+                 # SWITCHING PROVIDER REPLACES A ROW, IT DOES NOT EDIT ONE
+
+                 Calling this while a hosted provider is already active revokes that choice
+                 and inserts a new one, and the audit entry carries the old provider in
+                 `before` and the new one in `after`. The alternative, an update in place,
+                 would leave one row saying where the data goes now and nothing saying where
+                 it went last month, which is the question a customer will actually be
+                 asked.
+
+                 Calling it with the same provider and a new key is a rotation, and the
+                 audit row says `model_provider_rotated` rather than `model_provider_changed`
+                 because the sub-processor did not change and an event saying it did would be
+                 a false entry in a regulatory record. The row underneath is still replaced:
+                 a credential column that is never written twice is one that cannot be
+                 quietly swapped.
+            operationId: ModelService_UseHostedModel
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UseHostedModelRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UseHostedModelResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/notification-capabilities:
         get:
             tags:
@@ -3083,6 +3195,40 @@ components:
 
                          Empty for a scheduled sweep. A skill given no delegation has no tools that
                          reach a tenant's data, which is the Analyst today: it declares none.
+                modelEndpoint:
+                    allOf:
+                        - $ref: '#/components/schemas/ModelEndpoint'
+                    description: |-
+                        Where this run's model calls go, when the organisation has chosen a hosted
+                         provider (ENT-236, §26.6).
+
+                         # WHY THE CALLER PASSES THIS RATHER THAN THE HARNESS LOOKING IT UP
+
+                         The same rule as the obligations above (§26.2), and here it is load
+                         bearing rather than stylistic. Intelligence holds no database handle and no
+                         tenancy GUC, so it has no way to decide which organisation's key it is
+                         entitled to and no way to be wrong about it: core-api resolves the choice
+                         inside the tenant's own rows, opens the sealed credential with the key only
+                         it holds, and hands over exactly one endpoint for exactly this run.
+
+                         # AND WHY THIS IS A REAL RELAXATION OF A RULE, SAID OUT LOUD
+
+                         `AGENTS.md` says no third-party credential reaches the Python service. This
+                         puts one in a request to it, and pretending otherwise would be worse than
+                         the change. What is preserved is the part the rule exists for: Intelligence
+                         cannot OBTAIN a credential, cannot enumerate them, cannot persist one, and
+                         holds this one for the life of one call. What is given up is that the
+                         process is no longer credential-free by construction.
+
+                         The alternative considered was proxying every completion through core-api
+                         or the workers gateway so the key never leaves Go. It is stronger and it is
+                         written up in the PR; it was not built here because it puts every prompt
+                         and every token of a customer's compliance data through a second service
+                         that currently carries none of it, which trades one exposure for a larger
+                         one.
+
+                         Absent means the deployment's own endpoint, which is the default and the
+                         case where nothing leaves.
         DraftNarrativeResponse:
             type: object
             properties:
@@ -3794,6 +3940,30 @@ components:
                          instrument an obligation can cite. An empty list means "we cannot show you
                          the text here", which is honest, and is not the same as the citation being
                          absent.
+        GetModelSettingResponse:
+            type: object
+            properties:
+                setting:
+                    allOf:
+                        - $ref: '#/components/schemas/ModelSetting'
+                    description: What is serving this organisation now.
+                permittedProviders:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PermittedProvider'
+                    description: |-
+                        What this deployment permits at all. Empty means BYOK is switched off here,
+                         which is the default and is a supported deployment rather than a
+                         misconfiguration.
+                consequenceNotice:
+                    type: string
+                    description: |-
+                        The sentence a person is shown before confirming, and the one they must
+                         acknowledge. Served rather than written into a console, so there is one
+                         copy of it. See the service comment.
+                revertNotice:
+                    type: string
+                    description: The sentence shown when reverting, which says what reverting cannot do.
         GetNotificationCapabilitiesResponse:
             type: object
             properties:
@@ -4404,6 +4574,61 @@ components:
                          emailed capability-token links, which are exactly the links a compliance
                          product has to keep working. A client that wants a label shows org_name; a
                          client that wants a link uses this.
+        ModelEndpoint:
+            type: object
+            properties:
+                provider:
+                    type: string
+                baseUrl:
+                    type: string
+                model:
+                    type: string
+                apiKey:
+                    type: string
+            description: |-
+                ModelEndpoint is one organisation's chosen provider, for one run.
+
+                 NEVER RECORDED AS PART OF THE RUN. `api_key` does not reach `agent_runs`,
+                 does not reach a trace, and does not reach a log line. What the run records
+                 is `provider`, which is what a sub-processor record needs and is not a
+                 secret.
+        ModelSetting:
+            type: object
+            properties:
+                hosted:
+                    type: boolean
+                    description: |-
+                        False means the deployment's own model is serving, which is the default
+                         state of every organisation and the one where nothing leaves.
+
+                         A BOOLEAN RATHER THAN A `provider` OF "local", because there is no row for
+                         the bundled case and inventing a provider name for it would make the
+                         absence of a decision look like one.
+                provider:
+                    type: string
+                    description: |-
+                        Empty unless `hosted`. The provider as the customer's sub-processor list
+                         will have to name it.
+                baseUrl:
+                    type: string
+                model:
+                    type: string
+                credentialLastFour:
+                    type: string
+                    description: |-
+                        The last four characters of the key, never the key. Empty when the provider
+                         needs none, or when the key was too short to take a safe hint from.
+                changedAt:
+                    type: string
+                    description: |-
+                        When this became the setting, and who decided. `changed_by_user_id` is the
+                         person, and it is on the read surface deliberately: a decision whose author
+                         only the audit log knows is one the console cannot show beside the thing it
+                         decided.
+                    format: date-time
+                changedByUserId:
+                    type: string
+            description: ModelSetting is where this organisation's model calls go.
         NarrateFindingsRequest:
             type: object
             properties:
@@ -4724,6 +4949,18 @@ components:
                 ordering:
                     type: integer
                     format: int32
+        PermittedProvider:
+            type: object
+            properties:
+                name:
+                    type: string
+                host:
+                    type: string
+                    description: |-
+                        The host an endpoint must have, exactly. A leading dot makes it a suffix,
+                         so a customer's own Azure resource is permitted without permitting every
+                         host ending in those characters.
+            description: PermittedProvider is one option the operator has allowed.
         PipelineStatus:
             type: object
             properties:
@@ -5084,6 +5321,25 @@ components:
                          string. That is the mistake the records store made with `check_violation`
                          messages, which `AGENTS.md` names as one of the reasons decisions moved out
                          of plpgsql.
+                provider:
+                    type: string
+                    description: |-
+                        Who served this run's model calls (ENT-236).
+
+                         `instance` for the deployment's own endpoint, otherwise the organisation's
+                         chosen provider.
+
+                         # WHY `model` AND `model_version` COULD NOT ANSWER THIS
+
+                         Both come from the Intelligence container's environment, so they are
+                         constants of the DEPLOYMENT: an organisation switching to a hosted provider
+                         changes neither, and the run before and the run after read identically.
+                         Provenance that cannot distinguish "processed here" from "processed by a
+                         third party" is missing exactly the distinction a customer's sub-processor
+                         record is about.
+
+                         Empty is read as `instance` rather than refused, so an older Intelligence
+                         build against a newer core-api records something true rather than nothing.
             description: |-
                 RecordAgentRunRequest is one finished run.
 
@@ -5466,6 +5722,66 @@ components:
             properties:
                 integration:
                     $ref: '#/components/schemas/Integration'
+        UseBundledModelRequest:
+            type: object
+            properties: {}
+        UseBundledModelResponse:
+            type: object
+            properties:
+                setting:
+                    $ref: '#/components/schemas/ModelSetting'
+                auditEntryId:
+                    type: string
+        UseHostedModelRequest:
+            type: object
+            properties:
+                provider:
+                    type: string
+                    description: |-
+                        Must be one of `permitted_providers`. A name this deployment does not
+                         permit is refused rather than stored as text nobody will honour.
+                baseUrl:
+                    type: string
+                    description: |-
+                        Where the provider answers, OpenAI-compatible (ENT-235). HTTPS, and its
+                         host must match the provider's entry. Checked again at every use, because
+                         a provider an operator withdraws has to stop being reachable for the
+                         organisations that already chose it.
+                model:
+                    type: string
+                    description: |-
+                        Which model to ask the provider for. Required, unlike the bundled server,
+                         which serves one file and ignores the field.
+                apiKey:
+                    type: string
+                    description: |-
+                        The API key. WRITE ONLY: no RPC on this surface returns it, nothing logs
+                         it, and it is sealed before it reaches a database column.
+
+                         May be empty, and empty is a real configuration rather than an omission: a
+                         provider on the customer's own network may authenticate by mutual TLS or by
+                         nothing at all.
+                acknowledgeConsequence:
+                    type: boolean
+                    description: |-
+                        The consequence, acknowledged.
+
+                         NOT A FORMALITY AND NOT A PROMPT. A request without it is refused with
+                         `failed_precondition` and the notice as the message, so the only way to
+                         make this change is to have been handed the sentence describing it. That is
+                         a control in code, which is where §26.6 wants it: the difference between a
+                         compliance event and a settings write is whether the person can be shown to
+                         have been told.
+        UseHostedModelResponse:
+            type: object
+            properties:
+                setting:
+                    $ref: '#/components/schemas/ModelSetting'
+                auditEntryId:
+                    type: string
+                    description: |-
+                        The `audit_log` row this decision produced, so a console can link the
+                         change to the record of it rather than asserting one was made.
         User:
             type: object
             properties:
@@ -5879,6 +6195,49 @@ tags:
          or a form could overwrite with a paragraph would be a profile nobody could
          diff, correct field by field, or show a provenance for, and every downstream
          claim about "what Kindlast knows" would be a claim about a paragraph.
+    - name: ModelService
+      description: |-
+        Where an organisation's model runs (ENT-236, §26.6).
+
+         # THE TOGGLE IS A COMPLIANCE EVENT, NOT A PREFERENCE
+
+         The bundled stack serves its own model and needs no API key, which is what
+         lets a deployment holding a compliance record run with no outbound internet
+         at all. `docs/self-hosting.md` promises exactly that, and this service is
+         where a customer gives it up.
+
+         From the moment a hosted provider is chosen, that organisation's compliance
+         profile, its findings and its DSAR content leave the deployment and are
+         processed by somebody else. For the customer that provider becomes a
+         sub-processor they are obliged to be able to name, and choosing it is a
+         processing decision they are obliged to be able to account for.
+
+         So this service is shaped as a decision rather than as a setting, and three
+         things follow from that and are not decoration:
+
+           OWNER ONLY. Enforced in Go rather than by a scope, because a scope bounds
+           what a CLIENT may do and this is about which HUMAN may do it. `model:write`
+           is a human scope every signed-in person's token carries, exactly like
+           `org:manage`, and the role check is what refuses.
+
+           THE CONSEQUENCE IS STATED BEFORE IT IS CONFIRMED. `GetModelSetting`
+           returns the sentence, and `UseHostedModel` refuses a request that does not
+           acknowledge it. A console cannot skip the warning by not rendering one, and
+           a self-hoster's own client shows the same words rather than inventing them.
+
+           IT LEAVES A RECORD THE CUSTOMER CAN SHOW SOMEBODY. Every change writes an
+           `audit_log` row through the same function every other decision goes
+           through, so it lists, filters and exports with the rest of the record. The
+           RPC hands the row's id back, so the console can say "recorded" and mean it.
+
+         # NOTHING HERE DECIDES WHETHER THE OPTION EXISTS
+
+         The operator does, in `KINDLAST_BYOK_PROVIDERS`. An empty setting is the
+         default and permits nothing, so "nobody at this company may point our
+         compliance data at an external API" is a line in a configuration file rather
+         than a policy every owner of every organisation has to be trusted to follow.
+         `GetModelSetting` reports the permitted list so the console offers what the
+         deployment allows instead of a free-text box that fails on submit.
     - name: NarrativeService
       description: |-
         Narrating findings that have none (ENT-245, ENT-162, §26.2, §26.3).

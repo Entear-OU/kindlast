@@ -431,6 +431,32 @@ services:
       KINDLAST_INTEGRATION_KEY: ${KINDLAST_INTEGRATION_KEY:-local-dev:ZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMtYWI=}
       KINDLAST_INTEGRATION_KEYS_OLD: ${KINDLAST_INTEGRATION_KEYS_OLD:-}
 
+      # The hosted model providers this deployment permits (ENT-236, §26.6).
+      #
+      # EMPTY BY DEFAULT, AND THAT IS THE PRODUCT PROPERTY RATHER THAN AN
+      # UNFINISHED LINE. The bundled model needs no API key, which is what lets
+      # a deployment holding a compliance record run with no outbound internet
+      # at all, and `docs/self-hosting.md` promises exactly that. With this
+      # unset, no organisation in this deployment can point its compliance data
+      # at an external API, whatever any of their owners decide.
+      #
+      # Written `name=host,name=host`. The host is what the endpoint check
+      # compares against, so a list of bare names would let an organisation name
+      # a permitted provider and point it anywhere:
+      #
+      #   KINDLAST_BYOK_PROVIDERS=openai=api.openai.com,azure=.openai.azure.com
+      #
+      # A leading dot makes an entry a suffix, so a customer's own Azure
+      # resource is permitted without permitting every host ending in those
+      # characters. A malformed entry stops core-api at boot rather than
+      # producing a deployment that permits nothing while its configuration
+      # says otherwise.
+      #
+      # Turning it on also needs KINDLAST_INTEGRATION_KEY above, because a
+      # provider key is sealed with the same keyring; without one a provider
+      # that needs a key is refused rather than stored in plaintext.
+      KINDLAST_BYOK_PROVIDERS: ${KINDLAST_BYOK_PROVIDERS:-}
+
       # The provider's signing secret (ENT-210).
       #
       # Both this and the DSN above are required before the webhook route is

@@ -126,7 +126,38 @@ type DraftNarrativeRequest struct {
 	//
 	// Empty for a scheduled sweep. A skill given no delegation has no tools that
 	// reach a tenant's data, which is the Analyst today: it declares none.
-	Delegation    string `protobuf:"bytes,5,opt,name=delegation,proto3" json:"delegation,omitempty"`
+	Delegation string `protobuf:"bytes,5,opt,name=delegation,proto3" json:"delegation,omitempty"`
+	// Where this run's model calls go, when the organisation has chosen a hosted
+	// provider (ENT-236, §26.6).
+	//
+	// # WHY THE CALLER PASSES THIS RATHER THAN THE HARNESS LOOKING IT UP
+	//
+	// The same rule as the obligations above (§26.2), and here it is load
+	// bearing rather than stylistic. Intelligence holds no database handle and no
+	// tenancy GUC, so it has no way to decide which organisation's key it is
+	// entitled to and no way to be wrong about it: core-api resolves the choice
+	// inside the tenant's own rows, opens the sealed credential with the key only
+	// it holds, and hands over exactly one endpoint for exactly this run.
+	//
+	// # AND WHY THIS IS A REAL RELAXATION OF A RULE, SAID OUT LOUD
+	//
+	// `AGENTS.md` says no third-party credential reaches the Python service. This
+	// puts one in a request to it, and pretending otherwise would be worse than
+	// the change. What is preserved is the part the rule exists for: Intelligence
+	// cannot OBTAIN a credential, cannot enumerate them, cannot persist one, and
+	// holds this one for the life of one call. What is given up is that the
+	// process is no longer credential-free by construction.
+	//
+	// The alternative considered was proxying every completion through core-api
+	// or the workers gateway so the key never leaves Go. It is stronger and it is
+	// written up in the PR; it was not built here because it puts every prompt
+	// and every token of a customer's compliance data through a second service
+	// that currently carries none of it, which trades one exposure for a larger
+	// one.
+	//
+	// Absent means the deployment's own endpoint, which is the default and the
+	// case where nothing leaves.
+	ModelEndpoint *ModelEndpoint `protobuf:"bytes,6,opt,name=model_endpoint,json=modelEndpoint,proto3" json:"model_endpoint,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -196,6 +227,87 @@ func (x *DraftNarrativeRequest) GetDelegation() string {
 	return ""
 }
 
+func (x *DraftNarrativeRequest) GetModelEndpoint() *ModelEndpoint {
+	if x != nil {
+		return x.ModelEndpoint
+	}
+	return nil
+}
+
+// ModelEndpoint is one organisation's chosen provider, for one run.
+//
+// NEVER RECORDED AS PART OF THE RUN. `api_key` does not reach `agent_runs`,
+// does not reach a trace, and does not reach a log line. What the run records
+// is `provider`, which is what a sub-processor record needs and is not a
+// secret.
+type ModelEndpoint struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	BaseUrl       string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	Model         string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	ApiKey        string                 `protobuf:"bytes,4,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ModelEndpoint) Reset() {
+	*x = ModelEndpoint{}
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelEndpoint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelEndpoint) ProtoMessage() {}
+
+func (x *ModelEndpoint) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelEndpoint.ProtoReflect.Descriptor instead.
+func (*ModelEndpoint) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ModelEndpoint) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ModelEndpoint) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *ModelEndpoint) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *ModelEndpoint) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
 // ObligationContext is one obligation as the model sees it.
 //
 // A summary, never the Official Journal wording. The corpus stores no verbatim
@@ -233,7 +345,7 @@ type ObligationContext struct {
 
 func (x *ObligationContext) Reset() {
 	*x = ObligationContext{}
-	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[1]
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -245,7 +357,7 @@ func (x *ObligationContext) String() string {
 func (*ObligationContext) ProtoMessage() {}
 
 func (x *ObligationContext) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[1]
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -258,7 +370,7 @@ func (x *ObligationContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObligationContext.ProtoReflect.Descriptor instead.
 func (*ObligationContext) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{1}
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ObligationContext) GetSlug() string {
@@ -326,7 +438,7 @@ type DraftNarrativeResponse struct {
 
 func (x *DraftNarrativeResponse) Reset() {
 	*x = DraftNarrativeResponse{}
-	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[2]
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -338,7 +450,7 @@ func (x *DraftNarrativeResponse) String() string {
 func (*DraftNarrativeResponse) ProtoMessage() {}
 
 func (x *DraftNarrativeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[2]
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -351,7 +463,7 @@ func (x *DraftNarrativeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DraftNarrativeResponse.ProtoReflect.Descriptor instead.
 func (*DraftNarrativeResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{2}
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DraftNarrativeResponse) GetOutcome() DraftOutcome {
@@ -406,7 +518,7 @@ type RejectedCitation struct {
 
 func (x *RejectedCitation) Reset() {
 	*x = RejectedCitation{}
-	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[3]
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -418,7 +530,7 @@ func (x *RejectedCitation) String() string {
 func (*RejectedCitation) ProtoMessage() {}
 
 func (x *RejectedCitation) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[3]
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -431,7 +543,7 @@ func (x *RejectedCitation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectedCitation.ProtoReflect.Descriptor instead.
 func (*RejectedCitation) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{3}
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RejectedCitation) GetSlug() string {
@@ -452,7 +564,7 @@ var File_kindlast_platform_v1_intelligence_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\n" +
-	"'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xe1\x01\n" +
+	"'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xad\x02\n" +
 	"\x15DraftNarrativeRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x16\n" +
 	"\x06signal\x18\x02 \x01(\tR\x06signal\x12I\n" +
@@ -460,7 +572,13 @@ const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\x14on_behalf_of_user_id\x18\x04 \x01(\tR\x10onBehalfOfUserId\x12\x1e\n" +
 	"\n" +
 	"delegation\x18\x05 \x01(\tR\n" +
-	"delegation\"\x80\x01\n" +
+	"delegation\x12J\n" +
+	"\x0emodel_endpoint\x18\x06 \x01(\v2#.kindlast.platform.v1.ModelEndpointR\rmodelEndpoint\"u\n" +
+	"\rModelEndpoint\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x19\n" +
+	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12\x17\n" +
+	"\aapi_key\x18\x04 \x01(\tR\x06apiKey\"\x80\x01\n" +
 	"\x11ObligationContext\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
@@ -499,25 +617,27 @@ func file_kindlast_platform_v1_intelligence_proto_rawDescGZIP() []byte {
 }
 
 var file_kindlast_platform_v1_intelligence_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kindlast_platform_v1_intelligence_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_kindlast_platform_v1_intelligence_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_kindlast_platform_v1_intelligence_proto_goTypes = []any{
 	(DraftOutcome)(0),              // 0: kindlast.platform.v1.DraftOutcome
 	(*DraftNarrativeRequest)(nil),  // 1: kindlast.platform.v1.DraftNarrativeRequest
-	(*ObligationContext)(nil),      // 2: kindlast.platform.v1.ObligationContext
-	(*DraftNarrativeResponse)(nil), // 3: kindlast.platform.v1.DraftNarrativeResponse
-	(*RejectedCitation)(nil),       // 4: kindlast.platform.v1.RejectedCitation
+	(*ModelEndpoint)(nil),          // 2: kindlast.platform.v1.ModelEndpoint
+	(*ObligationContext)(nil),      // 3: kindlast.platform.v1.ObligationContext
+	(*DraftNarrativeResponse)(nil), // 4: kindlast.platform.v1.DraftNarrativeResponse
+	(*RejectedCitation)(nil),       // 5: kindlast.platform.v1.RejectedCitation
 }
 var file_kindlast_platform_v1_intelligence_proto_depIdxs = []int32{
-	2, // 0: kindlast.platform.v1.DraftNarrativeRequest.obligations:type_name -> kindlast.platform.v1.ObligationContext
-	0, // 1: kindlast.platform.v1.DraftNarrativeResponse.outcome:type_name -> kindlast.platform.v1.DraftOutcome
-	4, // 2: kindlast.platform.v1.DraftNarrativeResponse.rejected_citations:type_name -> kindlast.platform.v1.RejectedCitation
-	1, // 3: kindlast.platform.v1.IntelligenceService.DraftNarrative:input_type -> kindlast.platform.v1.DraftNarrativeRequest
-	3, // 4: kindlast.platform.v1.IntelligenceService.DraftNarrative:output_type -> kindlast.platform.v1.DraftNarrativeResponse
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 0: kindlast.platform.v1.DraftNarrativeRequest.obligations:type_name -> kindlast.platform.v1.ObligationContext
+	2, // 1: kindlast.platform.v1.DraftNarrativeRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
+	0, // 2: kindlast.platform.v1.DraftNarrativeResponse.outcome:type_name -> kindlast.platform.v1.DraftOutcome
+	5, // 3: kindlast.platform.v1.DraftNarrativeResponse.rejected_citations:type_name -> kindlast.platform.v1.RejectedCitation
+	1, // 4: kindlast.platform.v1.IntelligenceService.DraftNarrative:input_type -> kindlast.platform.v1.DraftNarrativeRequest
+	4, // 5: kindlast.platform.v1.IntelligenceService.DraftNarrative:output_type -> kindlast.platform.v1.DraftNarrativeResponse
+	5, // [5:6] is the sub-list for method output_type
+	4, // [4:5] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_intelligence_proto_init() }
@@ -531,7 +651,7 @@ func file_kindlast_platform_v1_intelligence_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_intelligence_proto_rawDesc), len(file_kindlast_platform_v1_intelligence_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
