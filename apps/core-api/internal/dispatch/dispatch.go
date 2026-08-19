@@ -20,9 +20,11 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 )
 
-// Outbox is the store half: claim a message, deliver it, record the outcome.
+// Outbox is the store half: claim a message, deliver it, record the outcome,
+// and clear out what no longer needs keeping.
 type Outbox interface {
 	Drain(ctx context.Context, batch int, deliver postgres.Deliver) (postgres.DrainResult, error)
+	ReclaimOutbox(ctx context.Context, bodyRetention time.Duration, batch int) (postgres.ReclaimResult, error)
 }
 
 // Defaults chosen for a queue whose traffic is invitations.
@@ -40,13 +42,77 @@ const (
 	DefaultBatch    = 20
 )
 
-// Dispatcher drains an outbox onto a channel on a timer.
+// Retention on the outbox (ENT-242).
+//
+// # WHY THERE IS A PERIOD AT ALL, AND WHY IT IS SHORT
+//
+// `body_text` holds the rendered invitation, and the rendered invitation holds
+// the raw token in a path segment, because the accept link is the message.
+// 00003 stores only that token's hash and says why: a database dump must not
+// yield a working invitation. The outbox is the one place that rule is
+// suspended, and it was meant to be suspended only until the dispatcher drained
+// the row. Nothing drained it, so every address and every message body ever
+// sent was still there.
+//
+// # WHY SEVEN DAYS, RATHER THAN NONE AND RATHER THAN NINETY
+//
+// Not zero, because a delivered body answers one real question: "what did we
+// actually send this person", asked when somebody reports a link that did not
+// work. That complaint arrives within days.
+//
+// Not ninety, because after a week the body answers nothing actionable. Seven
+// days is `postgres.InvitationLifetime`, so the window is exactly as long as
+// the token inside it can still be used, and not one day longer. Aligning the
+// two is the point rather than a coincidence: the period the body is worth
+// keeping is the period the link still works.
+//
+// It is an upper bound rather than the usual case. The reclaim redacts at the
+// earlier of this window and the invitation ceasing to be acceptable, so an
+// invitation accepted ten minutes after it arrives has its body cleared on the
+// next pass. A spent link is worth nothing to anybody, and holding somebody's
+// address for a further week to keep it would be the wrong trade.
+//
+// # AND WHAT IS NOT RECLAIMED
+//
+// A message that has not been delivered and whose invitation can still be
+// accepted is never touched, at any window. The raw token exists nowhere else,
+// so clearing that body destroys an invitation somebody is waiting for and
+// nobody can tell which ones need reissuing. The predicate that protects it
+// lives in the database and takes no argument from here, which is deliberate:
+// this constant is a decision and could be edited by anybody, and it must not
+// be able to reach that case however it is edited.
+const DeliveredBodyRetention = 7 * 24 * time.Hour
+
+// Defaults for the reclaim pass itself.
+//
+// Hourly, because every window this job applies is measured in days: running it
+// more often would buy an accuracy nobody can perceive and cost a scan an hour.
+// Running it daily would mean a spent token sitting in the clear for most of a
+// day after the invitation it belongs to was accepted, which is the case the
+// second disjunct exists to close quickly.
+//
+// The batch bounds one pass. It is much larger than the delivery batch because
+// this is one indexed statement against a partial index sized to the backlog,
+// not a network conversation per row.
+const (
+	DefaultReclaimInterval = time.Hour
+	DefaultReclaimBatch    = 500
+)
+
+// Dispatcher drains an outbox onto a channel on a timer, and clears out what
+// has been drained.
 type Dispatcher struct {
 	outbox   Outbox
 	channel  delivery.Channel
 	logger   *slog.Logger
 	interval time.Duration
 	batch    int
+
+	// Retention, on its own timer. Nothing about the reclaim wants to happen
+	// every ten seconds, and nothing about delivery wants to wait an hour.
+	reclaimInterval  time.Duration
+	reclaimBatch     int
+	reclaimRetention time.Duration
 }
 
 // New builds a dispatcher. A zero interval or batch takes the default.
@@ -62,10 +128,13 @@ func New(outbox Outbox, channel delivery.Channel, logger *slog.Logger,
 	return &Dispatcher{
 		outbox: outbox, channel: channel, logger: logger,
 		interval: interval, batch: batch,
+		reclaimInterval:  DefaultReclaimInterval,
+		reclaimBatch:     DefaultReclaimBatch,
+		reclaimRetention: DeliveredBodyRetention,
 	}
 }
 
-// Run drains until the context is cancelled.
+// Run drains until the context is cancelled, and reclaims on its own timer.
 //
 // Blocking, so the caller decides whether it owns a goroutine. It returns only
 // on cancellation: a failing drain is logged and retried on the next tick
@@ -73,18 +142,46 @@ func New(outbox Outbox, channel delivery.Channel, logger *slog.Logger,
 // server is down, the database is restarting) is one that resolves on its own,
 // and a dispatcher that exits on the first of them stops delivering
 // permanently while the process stays up and healthy.
+//
+// # WHY RETENTION LIVES HERE AND NOT IN A CRON
+//
+// This loop already runs on an interval inside core-api, already holds the
+// agent pool, and is already the only process that touches this table without a
+// request behind it. A second scheduler would be a second thing to configure, a
+// second thing to forget to deploy, and a second place for "why did nothing get
+// cleared" to hide. It moves to Temporal at build-order step 8 with the drain
+// it sits beside, as one piece rather than two.
+//
+// # IT IS SAFE IN MORE THAN ONE REPLICA, AND IS NOT A SINGLETON
+//
+// Both reclaim statements select their rows `for update skip locked`, so two
+// replicas ticking at the same moment take disjoint sets and neither waits on
+// the other. Every predicate tests `redacted_at is null`, so a row already done
+// is invisible to the next pass and the work is idempotent rather than merely
+// tolerable. A deployment running three of these clears its backlog three times
+// as fast and produces the same table.
 func (d *Dispatcher) Run(ctx context.Context) {
 	d.logger.Info("outbox dispatcher started",
 		"channel", d.channel.Name(),
 		"interval", d.interval.String(),
-		"batch", d.batch)
+		"batch", d.batch,
+		"reclaim_interval", d.reclaimInterval.String(),
+		"body_retention", d.reclaimRetention.String())
 
 	ticker := time.NewTicker(d.interval)
 	defer ticker.Stop()
 
-	// One pass before the first tick, so a restart delivers a backlog straight
-	// away instead of after an idle interval.
+	reclaim := time.NewTicker(d.reclaimInterval)
+	defer reclaim.Stop()
+
+	// One pass of each before the first tick. For the drain, so a restart
+	// delivers a backlog straight away instead of after an idle interval. For
+	// the reclaim, so a deployment that is restarted more often than once an
+	// hour still reclaims: with the first pass on the tick alone, a process
+	// that never lives a full hour would never run it at all, which is exactly
+	// how a retention job goes missing without anybody noticing.
 	d.once(ctx)
+	d.reclaimOnce(ctx)
 
 	for {
 		select {
@@ -93,7 +190,35 @@ func (d *Dispatcher) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			d.once(ctx)
+		case <-reclaim.C:
+			d.reclaimOnce(ctx)
 		}
+	}
+}
+
+// reclaimOnce clears the personal data out of messages that no longer need it.
+//
+// A failure is logged and the next tick tries again, for the same reason a
+// failed drain is: every cause resolves on its own, and a loop that exits on
+// one stops reclaiming permanently while the process stays up and healthy. The
+// difference is that nobody would notice this one, so it is logged at error
+// level rather than swallowed.
+func (d *Dispatcher) reclaimOnce(ctx context.Context) {
+	result, err := d.outbox.ReclaimOutbox(ctx, d.reclaimRetention, d.reclaimBatch)
+	if err != nil {
+		if ctx.Err() != nil {
+			// Shutdown, not a fault.
+			return
+		}
+		d.logger.Error("reclaiming the transactional outbox failed", "error", err)
+		return
+	}
+
+	// Silent when there was nothing to do, which is the common case on an idle
+	// deployment and would otherwise be a log line every hour forever.
+	if result.Redacted > 0 || result.Abandoned > 0 {
+		d.logger.Info("reclaimed transactional messages",
+			"redacted", result.Redacted, "abandoned", result.Abandoned)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -224,4 +225,68 @@ func (a *AgentStore) deliverOne(ctx context.Context, deliver Deliver) (outcome, 
 		return outcomeEmpty, fmt.Errorf("postgres: committing a delivery: %w", err)
 	}
 	return outcomeSent, nil
+}
+
+// ReclaimResult is what one pass of the retention job achieved.
+type ReclaimResult struct {
+	// Delivered messages whose body was cleared.
+	Redacted int
+	// Undelivered messages given up on, because the invitation they carry can
+	// no longer be accepted.
+	Abandoned int
+}
+
+// ReclaimOutbox clears the personal data out of messages that no longer need it
+// (ENT-242, migration 00030).
+//
+// # WHY THIS DELETES NOTHING
+//
+// An outbox row is two separable things: a delivery fact, and a rendered
+// message holding a recipient's address and, for an invitation, the raw bearer
+// token in the clear. Only the second is personal data. Deleting the row drops
+// the data by throwing away the fact; keeping the row holds the fact by keeping
+// the data. Redaction is the only option that does not force that trade, so
+// nothing here or in the migration removes a row: the only thing that does is
+// the cascade from `organisations`, which is how erasing an organisation
+// already works.
+//
+// The contrast worth drawing is with `audit_log`, which deliberately has no
+// retention at all (db/README.md) because a regulator may be shown it. The
+// outbox is the envelope rather than the letter: what a customer or a regulator
+// would be shown about an invitation is in `invitations`, which keeps the
+// address, the inviter and the outcome and is untouched by this. What the
+// outbox adds on top is the rendered text, and a few days after delivery that
+// is a dead credential and somebody's email address.
+//
+// # WHY A FUNCTION AND NOT A STATEMENT HERE
+//
+// Deciding an undelivered message's fate means asking whether the invitation it
+// carries can still be accepted, which is a read of `invitations`. The agent
+// role has no grant there by design (00008), because a role that can fabricate
+// a finding should not also be able to enumerate every invited address in the
+// deployment. The definer function answers that one question about rows it is
+// already looking at, and nothing adjacent. Same argument 00015 made for
+// `notification_recipients`.
+//
+// The period is passed in rather than living in the function, because a
+// retention period consults nothing and could reasonably be different next
+// quarter, which is the test for a decision (§14.5). What is not passed in is
+// the rule that a message which can still be delivered is never touched: that
+// predicate takes no argument, so no value of `bodyRetention`, including zero,
+// can reach a live invitation.
+func (a *AgentStore) ReclaimOutbox(ctx context.Context, bodyRetention time.Duration, batch int) (ReclaimResult, error) {
+	var result ReclaimResult
+
+	// Seconds rather than a pgx interval, matching CreateInvitation: the driver
+	// has no native interval and this is the encoding the rest of the store
+	// already uses.
+	err := a.pool.QueryRow(ctx, `
+		select redacted, abandoned
+		  from reclaim_transactional_outbox($1::interval, $2)
+	`, fmt.Sprintf("%d seconds", int(bodyRetention.Seconds())), batch).
+		Scan(&result.Redacted, &result.Abandoned)
+	if err != nil {
+		return ReclaimResult{}, fmt.Errorf("postgres: reclaiming the transactional outbox: %w", err)
+	}
+	return result, nil
 }
