@@ -59,7 +59,7 @@ reasoning about who could have touched something.
 | `onboarding_sessions` | `created_by` | `kindlast_app` |
 | `compliance_profiles` | `data_subjects`, `created_by` | `kindlast_app`, `kindlast_agent` (select, update) |
 | `notification_preferences` | `email`, a contact address separate from the sign-in one | `kindlast_app` |
-| `transactional_outbox` | `recipient_email`, `subject`, `body_text`, `body_html` | `kindlast_app`, `kindlast_agent` (select, update) |
+| `transactional_outbox` | `recipient_email`, `subject`, `body_text`, `body_html`, **until redacted**; see the retention section below | `kindlast_app` (select, insert), `kindlast_agent` (select, update) |
 | `notification_outbox`, `deadline_alert_log`, `weekly_briefing_log` | `user_id` | `kindlast_app` (+ `kindlast_agent` on the first) |
 | `findings`, `processing_activities`, `ai_systems`, `product_review_flags` | `created_by`, `approved_by` | `kindlast_app` (+ `kindlast_agent` on `findings`) |
 | `capability_tokens` | `user_id`, `token_hash` | `kindlast_agent` |
@@ -98,11 +98,17 @@ request *from* one of them cannot be answered by finding their user record,
 because there is not one. Search by value, not by `user_id`.
 
 **Message bodies that were never meant to persist.** `transactional_outbox`
-keeps `body_text` and `body_html` after sending. Rows move to `status = 'sent'`
-with `sent_at` stamped and **nothing deletes them**. Today `kind` is
-constrained to `'invitation'`, so what accumulates is the address and full text
-of every invitation ever sent. That is a retention question nobody has
-answered; it is flagged in the open questions below rather than fixed here.
+holds `recipient_email`, `subject` and both bodies, and for the only kind that
+exists today the body contains the invitation's accept link, which contains the
+raw token in a path segment. It used to hold all of that forever: rows moved to
+`status = 'sent'` and nothing removed them, so what accumulated was the address
+and the full text of every invitation ever sent, including to people who never
+accepted and have no account to be erased with.
+
+**That is now answered rather than open (ENT-242, migration 00030), and the
+answer is redaction rather than deletion.** The table has its own section below,
+because for anyone answering an access or erasure request the useful facts are
+what survives and what does not.
 
 ## Two things the database will not enforce for you
 
@@ -237,6 +243,12 @@ select * from notification_preferences
 where lower(email) = lower('person@example.com');
 ```
 
+The middle one returns less than it used to, and that is deliberate rather than
+a bug: a redacted outbox row has an empty `recipient_email`, so it cannot match
+an address search and holds nothing to report. `invitations` still answers "was
+this person invited, when, and did they accept", which is the part of the
+question that has an answer worth giving. See the retention section below.
+
 **5. Zitadel holds the rest.** Profile, credentials metadata and session
 records live in the `zitadel` database on `postgres-platform`. Export through
 Zitadel's own admin API rather than by reading its tables, because its schema
@@ -370,6 +382,71 @@ What bounds the exposure instead is three things that are already true:
 themselves, which is the fuller answer §25 wants and which needs a
 customer-visible setting rather than a constant in a Go package. Recorded as
 open, in the same spirit as the question below.
+
+## Outbox retention, and why it is redaction (ENT-242)
+
+`transactional_outbox` is the one table in the schema that holds a bearer
+credential in the clear. Its body is the rendered invitation, the rendered
+invitation contains the accept link, and the accept link contains the raw token
+in a path segment, because the link is the message. `invitations` two tables
+away stores only that token's hash and 00003 says why: a database dump must not
+yield a working invitation.
+
+That exception was always meant to be bounded by the dispatcher draining the
+row. Nothing removed the row afterwards, so it was not bounded at all, and every
+address and message body ever sent was still there. Migration 00030 bounds it.
+
+**The decision is: redact, and delete nothing.**
+
+The row is two separable things. A delivery fact, and a rendered message holding
+a person's address and a live credential. Only the second is personal data.
+Deleting the row would drop the data by throwing away the fact; keeping the row
+holds the fact by keeping the data. So the reclaim clears `recipient_email`,
+`subject`, `body_text`, `body_html` and `last_error`, stamps `redacted_at`, and
+leaves the rest alone. The only thing that removes a row from this table is
+still the cascade from `organisations`, so the erasure procedures above need no
+extra step.
+
+What that means for each state, which is what an operator actually needs:
+
+| State | What happens | When |
+|---|---|---|
+| Delivered | Body, subject, address and error cleared; `status`, `sent_at` and `attempts` kept | The earlier of seven days after delivery and the invitation ceasing to be acceptable |
+| Undelivered, invitation dead | Moved to `failed`, `last_error` says it was abandoned, then redacted as above | On the next pass after the invitation expires or is accepted |
+| Undelivered, invitation live | **Nothing, ever** | Not reachable at any retention window, including zero |
+
+The last row is the one to understand before touching any of this. The raw token
+exists nowhere else in the system, so clearing that body destroys an invitation
+somebody is waiting for; reissue is the only cure and nobody could tell which
+ones needed it. The rule protecting it is in the database and takes no argument
+from the caller, precisely so that editing the period cannot reach it.
+
+**Why seven days.** It is `postgres.InvitationLifetime`, so a delivered body is
+kept exactly as long as the token in it can still be used and not one day
+longer. Shorter loses the answer to "what did we actually send this person",
+which is what somebody asks when a link did not work, and that arrives within
+days. Longer keeps a dead credential and an address for nothing. It is an upper
+bound rather than the usual case: an invitation accepted ten minutes after it
+lands has its body cleared on the next hourly pass.
+
+**Who runs it.** The outbox dispatcher inside `core-api`, on its own hourly
+ticker beside the ten-second delivery ticker, through
+`reclaim_transactional_outbox`. It is safe in more than one replica and is not a
+singleton: both statements take their rows `for update skip locked` and every
+predicate tests `redacted_at is null`, so replicas take disjoint sets and the
+work is idempotent. It moves to Temporal at build-order step 8 with the drain it
+sits beside.
+
+**The sibling tables were checked and left alone.** `notification_outbox`,
+`deadline_alert_log` and `weekly_briefing_log` do not have this problem. None
+carries a body, a subject or an address: their personal data is a `user_id`,
+which resolves to a person only through `user_identities`, and all three cascade
+from `organisations`. `notification_outbox` resolves its recipient at dispatch
+time by design, so there is no rendered message in it to redact. Recorded here
+so the check does not have to be repeated.
+
+The longer argument, including why this is the opposite conclusion to
+`audit_log`'s, is in [`db/README.md`](../db/README.md).
 
 ## The open question, stated rather than answered
 

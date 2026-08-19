@@ -294,7 +294,10 @@ describe.skipIf(!reachable)('transactional outbox', () => {
     expect(after.sent_at).toBeNull()
   })
 
-  it('the application cannot delete a queued message', async () => {
+  it('the application cannot delete a queued message, and is told so', async () => {
+    // Same change, same reason. After 00030 nothing deletes from this table at
+    // all: retention is redaction, and the only removal is the cascade from
+    // `organisations`.
     const before = await rowByEmail(PENDING_A, orgA, ada)
 
     await setTenant(app, orgA, ada)
