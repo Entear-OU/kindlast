@@ -124,6 +124,31 @@ what they have to do about it, which no commit subject knows.
 
 ### Fixed
 
+- **Signing out did not sign anybody out of the identity provider, and ended
+  on a raw JSON error page.** The seed registered `${origin}/` as the web
+  client's post-logout redirect URI, while `/auth/logout` asks to return to
+  `${origin}/sign-in`. An authorization server matches that list exactly, so
+  Zitadel refused every sign-out with
+  `{"error":"invalid_request","error_description":"post_logout_redirect_uri invalid"}`
+  and left the person on its own domain looking at the JSON.
+
+  The visible half was the harmless half. Refusing the request means
+  `end_session` never ran, so the provider's session survived, while `web` had
+  already destroyed its own session and cleared its cookie. The person looks
+  signed out, and the next click on "Continue" signs them straight back in
+  without ever asking for a password, which on a shared machine hands the
+  workspace to whoever sits down next.
+
+  The seed now derives `${origin}/sign-in` from each console's callback, so
+  what is registered and what is requested cannot drift, and `journey.spec.ts`
+  drives a real sign-out: it asserts both that the browser lands back on
+  `/sign-in` and that signing in again reaches a password prompt.
+
+  **Self-hosters must re-run the seed** for an existing stack to pick this up
+  (`docker compose -f deploy/compose.yaml run --rm seed`). The seed republishes
+  the client's OIDC configuration on every run, so no manual change in Zitadel
+  is needed.
+
 - **Intelligence refused every request for the first minute of a fresh
   deployment** (ENT-253). A newly seeded authorization server has generated no
   signing key yet and serves an empty key set, which is correct rather than

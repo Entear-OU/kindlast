@@ -215,10 +215,32 @@ fi
 # entry rather than a duplicate.
 REDIRECT_URIS="$(jq -cn --arg dev "$WEB_REDIRECT_URI" --arg edge "$WEB_REDIRECT_URI_EDGE" \
   '[$dev, $edge] | unique')"
-# Where sign-out may return somebody: each console's own origin, derived from
-# its callback rather than configured separately, so the two cannot drift.
+# Where sign-out may return somebody, derived from each console's callback
+# rather than configured separately, so the two cannot drift.
+#
+# `sign-in` and not the bare origin, and the difference is the whole of this
+# bug. An authorization server matches a post-logout URI exactly, the same way
+# it matches a redirect URI, and `app/auth/logout/route.ts` asks to come back
+# to `${origin}/sign-in`: that is the right destination, because somebody who
+# has just signed out should land on the page that signs them back in rather
+# than on the marketing home page.
+#
+# This registered `${origin}/` instead, which matches nothing that is ever
+# requested, so Zitadel refused every sign-out with
+#
+#   {"error":"invalid_request","error_description":"post_logout_redirect_uri invalid"}
+#
+# rendered as raw JSON on its own domain. Worse than the dead end it looks
+# like: refusing the request means the end_session never runs, so the
+# provider's session survives. `web` had already destroyed its own session and
+# cleared its cookie by then, so the person looks signed out, and clicking
+# "Continue" signs them straight back in with no password because the provider
+# still knows them. On a shared machine that is the next person's problem.
+#
+# `journey.spec.ts` covers both halves, because landing back on /sign-in does
+# not prove the provider forgot anybody.
 LOGOUT_URIS="$(jq -cn --arg dev "$WEB_REDIRECT_URI" --arg edge "$WEB_REDIRECT_URI_EDGE" \
-  '[$dev, $edge] | map(sub("auth/callback$"; "")) | unique')"
+  '[$dev, $edge] | map(sub("auth/callback$"; "sign-in")) | unique')"
 
 echo "seed: ensuring 'web' OIDC client"
 APP_ID="$(api POST "/management/v1/projects/${PROJECT_ID}/apps/_search" \
