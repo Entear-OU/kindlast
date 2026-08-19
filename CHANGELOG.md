@@ -122,7 +122,38 @@ what they have to do about it, which no commit subject knows.
   container was called `kindlast-postgres-app`: it still is, unless a project
   name is set.
 
+### Added
+
+- **Changes to who can reach a compliance record are now in the audit log.**
+  Renaming the organisation, inviting somebody, changing a member's role and
+  removing a member each write a row, with what the value was before and what
+  it became. Until now every decision about a finding was recorded and every
+  change to who was allowed to make one was not, so the log could show that a
+  person approved something and not how they came to be in the organisation,
+  at what authority, or when it was taken away. That is the first question an
+  auditor asks.
+
+  The standard was already set: choosing a hosted model provider writes a row
+  (ENT-236) on exactly this reasoning. Membership was the larger gap.
+
+  New `action_type` values, which anything parsing the CSV export should
+  expect: `rename_organisation`, `invite_member`, `change_member_role`,
+  `remove_member`. An invitation records the address and the role offered and
+  never the token, which is a capability and would otherwise be re-issued to
+  everybody who can read the log. A rename that changes nothing writes no row.
+
+  **Accepting an invitation is not yet recorded**, and is the remaining half.
+  The audit log's insert policy binds a row to an active organisation and a
+  membership, and somebody redeeming an invitation has neither until the moment
+  they join, so it needs the row written inside `accept_invitation` itself
+  rather than beside it. Left for its own change rather than bolted on here.
+
 ### Fixed
+
+- **Three actions read as column names in the log.** `create_ropa_manual`,
+  `create_dsar_manual` and `update_ropa` were written by the backend and absent
+  from the console's label table, so an auditor saw the raw value. They now read
+  as sentences like every other row.
 
 - **The Watcher could not complete a single sweep, so no deployment has ever
   produced a finding.** Two of the Watcher's three detectors read the `dsars`

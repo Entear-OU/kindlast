@@ -28,6 +28,29 @@ const ACTION_LABELS: Record<string, string> = {
   update_ai_system: 'Edited an AI system entry',
   create_processing_activity: 'Added an Article 30 entry',
   create_ai_system_manual: 'Added an AI system entry',
+
+  // Three the backend writes and this map never knew, found while adding the
+  // membership ones by listing what actually reaches `action_type` rather than
+  // trusting the map. `create_dsar_manual` was on screen as its raw self, which
+  // is the schema showing through on the one page whose reader is an auditor.
+  //
+  // The fallback did its job: an unlabelled type rendered as itself rather than
+  // as "Unknown", so nothing was hidden. It just read like a column name.
+  create_ropa_manual: 'Added an Article 30 entry by hand',
+  create_dsar_manual: 'Logged a data subject request by hand',
+  update_ropa: 'Edited an Article 30 entry',
+
+  // Who can reach this record, and who let them. Every decision about a
+  // finding was recorded and every change to who was allowed to make one was
+  // not, so a reader could see that somebody approved something and not how
+  // they came to be here or at what authority.
+  //
+  // Worded as what the person did rather than as what the row is about, like
+  // every label above: "Invited somebody", not "Invitation".
+  rename_organisation: 'Renamed the organisation',
+  invite_member: 'Invited somebody to join',
+  change_member_role: "Changed somebody's role",
+  remove_member: 'Removed somebody',
 }
 
 export function actionLabel(actionType: string): string {

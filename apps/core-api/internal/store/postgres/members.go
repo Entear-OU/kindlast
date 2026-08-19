@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -11,6 +12,63 @@ import (
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/org"
 )
+
+// Audit action types for the membership surface.
+//
+// # WHY THESE EXIST AT ALL
+//
+// Every decision about a finding was recorded and every change to who could
+// make those decisions was not. A reader of the log could see that a person
+// approved something, and could not see how that person came to be in the
+// organisation, who let them in, at what role, or when somebody's authority
+// was raised or taken away. "Who has access to this compliance record, granted
+// by whom, and when" is the first question an auditor asks and the log could
+// not answer it.
+//
+// The standard was already set elsewhere: choosing a hosted model provider
+// writes a row (ENT-236) on exactly this reasoning, that a change with
+// consequences for a customer's data has to be answerable from their own log.
+// Membership is the same kind of change and was the larger gap.
+//
+// Named for what a person did rather than for the table that moved, matching
+// approve_finding and create_ropa. `audit.ActionLabels` in the console turns
+// each into a sentence.
+const (
+	ActionRenameOrganisation = "rename_organisation"
+	ActionInviteMember       = "invite_member"
+	ActionChangeMemberRole   = "change_member_role"
+	ActionRemoveMember       = "remove_member"
+)
+
+// auditJSON encodes a small before/after snapshot.
+//
+// Errors are impossible for the shapes used here (string maps), and a failure
+// to describe a change must never stop the change being recorded, so this
+// returns nil rather than an error: a row with a null `before` still says who
+// did what and when, which is the part that cannot be reconstructed later.
+func auditJSON(fields map[string]string) []byte {
+	if fields == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		return nil
+	}
+	return encoded
+}
+
+// auditTarget parses an id for an audit row's target column.
+//
+// Nil on anything unparseable, which cannot happen for values that came out of
+// the database as uuids, and which would leave a row naming the action without
+// naming its object rather than failing the action itself.
+func auditTarget(id string) *uuid.UUID {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return nil
+	}
+	return &parsed
+}
 
 // ErrNoSuchMember is returned when a role change or removal matched no row.
 //
@@ -157,6 +215,16 @@ func (t *Tenant) insertNamedOrganisation(ctx context.Context, orgID, name string
 // row and gets ErrNoSuchMember's sibling treatment: pgx.ErrNoRows here means
 // "you may not", and the handler turns it into a permission error.
 func (t *Tenant) RenameOrganisation(ctx context.Context, name string) (org.Joined, error) {
+	// The old name, read inside the same transaction as the update, so the
+	// `before` on the audit row is what this statement actually replaced
+	// rather than whatever the caller last rendered.
+	var previous string
+	if err := t.tx.QueryRow(ctx,
+		`select name from organisations where id = $1`, t.orgID).Scan(&previous); err != nil &&
+		!errors.Is(err, pgx.ErrNoRows) {
+		return org.Joined{}, fmt.Errorf("postgres: reading the current name: %w", err)
+	}
+
 	var joined org.Joined
 	err := t.tx.QueryRow(ctx, `
 		update organisations set name = $1
@@ -171,6 +239,33 @@ func (t *Tenant) RenameOrganisation(ctx context.Context, name string) (org.Joine
 		return org.Joined{}, fmt.Errorf("postgres: renaming the organisation: %w", err)
 	}
 	joined.Role = t.role
+
+	// A rename is not a membership change, and it is here for the reader rather
+	// than for the access question: a log that says "approved by Ada at Acme"
+	// is misleading a year later if Acme was called something else at the time
+	// and nothing records the change.
+	//
+	// Nothing is written when the name did not move. A settings form submitted
+	// twice, or saved without editing the field, is not an event, and a
+	// compliance log that fills with "renamed Acme to Acme" is harder to read
+	// for no gain. This was measured rather than anticipated: driving the real
+	// console produced exactly that row.
+	//
+	// `changed` is decided here rather than by the caller for the same reason
+	// `before` is read here: the comparison has to be against what the database
+	// held, not against what a form happened to render.
+	if previous != joined.OrgName {
+		if err := t.recordAudit(ctx, auditEntry{
+			ActionType:  ActionRenameOrganisation,
+			TargetTable: "organisations",
+			TargetID:    auditTarget(t.orgID),
+			Before:      auditJSON(map[string]string{"name": previous}),
+			After:       auditJSON(map[string]string{"name": joined.OrgName}),
+		}); err != nil {
+			return org.Joined{}, err
+		}
+	}
+
 	return joined, nil
 }
 
@@ -181,6 +276,24 @@ func (t *Tenant) RenameOrganisation(ctx context.Context, name string) (org.Joine
 // list it has just read inside this same transaction. Doing it in SQL would
 // mean expressing "would this leave nobody" as a subquery nobody can read.
 func (t *Tenant) SetMemberRole(ctx context.Context, userID, role string) error {
+	// The old role, locked, before the update replaces it. `for update` rather
+	// than a bare read because two owners changing the same person's role at
+	// once would otherwise both record the same `before` and one of the two
+	// audit rows would describe a change that never happened.
+	var previous string
+	err := t.tx.QueryRow(ctx, `
+		select role from memberships
+		where org_id = $1 and user_id = $2
+		for update
+	`, t.orgID, userID).Scan(&previous)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoSuchMember
+	}
+	if err != nil {
+		return fmt.Errorf("postgres: reading the current role: %w", err)
+	}
+
 	tag, err := t.tx.Exec(ctx, `
 		update memberships set role = $1 where org_id = $2 and user_id = $3
 	`, role, t.orgID, userID)
@@ -190,11 +303,65 @@ func (t *Tenant) SetMemberRole(ctx context.Context, userID, role string) error {
 	if tag.RowsAffected() == 0 {
 		return ErrNoSuchMember
 	}
-	return nil
+
+	// The change that matters most in this file. A role is how much authority
+	// somebody has over a compliance record, so raising one is the event an
+	// auditor asks about after the fact, and it left no trace at all.
+	return t.recordAudit(ctx, auditEntry{
+		ActionType:  ActionChangeMemberRole,
+		TargetTable: "memberships",
+		TargetID:    auditTarget(userID),
+		Before:      auditJSON(map[string]string{"role": previous}),
+		After:       auditJSON(map[string]string{"role": role}),
+	})
 }
 
 // RemoveMember removes someone from the active organisation.
 func (t *Tenant) RemoveMember(ctx context.Context, userID string) error {
+	var previous string
+	err := t.tx.QueryRow(ctx, `
+		select role from memberships
+		where org_id = $1 and user_id = $2
+		for update
+	`, t.orgID, userID).Scan(&previous)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoSuchMember
+	}
+	if err != nil {
+		return fmt.Errorf("postgres: reading the membership to remove: %w", err)
+	}
+
+	// The audit row goes FIRST, and this ordering is load-bearing rather than
+	// stylistic.
+	//
+	// `audit_log_insert_org` requires a membership for the acting user in the
+	// acting organisation. An owner is allowed to remove themselves, and after
+	// the delete that membership is exactly what no longer exists, so writing
+	// the row afterwards is refused with a 42501 and takes the whole removal
+	// down with it. Nobody could leave an organisation.
+	//
+	// Ordering costs nothing here because both statements are in one
+	// transaction: if the delete below fails, this row goes with it, so there
+	// is no window in which the log claims a removal that did not happen.
+	//
+	// No `after`, because there is no longer anything to describe. The absence
+	// is the record: a null after against a removal is what says the membership
+	// ended rather than changed.
+	//
+	// This is the offboarding half. Without it, a person losing access to a
+	// compliance record left exactly as much trace as never having had it,
+	// which is the wrong answer to "when did they stop being able to approve
+	// things".
+	if err := t.recordAudit(ctx, auditEntry{
+		ActionType:  ActionRemoveMember,
+		TargetTable: "memberships",
+		TargetID:    auditTarget(userID),
+		Before:      auditJSON(map[string]string{"role": previous}),
+	}); err != nil {
+		return err
+	}
+
 	tag, err := t.tx.Exec(ctx, `
 		delete from memberships where org_id = $1 and user_id = $2
 	`, t.orgID, userID)
@@ -227,5 +394,28 @@ func (t *Tenant) CreateInvitation(ctx context.Context, email, role, token string
 	if err != nil {
 		return org.Invitation{}, fmt.Errorf("postgres: creating the invitation: %w", err)
 	}
-	return invitation, nil
+
+	// Who was offered access, at what role, and by whom. The actor and the
+	// timestamp come from `record_audit_log`; the address and role are the part
+	// only this call knows.
+	//
+	// The address goes in `after` even though it is personal data about someone
+	// who may never become a user. That is the same decision every other audit
+	// row makes, and `docs/personal-data-runbook.md` already accounts for
+	// `invitations.email` on those grounds. Recording that access was offered
+	// while omitting who it was offered to would leave a row that cannot answer
+	// the question it exists for. The audit search deliberately does not cover
+	// `before`/`after`, so this does not become a way to search for a person.
+	//
+	// No token, hashed or otherwise. The audit log is readable by every member
+	// and exportable to CSV, and an invitation token is a capability.
+	return invitation, t.recordAudit(ctx, auditEntry{
+		ActionType:  ActionInviteMember,
+		TargetTable: "invitations",
+		TargetID:    auditTarget(invitation.ID),
+		After: auditJSON(map[string]string{
+			"email": email,
+			"role":  role,
+		}),
+	})
 }
