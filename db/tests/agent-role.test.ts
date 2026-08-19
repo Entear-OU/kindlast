@@ -145,6 +145,36 @@ describe.skipIf(!reachable)(
       const r = await agent.query(`select count(*)::int as n from obligations`)
       expect(r.rows[0].n).toBeGreaterThanOrEqual(0)
     })
+
+    // The test the rest of this block cannot give, and the one 00032 exists
+    // because nobody had written.
+    //
+    // Every test above names a table and proves the agent may touch it, which
+    // proves the grants somebody remembered rather than the grants the sweep
+    // needs. `run_watcher` calls three detectors, two of which read `dsars`,
+    // and no grant on `dsars` was ever issued: the suite stayed green for as
+    // long as the Watcher was completely unable to run, because nothing here
+    // ever called it.
+    //
+    // So this calls the real entry point on the real role. It asserts almost
+    // nothing about the result, deliberately: what it is guarding is that the
+    // function reaches its end without a 42501, and the next detector to read
+    // a table nobody granted turns this red on the commit that adds it rather
+    // than on the day a customer notices an empty feed.
+    //
+    // Proven able to fail: `revoke select on public.dsars from kindlast_agent`
+    // makes this the only red test in the suite, with the same
+    // "permission denied for table dsars" the running stack returned.
+    it('completes a whole sweep as itself, not just the reads it was granted', async () => {
+      await pointAt(orgA)
+
+      const r = await agent.query(`select public.run_watcher() as swept`)
+
+      // A count of profiles swept. Zero would mean the loop found nothing and
+      // the detectors never ran, which would make this pass without testing
+      // anything: the fixtures put a profile in orgA precisely so it cannot.
+      expect(r.rows[0].swept).toBeGreaterThan(0)
+    })
   },
 )
 
