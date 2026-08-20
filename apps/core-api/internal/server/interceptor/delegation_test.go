@@ -101,7 +101,7 @@ func buildDelegationChain(t *testing.T, a *authServer) (
 	mux := http.NewServeMux()
 	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(a.profiles(t)), chain))
 	mux.Handle(corev1connect.NewOrgServiceHandler(
-		orgservice.New("http://console.test.invalid"), chain))
+		orgservice.New("http://console.test.invalid", a.profiles(t)), chain))
 	mux.Handle(corev1connect.NewFindingsServiceHandler(findingsservice.New(false), chain))
 	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboardservice.New(), chain))
 	mux.Handle(platformv1connect.NewIngestServiceHandler(
@@ -195,21 +195,20 @@ func joinExisting(
 		t.Fatalf("committing the invitation: %v", err)
 	}
 
-	// A token for the same person that carries the address the invitation
-	// names. `signIn` deliberately mints one with no profile claims, because
-	// other tests here turn on the console falling back to userinfo for a name,
-	// so this cannot simply be added there.
-	accepting := map[string]string{
-		"Authorization": "Bearer " + a.tokenWithClaims(t,
-			mapClaims(a, joiner.claim, map[string]any{
-				"scope": orgScopes,
-				"email": fmt.Sprintf("%s@example.invalid", joiner.claim),
-			})),
-	}
+	// The address is published at userinfo rather than put in a token, because
+	// that is what the bundled Zitadel does: its access tokens carry no
+	// address at all. A fixture that put one in the token would exercise a
+	// path this deployment never takes, which is exactly how the refusal bug
+	// reached a release with a green suite.
+	a.serveUserInfo(joiner.claim, map[string]any{
+		"name":           joiner.claim,
+		"email":          fmt.Sprintf("%s@example.invalid", joiner.claim),
+		"email_verified": true,
+	})
 
 	if _, err := orgs.AcceptInvitation(t.Context(), withHeaders(
 		connect.NewRequest(&corev1.AcceptInvitationRequest{Token: token}),
-		accepting)); err != nil {
+		joiner.headers)); err != nil {
 		t.Fatalf("%s accepting into the second organisation: %v", joiner.claim, err)
 	}
 }

@@ -32,14 +32,14 @@ func interceptorsFor(t *testing.T, a *authServer, live *stack, scopes *intercept
 }
 
 // serveOrg starts OrgService behind the given interceptors.
-func serveOrg(t *testing.T, interceptors ...connect.Interceptor) corev1connect.OrgServiceClient {
+func serveOrg(t *testing.T, a *authServer, interceptors ...connect.Interceptor) corev1connect.OrgServiceClient {
 	t.Helper()
 
 	mux := http.NewServeMux()
 	// A real base URL, because InviteMember refuses without one (ENT-219) and a
 	// test service that could not invite would report that refusal as though it
 	// were the behaviour under test.
-	mux.Handle(corev1connect.NewOrgServiceHandler(org.New("http://console.test.invalid"),
+	mux.Handle(corev1connect.NewOrgServiceHandler(org.New("http://console.test.invalid", a.profiles(t)),
 		connect.WithInterceptors(interceptors...)))
 
 	server := httptest.NewServer(mux)

@@ -182,7 +182,7 @@ func TestAcceptingAnInvitationBeforeTheFirstMeYieldsOneOrganisation(t *testing.T
 	live := requireStack(t, a.server.URL)
 
 	scopes := realScopes(t)
-	orgClient := serveOrg(t,
+	orgClient := serveOrg(t, a,
 		interceptorsFor(t, a, live, scopes)...,
 	)
 	sessionClient, _ := buildChain(t, a, scopes)
@@ -229,7 +229,7 @@ func TestAnUnknownInvitationIsNotFoundThroughTheChain(t *testing.T) {
 	a := newAuthServer(t)
 	live := requireStack(t, a.server.URL)
 
-	orgClient := serveOrg(t, interceptorsFor(t, a, live, realScopes(t))...)
+	orgClient := serveOrg(t, a, interceptorsFor(t, a, live, realScopes(t))...)
 
 	claim := fmt.Sprintf("chain-unknown-%d", time.Now().UnixNano())
 	forget(t, a.server.URL, claim)
