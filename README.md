@@ -250,7 +250,7 @@ nothing to reach for. `web` holds a session and talks to `core-api`.
 The whole product comes up with one command and seeds itself: Postgres with the
 tenancy role split, migrations applied by a job that must exit zero, Zitadel as
 the OIDC provider, Redis, Mailpit, the resource server, the integrations
-gateway, a Caddy edge, and **the console itself**, served from a production
+gateway, Temporal, a Caddy edge, and **the console itself**, served from a production
 build at `localhost:8000`.
 
 ```bash

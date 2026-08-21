@@ -21,9 +21,21 @@
 #                      not boot code: N replicas racing the same DDL is the
 #                      failure mode this shape prevents (§14.2).
 #   postgres-platform  Infrastructure state whose schemas we do not own:
-#                      zitadel now, temporal + temporal_visibility at
-#                      build-order step 8. The application NEVER connects
-#                      here, and nobody hand-writes migrations for it.
+#                      zitadel, and Temporal's temporal + temporal_visibility
+#                      (ENT-256). The application NEVER connects here, and
+#                      nobody hand-writes migrations for it.
+#   temporal-init      Job. Creates Temporal's role and its two databases on
+#                      postgres-platform if they are not there, and exits zero.
+#                      A job rather than an initdb script because initdb runs
+#                      once per volume and Temporal arrived after every
+#                      existing volume was initialised; see deploy/temporal/.
+#   temporal           The workflow engine (ENT-256, §16). Owns every schedule
+#                      in the system, so the domain database does no scheduling
+#                      and carries no scheduler tables. Publishes no port: the
+#                      workers reach it on this network and nothing else should.
+#   temporal-ui        Its web UI, for reading a workflow's history when one
+#                      is stuck. IN THE `dev` PROFILE, so a production `up`
+#                      does not serve it: workflow histories carry finding ids.
 #   auth               Zitadel, self-migrating on boot, OIDC discovery at
 #                      http://localhost:${KINDLAST_AUTH_PORT:-8300}/.well-known/openid-configuration
 #   seed               Dev/test fixtures: two organisations with members in
@@ -225,6 +237,112 @@ services:
       interval: 3s
       timeout: 5s
       retries: 40
+
+  # Durable execution (ENT-256, core-api-surface §16), which is to say: the
+  # thing that makes the Watcher run without somebody pushing.
+  #
+  # WHAT IT IS FOR. Nothing in this stack ran on a schedule before this. The
+  # three pg_cron jobs left with the Supabase schema (00001) and the Vercel
+  # cron routes left with the Supabase console, and between that and Temporal
+  # the only thing that has ever produced a finding is SweepService.RunSweep,
+  # called by hand. §16.2 says every schedule in the system becomes a Temporal
+  # Schedule and every hop in the agent chain becomes a workflow step, so the
+  # domain Postgres does no scheduling work and carries no scheduler tables.
+  # That is the constraint this container satisfies. The schedules themselves
+  # arrive in the changes after this one; this brings the engine up and proves
+  # it runs inside the same air gap as everything else.
+  #
+  # ITS OWN DATABASE, AND NOT THE DOMAIN ONE. Temporal persists every workflow
+  # state transition, every activity attempt and every timer, which is a
+  # write-heavy workload with its own access patterns, and pointing it at
+  # postgres-app would put exactly the load on the domain database that §16.3
+  # exists to avoid. It shares postgres-platform with Zitadel: both are
+  # infrastructure state whose schemas we do not own and never query directly,
+  # neither serves a user page load, each gets its own database and its own
+  # role so neither can read the other. The application never connects to
+  # postgres-platform and Temporal never connects to postgres-app.
+  #
+  # RETENTION IS A DECISION, NOT A DEFAULT. A workflow history holds finding
+  # ids and enough context to re-identify an organisation, so left to the
+  # image's default it becomes a second compliance record with no retention
+  # policy anybody chose. KINDLAST_TEMPORAL_RETENTION below is applied when
+  # the default namespace is first created; it is meant to be well short of
+  # the audit log's retention, because the legal record lives in postgres-app
+  # and the execution telemetry does not get to become another one.
+  temporal-init:
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-temporal-init
+    image: postgres:17-alpine
+    restart: "no"
+    depends_on:
+      postgres-platform:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres-platform
+      PGUSER: postgres
+      PGPASSWORD: ${KINDLAST_PLATFORM_SUPER_PASSWORD:-platform-dev-password}
+      TEMPORAL_DB_PASSWORD: ${KINDLAST_TEMPORAL_DB_PASSWORD:-temporal-db-dev-password}
+    volumes:
+      - ./temporal/init.sh:/init.sh:ro
+    command: ["/bin/sh", "/init.sh"]
+
+  temporal:
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-temporal
+    image: temporalio/auto-setup:1.29.7
+    depends_on:
+      temporal-init:
+        condition: service_completed_successfully
+    environment:
+      # auto-setup's contract, read from the image's own auto-setup.sh rather
+      # than from a tutorial: the driver name is `postgres12` for every modern
+      # Postgres, and SKIP_DB_CREATE tells it the databases already exist (the
+      # init job made them) so it runs only the schema tool against them.
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: postgres-platform
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${KINDLAST_TEMPORAL_DB_PASSWORD:-temporal-db-dev-password}
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      SKIP_DB_CREATE: "true"
+      # The default namespace, created on first boot with the retention above.
+      # Changing the variable later does not change an existing namespace;
+      # docs/self-hosting.md says how to.
+      DEFAULT_NAMESPACE: default
+      DEFAULT_NAMESPACE_RETENTION: ${KINDLAST_TEMPORAL_RETENTION:-168h}
+      # Where the CLI inside the container, and the health probe below, find
+      # the server: its own service name on this network.
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
+    healthcheck:
+      # The image ships the `temporal` CLI, so the server probes itself the way
+      # core-api and workers do, and dependents wait on a server that answers
+      # rather than a process that started.
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  # The UI, in the `dev` profile and nowhere else:
+  #
+  #     docker compose -f deploy/compose.yaml --profile dev up -d
+  #
+  # It is how an operator reads why a workflow is stuck, and it is worth
+  # having for that alone. It is not in a default `up` because every workflow
+  # history it shows carries finding ids, and a production stack should not
+  # publish a browsable view of them on a port nobody asked for. Published on
+  # 127.0.0.1 only, like every other port here.
+  temporal-ui:
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-temporal-ui
+    image: temporalio/ui:2.53.3
+    profiles: ["dev"]
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:${KINDLAST_TEMPORAL_UI_PORT:-8233}
+    ports:
+      - "127.0.0.1:${KINDLAST_TEMPORAL_UI_PORT:-8233}:8080"
 
   seed:
     container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-seed

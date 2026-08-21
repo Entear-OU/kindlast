@@ -71,6 +71,10 @@ DEFAULT_REDIS_PORT=6379
 DEFAULT_EDGE_PORT=8000
 DEFAULT_MODEL_PORT=8081
 DEFAULT_INTELLIGENCE_PORT=8090
+# The Temporal UI is in the `dev` profile, so this is published only when that
+# profile is on; it still needs a slot so two worktrees with it on do not
+# collide. The eighth and last port the stride allows.
+DEFAULT_TEMPORAL_UI_PORT=8233
 
 usage() {
   cat >&2 <<'USAGE'
@@ -170,6 +174,7 @@ if [ "$DERIVE" = "1" ]; then
   EDGE_PORT=$(( BASE + 4 ))
   MODEL_PORT=$(( BASE + 5 ))
   INTELLIGENCE_PORT=$(( BASE + 6 ))
+  TEMPORAL_UI_PORT=$(( BASE + 7 ))
 else
   SLOT=0
   PROJECT="${KINDLAST_STACK_PROJECT:-kindlast}"
@@ -180,6 +185,7 @@ else
   EDGE_PORT=$DEFAULT_EDGE_PORT
   MODEL_PORT=$DEFAULT_MODEL_PORT
   INTELLIGENCE_PORT=$DEFAULT_INTELLIGENCE_PORT
+  TEMPORAL_UI_PORT=$DEFAULT_TEMPORAL_UI_PORT
 fi
 
 PG="127.0.0.1:${PG_APP_PORT}"
@@ -204,7 +210,7 @@ fi
 if [ "$CHECK" = "1" ] && command -v docker >/dev/null 2>&1; then
   conflicts=""
   for port in "$PG_APP_PORT" "$AUTH_PORT" "$MAILPIT_PORT" "$REDIS_PORT" \
-    "$EDGE_PORT" "$MODEL_PORT" "$INTELLIGENCE_PORT"; do
+    "$EDGE_PORT" "$MODEL_PORT" "$INTELLIGENCE_PORT" "$TEMPORAL_UI_PORT"; do
     # No `| head -1`: under `set -o pipefail` the SIGPIPE that head sends back
     # is the pipeline's status, so a successful check would exit the script.
     owner="$(docker ps --filter "publish=${port}" \
@@ -244,6 +250,7 @@ KINDLAST_REDIS_PORT=${REDIS_PORT}
 KINDLAST_EDGE_PORT=${EDGE_PORT}
 KINDLAST_MODEL_PORT=${MODEL_PORT}
 KINDLAST_INTELLIGENCE_PORT=${INTELLIGENCE_PORT}
+KINDLAST_TEMPORAL_UI_PORT=${TEMPORAL_UI_PORT}
 KINDLAST_MODEL_DIR=${MODEL_DIR}
 EOF
   echo "stack-env: wrote ${REPO}/deploy/.env (project ${PROJECT}, slot ${SLOT})" >&2
@@ -261,6 +268,7 @@ redis               127.0.0.1:${REDIS_PORT}
 edge (the console)  http://localhost:${EDGE_PORT}
 model               http://localhost:${MODEL_PORT}
 intelligence        http://localhost:${INTELLIGENCE_PORT}
+temporal ui         http://localhost:${TEMPORAL_UI_PORT}  (--profile dev)
 model weights       ${MODEL_DIR}
 EOF
   exit 0
@@ -295,6 +303,7 @@ export KINDLAST_REDIS_PORT='${REDIS_PORT}'
 export KINDLAST_EDGE_PORT='${EDGE_PORT}'
 export KINDLAST_MODEL_PORT='${MODEL_PORT}'
 export KINDLAST_INTELLIGENCE_PORT='${INTELLIGENCE_PORT}'
+export KINDLAST_TEMPORAL_UI_PORT='${TEMPORAL_UI_PORT}'
 export KINDLAST_MODEL_DIR='${MODEL_DIR}'
 export PG_HOST='127.0.0.1'
 export PG_PORT='${PG_APP_PORT}'

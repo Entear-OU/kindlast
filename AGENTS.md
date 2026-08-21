@@ -200,7 +200,7 @@ docker compose -f deploy/compose.yaml up -d
 One command from a clean checkout gives a healthy stack: Postgres with the
 role split applied, migrations applied by a job container that must exit zero,
 Zitadel serving OIDC discovery on `localhost:8300`, Redis, the resource server,
-the integrations gateway, a Caddy edge, and **the console itself**, served at
+the integrations gateway, Temporal, a Caddy edge, and **the console itself**, served at
 `localhost:8000` from a production Next build (ENT-241). Tear down with
 `down -v`.
 
