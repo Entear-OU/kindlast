@@ -44,7 +44,7 @@ func TestAnEngineAddressWithNoWayToCallCoreAPIIsRefused(t *testing.T) {
 	// the setting that would fix it.
 	for _, step := range []struct {
 		name, wants string
-		set        func()
+		set         func()
 	}{
 		{"no core-api URL", "KINDLAST_CORE_API_URL", func() {}},
 		{"no issuer", "KINDLAST_OIDC_ISSUER", func() {

@@ -126,13 +126,56 @@ func Ready(c client.Client) func(context.Context) error {
 }
 
 // ensureSnoozeExpirySchedule creates the Schedule, or brings an existing one
-// into line with the configured cron and action.
+// into line with the configured cron and action, retrying while the engine
+// finishes starting.
 //
 // Create-then-update rather than delete-and-recreate, because a Schedule has
 // state worth keeping: its history of runs, whether an operator paused it,
 // and the backfill it may be part way through. Changing the cron in
 // configuration should change the cron and nothing else.
+//
+// # WHY IT RETRIES, MEASURED RATHER THAN GUESSED
+//
+// The engine's healthcheck is `temporal operator cluster health`, which is
+// the frontend answering. For a few seconds after a restart the frontend is
+// up and the matching and history services have not yet joined its ring, and
+// a schedule update in that window fails with "Not enough hosts to serve the
+// request" and then the SDK's ten-second deadline. The first version of this
+// returned that error, the binary exited 1, and because core-api waits on
+// this service being healthy the whole stack failed to come up. It passed on
+// a fresh stack, where the create path happened to land after the ring had
+// formed, and failed in CI's air-gap job, which is the one place the stack is
+// brought up twice in a row on the same volumes and so took the update path
+// against an engine seconds old. Same class as ENT-253: a first-minute race
+// that a laptop stack is always past.
+//
+// So: keep trying for two minutes, with the per-attempt deadline the SDK
+// already applies, and only then fail, loudly, because a deployment with no
+// schedule is the silent failure the CI step exists to catch.
 func ensureSnoozeExpirySchedule(ctx context.Context, c client.Client, opts Options) error {
+	const attempts = 60
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		err := ensureSnoozeExpiryScheduleOnce(ctx, c, opts)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		opts.Logger.Info("waiting for temporal to accept the schedule",
+			"id", SnoozeExpiryScheduleID, "attempt", attempt, "error", err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return fmt.Errorf("schedule: %s could not be registered after %d attempts: %w",
+		SnoozeExpiryScheduleID, attempts, lastErr)
+}
+
+// ensureSnoozeExpiryScheduleOnce is one attempt; see the caller for why there
+// are several.
+func ensureSnoozeExpiryScheduleOnce(ctx context.Context, c client.Client, opts Options) error {
 	spec := client.ScheduleSpec{
 		CronExpressions: []string{opts.SnoozeExpirySchedule},
 		// A missed tick (the engine was down) runs once when it is back,
