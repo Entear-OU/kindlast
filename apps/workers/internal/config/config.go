@@ -12,6 +12,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -71,6 +72,55 @@ type Config struct {
 	// many gateway calls at once, refilling to full over the window.
 	RateLimitBurst  int
 	RateLimitWindow time.Duration
+
+	// Temporal is the worker half of this binary (ENT-256): the schedules that
+	// used to be pg_cron jobs and Vercel cron routes, run as workflows whose
+	// activities call core-api.
+	//
+	// EMPTY MEANS NO WORKER, AND THAT IS A SUPPORTED CONFIGURATION rather than
+	// a degraded one, the same way core-api serves no SweepService without an
+	// agent pool: a deployment that runs only the gateway half leaves this
+	// unset and nothing here tries to reach an engine that is not there. The
+	// bundled compose stack sets it.
+	Temporal Temporal
+}
+
+// Temporal is how the worker reaches the engine and core-api.
+type Temporal struct {
+	// Addr is the frontend, host:port. Empty disables the worker.
+	Addr string
+	// Namespace the schedules and workflows live in. The default namespace is
+	// the one auto-setup creates with the configured retention.
+	Namespace string
+	// TaskQueue this process polls. `core` is the Go queue of the design's
+	// two (§16.4); the Python service polls `intelligence`.
+	TaskQueue string
+
+	// SnoozeExpirySchedule is the cron expression for bringing deferred
+	// findings back. Hourly at ten past by default: pg_cron ran the same
+	// function once a day at 06:10, which meant a finding deferred "for seven
+	// days" came back up to a day late. An hour is the granularity a person
+	// notices, and the pass is one cheap UPDATE.
+	SnoozeExpirySchedule string
+
+	// CoreAPIURL is where the activities call. Through the edge on the bundled
+	// stack, the same door Intelligence uses, so there is no
+	// development-only shortcut.
+	CoreAPIURL string
+
+	// The credential the activities present to core-api. The same OIDC client
+	// file Intelligence and core-api read (`core-api-client.json`, written by
+	// the seed), because both halves are the same service principal and a
+	// second client would be a second thing to grant `internal:ingest` to, to
+	// rotate, and to forget. Required when Addr is set: a worker that cannot
+	// authenticate is not a degraded worker, it is one whose every activity
+	// fails.
+	OIDCIssuer       string
+	OIDCDiscoveryURL string
+	OIDCHostHeader   string
+	OIDCAudience     string
+	ClientID         string
+	ClientSecret     string
 }
 
 // Load reads the environment.
@@ -83,7 +133,19 @@ func Load() (*Config, error) {
 		OutboundTimeout:          durationOr("KINDLAST_GATEWAY_OUTBOUND_TIMEOUT", 30*time.Second),
 		RateLimitBurst:           intOr("KINDLAST_GATEWAY_RATE_BURST", 30),
 		RateLimitWindow:          durationOr("KINDLAST_GATEWAY_RATE_WINDOW", time.Minute),
+		Temporal: Temporal{
+			Addr:                 strings.TrimSpace(os.Getenv("KINDLAST_TEMPORAL_ADDR")),
+			Namespace:            valueOr("KINDLAST_TEMPORAL_NAMESPACE", "default"),
+			TaskQueue:            valueOr("KINDLAST_TEMPORAL_TASK_QUEUE", "core"),
+			SnoozeExpirySchedule: valueOr("KINDLAST_SNOOZE_EXPIRY_SCHEDULE", "10 * * * *"),
+			CoreAPIURL:           strings.TrimSpace(os.Getenv("KINDLAST_CORE_API_URL")),
+			OIDCIssuer:           strings.TrimSpace(os.Getenv("KINDLAST_OIDC_ISSUER")),
+			OIDCDiscoveryURL:     strings.TrimSpace(os.Getenv("KINDLAST_OIDC_DISCOVERY_URL")),
+			OIDCHostHeader:       strings.TrimSpace(os.Getenv("KINDLAST_OIDC_HOST_HEADER")),
+			OIDCAudience:         audience(),
+		},
 	}
+	cfg.Temporal.ClientID, cfg.Temporal.ClientSecret = internalClient()
 
 	if strings.TrimSpace(cfg.SharedSecret) == "" {
 		return nil, errors.New(
@@ -106,7 +168,84 @@ func Load() (*Config, error) {
 	// its operator may not use.
 	//
 	// The caller logs it loudly at boot; see main.
+
+	// The worker half fails closed on what it cannot do without. An engine
+	// address with no way to call core-api is a worker whose every activity
+	// would fail, and a misconfiguration somebody meant to get right should be
+	// heard about at startup rather than at the first schedule.
+	if t := cfg.Temporal; t.Addr != "" {
+		switch {
+		case t.CoreAPIURL == "":
+			return nil, errors.New("config: KINDLAST_TEMPORAL_ADDR is set but KINDLAST_CORE_API_URL is not; " +
+				"the worker's activities call core-api and need to know where")
+		case t.OIDCIssuer == "":
+			return nil, errors.New("config: KINDLAST_TEMPORAL_ADDR is set but KINDLAST_OIDC_ISSUER is not; " +
+				"the worker mints a token to call core-api and needs the issuer")
+		case t.OIDCAudience == "":
+			return nil, errors.New("config: KINDLAST_TEMPORAL_ADDR is set but no audience is configured " +
+				"(KINDLAST_OIDC_AUDIENCE or KINDLAST_OIDC_AUDIENCE_FILE); the token core-api accepts is scoped to it")
+		case t.ClientID == "" || t.ClientSecret == "":
+			return nil, errors.New("config: KINDLAST_TEMPORAL_ADDR is set but no client credential is configured " +
+				"(KINDLAST_INTERNAL_CLIENT_FILE, or KINDLAST_INTERNAL_CLIENT_ID and _SECRET); " +
+				"the worker presents it to core-api")
+		}
+	}
 	return cfg, nil
+}
+
+// audience reads KINDLAST_OIDC_AUDIENCE, or the file KINDLAST_OIDC_AUDIENCE_FILE
+// names. The same two spellings core-api and Intelligence accept, because the
+// value is Zitadel's project id, generated by the seed and written to the
+// shared volume rather than known in advance.
+func audience() string {
+	if value := strings.TrimSpace(os.Getenv("KINDLAST_OIDC_AUDIENCE")); value != "" {
+		return value
+	}
+	path := strings.TrimSpace(os.Getenv("KINDLAST_OIDC_AUDIENCE_FILE"))
+	if path == "" {
+		return ""
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(contents))
+}
+
+// internalClient reads the OIDC client credential, from the two environment
+// variables or from the JSON file Zitadel's machine-key output produces.
+//
+// The field names are the authorization server's, not ours: this is
+// `core-api-client.json` read as the seed wrote it, the same file and the same
+// shape core-api's config reads, so the two cannot drift.
+func internalClient() (id, secret string) {
+	id = strings.TrimSpace(os.Getenv("KINDLAST_INTERNAL_CLIENT_ID"))
+	secret = strings.TrimSpace(os.Getenv("KINDLAST_INTERNAL_CLIENT_SECRET"))
+	if id != "" && secret != "" {
+		return id, secret
+	}
+	path := strings.TrimSpace(os.Getenv("KINDLAST_INTERNAL_CLIENT_FILE"))
+	if path == "" {
+		return id, secret
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return id, secret
+	}
+	var credential struct {
+		ClientID     string `json:"clientId"`
+		ClientSecret string `json:"clientSecret"`
+	}
+	if err := json.Unmarshal(contents, &credential); err != nil {
+		return id, secret
+	}
+	if id == "" {
+		id = strings.TrimSpace(credential.ClientID)
+	}
+	if secret == "" {
+		secret = strings.TrimSpace(credential.ClientSecret)
+	}
+	return id, secret
 }
 
 // fileOrValue reads NAME, falling back to the contents of the file named by

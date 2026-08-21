@@ -35,6 +35,9 @@ const (
 const (
 	// SweepServiceRunSweepProcedure is the fully-qualified name of the SweepService's RunSweep RPC.
 	SweepServiceRunSweepProcedure = "/kindlast.platform.v1.SweepService/RunSweep"
+	// SweepServiceExpireSnoozesProcedure is the fully-qualified name of the SweepService's
+	// ExpireSnoozes RPC.
+	SweepServiceExpireSnoozesProcedure = "/kindlast.platform.v1.SweepService/ExpireSnoozes"
 )
 
 // SweepServiceClient is a client for the kindlast.platform.v1.SweepService service.
@@ -53,6 +56,29 @@ type SweepServiceClient interface {
 	// it worked. When sweeps outgrow that, this returns a handle instead, which
 	// is a proto change rather than an architectural one.
 	RunSweep(context.Context, *connect.Request[v1.RunSweepRequest]) (*connect.Response[v1.RunSweepResponse], error)
+	// Brings back every finding whose deferral has run out, across every
+	// organisation at once (ENT-256, part two).
+	//
+	// THE FIRST THING TEMPORAL RUNS ON A SCHEDULE, and the shape every schedule
+	// after it takes: a Temporal Schedule starts a workflow in `workers`, the
+	// workflow's activity calls this, and core-api does the work on the
+	// producer pool. `workers` holds no database credential by design (§21.4),
+	// so "an activity" means "an RPC on this surface", and this is that RPC.
+	//
+	// NO ORGANISATION HEADER, UNLIKE RunSweep, AND THAT IS THE POINT OF IT. A
+	// sweep is per organisation because "sweep everyone" is a blast radius
+	// somebody should have to write a loop for. Expiring snoozes is the
+	// opposite: it is a maintenance pass whose whole job is every organisation,
+	// it decides nothing (the person decided when they deferred), and running
+	// it per organisation would need a list of organisations the producer role
+	// deliberately cannot read. So the database function is SECURITY DEFINER
+	// and bounded by its own body instead (00034), and this RPC carries nothing
+	// but the call.
+	//
+	// Idempotent. A finding is brought back once; a second call in the same
+	// hour finds nothing to do and reports zero, which is what lets Temporal
+	// retry it freely.
+	ExpireSnoozes(context.Context, *connect.Request[v1.ExpireSnoozesRequest]) (*connect.Response[v1.ExpireSnoozesResponse], error)
 }
 
 // NewSweepServiceClient constructs a client for the kindlast.platform.v1.SweepService service. By
@@ -72,17 +98,29 @@ func NewSweepServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(sweepServiceMethods.ByName("RunSweep")),
 			connect.WithClientOptions(opts...),
 		),
+		expireSnoozes: connect.NewClient[v1.ExpireSnoozesRequest, v1.ExpireSnoozesResponse](
+			httpClient,
+			baseURL+SweepServiceExpireSnoozesProcedure,
+			connect.WithSchema(sweepServiceMethods.ByName("ExpireSnoozes")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // sweepServiceClient implements SweepServiceClient.
 type sweepServiceClient struct {
-	runSweep *connect.Client[v1.RunSweepRequest, v1.RunSweepResponse]
+	runSweep      *connect.Client[v1.RunSweepRequest, v1.RunSweepResponse]
+	expireSnoozes *connect.Client[v1.ExpireSnoozesRequest, v1.ExpireSnoozesResponse]
 }
 
 // RunSweep calls kindlast.platform.v1.SweepService.RunSweep.
 func (c *sweepServiceClient) RunSweep(ctx context.Context, req *connect.Request[v1.RunSweepRequest]) (*connect.Response[v1.RunSweepResponse], error) {
 	return c.runSweep.CallUnary(ctx, req)
+}
+
+// ExpireSnoozes calls kindlast.platform.v1.SweepService.ExpireSnoozes.
+func (c *sweepServiceClient) ExpireSnoozes(ctx context.Context, req *connect.Request[v1.ExpireSnoozesRequest]) (*connect.Response[v1.ExpireSnoozesResponse], error) {
+	return c.expireSnoozes.CallUnary(ctx, req)
 }
 
 // SweepServiceHandler is an implementation of the kindlast.platform.v1.SweepService service.
@@ -101,6 +139,29 @@ type SweepServiceHandler interface {
 	// it worked. When sweeps outgrow that, this returns a handle instead, which
 	// is a proto change rather than an architectural one.
 	RunSweep(context.Context, *connect.Request[v1.RunSweepRequest]) (*connect.Response[v1.RunSweepResponse], error)
+	// Brings back every finding whose deferral has run out, across every
+	// organisation at once (ENT-256, part two).
+	//
+	// THE FIRST THING TEMPORAL RUNS ON A SCHEDULE, and the shape every schedule
+	// after it takes: a Temporal Schedule starts a workflow in `workers`, the
+	// workflow's activity calls this, and core-api does the work on the
+	// producer pool. `workers` holds no database credential by design (§21.4),
+	// so "an activity" means "an RPC on this surface", and this is that RPC.
+	//
+	// NO ORGANISATION HEADER, UNLIKE RunSweep, AND THAT IS THE POINT OF IT. A
+	// sweep is per organisation because "sweep everyone" is a blast radius
+	// somebody should have to write a loop for. Expiring snoozes is the
+	// opposite: it is a maintenance pass whose whole job is every organisation,
+	// it decides nothing (the person decided when they deferred), and running
+	// it per organisation would need a list of organisations the producer role
+	// deliberately cannot read. So the database function is SECURITY DEFINER
+	// and bounded by its own body instead (00034), and this RPC carries nothing
+	// but the call.
+	//
+	// Idempotent. A finding is brought back once; a second call in the same
+	// hour finds nothing to do and reports zero, which is what lets Temporal
+	// retry it freely.
+	ExpireSnoozes(context.Context, *connect.Request[v1.ExpireSnoozesRequest]) (*connect.Response[v1.ExpireSnoozesResponse], error)
 }
 
 // NewSweepServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -116,10 +177,18 @@ func NewSweepServiceHandler(svc SweepServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(sweepServiceMethods.ByName("RunSweep")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sweepServiceExpireSnoozesHandler := connect.NewUnaryHandler(
+		SweepServiceExpireSnoozesProcedure,
+		svc.ExpireSnoozes,
+		connect.WithSchema(sweepServiceMethods.ByName("ExpireSnoozes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.SweepService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SweepServiceRunSweepProcedure:
 			sweepServiceRunSweepHandler.ServeHTTP(w, r)
+		case SweepServiceExpireSnoozesProcedure:
+			sweepServiceExpireSnoozesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -131,4 +200,8 @@ type UnimplementedSweepServiceHandler struct{}
 
 func (UnimplementedSweepServiceHandler) RunSweep(context.Context, *connect.Request[v1.RunSweepRequest]) (*connect.Response[v1.RunSweepResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.SweepService.RunSweep is not implemented"))
+}
+
+func (UnimplementedSweepServiceHandler) ExpireSnoozes(context.Context, *connect.Request[v1.ExpireSnoozesRequest]) (*connect.Response[v1.ExpireSnoozesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.SweepService.ExpireSnoozes is not implemented"))
 }

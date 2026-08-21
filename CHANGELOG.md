@@ -14,6 +14,44 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **Deferred findings come back on their date, on a schedule, which is the
+  first thing Temporal runs** (ENT-256, part two of five). Since the Supabase
+  schema went, every finding anybody deferred has stayed deferred: the job that
+  brought them back was a `pg_cron` entry dropped in migration 00001, and
+  nothing replaced it. A Temporal Schedule, `expire-snoozed-findings`, now runs
+  hourly at ten past and brings back every finding whose deferral has run out,
+  in every organisation at once. Hourly rather than the old daily 06:10 because
+  "defer for seven days" should mean seven days, not up to eight.
+
+  The shape is the one every schedule after it will take, and it is worth
+  knowing as an operator. `workers` (the integrations gateway's binary, now
+  also the Temporal worker on the `core` task queue) registers the schedule
+  with the engine at boot; the schedule starts a workflow; the workflow's one
+  activity calls a new RPC on core-api's internal surface,
+  `SweepService.ExpireSnoozes`, with the same service credential Intelligence
+  presents; core-api runs the pass on the producer pool. `workers` still holds
+  no database credential. A failed call is retried with backoff and shows up in
+  the Temporal UI with its reason; a refused credential is not retried and
+  fails the run at once, so it is visible rather than endlessly "trying".
+
+  Two things change in the database. `expire_snoozed_findings()` becomes the
+  eighth `SECURITY DEFINER` function, because it is a maintenance pass over
+  every organisation started by nothing that has a tenant, which no
+  single-organisation policy can express; migration 00034 and `db/README.md`
+  carry the argument. And it is executable by the producer role only: it used
+  to be PUBLIC, which was harmless while nothing bypassed policies and is not
+  now. The application role cannot bring a deferred decision back early.
+
+  **For a self-hoster upgrading:** nothing to run by hand. `workers` now needs
+  the authorization server and the seed's client file at boot, which the
+  compose file gives it; if you run your own IdP, `workers` takes the same
+  `KINDLAST_OIDC_*` and `KINDLAST_INTERNAL_CLIENT_FILE` settings core-api
+  does. `workers` now reports not ready until the engine answers, so core-api
+  (which waits on it) does not start before the thing its schedules run on.
+  The first tick after the upgrade brings back everything that was due while
+  nothing ran, which may be a lot of findings at once: that is the backlog
+  being cleared, not a fault.
+
 - **Temporal runs in the stack, on its own databases, inside the air gap**
   (ENT-256, build-order step 8, part one of five). Nothing in Kindlast has run
   on a schedule since the Supabase schema went: the three `pg_cron` jobs left

@@ -143,6 +143,98 @@ func (x *RunSweepResponse) GetRanAt() *timestamppb.Timestamp {
 	return nil
 }
 
+type ExpireSnoozesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExpireSnoozesRequest) Reset() {
+	*x = ExpireSnoozesRequest{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExpireSnoozesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExpireSnoozesRequest) ProtoMessage() {}
+
+func (x *ExpireSnoozesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExpireSnoozesRequest.ProtoReflect.Descriptor instead.
+func (*ExpireSnoozesRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{2}
+}
+
+type ExpireSnoozesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Findings returned to "needs a decision" by this call. Zero is the ordinary
+	// answer most hours of most days.
+	Reemerged int32 `protobuf:"varint,1,opt,name=reemerged,proto3" json:"reemerged,omitempty"`
+	// When the pass ran, from the database's clock inside the same transaction,
+	// so it is the instant the findings actually moved.
+	RanAt         *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=ran_at,json=ranAt,proto3" json:"ran_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExpireSnoozesResponse) Reset() {
+	*x = ExpireSnoozesResponse{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExpireSnoozesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExpireSnoozesResponse) ProtoMessage() {}
+
+func (x *ExpireSnoozesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExpireSnoozesResponse.ProtoReflect.Descriptor instead.
+func (*ExpireSnoozesResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ExpireSnoozesResponse) GetReemerged() int32 {
+	if x != nil {
+		return x.Reemerged
+	}
+	return 0
+}
+
+func (x *ExpireSnoozesResponse) GetRanAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RanAt
+	}
+	return nil
+}
+
 var File_kindlast_platform_v1_sweep_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_sweep_proto_rawDesc = "" +
@@ -154,9 +246,14 @@ const file_kindlast_platform_v1_sweep_proto_rawDesc = "" +
 	"\x10RunSweepResponse\x12\x18\n" +
 	"\asignals\x18\x01 \x01(\x05R\asignals\x12\x1a\n" +
 	"\bfindings\x18\x02 \x01(\x05R\bfindings\x121\n" +
-	"\x06ran_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x05ranAt2\x9c\x01\n" +
+	"\x06ran_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x05ranAt\"\x16\n" +
+	"\x14ExpireSnoozesRequest\"h\n" +
+	"\x15ExpireSnoozesResponse\x12\x1c\n" +
+	"\treemerged\x18\x01 \x01(\x05R\treemerged\x121\n" +
+	"\x06ran_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05ranAt2\xc2\x02\n" +
 	"\fSweepService\x12\x8b\x01\n" +
-	"\bRunSweep\x12%.kindlast.platform.v1.RunSweepRequest\x1a&.kindlast.platform.v1.RunSweepResponse\"0\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/internal/v1/sweepB\xde\x01\n" +
+	"\bRunSweep\x12%.kindlast.platform.v1.RunSweepRequest\x1a&.kindlast.platform.v1.RunSweepResponse\"0\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/internal/v1/sweep\x12\xa3\x01\n" +
+	"\rExpireSnoozes\x12*.kindlast.platform.v1.ExpireSnoozesRequest\x1a+.kindlast.platform.v1.ExpireSnoozesResponse\"9\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/internal/v1/snoozes:expireB\xde\x01\n" +
 	"\x18com.kindlast.platform.v1B\n" +
 	"SweepProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
@@ -172,21 +269,26 @@ func file_kindlast_platform_v1_sweep_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_sweep_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_sweep_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_kindlast_platform_v1_sweep_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_kindlast_platform_v1_sweep_proto_goTypes = []any{
 	(*RunSweepRequest)(nil),       // 0: kindlast.platform.v1.RunSweepRequest
 	(*RunSweepResponse)(nil),      // 1: kindlast.platform.v1.RunSweepResponse
-	(*timestamppb.Timestamp)(nil), // 2: google.protobuf.Timestamp
+	(*ExpireSnoozesRequest)(nil),  // 2: kindlast.platform.v1.ExpireSnoozesRequest
+	(*ExpireSnoozesResponse)(nil), // 3: kindlast.platform.v1.ExpireSnoozesResponse
+	(*timestamppb.Timestamp)(nil), // 4: google.protobuf.Timestamp
 }
 var file_kindlast_platform_v1_sweep_proto_depIdxs = []int32{
-	2, // 0: kindlast.platform.v1.RunSweepResponse.ran_at:type_name -> google.protobuf.Timestamp
-	0, // 1: kindlast.platform.v1.SweepService.RunSweep:input_type -> kindlast.platform.v1.RunSweepRequest
-	1, // 2: kindlast.platform.v1.SweepService.RunSweep:output_type -> kindlast.platform.v1.RunSweepResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	4, // 0: kindlast.platform.v1.RunSweepResponse.ran_at:type_name -> google.protobuf.Timestamp
+	4, // 1: kindlast.platform.v1.ExpireSnoozesResponse.ran_at:type_name -> google.protobuf.Timestamp
+	0, // 2: kindlast.platform.v1.SweepService.RunSweep:input_type -> kindlast.platform.v1.RunSweepRequest
+	2, // 3: kindlast.platform.v1.SweepService.ExpireSnoozes:input_type -> kindlast.platform.v1.ExpireSnoozesRequest
+	1, // 4: kindlast.platform.v1.SweepService.RunSweep:output_type -> kindlast.platform.v1.RunSweepResponse
+	3, // 5: kindlast.platform.v1.SweepService.ExpireSnoozes:output_type -> kindlast.platform.v1.ExpireSnoozesResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_sweep_proto_init() }
@@ -200,7 +302,7 @@ func file_kindlast_platform_v1_sweep_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_sweep_proto_rawDesc), len(file_kindlast_platform_v1_sweep_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

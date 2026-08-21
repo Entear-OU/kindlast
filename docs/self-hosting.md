@@ -491,14 +491,32 @@ secret now. If you still have a crontab entry pointing at
 `/api/notifications/dispatch`, remove it: the route does not exist and the job
 does nothing but fail.
 
-**What runs on a schedule today:** nothing yet, and that is stated rather than
-implied. This release brings the engine up and proves it runs inside the same
-air gap as everything else. The schedules arrive in the changes that follow, in
-this order: expiring snoozed findings first, then notification dispatch, then
-the Watcher and Analyst chain, each replacing a hand trigger or a polling loop
-that exists today. Until the last of those lands, a sweep is started by calling
-`SweepService.RunSweep` with a service credential, exactly as before; see the
-Postman collection for the request.
+**What runs on a schedule today**, stated rather than implied:
+
+| Schedule id | When | What it does |
+|---|---|---|
+| `expire-snoozed-findings` | Hourly at ten past (`KINDLAST_SNOOZE_EXPIRY_SCHEDULE`) | Brings back every finding whose deferral has run out, in every organisation, so "defer for seven days" means seven days rather than until somebody remembers. One pass, idempotent, run as the producer role. |
+
+The rest arrive in the changes that follow, in this order: notification
+dispatch, then the Watcher and Analyst chain, each replacing a polling loop or
+a hand trigger that exists today. Until the last of those lands, a sweep is
+still started by calling `SweepService.RunSweep` with a service credential,
+exactly as before; see the Postman collection for the request.
+
+The worker that runs these is the `workers` container, the same binary as the
+integrations gateway, polling the `core` task queue. It registers its
+schedules with the engine at boot, so there is nothing to create by hand, and
+it makes an existing schedule match its configuration if you change the cron.
+Its settings:
+
+| Variable | Default | Why |
+|---|---|---|
+| `KINDLAST_TEMPORAL_ADDR` | `temporal:7233` | Where the engine answers. **Empty means no worker**: the gateway half still runs and the container says at boot that nothing will run on a schedule. |
+| `KINDLAST_TEMPORAL_NAMESPACE` | `default` | The namespace the schedules live in, which is the one auto-setup creates with the retention above. |
+| `KINDLAST_TEMPORAL_TASK_QUEUE` | `core` | The queue this worker polls. |
+| `KINDLAST_SNOOZE_EXPIRY_SCHEDULE` | `10 * * * *` | Five-field cron, UTC, for bringing deferred findings back. |
+| `KINDLAST_CORE_API_URL` | `http://edge:80` | Where the activities call. Through the edge, the same door Intelligence uses. |
+| `KINDLAST_OIDC_*`, `KINDLAST_INTERNAL_CLIENT_FILE` | as core-api | The worker mints a token to call core-api, with the same service credential Intelligence presents. The bundled stack mounts the seed's files; an operator pointing at their own IdP sets these the way they did for core-api. |
 
 ### Seeing what is running
 
@@ -506,6 +524,18 @@ Postman collection for the request.
 docker compose -f deploy/compose.yaml --profile dev up -d temporal-ui
 # http://localhost:8233 shows every workflow, schedule and failure
 ```
+
+To run a schedule now rather than at its next tick, which is how to check the
+whole path after an upgrade:
+
+```bash
+docker compose -f deploy/compose.yaml exec temporal \
+  temporal schedule trigger --schedule-id expire-snoozed-findings --address temporal:7233
+```
+
+A deferred finding whose date has passed comes back to "needs a decision" in
+the feed within a few seconds, and the run's history in the UI says how many
+moved.
 
 Or without the UI:
 

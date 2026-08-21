@@ -27,7 +27,7 @@ from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n kindlast/platform/v1/sweep.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"2\n\x0fRunSweepRequest\x12\x1f\n\x0b\x64\x65tect_only\x18\x01 \x01(\x08R\ndetectOnly\"{\n\x10RunSweepResponse\x12\x18\n\x07signals\x18\x01 \x01(\x05R\x07signals\x12\x1a\n\x08\x66indings\x18\x02 \x01(\x05R\x08\x66indings\x12\x31\n\x06ran_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt2\x9c\x01\n\x0cSweepService\x12\x8b\x01\n\x08RunSweep\x12%.kindlast.platform.v1.RunSweepRequest\x1a&.kindlast.platform.v1.RunSweepResponse\"0\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x17\"\x12/internal/v1/sweep:\x01*B\xde\x01\n\x18\x63om.kindlast.platform.v1B\nSweepProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n kindlast/platform/v1/sweep.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"2\n\x0fRunSweepRequest\x12\x1f\n\x0b\x64\x65tect_only\x18\x01 \x01(\x08R\ndetectOnly\"{\n\x10RunSweepResponse\x12\x18\n\x07signals\x18\x01 \x01(\x05R\x07signals\x12\x1a\n\x08\x66indings\x18\x02 \x01(\x05R\x08\x66indings\x12\x31\n\x06ran_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt\"\x16\n\x14\x45xpireSnoozesRequest\"h\n\x15\x45xpireSnoozesResponse\x12\x1c\n\treemerged\x18\x01 \x01(\x05R\treemerged\x12\x31\n\x06ran_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt2\xc2\x02\n\x0cSweepService\x12\x8b\x01\n\x08RunSweep\x12%.kindlast.platform.v1.RunSweepRequest\x1a&.kindlast.platform.v1.RunSweepResponse\"0\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x17\"\x12/internal/v1/sweep:\x01*\x12\xa3\x01\n\rExpireSnoozes\x12*.kindlast.platform.v1.ExpireSnoozesRequest\x1a+.kindlast.platform.v1.ExpireSnoozesResponse\"9\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02 \"\x1b/internal/v1/snoozes:expire:\x01*B\xde\x01\n\x18\x63om.kindlast.platform.v1B\nSweepProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -37,10 +37,16 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'\n\030com.kindlast.platform.v1B\nSweepProtoP\001ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\242\002\003KPX\252\002\024Kindlast.Platform.V1\312\002\024Kindlast\\Platform\\V1\342\002 Kindlast\\Platform\\V1\\GPBMetadata\352\002\026Kindlast::Platform::V1'
   _globals['_SWEEPSERVICE'].methods_by_name['RunSweep']._loaded_options = None
   _globals['_SWEEPSERVICE'].methods_by_name['RunSweep']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002\027\"\022/internal/v1/sweep:\001*'
+  _globals['_SWEEPSERVICE'].methods_by_name['ExpireSnoozes']._loaded_options = None
+  _globals['_SWEEPSERVICE'].methods_by_name['ExpireSnoozes']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002 \"\033/internal/v1/snoozes:expire:\001*'
   _globals['_RUNSWEEPREQUEST']._serialized_start=154
   _globals['_RUNSWEEPREQUEST']._serialized_end=204
   _globals['_RUNSWEEPRESPONSE']._serialized_start=206
   _globals['_RUNSWEEPRESPONSE']._serialized_end=329
-  _globals['_SWEEPSERVICE']._serialized_start=332
-  _globals['_SWEEPSERVICE']._serialized_end=488
+  _globals['_EXPIRESNOOZESREQUEST']._serialized_start=331
+  _globals['_EXPIRESNOOZESREQUEST']._serialized_end=353
+  _globals['_EXPIRESNOOZESRESPONSE']._serialized_start=355
+  _globals['_EXPIRESNOOZESRESPONSE']._serialized_end=459
+  _globals['_SWEEPSERVICE']._serialized_start=462
+  _globals['_SWEEPSERVICE']._serialized_end=784
 # @@protoc_insertion_point(module_scope)

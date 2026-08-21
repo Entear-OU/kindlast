@@ -38,6 +38,7 @@ import (
 // used rather than exported from the store (§21.6).
 type Producer interface {
 	RunSweep(ctx context.Context, orgID string, detectOnly bool) (postgres.Sweep, error)
+	ExpireSnoozes(ctx context.Context) (postgres.Expiry, error)
 }
 
 // Service implements internalv1connect.SweepServiceHandler.
@@ -80,5 +81,33 @@ func (s *Service) RunSweep(
 		Signals:  result.Signals,
 		Findings: result.Findings,
 		RanAt:    timestamppb.New(result.RanAt),
+	}), nil
+}
+
+// ExpireSnoozes brings back every finding whose deferral has run out, across
+// every organisation at once.
+//
+// No organisation header is read and none is required, which is the one way
+// this differs from RunSweep and is deliberate: see the proto and 00034 for
+// why a maintenance pass over every tenant is not a sweep. The gate is the
+// same `internal:ingest` scope, issued to service clients only, and the
+// Temporal worker in `workers` is the caller this exists for (ENT-256).
+func (s *Service) ExpireSnoozes(
+	ctx context.Context,
+	_ *connect.Request[platformv1.ExpireSnoozesRequest],
+) (*connect.Response[platformv1.ExpireSnoozesResponse], error) {
+	if _, ok := interceptor.ClaimsFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			errors.New("handler reached with no verified identity"))
+	}
+
+	result, err := s.producer.ExpireSnoozes(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	return connect.NewResponse(&platformv1.ExpireSnoozesResponse{
+		Reemerged: result.Reemerged,
+		RanAt:     timestamppb.New(result.RanAt),
 	}), nil
 }

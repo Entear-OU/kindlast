@@ -109,3 +109,46 @@ func (a *AgentStore) RunSweep(ctx context.Context, orgID string, detectOnly bool
 
 // ErrBadOrganisation is returned when the organisation header is not a uuid.
 var ErrBadOrganisation = errors.New("postgres: the organisation is not a uuid")
+
+// Expiry is the result of one snooze-expiry pass.
+type Expiry struct {
+	Reemerged int32
+	RanAt     time.Time
+}
+
+// ExpireSnoozes brings back every finding whose deferral has run out, across
+// every organisation (ENT-256, part two).
+//
+// NO GUC, AND THAT IS THE WHOLE DIFFERENCE FROM RunSweep ABOVE. A sweep names
+// one organisation because "sweep everyone" is a blast radius somebody should
+// have to write a loop for. This is the opposite case: a maintenance pass
+// whose job is every organisation, that decides nothing (the person decided
+// when they deferred), and for which there is no GUC value meaning "all of
+// them". So `expire_snoozed_findings()` is SECURITY DEFINER as of 00034,
+// executable by this role and no other, and bounded by its own body: one
+// UPDATE on findings, snoozed rows whose date has passed, nothing else.
+//
+// Idempotent by construction. A finding comes back once; a second call finds
+// nothing and reports zero, which is what makes it safe for a scheduler to
+// retry without anybody reasoning about it.
+func (a *AgentStore) ExpireSnoozes(ctx context.Context) (Expiry, error) {
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return Expiry{}, fmt.Errorf("postgres: beginning the snooze expiry: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var result Expiry
+	if err := tx.QueryRow(ctx, `select public.expire_snoozed_findings()`).Scan(&result.Reemerged); err != nil {
+		return Expiry{}, fmt.Errorf("postgres: expiring snoozes: %w", err)
+	}
+	// Inside the transaction, so the timestamp reported is the one the
+	// findings actually moved at, not the moment the response was built.
+	if err := tx.QueryRow(ctx, `select now()`).Scan(&result.RanAt); err != nil {
+		return Expiry{}, fmt.Errorf("postgres: reading the expiry time: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Expiry{}, fmt.Errorf("postgres: committing the snooze expiry: %w", err)
+	}
+	return result, nil
+}

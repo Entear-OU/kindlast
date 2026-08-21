@@ -57,14 +57,15 @@
 #                      deployment holding a compliance record run with no
 #                      outbound internet at all (§18.1). Also in the `model`
 #                      profile.
-#   workers            The integrations policy gateway (ENT-231). The ONLY
-#                      process here that opens a connection to an address a
-#                      customer supplied, behind an egress allow-list, a
-#                      per-connection tool allow-list, redaction and a
-#                      per-organisation rate limit. Holds no database
-#                      credential and no third-party credential at rest: it is
-#                      handed one fetch at a time by core-api and returns what
-#                      it found.
+#   workers            Two halves in one binary. The integrations policy
+#                      gateway (ENT-231): the ONLY process here that opens a
+#                      connection to an address a customer supplied, behind an
+#                      egress allow-list, a per-connection tool allow-list,
+#                      redaction and a per-organisation rate limit. And the
+#                      Temporal worker (ENT-256): polls the `core` task queue
+#                      and runs the schedules, each an RPC on core-api's
+#                      internal surface. Holds no database credential and no
+#                      third-party credential at rest in either half.
 #   web               The console and the marketing site (ENT-241). A
 #                      production Next build, served from the standalone
 #                      output, publishing no port of its own: the browser
@@ -1015,8 +1016,47 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      # The worker half (ENT-256). It mints a token at boot, so it needs the
+      # authorization server and the client file the seed writes; and it
+      # registers its schedules with the engine, so the engine has to answer.
+      # No dependency on core-api, deliberately: core-api depends on this
+      # service being healthy, and the activities call core-api only when a
+      # schedule fires, which is long after boot.
+      seed:
+        condition: service_completed_successfully
+      auth:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
     environment:
       KINDLAST_GATEWAY_LISTEN: ":8100"
+
+      # THE TEMPORAL WORKER (ENT-256). Set, the binary polls the `core` task
+      # queue and registers the schedules; unset, it is the gateway alone and
+      # nothing in the deployment runs on a schedule, which it says at boot.
+      KINDLAST_TEMPORAL_ADDR: ${KINDLAST_TEMPORAL_ADDR:-temporal:7233}
+      KINDLAST_TEMPORAL_NAMESPACE: default
+      KINDLAST_TEMPORAL_TASK_QUEUE: core
+      # When deferred findings come back. Hourly at ten past: pg_cron ran the
+      # same pass daily at 06:10 and a finding deferred "for seven days" came
+      # back up to a day late. Five-field cron, UTC.
+      KINDLAST_SNOOZE_EXPIRY_SCHEDULE: ${KINDLAST_SNOOZE_EXPIRY_SCHEDULE:-10 * * * *}
+
+      # Where the activities call: through the edge, the same door Intelligence
+      # uses, so there is no development-only shortcut. The edge routes
+      # /kindlast.platform.v1.* to core-api.
+      KINDLAST_CORE_API_URL: http://edge:80
+
+      # The token the activities present. The same issuer split, host header,
+      # audience file and client file core-api and Intelligence read, for the
+      # same reasons they do: see core-api's environment above. One service
+      # principal for every internal caller, rather than one to grant, rotate
+      # and forget per binary.
+      KINDLAST_OIDC_ISSUER: http://localhost:${KINDLAST_AUTH_PORT:-8300}
+      KINDLAST_OIDC_DISCOVERY_URL: http://auth:8080/.well-known/openid-configuration
+      KINDLAST_OIDC_HOST_HEADER: "localhost:${KINDLAST_AUTH_PORT:-8300}"
+      KINDLAST_OIDC_AUDIENCE_FILE: /machinekey/core-api-audience.txt
+      KINDLAST_INTERNAL_CLIENT_FILE: /machinekey/core-api-client.json
 
       # The shared secret core-api presents.
       #
@@ -1062,15 +1102,21 @@ services:
       # whatever this says.
       KINDLAST_GATEWAY_ALLOW_PRIVATE_DESTINATIONS: ${KINDLAST_GATEWAY_ALLOW_PRIVATE_DESTINATIONS:-false}
 
-      # The bounds that stand in for Temporal until build-order step 8: one
-      # outbound call cannot exceed this, and one organisation cannot make more
-      # than `RATE_BURST` calls per `RATE_WINDOW`.
+      # The gateway's own bounds on a customer-supplied endpoint: one outbound
+      # call cannot exceed this, and one organisation cannot make more than
+      # `RATE_BURST` calls per `RATE_WINDOW`. Temporal is in the stack now
+      # (ENT-256) but the gateway's fetches are not yet activities; these stay
+      # until the Watcher chain in part four makes them so.
       KINDLAST_GATEWAY_OUTBOUND_TIMEOUT: ${KINDLAST_GATEWAY_OUTBOUND_TIMEOUT:-30s}
       KINDLAST_GATEWAY_RATE_BURST: ${KINDLAST_GATEWAY_RATE_BURST:-30}
       KINDLAST_GATEWAY_RATE_WINDOW: ${KINDLAST_GATEWAY_RATE_WINDOW:-1m}
+    volumes:
+      - zitadel-machinekey:/machinekey:ro
     healthcheck:
       # The runtime image is distroless, so there is no curl to probe with and
-      # the binary probes itself. Same shape as core-api's.
+      # the binary probes itself. Same shape as core-api's. With the worker
+      # configured, ready means the engine answers, so core-api (which waits on
+      # this) does not start before the thing its schedules run on.
       test: ["CMD", "/workers", "healthcheck"]
       interval: 3s
       timeout: 5s

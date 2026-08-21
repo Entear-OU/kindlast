@@ -680,6 +680,26 @@
           }
         },
         {
+          "name": "Expire snoozes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.SweepService/ExpireSnoozes",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.SweepService", "ExpireSnoozes"]
+            },
+            "description": "Brings back every finding whose deferral has run out, across every organisation at once. **Served as of ENT-256 (part two).** Required scope: `internal:ingest`, the same machine scope as Run sweep, so use the client-credentials token.\n\n**No `Kindlast-Org-Id` header, and that is the point.** A sweep names one organisation because sweeping everyone is a blast radius somebody should have to write a loop for. Expiring snoozes is the opposite: a maintenance pass whose whole job is every organisation, that decides nothing (the person decided when they deferred), and the database function behind it is `SECURITY DEFINER` and executable by the producer role alone (migration 00034). Sending the header changes nothing.\n\n**You will not normally call this.** It is the activity behind the `expire-snoozed-findings` Temporal Schedule, which `workers` registers at boot and runs hourly. It is here so an operator can run a pass by hand and see the count, and because the collection documents every RPC on the internal surface. Idempotent: a second call in the same hour reports `reemerged: 0`.\n\nThe response carries `reemerged` (how many findings returned to needing a decision) and `ranAt` (the database clock inside the transaction, so it is the instant they actually moved)."
+          }
+        },
+        {
           "name": "Dashboard",
           "request": {
             "method": "POST",
