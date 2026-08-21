@@ -41,8 +41,8 @@ docker compose -f deploy/compose.yaml up -d
 
 That gives you Postgres with the tenancy role split applied, migrations run by
 a job container that must exit zero, Zitadel serving OIDC discovery, Redis, the
-resource server, the integrations gateway, a Caddy edge, and **Kindlast itself
-at http://localhost:8000**. Tear it down with `down -v`.
+resource server, the integrations gateway, Temporal, a Caddy edge, and
+**Kindlast itself at http://localhost:8000**. Tear it down with `down -v`.
 
 The console is a production Next build in its own container (ENT-241), so a
 host running this needs Docker and nothing else: no Bun, no Node, no checkout
@@ -102,6 +102,33 @@ Both are for surfaces currently being rebuilt: the notification and scheduled
 paths went with the Supabase removal, so nothing reads these yet. They are
 listed because the values should be settled before the surfaces return, not
 improvised on the day.
+
+### Temporal
+
+The workflow engine runs on `postgres-platform` beside Zitadel, never on the
+domain database, and these are the only settings it takes. All have local
+development defaults, and the first is the one to change before anything
+leaves a laptop.
+
+| Variable | Default | Why |
+|---|---|---|
+| `KINDLAST_TEMPORAL_DB_PASSWORD` | `temporal-db-dev-password` | The password for Temporal's own role on `postgres-platform`. The `temporal-init` job creates the role and its two databases (`temporal`, `temporal_visibility`) with it, and the engine connects with it. |
+| `KINDLAST_TEMPORAL_RETENTION` | `168h` | How long a finished workflow's history is kept. **Applied when the default namespace is first created and not changed by editing this afterwards.** A workflow history carries finding ids and enough context to re-identify an organisation, so this is a retention decision about personal data rather than a log setting: keep it well short of how long you keep the audit log, because the legal record lives in the domain database and the execution telemetry must not become a second one. To change it on an existing deployment: `docker compose -f deploy/compose.yaml exec temporal temporal operator namespace update --retention 72h default`. |
+| `KINDLAST_TEMPORAL_UI_PORT` | `8233` | Host port for the Temporal UI, which is in the `dev` profile and published only when that profile is on (see below). |
+
+The UI is how you read why a workflow is stuck, and it is deliberately not
+part of a default `up`, because every history it shows carries finding ids:
+
+```bash
+docker compose -f deploy/compose.yaml --profile dev up -d
+# then http://localhost:8233
+```
+
+Nobody writes migrations for Temporal's databases. The engine runs its own
+schema tool on boot, against databases it owns, and an upgrade of the image is
+an upgrade of the schema. `temporal-init` runs on every boot and creates only
+what is missing, so a deployment that predates Temporal gets its role and
+databases the first time it starts the new stack, with nothing to run by hand.
 
 ### The model
 
@@ -454,56 +481,50 @@ it: this is not yet a system you would run a compliance programme on.
 
 ## Scheduling the agents
 
-This is the part Vercel does for you and nothing else does.
+Scheduled work runs inside the stack, on Temporal. There is no cron to set up
+on the host and no endpoint to call on a timer; the schedules are part of the
+deployment, and they run wherever the stack runs, including air-gapped.
 
-Every scheduled endpoint is a `GET` that authenticates with a bearer token:
+What this page used to say here described three Vercel Cron routes and a
+`CRON_SECRET`. Those went with the Supabase console and nothing reads that
+secret now. If you still have a crontab entry pointing at
+`/api/notifications/dispatch`, remove it: the route does not exist and the job
+does nothing but fail.
 
-```
-Authorization: Bearer ${CRON_SECRET}
-```
+**What runs on a schedule today:** nothing yet, and that is stated rather than
+implied. This release brings the engine up and proves it runs inside the same
+air gap as everything else. The schedules arrive in the changes that follow, in
+this order: expiring snoozed findings first, then notification dispatch, then
+the Watcher and Analyst chain, each replacing a hand trigger or a polling loop
+that exists today. Until the last of those lands, a sweep is started by calling
+`SweepService.RunSweep` with a service credential, exactly as before; see the
+Postman collection for the request.
 
-They fail closed. If `CRON_SECRET` is unset the route returns 401 rather than
-running unauthenticated, so a missing secret shows up as "nothing happens"
-rather than as an open endpoint.
-
-The schedules, matching `vercel.json`:
-
-| Endpoint | Schedule | Purpose |
-|---|---|---|
-| `/api/notifications/dispatch` | `*/5 * * * *` | Sends queued finding emails |
-| `/api/notifications/briefing` | `0 * * * *` | Hourly tick, fires per user at their local Monday 09:00 |
-| `/api/notifications/deadline-alerts` | `0 7 * * *` | Daily deadline warnings |
-
-The briefing endpoint is hourly by design. It resolves each user's local Monday
-morning itself, so do not "optimise" it to weekly.
-
-### With crontab
-
-```cron
-CRON_SECRET=your-secret-here
-APP=https://kindlast.example.com
-
-*/5 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" $APP/api/notifications/dispatch >/dev/null
-0   * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" $APP/api/notifications/briefing >/dev/null
-0   7 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" $APP/api/notifications/deadline-alerts >/dev/null
-```
-
-`curl -f` makes a non-2xx response a non-zero exit, so cron's own mail will tell
-you when something breaks. Do not silence stderr as well as stdout.
-
-Systemd timers, Kubernetes CronJobs, GitHub Actions on a schedule, or any hosted
-cron service all work equally well. The only requirement is an authenticated
-HTTP GET on time.
-
-### Verifying it works
+### Seeing what is running
 
 ```bash
-curl -i -H "Authorization: Bearer $CRON_SECRET" \
-  https://kindlast.example.com/api/notifications/dispatch
+docker compose -f deploy/compose.yaml --profile dev up -d temporal-ui
+# http://localhost:8233 shows every workflow, schedule and failure
 ```
 
-`200` means the loop is alive. `401` means `CRON_SECRET` does not match between
-your scheduler and the app. A `404` means the route is not deployed.
+Or without the UI:
+
+```bash
+docker compose -f deploy/compose.yaml exec temporal \
+  temporal workflow list --address temporal:7233
+docker compose -f deploy/compose.yaml exec temporal \
+  temporal schedule list --address temporal:7233
+```
+
+A workflow that has failed says why in its history, with every attempt and
+every retry, which is the property that made Temporal worth a container: "why
+did this finding get produced" and "why did it not" are both answerable from
+the record rather than reconstructed from logs.
+
+### Retention
+
+See `KINDLAST_TEMPORAL_RETENTION` above. It is the one Temporal setting with a
+data-protection consequence, and the default is chosen to be short.
 
 ## What is not provided
 

@@ -14,6 +14,44 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **Temporal runs in the stack, on its own databases, inside the air gap**
+  (ENT-256, build-order step 8, part one of five). Nothing in Kindlast has run
+  on a schedule since the Supabase schema went: the three `pg_cron` jobs left
+  with migration 00001, the Vercel cron routes left with the old console, and
+  between then and now the only thing that has ever produced a finding is
+  `SweepService.RunSweep`, called by hand. Temporal is the design's answer
+  (§16): every schedule becomes a Temporal Schedule and every hop in the agent
+  chain becomes a workflow step, so the domain database does no scheduling and
+  carries no scheduler tables.
+
+  This change brings the engine up and nothing else. `temporal` joins a
+  default `up`, on `postgres-platform` beside Zitadel and never on the domain
+  Postgres, with its own role and its own two databases, provisioned by a
+  `temporal-init` job that runs every boot and creates only what is missing.
+  The schedules themselves arrive in the next changes, in this order: expiring
+  snoozed findings, notification dispatch, then the Watcher and Analyst chain.
+  Until the last of those lands a sweep is still started by hand, and
+  `docs/self-hosting.md` now says so rather than describing cron routes that
+  no longer exist.
+
+  **For a self-hoster upgrading:** nothing to run by hand. The init job
+  creates Temporal's role and databases on your existing `postgres-platform`
+  volume the first time the new stack starts, which is the reason it is a job
+  rather than an initdb script (initdb runs once per volume, and yours already
+  has). Two settings are worth reading before you deploy:
+  `KINDLAST_TEMPORAL_DB_PASSWORD`, which has a development default, and
+  `KINDLAST_TEMPORAL_RETENTION`, which decides how long workflow histories are
+  kept and is applied when the namespace is first created. A history carries
+  finding ids, so this is a retention decision about personal data; the
+  default is seven days and the doc says how to change it on a deployment that
+  already exists.
+
+  The Temporal UI is in a `dev` profile and absent from a default `up`, because
+  every history it shows carries finding ids and a production stack should
+  not publish a browsable view of them on a port nobody asked for. A worktree
+  stack gets it an eighth port, `KINDLAST_TEMPORAL_UI_PORT`, from
+  `scripts/stack-env.sh` like the other seven.
+
 - **Changes to who can reach a compliance record are now in the audit log.**
   Renaming the organisation, inviting somebody, changing a member's role and
   removing a member each write a row, with what the value was before and what

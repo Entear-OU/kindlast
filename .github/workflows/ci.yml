@@ -480,6 +480,26 @@ jobs:
           echo "seed job did not finish in time"
           exit 1
 
+      # Temporal came up on postgres-platform (ENT-256). `up -d` returns once
+      # the container starts, and auto-setup then has to reach the database,
+      # run the schema tool against two databases and register a namespace
+      # before the server answers, so this waits on the healthcheck rather
+      # than on the process. The logs on failure are temporal-init's as well
+      # as temporal's, because "role does not exist" is the init job's fault
+      # and shows up in the server's log.
+      - name: Wait for Temporal to be healthy
+        run: |
+          for i in $(seq 1 60); do
+            status="$(docker inspect kindlast-temporal --format '{{.State.Health.Status}}' 2>/dev/null || echo missing)"
+            if [ "$status" = "healthy" ]; then
+              echo "temporal healthy"; exit 0
+            fi
+            sleep 2
+          done
+          echo "temporal never became healthy (last status: ${status})" >&2
+          docker compose -f deploy/compose.yaml logs temporal-init temporal || true
+          exit 1
+
       # Guard: a healthy stack means migrations applied by the job container
       # and Zitadel serving OIDC discovery (the ENT-192 acceptance criteria).
       - name: Verify the stack is reachable
@@ -549,6 +569,28 @@ jobs:
           fi
           docker run --rm --network kindlast_default curlimages/curl:8.11.1 \
             --fail --silent --show-error http://core-api:8080/healthz
+
+      # Same statement as core-api's, for the same reason: the workflow engine
+      # is reachable on the compose network and nowhere else. Its UI is the
+      # operator's window and lives in the `dev` profile, which this job does
+      # not turn on, so the UI container must not exist here at all.
+      # Not the `{{json .NetworkSettings.Ports}}` comparison the core-api step
+      # makes: that image EXPOSEs nothing, so its map is empty, while this one
+      # EXPOSEs eight ports and lists each with a null binding. The question is
+      # whether any has a host binding, which the range below answers and the
+      # json dump does not.
+      - name: Temporal publishes no port, and the UI is not running
+        run: |
+          published="$(docker inspect kindlast-temporal \
+            --format '{{range $p, $b := .NetworkSettings.Ports}}{{if $b}}{{$p}} {{end}}{{end}}')"
+          if [ -n "$published" ]; then
+            echo "temporal publishes ports, and must not: $published"
+            exit 1
+          fi
+          if docker inspect kindlast-temporal-ui >/dev/null 2>&1; then
+            echo "temporal-ui is running without the dev profile, and must not be"
+            exit 1
+          fi
 
       - name: Stack logs on failure
         if: failure()

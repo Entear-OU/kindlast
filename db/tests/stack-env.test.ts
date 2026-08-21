@@ -46,6 +46,7 @@ const PORT_NAMES = [
   'KINDLAST_EDGE_PORT',
   'KINDLAST_MODEL_PORT',
   'KINDLAST_INTELLIGENCE_PORT',
+  'KINDLAST_TEMPORAL_UI_PORT',
 ]
 
 describe('scripts/stack-env.sh', () => {
@@ -60,6 +61,7 @@ describe('scripts/stack-env.sh', () => {
     expect(env.KINDLAST_EDGE_PORT).toBe('8000')
     expect(env.KINDLAST_MODEL_PORT).toBe('8081')
     expect(env.KINDLAST_INTELLIGENCE_PORT).toBe('8090')
+    expect(env.KINDLAST_TEMPORAL_UI_PORT).toBe('8233')
   })
 
   it('leaves the default checkout pointing at ./models, not an absolute path', () => {
