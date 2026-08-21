@@ -32,6 +32,12 @@ type recordingProducer struct {
 	calls      int
 	lastOrg    string
 	detectOnly bool
+	expiries   int
+}
+
+func (r *recordingProducer) ExpireSnoozes(context.Context) (postgres.Expiry, error) {
+	r.expiries++
+	return postgres.Expiry{Reemerged: 4, RanAt: time.Unix(0, 0).UTC()}, nil
 }
 
 func (r *recordingProducer) RunSweep(_ context.Context, orgID string, detectOnly bool) (postgres.Sweep, error) {
@@ -160,5 +166,48 @@ func TestDetectOnlyReachesTheProducer(t *testing.T) {
 
 	if !producer.detectOnly {
 		t.Fatal("detect_only did not reach the producer")
+	}
+}
+
+// Expiring snoozes needs the same machine scope as a sweep, and nothing a
+// person holds reaches it (ENT-256, part two).
+func TestExpiringSnoozesNeedsTheInternalScope(t *testing.T) {
+	a := newAuthServer(t)
+	client, producer := buildSweepChain(t, a)
+
+	human := sweepHeaders(t, a,
+		"openid profile email findings:read findings:act dashboard:read org:read org:manage",
+		"")
+
+	_, err := client.ExpireSnoozes(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.ExpireSnoozesRequest{}), human))
+
+	if got := codeOf(t, err); got != connect.CodePermissionDenied {
+		t.Fatalf("got %v, want permission_denied", got)
+	}
+	if producer.expiries != 0 {
+		t.Fatalf("the producer expired %d times for a refused request, want 0", producer.expiries)
+	}
+}
+
+// And it takes no organisation header, which is the one way it differs from
+// a sweep: a maintenance pass over every organisation has no tenant to name,
+// and requiring one would force the caller to invent it.
+func TestAServiceTokenCanExpireSnoozesWithNoOrganisation(t *testing.T) {
+	a := newAuthServer(t)
+	client, producer := buildSweepChain(t, a)
+
+	res, err := client.ExpireSnoozes(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.ExpireSnoozesRequest{}),
+		sweepHeaders(t, a, "internal:ingest", "")))
+	if err != nil {
+		t.Fatalf("expiring snoozes: %v", err)
+	}
+
+	if producer.expiries != 1 {
+		t.Fatalf("the producer expired %d times, want 1", producer.expiries)
+	}
+	if res.Msg.GetReemerged() != 4 {
+		t.Errorf("count did not survive the round trip: %+v", res.Msg)
 	}
 }

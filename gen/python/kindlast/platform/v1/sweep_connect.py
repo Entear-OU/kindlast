@@ -20,6 +20,9 @@ class SweepService(Protocol):
     async def run_sweep(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunSweepRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunSweepResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def expire_snoozes(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class SweepServiceASGIApplication(ConnectASGIApplication[SweepService]):
     def __init__(self, service: SweepService | AsyncGenerator[SweepService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -35,6 +38,16 @@ class SweepServiceASGIApplication(ConnectASGIApplication[SweepService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.run_sweep,
+                ),
+                "/kindlast.platform.v1.SweepService/ExpireSnoozes": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ExpireSnoozes",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.expire_snoozes,
                 ),
             },
             interceptors=interceptors,
@@ -69,9 +82,31 @@ class SweepServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def expire_snoozes(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ExpireSnoozes",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class SweepServiceSync(Protocol):
     def run_sweep(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunSweepRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunSweepResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def expire_snoozes(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -88,6 +123,16 @@ class SweepServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.run_sweep,
+                ),
+                "/kindlast.platform.v1.SweepService/ExpireSnoozes": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ExpireSnoozes",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.expire_snoozes,
                 ),
             },
             interceptors=interceptors,
@@ -116,6 +161,26 @@ class SweepServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.SweepService",
                 input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunSweepRequest,
                 output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunSweepResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def expire_snoozes(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ExpireSnoozes",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

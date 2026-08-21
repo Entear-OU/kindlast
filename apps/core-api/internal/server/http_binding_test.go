@@ -443,6 +443,13 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.SweepService.RunSweep": {
 			Method: "POST", Path: "/internal/v1/sweep",
 		},
+		// ENT-256. The colon verb, as IngestCorpus below: expiring is a custom
+		// action over the snoozes, not a subresource. Still no {org_id}, and
+		// here for the opposite reason from RunSweep: this one is every
+		// organisation at once, by design.
+		"kindlast.platform.v1.SweepService.ExpireSnoozes": {
+			Method: "POST", Path: "/internal/v1/snoozes:expire",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

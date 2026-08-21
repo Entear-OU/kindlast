@@ -20,6 +20,16 @@
 // gateway "calls core-api rather than the database, so it needs no role of its
 // own", and it is why this binary can be restarted, scaled or compromised
 // without any of that touching a tenant's data at rest.
+//
+// # THE SECOND HALF: THE TEMPORAL WORKER (ENT-256)
+//
+// The same binary also polls the `core` task queue and runs the schedules
+// that used to be pg_cron jobs and Vercel cron routes (§16.4 puts the Go
+// worker here). It inherits the rule above exactly: an activity is an RPC on
+// core-api's internal surface, made with the same service credential
+// Intelligence presents, and core-api does the work. Optional, like the
+// gateway's allow-list: no KINDLAST_TEMPORAL_ADDR, no worker, and the gateway
+// half runs as before.
 package main
 
 import (
@@ -37,8 +47,11 @@ import (
 	"github.com/Entear-OU/kindlast/apps/workers/internal/config"
 	"github.com/Entear-OU/kindlast/apps/workers/internal/egress"
 	"github.com/Entear-OU/kindlast/apps/workers/internal/ratelimit"
+	"github.com/Entear-OU/kindlast/apps/workers/internal/schedule"
 	"github.com/Entear-OU/kindlast/apps/workers/internal/server"
 	"github.com/Entear-OU/kindlast/apps/workers/internal/service/gateway"
+	"github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1/platformv1connect"
+	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
 )
 
 func main() {
@@ -122,6 +135,26 @@ func run(logger *slog.Logger) error {
 			"and wrong for one where a customer supplies the address")
 	}
 
+	// The worker half, if this deployment runs one. Started before the HTTP
+	// server so that a readiness probe can say something true: with a worker,
+	// "ready" means the engine answers; without one, it means listening.
+	ready := func(context.Context) error { return nil }
+	if cfg.Temporal.Addr != "" {
+		w, err := startWorker(ctx, logger, cfg)
+		if err != nil {
+			return err
+		}
+		defer w.Stop()
+		ready = schedule.Ready(w.Client())
+	} else {
+		// Loud rather than fatal, for the same reason as the allow-list
+		// above: a gateway-only deployment is a supported shape, and the
+		// symptom of forgetting the worker is "nothing ever runs on a
+		// schedule", which should be a log line rather than a mystery.
+		logger.Warn("no temporal worker: KINDLAST_TEMPORAL_ADDR is not set, " +
+			"so nothing in this deployment runs on a schedule (snoozed findings will not come back)")
+	}
+
 	handler, err := server.New(server.Dependencies{
 		Gateway: gateway.New(
 			allow,
@@ -130,11 +163,12 @@ func run(logger *slog.Logger) error {
 			logger,
 		),
 		SharedSecret: cfg.SharedSecret,
-		// Ready when it is listening. There is nothing else to probe: the
-		// gateway holds no connection to anything, by design, so a readiness
-		// check that reached a customer's endpoint would be this deployment
-		// dialling out on a timer for no reason.
-		Ready: func(context.Context) error { return nil },
+		// With no worker, ready when listening. There is nothing else to
+		// probe: the gateway holds no connection to anything, by design, so a
+		// readiness check that reached a customer's endpoint would be this
+		// deployment dialling out on a timer for no reason. With a worker, it
+		// is the engine's health.
+		Ready: ready,
 	})
 	if err != nil {
 		return err
@@ -178,4 +212,96 @@ func newHTTPServer(addr string, handler http.Handler) *http.Server {
 		ReadHeaderTimeout: 10 * time.Second,
 		Protocols:         &protocols,
 	}
+}
+
+// startWorker connects to the engine and starts polling, with an activity set
+// that can call core-api as the service principal.
+//
+// The token source is the same shape core-api uses to call Intelligence and
+// for the same reason: the audience and the roles scope are both required, and
+// a token with the audience alone authenticates perfectly and carries no
+// scope, which core-api reports as permission denied. The plural in
+// `projects:roles` is not a typo.
+func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*schedule.Worker, error) {
+	t := cfg.Temporal
+
+	transport := &oidc.Transport{Host: t.OIDCHostHeader}
+	discoveryURL := t.OIDCDiscoveryURL
+	if discoveryURL == "" {
+		discoveryURL = strings.TrimSuffix(t.OIDCIssuer, "/") + oidc.DiscoveryPath
+	}
+	provider, err := discoverWithRetry(ctx, logger, transport, discoveryURL, t.OIDCIssuer)
+	if err != nil {
+		return nil, err
+	}
+	if provider.TokenEndpoint == "" {
+		return nil, errors.New("the authorization server advertises no token_endpoint, " +
+			"so the worker cannot mint a token to call core-api")
+	}
+
+	tokens, err := oidc.NewClientCredentials(oidc.ClientCredentialsConfig{
+		Endpoint: provider.TokenEndpoint,
+		ClientID: t.ClientID,
+		Secret:   t.ClientSecret,
+		Audience: t.OIDCAudience,
+		Scopes: []string{
+			"openid",
+			"urn:zitadel:iam:org:projects:roles",
+			fmt.Sprintf("urn:zitadel:iam:org:project:id:%s:aud", t.OIDCAudience),
+		},
+		Transport: transport,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("building the worker's token source: %w", err)
+	}
+
+	coreAPI := platformv1connect.NewSweepServiceClient(
+		&http.Client{
+			Timeout:   2 * time.Minute,
+			Transport: &oidc.Bearer{Source: tokens},
+		}, t.CoreAPIURL)
+
+	opts := schedule.Options{
+		Addr:                 t.Addr,
+		Namespace:            t.Namespace,
+		TaskQueue:            t.TaskQueue,
+		SnoozeExpirySchedule: t.SnoozeExpirySchedule,
+		Activities:           &schedule.Activities{CoreAPI: coreAPI},
+		Logger:               logger,
+	}
+	c, err := schedule.Connect(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	w, err := schedule.Start(ctx, c, opts)
+	if err != nil {
+		c.Close()
+		return nil, err
+	}
+	return w, nil
+}
+
+// discoverWithRetry is core-api's, for the same race: `auth` and this binary
+// start together and the first discovery often lands before Zitadel answers.
+func discoverWithRetry(
+	ctx context.Context, logger *slog.Logger,
+	transport *oidc.Transport, discoveryURL, expectedIssuer string,
+) (*oidc.Provider, error) {
+	const attempts = 30
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		provider, err := oidc.DiscoverAt(ctx, transport, discoveryURL, expectedIssuer)
+		if err == nil {
+			return provider, nil
+		}
+		lastErr = err
+		logger.Info("waiting for the authorization server",
+			"discovery_url", discoveryURL, "attempt", attempt, "error", err)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return nil, lastErr
 }

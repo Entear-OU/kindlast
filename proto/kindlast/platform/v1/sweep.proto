@@ -58,6 +58,36 @@ service SweepService {
       body: "*"
     };
   }
+
+  // Brings back every finding whose deferral has run out, across every
+  // organisation at once (ENT-256, part two).
+  //
+  // THE FIRST THING TEMPORAL RUNS ON A SCHEDULE, and the shape every schedule
+  // after it takes: a Temporal Schedule starts a workflow in `workers`, the
+  // workflow's activity calls this, and core-api does the work on the
+  // producer pool. `workers` holds no database credential by design (§21.4),
+  // so "an activity" means "an RPC on this surface", and this is that RPC.
+  //
+  // NO ORGANISATION HEADER, UNLIKE RunSweep, AND THAT IS THE POINT OF IT. A
+  // sweep is per organisation because "sweep everyone" is a blast radius
+  // somebody should have to write a loop for. Expiring snoozes is the
+  // opposite: it is a maintenance pass whose whole job is every organisation,
+  // it decides nothing (the person decided when they deferred), and running
+  // it per organisation would need a list of organisations the producer role
+  // deliberately cannot read. So the database function is SECURITY DEFINER
+  // and bounded by its own body instead (00034), and this RPC carries nothing
+  // but the call.
+  //
+  // Idempotent. A finding is brought back once; a second call in the same
+  // hour finds nothing to do and reports zero, which is what lets Temporal
+  // retry it freely.
+  rpc ExpireSnoozes(ExpireSnoozesRequest) returns (ExpireSnoozesResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/snoozes:expire"
+      body: "*"
+    };
+  }
 }
 
 message RunSweepRequest {
@@ -83,4 +113,15 @@ message RunSweepResponse {
   int32 findings = 2;
   // When this sweep ran, which is what the console's "last checked" reads.
   google.protobuf.Timestamp ran_at = 3;
+}
+
+message ExpireSnoozesRequest {}
+
+message ExpireSnoozesResponse {
+  // Findings returned to "needs a decision" by this call. Zero is the ordinary
+  // answer most hours of most days.
+  int32 reemerged = 1;
+  // When the pass ran, from the database's clock inside the same transaction,
+  // so it is the instant the findings actually moved.
+  google.protobuf.Timestamp ran_at = 2;
 }

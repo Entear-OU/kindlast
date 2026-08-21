@@ -35,7 +35,7 @@ future one nobody has written yet:
 - The append-only trigger on `audit_log`
 - Indexes
 - The `SECURITY DEFINER` functions that exist because RLS structurally cannot
-  express the check. There are seven:
+  express the check. There are eight:
 
   | Function | Added by | Why it cannot be a policy |
   |---|---|---|
@@ -46,10 +46,11 @@ future one nobody has written yet:
   | `redeem_capability_token` | `00015` | The caller has no session, so no tenancy GUC is set and every policy would refuse |
   | `resolve_act_delegation` | `00021` | Same reason as redeeming a capability token: the delegation is what establishes the session, so nothing is set yet for a policy to read |
   | `mint_finding_approval_delegation` | `00027` | The dispatcher mints it and holds no grant on `memberships`, so it cannot check the eligibility the mint depends on |
+  | `expire_snoozed_findings` | `00034` | A maintenance pass over every organisation at once, started by a schedule with no tenant and no person; every `findings` policy is scoped by one organisation's GUC and the producer role cannot list organisations to iterate them |
 
 Each carries its justification in the migration that creates it. A definer
-function is how RLS gets bypassed by accident, so adding an eighth means
-writing down why none of these seven already covers you.
+function is how RLS gets bypassed by accident, so adding a ninth means
+writing down why none of these eight already covers you.
 
 **This table went stale twice before anyone noticed, which is the argument for
 the `Added by` column.** It read "five" while the database held seven:
