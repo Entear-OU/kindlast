@@ -156,6 +156,7 @@ For the Go workspace:
 ```bash
 buf lint                 # proto lint
 buf generate             # regenerate gen/, which is committed
+bun run gen:postman      # regenerate the Core API half of postman/, also committed
 golangci-lint run ./...  # lint and formatting, from within a module directory
 golangci-lint fmt ./...  # gofmt and goimports, writes
 go build ./... && go test ./...   # run from within a module directory
@@ -163,7 +164,9 @@ go build ./... && go test ./...   # run from within a module directory
 
 `buf` is pinned (see the CI workflow for the version). Generated code is
 committed and CI fails on drift, so run `buf generate` and commit the result
-whenever a proto changes.
+whenever a proto changes. Run `bun run gen:postman` in the same breath: the
+Core API half of the collection comes off the same image and is checked the
+same way.
 
 `golangci-lint` is pinned too, and CI installs the same version. One
 `.golangci.yml` at the root serves all four Go modules (`apps/core-api`,
@@ -364,11 +367,46 @@ rules that bite most often when writing code:
 If a change would weaken one of these, stop and say so in the PR rather than
 working around it.
 
-## When the API surface changes, update the Postman collection
+## When the API surface changes, regenerate the collection and update the hand-written half
 
 **Any change to the API surface updates `postman/` in the same PR.** Not a
 follow-up, not an issue for later: the same PR, so the collection is reviewed
 against the change it describes.
+
+Since ENT-265 the collection has two halves and only one of them is yours to
+write.
+
+**Generated: the contract facts in `Core API v1`.** Run it and commit what it
+writes:
+
+```bash
+bun run gen:postman          # or ./scripts/gen-postman.py
+```
+
+It reads the proto image, the same one `gen/openapi/openapi.yaml` comes from,
+and owns exactly three things: that every RPC has a request at all, the Connect
+path that request calls, and the block below `**From the contract.**` in each
+description, which carries the required scope and the declared REST binding. CI
+regenerates and fails on any diff, the way it does for `gen/`, so a new RPC
+without a request is a red build rather than a rule somebody remembered.
+
+It reads the proto image rather than `gen/openapi/openapi.yaml`, and that is
+worth knowing before you try to change it. The OpenAPI document describes the
+REST binding, which nothing routes: the edge forwards the Connect paths and
+opens one `/api/v1` path, for the billing webhook. Generating from it would
+have replaced every working Core API request with one that 404s. The image
+also carries the proto package, the `required_scope` option and the leading
+comments, none of which survive into the document.
+
+**Hand-written: everything else, and it is most of what matters.** The
+authorization server's routes, `web`'s redirect endpoints and the webhook paths
+are hand-written folders the generator does not read. Inside a generated
+request, the name, the body, the headers and the prose above the marker are
+hand-written too, because the contract does not carry them: which calls need
+the active-organisation header is not derivable from the package, and seven of
+them contradict the obvious rule in both directions.
+
+The rules below apply to the hand-written half. The generator does the rest.
 
 The surface means anything a caller has to know:
 
@@ -405,14 +443,16 @@ Three things to get right, all of which have already gone wrong once:
 3. **Do not reformat the JSON.** Editing it by loading and re-dumping through
    a library expands the compact arrays and escapes the section signs, and
    turns a six-line change into a two-hundred-line diff nobody can review.
-   Edit the fields you mean to edit and leave the rest byte-identical.
+   Edit the fields you mean to edit and leave the rest byte-identical. The
+   generator obeys this too: it reads the file into a tree that remembers how
+   every value was written and prints those bytes back, and
+   `scripts/test_gen_postman.py` asserts it, because a formatter that is only
+   usually faithful is one nobody will run.
 
 Mark an endpoint that does not exist yet with the issue that will deliver it,
 and keep it in the collection. Requests that document the plan are deliberate:
 they are how the collection tracks where the build order is going rather than
-only where it has been. When `buf` emits OpenAPI (design doc §23.2), the Core
-API requests should be generated from the spec instead, and this rule then
-applies to regenerating them.
+only where it has been.
 
 ## Development approach
 

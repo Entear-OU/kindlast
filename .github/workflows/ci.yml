@@ -412,6 +412,29 @@ jobs:
           git diff --exit-code -- gen/ \
             || { echo "gen/ is out of date; run 'buf generate' and commit"; exit 1; }
 
+      # The Postman collection's Core API folder is generated from the same
+      # proto image, so it is checked here rather than in the job that owns
+      # TypeScript: this is where buf already is (ENT-265).
+      #
+      # The tests run first and separately from the drift check, because the
+      # two catch different failures. Drift says the collection disagrees with
+      # the contract. The tests say the generator's reader and printer are
+      # faithful to what they were not asked to change, which is what stops it
+      # reformatting the hand-written half the day somebody does change a
+      # proto. A regeneration that silently expanded every compact array would
+      # pass a drift check the moment it was committed.
+      #
+      # python3 with no packages, which ubuntu-latest has. No Bun setup here
+      # for the sake of one script.
+      - name: Test the Postman generator
+        run: python3 scripts/test_gen_postman.py
+
+      - name: Check the Postman collection is in sync
+        run: |
+          python3 scripts/gen-postman.py
+          git diff --exit-code -- postman/ \
+            || { echo "postman/ is out of date; run 'bun run gen:postman' and commit"; exit 1; }
+
       # Installed through the official action rather than `go install`, which is
       # a departure from how buf is installed above and the reason is wall
       # clock: the action fetches a prebuilt binary in seconds, where building

@@ -56,6 +56,37 @@ what they have to do about it, which no commit subject knows.
   the one piece of this that is an operator's decision rather than automatic:
   nothing polls for a newer corpus. `docs/self-hosting.md` has the section.
 
+- **The Postman collection's Core API requests are generated from the proto
+  contract, and CI fails when they drift** (ENT-265). `postman/` is the only
+  executable description of the parts of this system that will never appear in
+  a proto file, so it is worth trusting; until now the rule that kept its Core
+  API half current was that every author remembered to mirror a proto change
+  into it by hand. `./scripts/gen-postman.py` (also `bun run gen:postman`) now
+  reads the same proto image `gen/openapi/openapi.yaml` comes from and owns
+  three things per request: that a request exists at all for every RPC, the
+  Connect path it calls, and the block below **From the contract.** in its
+  description, which carries the required scope and the declared REST binding.
+
+  **If you have imported this collection, re-import it.** Every Core API
+  request's description gained that block, and the descriptions are where the
+  measured facts live. Nothing else moved: no path, no header, no body.
+
+  What stays hand-written is most of what makes the collection useful, and it
+  stays that way deliberately. The authorization server's routes, `web`'s
+  redirect endpoints and the webhook paths are untouched folders. Inside a
+  generated request, the name, body, headers and the prose above the marker are
+  hand-written, because the contract does not carry them: which calls need the
+  active-organisation header is not in the proto, and seven requests contradict
+  the obvious rule.
+
+  **The REST binding each description now names is declared, not routed.** That
+  was true before this change and is merely visible now. Every RPC carries a
+  `google.api.http` annotation, so a client generated from
+  `gen/openapi/openapi.yaml` will call `GET /api/v1/me` and its siblings, and
+  the edge routes the Connect paths and opens exactly one `/api/v1` path, for
+  the billing webhook. Opening the REST surface is its own piece of work, with
+  a gateway and rate limiting attached to the decision.
+
 - **The machine surface an agentic Watcher needs: what it may read, and the
   one thing it may write** (ENT-258, first of three). The Watcher today is
   three fixed detectors over the compliance profile and the DSAR table; it
