@@ -143,9 +143,10 @@ type Analysis struct {
 // RunAnalyst runs the Analyst, and only the Analyst, for one organisation:
 // the second activity of a sweep workflow, after RunSweep with detect_only.
 //
-// Same shape as RunSweep: one transaction, one GUC, no actor. `run_analyst()`
-// works over the signals nobody has analysed yet, so a second call finds none
-// and reports zero, which is what lets a workflow retry it on its own.
+// Same shape as RunSweep: one transaction, one GUC, no actor. The Analyst
+// upserts each open signal onto its finding, so a second call over the same
+// signals rewrites the same rows and reports the same count, which is what lets
+// a workflow retry it on its own.
 func (a *AgentStore) RunAnalyst(ctx context.Context, orgID string) (Analysis, error) {
 	org, err := uuid.Parse(orgID)
 	if err != nil {
@@ -163,8 +164,8 @@ func (a *AgentStore) RunAnalyst(ctx context.Context, orgID string) (Analysis, er
 	}
 
 	var result Analysis
-	if err := tx.QueryRow(ctx, `select public.run_analyst()`).Scan(&result.Findings); err != nil {
-		return Analysis{}, fmt.Errorf("postgres: running the analyst: %w", err)
+	if result.Findings, err = runAnalyst(ctx, tx, a.logger); err != nil {
+		return Analysis{}, err
 	}
 	if err := tx.QueryRow(ctx, `select now()`).Scan(&result.RanAt); err != nil {
 		return Analysis{}, fmt.Errorf("postgres: reading the analysis time: %w", err)

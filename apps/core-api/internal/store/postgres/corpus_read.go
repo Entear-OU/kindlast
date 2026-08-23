@@ -23,16 +23,20 @@ import (
 // scanning this file for a missing predicate should find this comment rather
 // than filing one.
 //
-// # THE CITATION LABEL AND URL COME FROM THE DATABASE
+// # THE CITATION LABEL AND URL ARE RENDERED IN GO, AND STILL ONLY ONCE
 //
-// `analyst_citation_label` and `analyst_citation_url` are two of the five
-// SECURITY DEFINER functions 00016 kept, and they stay because they are the
-// same answer the Analyst gets when it writes a finding. Rendering the label in
-// Go here would be a second implementation of "what is this citation called",
-// and the two would diverge the first time somebody added a regulation whose
-// short title needed a special case. A finding saying `GDPR Art. 30` while this
-// page says `32016R0679 Art. 30` is exactly the inconsistency that makes a
-// customer stop trusting both.
+// This used to call `analyst_citation_label` and `analyst_citation_url`, and
+// said so at length: rendering the label here as well as in the Analyst would
+// be two implementations of "what is this citation called", and a finding
+// saying `GDPR Art. 30` while this page says `32016R0679 Art. 30` is the
+// inconsistency that makes a customer stop trusting both.
+//
+// That reasoning still holds and it is why the move was all or nothing.
+// ENT-259 took the Analyst's conversion out of plpgsql, so leaving these two
+// behind would have created exactly the divergence the old comment warned
+// about. There is still one renderer, `corpus.Citation`'s Label and URL, and
+// both callers use it. Its tests pin the output against what the plpgsql
+// produced, read off a running database rather than derived from the body.
 
 const obligationColumns = `
 	o.slug,
@@ -49,13 +53,7 @@ const obligationColumns = `
 	coalesce(o.citation_article, 0),
 	coalesce(o.citation_recital, 0),
 	coalesce(o.citation_annex, ''),
-	coalesce(o.citation_paragraph, ''),
-	public.analyst_citation_label(
-		o.citation_celex, o.citation_kind, o.citation_article,
-		o.citation_recital, o.citation_annex, o.citation_paragraph),
-	public.analyst_citation_url(
-		o.citation_celex, o.citation_kind, o.citation_article,
-		o.citation_recital, o.citation_annex)
+	coalesce(o.citation_paragraph, '')
 `
 
 func scanObligation(row pgx.Row) (corpus.StoredObligation, error) {
@@ -66,9 +64,15 @@ func scanObligation(row pgx.Row) (corpus.StoredObligation, error) {
 		&o.Citation.Kind, &o.Citation.Celex,
 		&o.Citation.ArticleNumber, &o.Citation.RecitalNumber,
 		&o.Citation.AnnexLabel, &o.Citation.ParagraphLabel,
-		&o.Label, &o.URL,
 	)
-	return o, err
+	if err != nil {
+		return o, err
+	}
+	// Derived from the parts the row carries, rather than selected beside them.
+	// See the header for why this is the only place it happens.
+	o.Label = o.Citation.Label()
+	o.URL = o.Citation.URL()
+	return o, nil
 }
 
 // Obligations returns every obligation this deployment checks against.

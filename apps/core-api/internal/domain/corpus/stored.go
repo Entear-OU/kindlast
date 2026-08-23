@@ -23,14 +23,14 @@ type StoredObligation struct {
 
 	Citation Citation
 
-	// Rendered by `analyst_citation_label` and `analyst_citation_url`, the same
-	// functions the Analyst uses when it writes a finding.
+	// Rendered by Citation's Label and URL, the same code the Analyst uses
+	// when it writes a finding (ENT-259 moved both off plpgsql together).
 	//
-	// Deliberately not reimplemented in Go. Two implementations of "what is
-	// this citation called" diverge the first time a regulation needs a special
-	// case, and a finding saying `GDPR Art. 30` while the obligation page says
-	// `32016R0679 Art. 30` is the inconsistency that makes a customer stop
-	// trusting both.
+	// Derived rather than stored, and derived in exactly one place. Two
+	// implementations of "what is this citation called" diverge the first time
+	// a regulation needs a special case, and a finding saying `GDPR Art. 30`
+	// while the obligation page says `32016R0679 Art. 30` is the inconsistency
+	// that makes a customer stop trusting both.
 	Label string
 	URL   string
 }

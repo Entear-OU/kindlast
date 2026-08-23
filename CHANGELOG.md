@@ -831,6 +831,47 @@ what they have to do about it, which no commit subject knows.
   identified by their key prefix and recorded as `agent`. If you call
   `emit_watcher_finding` yourself, it takes an optional ninth argument and
   defaults to `detector`, so existing calls are unchanged.
+- **The Watcher's detectors and the Analyst's conversion are Go, not plpgsql.**
+  `watcher_detect_deadlines`, `watcher_detect_gaps`,
+  `watcher_detect_dsar_escalation` and `analyst_convert_signal` decided which
+  obligation applies to which profile, how urgent a deadline had become and how
+  much work a finding was. Those are product judgements that change as
+  obligations are added, so by the rule in `db/README.md` they belong in Go, and
+  they are now in `apps/core-api/internal/domain/sweep`.
+
+  Nothing a customer sees changes. Every signal and every finding either
+  implementation writes is asserted identical, field by field, over a fixture
+  set covering gaps, data-subject requests inside and outside both windows,
+  overdue requests, sensitive data categories and an organisation with nothing
+  to raise. Both halves run as `kindlast_agent` in that comparison, which is
+  what makes a read the producer role was never granted fail on the commit that
+  adds it rather than on the day a feed goes quiet.
+
+  **One reported number changes, and it was wrong before.** `RunSweep` and
+  `RunAnalyst` answer with `signals` and `findings`. The plpgsql returned the
+  number of PROFILES it walked, which under the producer role is always one, so
+  every sweep has reported `1` and `1` since the endpoint shipped, whatever it
+  actually wrote. They now count signals raised and findings converted. Nothing
+  branches on either number; they are summed into a workflow history and read by
+  an operator, who until now was reading a constant.
+
+  No migration and no schema change. The plpgsql functions are still present and
+  still work, deliberately: they are the baseline the Go is compared against, and
+  `db/tests/agent-role.test.ts` still calls `run_watcher()` as the producer role.
+  Dropping them, re-deriving `kindlast_agent`'s grants from what the Go actually
+  reads, and regenerating the grant matrix is the remaining half of ENT-259.
+  `kindlast_agent` needs no new grant for this release: the Go reads the same
+  five tables the plpgsql did. It records `source = 'detector'` on the signals it
+  writes, so ENT-273's "a signal cannot change hands" trigger applies to it the
+  same way it applies to `emit_watcher_finding`.
+
+  Citation labels and URLs moved with the Analyst, and the obligation pages
+  moved with them in the same change. `analyst_citation_label` and
+  `analyst_citation_url` were rendering both a finding's citation and the
+  regulation page's, and moving only one would have left two implementations of
+  "what is this citation called" free to diverge. There is still exactly one, now
+  `corpus.Citation`'s `Label` and `URL`, and its output is asserted against the
+  plpgsql over the whole stored corpus.
 
 ## [0.1.0]
 
