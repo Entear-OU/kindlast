@@ -130,6 +130,8 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		activityOptions(SettleSweepTriggerActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.ListSweepTargets,
 		activityOptions(ListSweepTargetsActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.NarrateFindings,
+		activityOptions(NarrateFindingsActivityName))
 
 	if err := w.Start(); err != nil {
 		return nil, fmt.Errorf("schedule: starting the worker: %w", err)

@@ -14,6 +14,30 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **Findings get their explanation on the sweep, without anybody asking**
+  (ENT-256, part five, first half). `NarrateFindings` (ENT-245) was written as
+  the job that runs after a sweep over findings that have no narrative, and
+  nothing in the product ran it: every finding showed only the deterministic
+  text the sweep wrote. It is now the third step of every sweep workflow,
+  after the Watcher and the Analyst and, for a triggered sweep, after the
+  trigger is settled, so the feed shows the finding the moment it exists and
+  the explanation arrives as the model drafts it. One finding per activity,
+  up to fifty per run, with a retry policy; a deployment without the `model`
+  profile costs one activity per run and nothing is wrong; an organisation
+  whose provider cannot be honoured is recorded as skipped in the run's
+  result and the sweep is not failed. The daily run narrates one organisation
+  at a time after its fan-out, because one local model serves one request at
+  a time.
+
+  Not in this change, and why: the design's "Go loads, Python drafts, Go
+  persists" as three activities with the draft on an `intelligence` task
+  queue served by the Python service. That puts the draft's input into a
+  workflow history, and an organisation's own provider key (ENT-236) cannot
+  ride in it; the model call therefore stays behind core-api's
+  `NarrateFindings`, which opens the key and makes the call. Whether the
+  local-model path alone moves to a Python queue is a decision recorded on
+  ENT-256 for the maintainers.
+
 - **The Watcher and the Analyst run on a schedule again, and confirming
   onboarding triggers the organisation's first sweep on its own** (ENT-256,
   part four of five; closes the gap ENT-212 left). Since the Supabase schema

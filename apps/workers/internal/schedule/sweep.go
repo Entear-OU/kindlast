@@ -143,6 +143,8 @@ type SweepResult struct {
 	Signals  int32
 	Findings int32
 	RanAt    time.Time
+	// Narration is the third step, after the findings exist (part five).
+	Narration NarrationResult
 }
 
 // sweepOrganisation runs the Watcher, then the Analyst, for one organisation:
@@ -197,6 +199,13 @@ func TriggeredSweepWorkflow(ctx workflow.Context, trigger Trigger) (SweepResult,
 	if sweepErr != nil {
 		return result, sweepErr
 	}
+
+	// Settled first, narrated second, on purpose. The trigger says done the
+	// moment findings exist and the feed shows them with their deterministic
+	// text; the explanations arrive as a local model drafts them, which can
+	// be minutes each, and a person who just confirmed onboarding should not
+	// wait on that to see the first finding.
+	result.Narration = narrateOrganisation(ctx, trigger.OrgID)
 	return result, nil
 }
 
@@ -209,6 +218,11 @@ type DailySweepResult struct {
 	Failed        []string
 	Signals       int32
 	Findings      int32
+	// Narrated is how many findings got their explanation across the estate
+	// this run; NarrationSkipped lists the organisations whose model choice
+	// could not be honoured, by id.
+	Narrated         int32
+	NarrationSkipped []string
 }
 
 // dailyConcurrency bounds how many organisations are swept at once.
@@ -254,6 +268,7 @@ func DailySweepWorkflow(ctx workflow.Context) (DailySweepResult, error) {
 	// coroutines are scheduled by the workflow, not by the Go runtime.
 	semaphore := workflow.NewBufferedChannel(ctx, dailyConcurrency)
 	wg := workflow.NewWaitGroup(ctx)
+	var swept []string
 	for _, orgID := range orgs {
 		wg.Add(1)
 		workflow.Go(ctx, func(ctx workflow.Context) {
@@ -261,17 +276,36 @@ func DailySweepWorkflow(ctx workflow.Context) (DailySweepResult, error) {
 			semaphore.Send(ctx, struct{}{})
 			defer semaphore.Receive(ctx, nil)
 
-			swept, err := sweepOrganisation(ctx, orgID)
+			sweep, err := sweepOrganisation(ctx, orgID)
 			if err != nil {
 				result.Failed = append(result.Failed, orgID)
 				return
 			}
 			result.Swept++
-			result.Signals += swept.Signals
-			result.Findings += swept.Findings
+			result.Signals += sweep.Signals
+			result.Findings += sweep.Findings
+			swept = append(swept, orgID)
 		})
 	}
 	wg.Wait(ctx)
+
+	// Narration afterwards, and one organisation at a time. One
+	// `llama-server` serves one request at a time, so drafting four
+	// organisations' findings in parallel moves the queue rather than
+	// shortening it and turns one slow finding into a pile of timeouts; the
+	// sweeps were parallel because they are seconds of SQL, and this is not.
+	// The first organisation answers whether Intelligence exists at all, and
+	// an estate without it costs one activity rather than one per tenant.
+	for _, orgID := range swept {
+		narration := narrateOrganisation(ctx, orgID)
+		result.Narrated += narration.Narrated
+		if narration.Skipped != "" {
+			result.NarrationSkipped = append(result.NarrationSkipped, orgID)
+		}
+		if !narration.Available && narration.Skipped == "" {
+			break
+		}
+	}
 	return result, nil
 }
 

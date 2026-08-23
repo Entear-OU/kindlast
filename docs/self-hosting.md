@@ -502,7 +502,7 @@ does nothing but fail.
 | `relay-transactional-outbox` | Every 15 seconds (`KINDLAST_OUTBOX_RELAY_INTERVAL`) | Asks core-api what is waiting to leave and starts one workflow per row: `deliver-message/{row id}` for an invitation email, `deliver-notification/{row id}` for a finding notification. Each has a retry policy that backs off (ten seconds, doubling, capped at ten minutes) and no attempt limit: every attempt and what the mail server answered is in that workflow's history. A message that is not leaving is a running workflow in the UI with a reason. |
 | `reclaim-transactional-outbox` | Hourly at forty past (`KINDLAST_OUTBOX_RECLAIM_SCHEDULE`) | Clears the recipient's address and the rendered body out of delivered messages after seven days, and gives up on undelivered ones whose invitation can no longer be accepted. The rendered body of an invitation carries the raw token, so this is a credential-lifetime pass before it is a data-minimisation one. A message that can still be delivered is never touched. |
 | `relay-sweep-triggers` | Every 15 seconds (`KINDLAST_SWEEP_RELAY_INTERVAL`) | Asks core-api which sweeps somebody asked for and nothing has run (today: an onboarding somebody just confirmed writes a `sweep_triggers` row in the same transaction as the profile) and starts one `TriggeredSweepWorkflow` per row, named `sweep/{trigger id}`. So a fresh organisation sees findings within seconds of confirming, without anybody calling `RunSweep`. |
-| `sweep-every-organisation` | Daily at 06:00 UTC (`KINDLAST_SWEEP_SCHEDULE`) | Lists every organisation with a compliance profile and runs the Watcher and then the Analyst over each, four at a time, as two activities per organisation with their own retries. One organisation's failure is recorded in the run's result and does not stop the rest. This is what pg_cron's `watcher-daily` and `analyst-daily` were; the Analyst is now the next step in the same workflow rather than a second job five minutes later. |
+| `sweep-every-organisation` | Daily at 06:00 UTC (`KINDLAST_SWEEP_SCHEDULE`) | Lists every organisation with a compliance profile and runs the Watcher and then the Analyst over each, four at a time, as two activities per organisation with their own retries. One organisation's failure is recorded in the run's result and does not stop the rest. This is what pg_cron's `watcher-daily` and `analyst-daily` were; the Analyst is now the next step in the same workflow rather than a second job five minutes later. Then, one organisation at a time, it drafts the narrative for findings that have none (see below). |
 
 Mail itself is sent by core-api, not by the worker: the worker asks core-api
 to deliver a message by id, and core-api, which holds the SMTP channel, claims
@@ -523,6 +523,18 @@ dropped with the reason on its row, because holding one needs a scheduler.
 So a `deliver-notification/...` workflow showing as running overnight is a
 person asleep, and its history says who was told, who is being held, and
 until when. Nobody's address appears in it.
+
+**Narration is the third step of every sweep.** After the Watcher and the
+Analyst, and after a triggered sweep has settled its trigger, the workflow asks
+core-api to draft the narrative for findings that have none, one finding per
+activity, up to fifty per run. On a stack without the `model` profile core-api
+answers that Intelligence is not available and the step costs one activity;
+with it, a local model takes minutes per finding and each draft is one visible
+retryable unit in the workflow's history. The feed shows every finding with
+its deterministic text as soon as the sweep is done; explanations arrive as
+they are drafted. An organisation whose chosen provider cannot be honoured (a
+withdrawn provider, a key that will not open) is recorded as skipped in the
+run's result and the sweep is not failed.
 
 `SweepService.RunSweep` still exists for an operator who wants to sweep one
 organisation now, with a service credential; see the Postman collection. It is

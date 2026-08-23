@@ -266,6 +266,13 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 	}
 	coreAPI := platformv1connect.NewSweepServiceClient(httpClient, t.CoreAPIURL)
 	mail := platformv1connect.NewDeliveryServiceClient(httpClient, t.CoreAPIURL)
+	// The narrative client gets its own, longer timeout: one NarrateFindings
+	// call is one draft on whatever model the organisation runs, and a local
+	// model takes minutes per finding. The activity's own timeout is the
+	// bound that matters; this one only has to not fire first.
+	narratives := platformv1connect.NewNarrativeServiceClient(
+		&http.Client{Timeout: 10 * time.Minute, Transport: &oidc.Bearer{Source: tokens}},
+		t.CoreAPIURL)
 
 	opts := schedule.Options{
 		Addr:                  t.Addr,
@@ -276,7 +283,7 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 		OutboxReclaimSchedule: t.OutboxReclaimSchedule,
 		SweepRelayInterval:    t.SweepRelayInterval,
 		SweepSchedule:         t.SweepSchedule,
-		Activities:            &schedule.Activities{CoreAPI: coreAPI, Sweeps: coreAPI, Mail: mail},
+		Activities:            &schedule.Activities{CoreAPI: coreAPI, Sweeps: coreAPI, Mail: mail, Narratives: narratives},
 		Logger:                logger,
 	}
 	c, err := schedule.Connect(ctx, opts)

@@ -21,6 +21,9 @@ type Activities struct {
 	// generated client satisfies both; two names because two features
 	// declared what they need separately, which is the §21.6 habit.
 	Sweeps Sweeper
+	// Narratives is NarrativeService: findings, explained, as the third step
+	// of a sweep (part five).
+	Narratives Narrator
 	// Mail is DeliveryService: the transactional outbox's delivery half
 	// (part three).
 	Mail Deliverer
