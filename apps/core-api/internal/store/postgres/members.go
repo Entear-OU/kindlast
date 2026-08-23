@@ -38,6 +38,20 @@ const (
 	ActionInviteMember       = "invite_member"
 	ActionChangeMemberRole   = "change_member_role"
 	ActionRemoveMember       = "remove_member"
+
+	// Written by the database rather than from here, and it is the only one of
+	// the five that is.
+	//
+	// `audit_log_insert_org` binds a row to an active organisation and to a
+	// membership for the acting user. Somebody redeeming an invitation has
+	// neither: that is what an invitation is for. So the row cannot be written
+	// beside the acceptance, and is written inside `accept_invitation` (00038)
+	// in the same statement block that creates the membership, which is where
+	// the organisation, the actor and the granted role are all known at once.
+	//
+	// The name lives here anyway, because it is what Go reads back and what the
+	// console labels, and a value spelled in two places drifts.
+	ActionAcceptInvitation = "accept_invitation"
 )
 
 // auditJSON encodes a small before/after snapshot.

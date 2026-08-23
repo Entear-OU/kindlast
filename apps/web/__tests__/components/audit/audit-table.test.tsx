@@ -102,6 +102,7 @@ describe('AuditTable', () => {
   it.each([
     ['rename_organisation', 'Renamed the organisation'],
     ['invite_member', 'Invited somebody to join'],
+    ['accept_invitation', 'Joined by invitation'],
     ['change_member_role', "Changed somebody's role"],
     ['remove_member', 'Removed somebody'],
     ['create_ropa_manual', 'Added an Article 30 entry by hand'],
@@ -112,6 +113,11 @@ describe('AuditTable', () => {
     // sees the raw `change_member_role` is reading a schema rather than a
     // record, and these are the rows an auditor asks for first: who was let in,
     // at what authority, and when it was taken away.
+    //
+    // `accept_invitation` is the newest (ENT-268) and is the answer to
+    // `invite_member`. It shipped to the database a change before it reached
+    // this map, so the page showed the raw value for exactly as long as that
+    // gap lasted, which is the case this row exists to stop recurring.
     render(
       <AuditTable
         entries={[

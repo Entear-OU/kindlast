@@ -464,15 +464,34 @@ what they have to do about it, which no commit subject knows.
 
   New `action_type` values, which anything parsing the CSV export should
   expect: `rename_organisation`, `invite_member`, `change_member_role`,
-  `remove_member`. An invitation records the address and the role offered and
-  never the token, which is a capability and would otherwise be re-issued to
-  everybody who can read the log. A rename that changes nothing writes no row.
+  `remove_member`, `accept_invitation`. An invitation records the address and
+  the role offered and never the token, which is a capability and would
+  otherwise be re-issued to everybody who can read the log. A rename that
+  changes nothing writes no row.
 
-  **Accepting an invitation is not yet recorded**, and is the remaining half.
-  The audit log's insert policy binds a row to an active organisation and a
-  membership, and somebody redeeming an invitation has neither until the moment
-  they join, so it needs the row written inside `accept_invitation` itself
-  rather than beside it. Left for its own change rather than bolted on here.
+  **Accepting an invitation is recorded too** (ENT-268), which is what closes
+  the gap between an offer of access and access actually being taken up. Until
+  it was, "invited somebody to join" was the same row whether the invitation was
+  still sitting unread in a mailbox or the person had been reading the
+  compliance record every day since, and telling those apart is the reason
+  access is logged at all. The row names the joiner, points at the invitation it
+  redeemed, and carries the role granted. Refusals write nothing, because
+  nothing happened: expired, already accepted, never existed and addressed to
+  somebody else stay one answer in the log as they are to the caller.
+
+  It arrived a change later than the other four for a structural reason worth
+  knowing if you self-host and read the schema. The audit log's insert policy
+  binds a row to an active organisation and to a membership for the acting user,
+  and somebody redeeming an invitation has neither until the moment they join,
+  so the row is written inside `accept_invitation` (a `SECURITY DEFINER`
+  function that already existed for the same reason) rather than beside it. The
+  policy itself is unchanged: a caller who is not a member still cannot write
+  into an organisation's log, and `db/tests` asserts that alongside the new
+  behaviour.
+
+  The console names it "Joined by invitation", next to "Invited somebody to
+  join", so the offer and the arrival read as a pair rather than as one sentence
+  and one column name.
 
 - **An organisation can choose its own model provider, and the choice is a
   compliance event rather than a preference** (ENT-236).
