@@ -23,8 +23,6 @@ import json
 from typing import Any, Protocol
 
 import httpx
-from connectrpc.errors import ConnectError
-from kindlast.platform.v1 import completion_connect, completion_pb2
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -90,6 +88,12 @@ class ProxiedModelClient:
     ) -> None:
         if not org_id:
             raise ValueError("a proxied model client is bound to an organisation")
+        # The generated client is imported here rather than at the top of the
+        # module, so the harness stays importable with `gen/python` off the
+        # path: the evals gate imports `Completion` from this module and runs
+        # without the Connect stubs, as it always has.
+        from kindlast.platform.v1 import completion_connect  # noqa: PLC0415
+
         self._org_id = org_id
         self._tokens = tokens
         self._timeout_ms = int(timeout * 1000)
@@ -106,6 +110,9 @@ class ProxiedModelClient:
         max_tokens: int = 800,
         temperature: float = 0.7,
     ) -> Completion:
+        from connectrpc.errors import ConnectError  # noqa: PLC0415
+        from kindlast.platform.v1 import completion_pb2  # noqa: PLC0415
+
         request = completion_pb2.CompleteRequest(
             org_id=self._org_id,
             messages=[
