@@ -436,6 +436,73 @@ def test_the_narrative_path_still_asks_for_the_analysts_grammar():
     assert model.schemas == [analyst.output_schema()]
 
 
+def test_a_refusal_from_core_api_is_a_recorded_refusal_and_not_a_crash():
+    """ENT-277, and the bug this exists for is the shape of the bug, not the
+    vocabulary.
+
+    A `CoreAPIError` matched none of `watch`'s handlers, so it left the
+    function entirely and took the whole RPC with it: HTTP 500, and no
+    `agent_runs` row for a run that had really happened. That is the one
+    outcome the harness must never produce, because the record is what a
+    customer reads to understand what ran on their data.
+
+    Found by the comparison gate against a real model, which produced a `kind`
+    outside the vocabulary. core-api refused it with `invalid_argument`,
+    exactly as designed, and the refusal became a crash.
+    """
+    from connectrpc.code import Code
+
+    from kindlast_intelligence.harness.remote import CoreAPIError
+
+    def refuse(_signal: dict[str, Any]) -> tuple[str, bool]:
+        raise CoreAPIError(
+            "raising the signal: kind must be one of [deadline profile_gap dsar]",
+            code=Code.INVALID_ARGUMENT,
+        )
+
+    model = ScriptedModel(
+        {"action": "raise_signal", "reason": "worth raising", "signal": a_signal()},
+    )
+    run_record, _ = watch(
+        context=CONTEXT,
+        model=model,
+        write_signal=refuse,
+        validator=CitationValidator(OfferedObligations(OBLIGATIONS)),
+        model_name="test",
+        model_version="0",
+    )
+
+    # A rule was applied, so this is the guardrail working, not a breakage.
+    assert run_record.outcome is Outcome.REFUSED
+    assert "kind must be one of" in run_record.outcome_detail
+    # And the run is a record: the call that was refused is in it.
+    assert run_record.tool_calls, "a refused run recorded no tool call"
+
+
+def test_core_api_being_unreachable_is_a_failure_and_not_a_refusal():
+    """The other side of the same clause. REFUSED is a claim that the
+    guardrails worked, and a connection that never arrived proves nothing about
+    them. An error carrying no Connect code never reached core-api's rules."""
+    from kindlast_intelligence.harness.remote import CoreAPIError
+
+    def unreachable(_signal: dict[str, Any]) -> tuple[str, bool]:
+        raise CoreAPIError("raising the signal: connection refused")
+
+    model = ScriptedModel(
+        {"action": "raise_signal", "reason": "worth raising", "signal": a_signal()},
+    )
+    run_record, _ = watch(
+        context=CONTEXT,
+        model=model,
+        write_signal=unreachable,
+        validator=CitationValidator(OfferedObligations(OBLIGATIONS)),
+        model_name="test",
+        model_version="0",
+    )
+
+    assert run_record.outcome is Outcome.FAILED
+
+
 def test_the_watcher_holds_exactly_one_tool_and_it_is_not_a_finding():
     """The separation the whole surface rests on, asserted rather than assumed.
 

@@ -67,6 +67,7 @@ from kindlast.platform.v1 import (
     watcher_pb2,
 )
 
+from .harness.remote import CoreAPIError, code_of
 from .harness.run import AgentRun, Outcome
 
 
@@ -83,10 +84,6 @@ _OUTCOMES = {
     Outcome.REFUSED: ingest_pb2.AGENT_RUN_OUTCOME_REFUSED,
     Outcome.FAILED: ingest_pb2.AGENT_RUN_OUTCOME_FAILED,
 }
-
-
-class CoreAPIError(Exception):
-    """core-api refused or could not be reached."""
 
 
 class CoreAPI:
@@ -154,7 +151,9 @@ class CoreAPI:
                 request, headers={"Authorization": f"Bearer {self._tokens.get()}"}
             )
         except Exception as exc:
-            raise CoreAPIError(f"recording the agent run: {exc}") from exc
+            raise CoreAPIError(
+                f"recording the agent run: {exc}", code=code_of(exc)
+            ) from exc
 
         return response.id
 
@@ -189,6 +188,8 @@ class CoreAPI:
                 request, headers={"Authorization": f"Bearer {self._tokens.get()}"}
             )
         except Exception as exc:
-            raise CoreAPIError(f"raising the signal: {exc}") from exc
+            raise CoreAPIError(
+                f"raising the signal: {exc}", code=code_of(exc)
+            ) from exc
 
         return response.signal_id, response.raised
