@@ -34,6 +34,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	integrationsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/integrations"
 	modelchoiceservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelchoice"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
@@ -380,9 +381,12 @@ func run(logger *slog.Logger) error {
 		// (ENT-236). Absent unless all of the agent pool, a sealing key and a
 		// permitted provider list are present, because honouring a choice
 		// without the checks that make it safe is worse than not honouring it.
-		ModelChoices:   modelChoicesDependency(outbox),
-		ModelKeys:      integrationKeys,
-		ModelProviders: modelProviders,
+		// Where an organisation's completions go (ENT-236, ENT-256 part
+		// five): the deployment's own model, or the provider it chose, with
+		// the key opened here and nowhere else. Always built, so a deployment
+		// with no model refuses a completion with a reason rather than 404.
+		ModelRouter: modelroute.New(cfg.ModelURL, cfg.ModelName).
+			WithModelChoice(modelChoicesDependency(outbox), integrationKeys, modelProviders, nil),
 		// Same typed-nil trap as Corpus above, and the same shape of guard: a
 		// nil *gateway.Client assigned straight into the interface field would
 		// produce an interface that is not nil, the registration guard would
@@ -617,7 +621,7 @@ func narrativesDependency(store *postgres.AgentStore) narrative.Findings {
 // assigning a nil *AgentStore straight into the interface field produces an
 // interface that is not nil, so the guard downstream passes and the first call
 // panics.
-func modelChoicesDependency(store *postgres.AgentStore) narrative.ModelChoices {
+func modelChoicesDependency(store *postgres.AgentStore) modelroute.Choices {
 	if store == nil {
 		return nil
 	}

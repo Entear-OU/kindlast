@@ -80,12 +80,15 @@ def a_service(auth_server: AuthServer, model=None, core_api=None):
     keys = KeySet(document["jwks_uri"])
     keys.warm()
 
+    fake = model or FakeModel(a_good_answer())
     return IntelligenceService(
         verifier=Verifier(keys, issuer=document["issuer"], audience=TEST_AUDIENCE),
-        model=model or FakeModel(a_good_answer()),
         core_api=core_api or FakeCoreAPI(),
         model_name="Qwen3.5-2B-Q4_K_M",
         model_version="aaf42c8b",
+        # Every run's model client is built from the organisation id
+        # (ENT-256, part five); here it is the test's fake regardless.
+        model_factory=lambda org_id: fake,
         budget=Budget(),
     )
 

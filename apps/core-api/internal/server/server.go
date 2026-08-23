@@ -10,17 +10,17 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	auditservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/audit"
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
+	completionservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/completion"
 	corpusservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/corpus"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	narrativeservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/notifications"
 	onboardingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/onboarding"
@@ -179,18 +179,15 @@ type Dependencies struct {
 	// operator.
 	Drafter narrativeservice.Drafter
 
-	// ModelChoices, ModelKeys and ModelProviders let the narration job honour an
-	// organisation's chosen provider (ENT-236).
-	//
-	// Three fields rather than one, because the narration job needs all three to
-	// honour a choice safely: the rows to read it from, the keyring to open the
-	// sealed credential with, and the operator's allow-list to re-check the
-	// provider against on every pass. Any one missing means the job narrates on
-	// the deployment's own endpoint, which is the default rather than a
-	// degradation.
-	ModelChoices   narrativeservice.ModelChoices
-	ModelKeys      *secrets.Keyring
-	ModelProviders []modelchoice.Provider
+	// ModelRouter answers where an organisation's completions go: the
+	// deployment's own model, or the provider it chose (ENT-236), with the
+	// sealed key opened only here in Go (ENT-256, part five). Two services
+	// ask it: NarrativeService, to refuse a batch whose provider cannot be
+	// honoured before it starts, and CompletionService, to make the call.
+	// Always set by main, even on a deployment with no model: the resolver
+	// then refuses every completion with a reason, which is better than a
+	// service that is absent.
+	ModelRouter *modelroute.Resolver
 
 	// Integrations serves the console's control over which customer systems
 	// Kindlast may reach (ENT-231).
@@ -402,9 +399,19 @@ func New(deps Dependencies) (http.Handler, error) {
 	if deps.Narratives != nil {
 		mux.Handle(platformv1connect.NewNarrativeServiceHandler(
 			narrativeservice.New(deps.Narratives, deps.Drafter, deps.Logger,
-				narrativeservice.WithModelChoice(
-					deps.ModelChoices, deps.ModelKeys, deps.ModelProviders, nil)),
+				narrativeservice.WithRouter(routerOrNil(deps.ModelRouter))),
 			internal))
+	}
+
+	// Completions through core-api (ENT-256, part five). The Python service
+	// asks here for every model call, naming the organisation; this resolves
+	// the route and opens the key, and the key goes to the model endpoint and
+	// nowhere else. Registered whenever a router exists, which main makes
+	// always: a deployment with no model answers failed_precondition with a
+	// reason rather than 404.
+	if deps.ModelRouter != nil {
+		mux.Handle(platformv1connect.NewCompletionServiceHandler(
+			completionservice.New(deps.ModelRouter, nil), internal))
 	}
 
 	// Unauthenticated by design, and bound to the internal listener only.
@@ -572,4 +579,13 @@ func New(deps Dependencies) (http.Handler, error) {
 	})
 
 	return mux, nil
+}
+
+// routerOrNil keeps a nil *Resolver out of a non-nil interface: the same
+// typed-nil trap main guards every optional dependency against.
+func routerOrNil(r *modelroute.Resolver) narrativeservice.Router {
+	if r == nil {
+		return nil
+	}
+	return r
 }

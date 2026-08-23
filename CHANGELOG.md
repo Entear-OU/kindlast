@@ -12,6 +12,33 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
+### Changed
+
+- **Every model call now goes through core-api, and the Python service holds
+  no model endpoint and no credential again** (ENT-256, part five, second
+  half; the hardening ENT-236 parked). A new internal RPC,
+  `CompletionService.Complete`, takes the messages and the organisation;
+  core-api resolves whether that organisation uses the deployment's own model
+  or a provider it chose, opens the sealed provider key with the key only
+  core-api holds, makes the call, and returns the content and usage. The
+  Python service asks it for every completion and reads no model URL from its
+  configuration. `DraftNarrative`'s `model_endpoint.base_url` and `.api_key`
+  are deprecated on the wire, never populated, and **refused** if a caller
+  sets them.
+
+  Why: drafts are becoming Temporal activities on a Python worker, and an
+  activity's input is written into a workflow history; a key cannot ride
+  there, so it no longer rides anywhere. What it costs, said plainly: every
+  prompt passes through core-api, which already holds the finding, the
+  obligation and the profile it is built from.
+
+  **Operators: `KINDLAST_MODEL_ENDPOINT` is a new core-api setting** (the
+  bundled stack sets it to the `model` service; `KINDLAST_MODEL_NAME` joins
+  it for the run record), and `KINDLAST_MODEL_URL` on the `intelligence`
+  service is no longer read. An organisation's chosen provider (ENT-236)
+  keeps working unchanged from the organisation's side; the difference is
+  where the key is used.
+
 ### Added
 
 - **Findings get their explanation on the sweep, without anybody asking**

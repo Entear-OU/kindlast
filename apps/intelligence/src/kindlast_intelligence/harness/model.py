@@ -1,23 +1,30 @@
-"""The model client: OpenAI-compatible HTTP, pointed at whatever serves it.
+"""The model clients: what the harness calls to get one completion.
 
-ENT-235 makes that llama.cpp's `llama-server` by default, local and needing no
-API key. It could equally be vLLM on a GPU or a hosted provider, because the
-abstraction point is the wire format rather than the runtime. Which is why
-there is no llama.cpp in this file: the endpoint is configuration.
+Two implementations of one shape, `complete(messages, schema, max_tokens,
+temperature) -> Completion`, and the harness cannot tell them apart:
 
-ENT-236 makes it configuration PER ORGANISATION as well as per deployment, and
-this file needed two changes for it: a model name on the wire, because a hosted
-provider requires one and `llama-server` ignores it, and a note about where the
-key comes from. One client per run in that case, built from the endpoint
-core-api resolved and handed over, rather than the one built at boot.
+`ProxiedModelClient` is the one the service runs (ENT-256, part five). It asks
+core-api's CompletionService, naming the organisation and nothing else; core-api
+resolves the organisation's model choice, opens the key only it holds, makes the
+call, and returns the content and what it cost. This process therefore holds no
+model endpoint and no credential, by construction: the thing ENT-236 relaxed
+for one field of one request is not relaxed any more, because the field is not
+read any more.
+
+`ModelClient` is the direct OpenAI-compatible HTTP client, pointed at whatever
+serves the wire format (ENT-235: llama.cpp's `llama-server` by default). It is
+kept for the evals recorder, a maintainer's tool that is pointed at a model by
+argument, and for tests; the service builds none.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
+from connectrpc.errors import ConnectError
+from kindlast.platform.v1 import completion_connect, completion_pb2
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -45,6 +52,94 @@ class Completion(BaseModel):
 
 class ModelError(Exception):
     """The model could not be reached, or answered something unusable."""
+
+
+class Completer(Protocol):
+    """Anything that can answer one completion: both clients below, and the
+    tests' fakes."""
+
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        schema: dict[str, Any] | None = None,
+        max_tokens: int = 800,
+        temperature: float = 0.7,
+    ) -> Completion: ...
+
+
+class TokenSource(Protocol):
+    def get(self) -> str: ...
+
+
+class ProxiedModelClient:
+    """One organisation's completions, through core-api (ENT-256, part five).
+
+    Bound to an organisation at construction, because that is the one thing
+    core-api needs to know to decide whose model, and whose key, answers. It
+    holds this service's own OAuth token source for calling core-api as
+    itself, which is the one credential this process legitimately has, and
+    nothing about any model.
+    """
+
+    def __init__(
+        self,
+        core_api_url: str,
+        tokens: TokenSource,
+        org_id: str,
+        timeout: float = 300.0,
+    ) -> None:
+        if not org_id:
+            raise ValueError("a proxied model client is bound to an organisation")
+        self._org_id = org_id
+        self._tokens = tokens
+        self._timeout_ms = int(timeout * 1000)
+        self._client = completion_connect.CompletionServiceClientSync(core_api_url)
+        # What served the last completion, for the run record: core-api says,
+        # because core-api knows; this process does not.
+        self.provider: str = ""
+        self.model: str = ""
+
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        schema: dict[str, Any] | None = None,
+        max_tokens: int = 800,
+        temperature: float = 0.7,
+    ) -> Completion:
+        request = completion_pb2.CompleteRequest(
+            org_id=self._org_id,
+            messages=[
+                completion_pb2.ChatMessage(role=m["role"], content=m["content"])
+                for m in messages
+            ],
+            response_schema_json=json.dumps(schema) if schema is not None else "",
+            max_tokens=max_tokens,
+            temperature=temperature,
+            temperature_set=True,
+        )
+        try:
+            response = self._client.complete(
+                request,
+                headers={"Authorization": f"Bearer {self._tokens.get()}"},
+                timeout_ms=self._timeout_ms,
+            )
+        except ConnectError as exc:
+            # Every code core-api uses here is "the model could not be
+            # reached, or would not serve this organisation": the harness
+            # records it as a failed run and says why. The message carries
+            # no key, because core-api never puts one in an error.
+            raise ModelError(f"core-api could not complete the call: {exc}") from exc
+        except Exception as exc:  # noqa: BLE001 (anything else is the transport)
+            raise ModelError(f"core-api did not answer: {exc}") from exc
+        self.provider = response.provider
+        self.model = response.model
+        return Completion(
+            content=response.content,
+            input_tokens=int(response.input_tokens),
+            cached_input_tokens=int(response.cached_input_tokens),
+            output_tokens=int(response.output_tokens),
+            finish_reason=response.finish_reason,
+        )
 
 
 class ModelClient:

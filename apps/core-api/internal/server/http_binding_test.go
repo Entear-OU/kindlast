@@ -493,6 +493,12 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.DeliveryService.SettleNotification": {
 			Method: "POST", Path: "/internal/v1/notifications:settle",
 		},
+		// ENT-256, part five. One model call, through core-api, so the
+		// organisation's key never leaves Go. The prompt crosses here as
+		// data; the route and the credential are resolved on the far side.
+		"kindlast.platform.v1.CompletionService.Complete": {
+			Method: "POST", Path: "/internal/v1/completions",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

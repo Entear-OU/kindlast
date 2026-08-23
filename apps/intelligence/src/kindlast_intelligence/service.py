@@ -36,7 +36,7 @@ from .auth.verifier import Verifier
 from .coreapi import CoreAPI, CoreAPIError
 from .harness.budget import Budget
 from .harness.citations import CitationValidator, OfferedObligations
-from .harness.model import ModelClient
+from .harness.model import Completer
 from .harness.run import Outcome, draft_narrative
 
 logger = logging.getLogger(__name__)
@@ -54,25 +54,24 @@ class IntelligenceService:
     def __init__(
         self,
         verifier: Verifier,
-        model: ModelClient,
         core_api: CoreAPI,
         model_name: str,
         model_version: str,
+        model_factory: Callable[[str], Completer],
         budget: Budget | None = None,
-        model_factory: Callable[..., ModelClient] | None = None,
     ) -> None:
         self._verifier = verifier
-        self._model = model
         self._core_api = core_api
         self._model_name = model_name
         self._model_version = model_version
         self._budget_template = budget
-        # How a per-run client is built when an organisation chose a provider
-        # (ENT-236). A seam rather than a direct call to `ModelClient`, so the
-        # tests can assert WHAT was built without a network, which is the only
-        # way to check that the key went to the endpoint it was meant for and
-        # that the bundled model was not quietly used instead.
-        self._model_factory = model_factory or ModelClient
+        # How the model client for one run is built: from the organisation id
+        # and nothing else (ENT-256, part five). In production that is a
+        # ProxiedModelClient bound to the organisation, asking core-api for
+        # every completion; in tests it is whatever fake the test wants. A
+        # seam rather than a direct construction, so the tests can assert that
+        # the client was bound to the right organisation without a network.
+        self._model_factory = model_factory
 
     def draft_narrative(
         self,
@@ -102,7 +101,7 @@ class IntelligenceService:
             )
 
         model, model_name, model_version, provider = self._model_for(
-            request.model_endpoint
+            request.org_id, request.model_endpoint
         )
 
         run = draft_narrative(
@@ -163,56 +162,58 @@ class IntelligenceService:
         )
 
     def _model_for(
-        self, endpoint: intelligence_pb2.ModelEndpoint
-    ) -> tuple[ModelClient, str, str, str]:
+        self, org_id: str, endpoint: intelligence_pb2.ModelEndpoint
+    ) -> tuple[Completer, str, str, str]:
         """Which model serves this run, and what the record should say.
 
-        # THE CREDENTIAL RULE, AND EXACTLY HOW MUCH OF IT MOVED
+        # THE CREDENTIAL RULE, RESTORED (ENT-256, part five)
 
-        `AGENTS.md` says no third-party credential reaches this service. ENT-236
-        puts one in this field, and pretending otherwise would be worse than the
-        change, so here is the whole of it.
+        `AGENTS.md` says no third-party credential reaches this service, and
+        since ENT-236 it had one recorded exception: an organisation's API
+        key arrived in `model_endpoint.api_key` for one call. That exception
+        is retired. Every completion goes through core-api's
+        CompletionService, bound to the organisation; core-api resolves the
+        choice inside the tenant's own rows, opens the key only it holds, and
+        makes the call. This process holds no endpoint and no credential, by
+        construction, and a request that carries either is REFUSED rather
+        than honoured: a key arriving here is the old exception coming back
+        through a door that is no longer open, and the right answer to it is
+        "no", loudly, so the caller that sent it gets fixed.
 
-        What is preserved is the part the rule exists for. This service cannot
-        OBTAIN a credential: it holds no database handle, sets no tenancy GUC,
-        reads no key from its own configuration, and has no way to ask for one.
-        core-api decides, inside the tenant own rows, which key it is entitled
-        to open, and hands over exactly one endpoint for exactly this run. The
-        key is held for the life of one client, is never written to the run
-        record, and reaches no log line.
-
-        What is given up is that the process is no longer credential-free by
-        construction. The stronger arrangement, proxying every completion
-        through core-api so the key never leaves Go, is written up in the PR: it
-        was not built because it routes every prompt and every token of a
-        customer compliance data through a second service that carries none of
-        it today, which trades one exposure for a larger one.
+        What the request still carries is the provider and model NAMES, for
+        the run record, which is what a sub-processor record needs and is
+        not a secret. Absent means the deployment's own model.
 
         # AND NO FALLBACK, EVER
 
         An organisation that chose a provider gets that provider or gets a
-        failed run. There is no branch below that answers a hosted request with
-        the bundled model, because a silent fallback would process a customer
-        findings somewhere other than where their own record of processing says,
-        and nothing in the product would say it happened.
+        failed run. The decision is core-api's now, and core-api makes it the
+        same way this code used to: a choice that cannot be honoured is an
+        error, never a quiet answer from the bundled model.
         """
-        if not endpoint.base_url:
-            return self._model, self._model_name, self._model_version, "instance"
+        if endpoint.api_key or endpoint.base_url:  # deprecated on the wire, refused on purpose
+            raise ConnectError(
+                Code.INVALID_ARGUMENT,
+                "this service holds no model endpoint and no credential: "
+                "completions go through core-api's CompletionService, and a "
+                "request carrying model_endpoint.base_url or .api_key is "
+                "refused (ENT-256, part five)",
+            )
 
-        client = self._model_factory(
-            endpoint.base_url,
-            api_key=endpoint.api_key or None,
-            model=endpoint.model or None,
-        )
+        client = self._model_factory(org_id)
+        if not endpoint.provider:
+            return client, self._model_name, self._model_version, "instance"
         # `provider-managed` rather than an invented digest. A local build
         # records the weights digest because it knows it; a hosted provider
         # serves whatever it is serving today and does not say, and a version
         # string this service made up would be worse than one that says so.
+        if endpoint.provider == "instance":
+            return client, endpoint.model or self._model_name, self._model_version, "instance"
         return (
             client,
             endpoint.model or self._model_name,
             "provider-managed",
-            endpoint.provider or "hosted",
+            endpoint.provider,
         )
 
     def _authorise(self, ctx: RequestContext) -> None:
@@ -361,5 +362,8 @@ def config_from_env() -> dict[str, str]:
             or os.getenv("KINDLAST_OIDC_PROJECT_ID", ""),
         ),
         "core_api_url": os.environ["KINDLAST_CORE_API_URL"],
-        "model_url": os.getenv("KINDLAST_MODEL_URL", "http://model:8080"),
+        # No model URL, deliberately (ENT-256, part five). This service dials
+        # no model: every completion goes through core-api's
+        # CompletionService, and the deployment's own model URL is core-api's
+        # setting. test_no_third_party_credential.py asserts the absence.
     }

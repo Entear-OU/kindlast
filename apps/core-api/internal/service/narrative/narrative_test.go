@@ -12,6 +12,7 @@ import (
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
 )
@@ -419,30 +420,36 @@ func TestAChosenProviderReachesTheRun(t *testing.T) {
 		t.Fatalf("parsing providers: %v", err)
 	}
 
-	service := New(newFindings(finding()), drafter, nil, WithModelChoice(
-		&fakeChoices{
-			choice: postgres.Choice{
-				ID: rowID, Provider: "openai",
-				BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
+	service := New(newFindings(finding()), drafter, nil, WithRouter(
+		modelroute.New("http://model:8080", "local-model").WithModelChoice(
+			&fakeChoices{
+				choice: postgres.Choice{
+					ID: rowID, Provider: "openai",
+					BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
+				},
+				sealed: postgres.Sealed{Ciphertext: sealed, KeyID: keyID},
 			},
-			sealed: postgres.Sealed{Ciphertext: sealed, KeyID: keyID},
-		},
-		keys, providers, publicLookup,
-	))
+			keys, providers, publicLookup,
+		)))
 
 	if _, err := service.NarrateFindings(t.Context(), request(org)); err != nil {
 		t.Fatalf("narrating: %v", err)
 	}
 
+	// THE RUN RECORD IS TOLD WHICH PROVIDER, AND NOTHING ELSE LEAVES. The
+	// sealed key opened (the resolver would have refused otherwise), and it
+	// opened for CompletionService's benefit, not this request's: the
+	// Python service receives names for its record and makes the call back
+	// through core-api (ENT-256, part five).
 	endpoint := drafter.endpoint
 	if endpoint == nil {
-		t.Fatal("the run was sent with no endpoint, so it went to the deployment's own model")
+		t.Fatal("the run was sent with no provider name, so its record would say the deployment's own model")
 	}
-	if endpoint.GetProvider() != "openai" || endpoint.GetBaseUrl() != "https://api.openai.com" {
-		t.Fatalf("the endpoint is %+v", endpoint)
+	if endpoint.GetProvider() != "openai" || endpoint.GetModel() != "gpt-oss-120b" {
+		t.Fatalf("the endpoint hint is %+v", endpoint)
 	}
-	if endpoint.GetApiKey() != "sk-proj-abcdefgh1234" {
-		t.Fatal("the sealed key did not open, so the run would reach the provider unauthenticated")
+	if endpoint.GetBaseUrl() != "" || endpoint.GetApiKey() != "" { //nolint:staticcheck // asserting the deprecated fields stay empty
+		t.Fatal("an endpoint or a key reached the Intelligence request; since ENT-256 part five neither may")
 	}
 }
 
@@ -456,15 +463,16 @@ func TestAChosenProviderReachesTheRun(t *testing.T) {
 func TestAWithdrawnProviderFailsTheJobRatherThanQuietlyReverting(t *testing.T) {
 	drafter := succeeding()
 
-	service := New(newFindings(finding()), drafter, nil, WithModelChoice(
-		&fakeChoices{choice: postgres.Choice{
-			ID: "c0000000-0000-4000-8000-000000000001", Provider: "openai",
-			BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
-		}},
-		testKeyring(t),
-		// The operator has withdrawn everything.
-		nil, publicLookup,
-	))
+	service := New(newFindings(finding()), drafter, nil, WithRouter(
+		modelroute.New("http://model:8080", "local-model").WithModelChoice(
+			&fakeChoices{choice: postgres.Choice{
+				ID: "c0000000-0000-4000-8000-000000000001", Provider: "openai",
+				BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
+			}},
+			testKeyring(t),
+			// The operator has withdrawn everything.
+			nil, publicLookup,
+		)))
 
 	_, err := service.NarrateFindings(t.Context(), request(org))
 	if err == nil {
@@ -489,13 +497,14 @@ func TestAnEndpointThatNowResolvesInsideTheDeploymentFailsTheJob(t *testing.T) {
 		return []netip.Addr{netip.MustParseAddr("169.254.169.254")}, nil
 	}
 
-	service := New(newFindings(finding()), drafter, nil, WithModelChoice(
-		&fakeChoices{choice: postgres.Choice{
-			ID: "c0000000-0000-4000-8000-000000000001", Provider: "openai",
-			BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
-		}},
-		testKeyring(t), providers, inside,
-	))
+	service := New(newFindings(finding()), drafter, nil, WithRouter(
+		modelroute.New("http://model:8080", "local-model").WithModelChoice(
+			&fakeChoices{choice: postgres.Choice{
+				ID: "c0000000-0000-4000-8000-000000000001", Provider: "openai",
+				BaseURL: "https://api.openai.com", Model: "gpt-oss-120b",
+			}},
+			testKeyring(t), providers, inside,
+		)))
 
 	if _, err := service.NarrateFindings(t.Context(), request(org)); err == nil {
 		t.Fatal("an endpoint resolving inside the deployment was dialled")
@@ -505,22 +514,41 @@ func TestAnEndpointThatNowResolvesInsideTheDeploymentFailsTheJob(t *testing.T) {
 	}
 }
 
-func TestAnOrganisationWithNoChoiceSendsNoEndpoint(t *testing.T) {
+func TestAnOrganisationWithNoChoiceIsRecordedAgainstTheInstanceModel(t *testing.T) {
 	drafter := succeeding()
 	providers, err := modelchoice.ParseProviders("openai=api.openai.com")
 	if err != nil {
 		t.Fatalf("parsing providers: %v", err)
 	}
 
-	service := New(newFindings(finding()), drafter, nil, WithModelChoice(
-		&fakeChoices{err: postgres.ErrNoModelChoice},
-		testKeyring(t), providers, publicLookup,
-	))
+	service := New(newFindings(finding()), drafter, nil, WithRouter(
+		modelroute.New("http://model:8080", "local-model").WithModelChoice(
+			&fakeChoices{err: postgres.ErrNoModelChoice},
+			testKeyring(t), providers, publicLookup,
+		)))
 
 	if _, err := service.NarrateFindings(t.Context(), request(org)); err != nil {
 		t.Fatalf("narrating: %v", err)
 	}
-	if drafter.endpoint != nil {
-		t.Fatal("an organisation that chose nothing was given an endpoint")
+	if drafter.endpoint == nil || drafter.endpoint.GetProvider() != modelroute.ProviderInstance {
+		t.Fatalf("an organisation that chose nothing was recorded against %+v, want the instance model", drafter.endpoint)
+	}
+	if drafter.endpoint.GetBaseUrl() != "" || drafter.endpoint.GetApiKey() != "" { //nolint:staticcheck // asserting the deprecated fields stay empty
+		t.Fatal("an endpoint reached the Intelligence request")
+	}
+}
+
+// A deployment that runs no model and an organisation that chose none is a
+// job that cannot run, and says so, rather than a drafter dialling nothing.
+func TestNoModelAnywhereFailsTheJobBeforeAnyRun(t *testing.T) {
+	drafter := succeeding()
+	service := New(newFindings(finding()), drafter, nil, WithRouter(modelroute.New("", "")))
+
+	_, err := service.NarrateFindings(t.Context(), request(org))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("code is %v, want failed_precondition: %v", connect.CodeOf(err), err)
+	}
+	if drafter.calls != 0 {
+		t.Fatal("a run was attempted with no model to run it on")
 	}
 }

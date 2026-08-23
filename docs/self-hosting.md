@@ -161,6 +161,7 @@ an actual deployment, so a real install passes the flag.
 | `KINDLAST_MODEL_CTX` | `16384` | Context window. A **memory** decision, not a capability one: the model supports 262144 natively, and allocating that would want far more RAM than the weights. |
 | `KINDLAST_MODEL_PARALLEL` | `2` | Concurrent slots. |
 | `KINDLAST_MODEL_PORT` | `8081` | Host port for the endpoint. |
+| `KINDLAST_MODEL_ENDPOINT` | `http://model:8080` (on core-api) | Where core-api sends the deployment's own completions. **core-api makes every model call** (ENT-256, part five): the Python service asks core-api for each completion, naming only the organisation, and core-api resolves whether that organisation uses this endpoint or a provider it chose, opens the provider key only it holds, and dials. The Python service holds no model endpoint and no key. Empty means this deployment runs no model; a completion is then refused with a reason and nothing dials anything. Not `KINDLAST_MODEL_URL`, which is `model-init`'s download URL. |
 
 Sizing, so you can pick before rather than after:
 
@@ -183,10 +184,13 @@ a filename from one model and a digest from another is a configuration that
 deletes a good file and fetches the wrong one.
 
 **Using a hosted provider instead.** Anything OpenAI-compatible works, so point
-the client at it and leave the `model` service out. Understand what that
-changes: your compliance profile, findings and DSAR content start leaving the
-deployment, and the provider becomes a processor you are responsible for
-recording.
+`KINDLAST_MODEL_ENDPOINT` on core-api at it and leave the `model` service out.
+Understand what that changes: your compliance profile, findings and DSAR
+content start leaving the deployment, and the provider becomes a processor you
+are responsible for recording. (A deployment-wide hosted endpoint that needs a
+key is not supported through this setting: the deployment's own endpoint is
+dialled without one. An organisation that wants a keyed provider chooses it
+per organisation, below, and core-api holds the key.)
 
 ### Letting an organisation choose its own provider (ENT-236)
 

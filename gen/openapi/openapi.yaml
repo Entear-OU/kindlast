@@ -2022,6 +2022,41 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/completions:
+        post:
+            tags:
+                - CompletionService
+            description: |-
+                One chat completion, on the model the organisation's choice resolves to.
+
+                   invalid_argument      no organisation, no messages, or a malformed body
+                   failed_precondition   the organisation's provider cannot be honoured
+                                         (withdrawn, unreachable, a key that will not open,
+                                         or a provider that refused the key), or this
+                                         deployment runs no model at all; the run fails
+                                         and says why, and nothing falls back
+                   unavailable           the model endpoint did not answer or answered
+                                         with a server error; try again
+            operationId: CompletionService_Complete
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CompleteRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CompleteResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/corpus:ingest:
         post:
             tags:
@@ -3201,6 +3236,14 @@ components:
                     description: |-
                         When the endpoint answered, RFC 3339. The gateway's clock, because the
                          endpoint's is not ours to trust and `observed_at` needs to mean something.
+        ChatMessage:
+            type: object
+            properties:
+                role:
+                    type: string
+                    description: '`system`, `user` or `assistant`.'
+                content:
+                    type: string
         Citation:
             type: object
             properties:
@@ -3277,6 +3320,60 @@ components:
                  See the service comment: every field is a value the database already holds.
                  A client renders `label` and links `url`; the structured parts are present so
                  a client can filter or group by regulation, not so it can rebuild the label.
+        CompleteRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                    description: |-
+                        Whose model. Resolves the organisation's choice (ENT-236) or the
+                         deployment's own model when it has made none.
+                messages:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatMessage'
+                    description: The conversation, in order. The caller builds it; core-api forwards it.
+                responseSchemaJson:
+                    type: string
+                    description: |-
+                        A JSON Schema the answer must conform to, serialised, or empty for free
+                         text. Forwarded as the endpoint's structured-output request.
+                maxTokens:
+                    type: integer
+                    description: Zero means the endpoint's default.
+                    format: int32
+                temperature:
+                    type: number
+                    description: |-
+                        Zero means the endpoint's default; the caller that wants exactly zero
+                         sets `temperature_set`.
+                    format: float
+                temperatureSet:
+                    type: boolean
+        CompleteResponse:
+            type: object
+            properties:
+                content:
+                    type: string
+                inputTokens:
+                    type: integer
+                    format: int32
+                cachedInputTokens:
+                    type: integer
+                    format: int32
+                outputTokens:
+                    type: integer
+                    format: int32
+                finishReason:
+                    type: string
+                provider:
+                    type: string
+                    description: |-
+                        Which model served it, for the run record: the provider name the
+                         organisation chose (`instance` for the deployment's own model) and the
+                         model name on the wire.
+                model:
+                    type: string
         ConfirmProfileRequest:
             type: object
             properties: {}
@@ -3624,35 +3721,30 @@ components:
                     allOf:
                         - $ref: '#/components/schemas/ModelEndpoint'
                     description: |-
-                        Where this run's model calls go, when the organisation has chosen a hosted
-                         provider (ENT-236, §26.6).
+                        Which model this run is recorded against: the organisation's chosen
+                         provider and model name (ENT-236, §26.6), as a hint for the run record
+                         and nothing more.
 
-                         # WHY THE CALLER PASSES THIS RATHER THAN THE HARNESS LOOKING IT UP
+                         # WHAT CHANGED HERE, AND WHY (ENT-256, part five)
 
-                         The same rule as the obligations above (§26.2), and here it is load
-                         bearing rather than stylistic. Intelligence holds no database handle and no
-                         tenancy GUC, so it has no way to decide which organisation's key it is
-                         entitled to and no way to be wrong about it: core-api resolves the choice
-                         inside the tenant's own rows, opens the sealed credential with the key only
-                         it holds, and hands over exactly one endpoint for exactly this run.
+                         ENT-236 put the organisation's own API key in this field for one call, a
+                         recorded relaxation of the rule that no third-party credential reaches
+                         the Python service. It was the pass-through shape, and the alternative
+                         considered then, proxying every completion through core-api so the key
+                         never leaves Go, was parked in §25.
 
-                         # AND WHY THIS IS A REAL RELAXATION OF A RULE, SAID OUT LOUD
+                         Temporal unparked it. A draft that runs as a Python activity has its
+                         input written into a workflow history, and a key cannot ride there; so
+                         the key no longer rides anywhere. Intelligence asks core-api's
+                         CompletionService for every completion, naming only the organisation,
+                         and core-api resolves the choice inside the tenant's own rows, opens the
+                         sealed credential with the key only it holds, and makes the call. The
+                         Python service holds no endpoint and no credential, by construction,
+                         again. `base_url` and `api_key` are kept on the wire for compatibility
+                         and are refused if set: a request carrying either is a caller that has
+                         not heard, and answering it would be the old exception by the back door.
 
-                         `AGENTS.md` says no third-party credential reaches the Python service. This
-                         puts one in a request to it, and pretending otherwise would be worse than
-                         the change. What is preserved is the part the rule exists for: Intelligence
-                         cannot OBTAIN a credential, cannot enumerate them, cannot persist one, and
-                         holds this one for the life of one call. What is given up is that the
-                         process is no longer credential-free by construction.
-
-                         The alternative considered was proxying every completion through core-api
-                         or the workers gateway so the key never leaves Go. It is stronger and it is
-                         written up in the PR; it was not built here because it puts every prompt
-                         and every token of a customer's compliance data through a second service
-                         that currently carries none of it, which trades one exposure for a larger
-                         one.
-
-                         Absent means the deployment's own endpoint, which is the default and the
+                         Absent means the deployment's own model, which is the default and the
                          case where nothing leaves.
         DraftNarrativeResponse:
             type: object
@@ -5074,17 +5166,23 @@ components:
                     type: string
                 baseUrl:
                     type: string
+                    description: |-
+                        No longer read. Intelligence dials no model; a request setting this is
+                         refused with invalid_argument (ENT-256, part five).
                 model:
                     type: string
                 apiKey:
                     type: string
+                    description: |-
+                        No longer read, and never populated by core-api. A request setting this
+                         is refused with invalid_argument: a credential arriving this way is the
+                         retired exception, not a feature (ENT-256, part five).
             description: |-
-                ModelEndpoint is one organisation's chosen provider, for one run.
+                ModelEndpoint is one organisation's chosen provider, for the run record.
 
-                 NEVER RECORDED AS PART OF THE RUN. `api_key` does not reach `agent_runs`,
-                 does not reach a trace, and does not reach a log line. What the run records
-                 is `provider`, which is what a sub-processor record needs and is not a
-                 secret.
+                 Names only: `provider`, which is what a sub-processor record needs and is
+                 not a secret, and `model`. Where the call goes and what authenticates it
+                 are core-api's to know (CompletionService).
         ModelSetting:
             type: object
             properties:
@@ -6540,6 +6638,48 @@ tags:
          than a degraded one. So this service answers "billing is not configured here"
          as a first-class response rather than erroring, and a console that reads it
          shows a settings page with no checkout rather than a broken one.
+    - name: CompletionService
+      description: |-
+        Completions through core-api (ENT-256, part five; the §25 hardening,
+         unparked).
+
+         WHY THE MODEL CALL MOVES INTO GO
+
+         Intelligence used to dial the model itself: the deployment's own endpoint
+         from its configuration, or, for an organisation that chose a hosted
+         provider, an endpoint and an API key that core-api put in the DraftNarrative
+         request for that one call (ENT-236). That was the recorded exception to "no
+         third-party credential reaches the Python service", and it held because the
+         key lived for one request and was written nowhere.
+
+         Temporal retires the exception rather than widening it. A draft that runs as
+         a Python activity has its input written into a workflow history that is kept
+         for the namespace's retention and readable in the UI; a key cannot ride
+         there. So the key no longer rides anywhere: every completion, for every
+         organisation, comes through this service. Python sends the messages and
+         names the organisation; core-api resolves the organisation's model choice
+         inside the tenant's own rows, opens the sealed key with the key only it
+         holds, makes the call, and returns the content and what it cost. The Python
+         service holds no endpoint and no credential, by construction, and the
+         credential-rule tests in apps/intelligence assert the absence again.
+
+         WHAT IT COSTS, SAID OUT LOUD
+
+         Every prompt and every token of a customer's compliance data now passes
+         through core-api, which carried none of it before. That is the cost §25
+         priced, and it was taken deliberately: core-api already holds the finding,
+         the obligation and the profile the prompt is built from, so this is the
+         same data taking one more hop inside the trust boundary rather than new
+         data entering it. What does not change: the prompt is data, never
+         instruction, and core-api forwards it to the model without reading it.
+
+         NO FALLBACK, EVER
+
+         An organisation that chose a provider gets that provider or gets an error.
+         There is no branch that answers a hosted request with the deployment's own
+         model, because a silent fallback would process a customer's findings
+         somewhere other than where their own record of processing says, and nothing
+         in the product would say it happened.
     - name: CorpusService
       description: |-
         The regulatory corpus, read (§10, §24; ENT-207).

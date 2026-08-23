@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Completions through core-api (ENT-256, part five; the §25 hardening,
+// unparked).
+//
+// WHY THE MODEL CALL MOVES INTO GO
+//
+// Intelligence used to dial the model itself: the deployment's own endpoint
+// from its configuration, or, for an organisation that chose a hosted
+// provider, an endpoint and an API key that core-api put in the DraftNarrative
+// request for that one call (ENT-236). That was the recorded exception to "no
+// third-party credential reaches the Python service", and it held because the
+// key lived for one request and was written nowhere.
+//
+// Temporal retires the exception rather than widening it. A draft that runs as
+// a Python activity has its input written into a workflow history that is kept
+// for the namespace's retention and readable in the UI; a key cannot ride
+// there. So the key no longer rides anywhere: every completion, for every
+// organisation, comes through this service. Python sends the messages and
+// names the organisation; core-api resolves the organisation's model choice
+// inside the tenant's own rows, opens the sealed key with the key only it
+// holds, makes the call, and returns the content and what it cost. The Python
+// service holds no endpoint and no credential, by construction, and the
+// credential-rule tests in apps/intelligence assert the absence again.
+//
+// WHAT IT COSTS, SAID OUT LOUD
+//
+// Every prompt and every token of a customer's compliance data now passes
+// through core-api, which carried none of it before. That is the cost §25
+// priced, and it was taken deliberately: core-api already holds the finding,
+// the obligation and the profile the prompt is built from, so this is the
+// same data taking one more hop inside the trust boundary rather than new
+// data entering it. What does not change: the prompt is data, never
+// instruction, and core-api forwards it to the model without reading it.
+//
+// NO FALLBACK, EVER
+//
+// An organisation that chose a provider gets that provider or gets an error.
+// There is no branch that answers a hosted request with the deployment's own
+// model, because a silent fallback would process a customer's findings
+// somewhere other than where their own record of processing says, and nothing
+// in the product would say it happened.
+service CompletionService {
+  // One chat completion, on the model the organisation's choice resolves to.
+  //
+  //   invalid_argument      no organisation, no messages, or a malformed body
+  //   failed_precondition   the organisation's provider cannot be honoured
+  //                         (withdrawn, unreachable, a key that will not open,
+  //                         or a provider that refused the key), or this
+  //                         deployment runs no model at all; the run fails
+  //                         and says why, and nothing falls back
+  //   unavailable           the model endpoint did not answer or answered
+  //                         with a server error; try again
+  rpc Complete(CompleteRequest) returns (CompleteResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:intelligence";
+    option (google.api.http) = {
+      post: "/internal/v1/completions"
+      body: "*"
+    };
+  }
+}
+
+message CompleteRequest {
+  // Whose model. Resolves the organisation's choice (ENT-236) or the
+  // deployment's own model when it has made none.
+  string org_id = 1;
+  // The conversation, in order. The caller builds it; core-api forwards it.
+  repeated ChatMessage messages = 2;
+  // A JSON Schema the answer must conform to, serialised, or empty for free
+  // text. Forwarded as the endpoint's structured-output request.
+  string response_schema_json = 3;
+  // Zero means the endpoint's default.
+  int32 max_tokens = 4;
+  // Zero means the endpoint's default; the caller that wants exactly zero
+  // sets `temperature_set`.
+  float temperature = 5;
+  bool temperature_set = 6;
+}
+
+message ChatMessage {
+  // `system`, `user` or `assistant`.
+  string role = 1;
+  string content = 2;
+}
+
+message CompleteResponse {
+  string content = 1;
+  int32 input_tokens = 2;
+  int32 cached_input_tokens = 3;
+  int32 output_tokens = 4;
+  string finish_reason = 5;
+  // Which model served it, for the run record: the provider name the
+  // organisation chose (`instance` for the deployment's own model) and the
+  // model name on the wire.
+  string provider = 6;
+  string model = 7;
+}

@@ -33,8 +33,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
 )
@@ -59,61 +58,34 @@ type Drafter interface {
 	) (*connect.Response[platformv1.DraftNarrativeResponse], error)
 }
 
-// ModelChoices resolves which endpoint an organisation's runs go to (ENT-236).
-//
-// An interface for the same reason Findings is one, and nil is a supported
-// deployment: a stack that permits no hosted provider narrates on whatever
-// endpoint Intelligence was configured with, which is every stack by default.
-type ModelChoices interface {
-	ActiveModelChoiceForOrg(ctx context.Context, orgID string) (postgres.Choice, postgres.Sealed, error)
+// Router answers where an organisation's completions go (ENT-236), and is
+// asked here only so that a batch whose provider cannot be honoured fails
+// before it starts rather than one finding in. The route's credential is not
+// read: since ENT-256 part five, the Python service makes every completion
+// through CompletionService, and what NarrateFindings sends it is the
+// provider and model names for the run record.
+type Router interface {
+	Resolve(ctx context.Context, orgID string) (modelroute.Route, error)
 }
 
 type Service struct {
 	findings Findings
 	drafter  Drafter
 	logger   *slog.Logger
-
-	choices   ModelChoices
-	keys      *secrets.Keyring
-	providers []modelchoice.Provider
-	lookup    modelchoice.Lookup
+	router   Router
 }
 
 // Option configures the service.
-//
-// Options rather than more parameters, because a deployment with no agent pool
-// and no hosted providers is the ordinary one and it should not have to pass
-// four nils to say so.
 type Option func(*Service)
 
-// WithModelChoice makes this service honour an organisation's chosen provider.
-//
-// A nil store or a nil keyring is treated as absent, because honouring a choice
-// means reading it and opening a sealed key, and doing either without the other
-// is not a degraded version of this feature but a broken one.
-//
-// AN EMPTY PROVIDER LIST IS NOT ABSENT, AND THAT IS THE SUBTLE ONE. The obvious
-// reading is that a deployment permitting nothing has no work for this to do,
-// so it should not be wired. That is wrong in the one direction that matters:
-// an operator can withdraw the last provider while an organisation still has a
-// row, and an unwired resolver would then narrate that organisation on the
-// deployment's own model, silently, with nothing saying its choice had stopped
-// being honoured. Wired with an empty list, the same case fails loudly, because
-// `Permitted` refuses every name.
-func WithModelChoice(
-	choices ModelChoices,
-	keys *secrets.Keyring,
-	providers []modelchoice.Provider,
-	lookup modelchoice.Lookup,
-) Option {
+// WithRouter makes this service check, and name for the run record, the
+// model an organisation's choice resolves to. Nil is the same as absent:
+// runs are recorded against the deployment's own model.
+func WithRouter(router Router) Option {
 	return func(s *Service) {
-		if choices == nil || keys == nil {
-			return
+		if router != nil {
+			s.router = router
 		}
-		if lookup == nil {
-			lookup = modelchoice.SystemLookup
-		}
-		s.choices, s.keys, s.providers, s.lookup = choices, keys, providers, lookup
 	}
 }
 
@@ -130,7 +102,8 @@ func New(findings Findings, drafter Drafter, logger *slog.Logger, options ...Opt
 	return service
 }
 
-// modelEndpointFor resolves where this organisation's runs go.
+// modelEndpointFor names, for the run record, the model this organisation's
+// runs go to, and refuses when that model cannot be honoured.
 //
 // # A REFUSAL HERE FAILS THE JOB RATHER THAN FALLING BACK
 //
@@ -142,52 +115,17 @@ func New(findings Findings, drafter Drafter, logger *slog.Logger, options ...Opt
 // that stops and says why is recoverable; one that silently processes elsewhere
 // is a disclosure nobody can date.
 //
-// Nil with a nil error means exactly one thing: this organisation has made no
-// choice and uses the model this deployment runs.
+// Names only. `base_url` and `api_key` on ModelEndpoint are deprecated and
+// never set: the Python service refuses a request carrying either.
 func (s *Service) modelEndpointFor(ctx context.Context, orgID string) (*platformv1.ModelEndpoint, error) {
-	if s.choices == nil {
+	if s.router == nil {
 		return nil, nil
 	}
-
-	choice, sealed, err := s.choices.ActiveModelChoiceForOrg(ctx, orgID)
-	if errors.Is(err, postgres.ErrNoModelChoice) {
-		return nil, nil
-	}
+	route, err := s.router.Resolve(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
-
-	// RE-CHECKED, NOT TRUSTED BECAUSE IT WAS CHECKED WHEN IT WAS WRITTEN. The
-	// allow-list is deployment configuration, so a provider an operator has
-	// withdrawn has to stop being reachable for organisations that already
-	// chose it, and an endpoint that has since started resolving inside the
-	// deployment has to stop being dialled. 00025 makes the same argument about
-	// a connection endpoint.
-	provider, err := modelchoice.Permitted(s.providers, choice.Provider)
-	if err != nil {
-		return nil, fmt.Errorf("this organisation model provider is no longer permitted here: %w", err)
-	}
-	if err := modelchoice.ValidateEndpoint(ctx, choice.BaseURL, provider, s.lookup); err != nil {
-		return nil, fmt.Errorf("this organisation model endpoint can no longer be reached safely: %w", err)
-	}
-
-	endpoint := &platformv1.ModelEndpoint{
-		Provider: choice.Provider,
-		BaseUrl:  choice.BaseURL,
-		Model:    choice.Model,
-	}
-	if len(sealed.Ciphertext) > 0 {
-		key, err := s.keys.Open(sealed.Ciphertext, sealed.KeyID, choice.ID)
-		if err != nil {
-			// A key this deployment can no longer open. Refused rather than
-			// dialled without one, because an unauthenticated request to a
-			// hosted provider fails at the far end and takes the customer
-			// signal with it on the way.
-			return nil, fmt.Errorf("this organisation provider key cannot be opened: %w", err)
-		}
-		endpoint.ApiKey = key
-	}
-	return endpoint, nil
+	return &platformv1.ModelEndpoint{Provider: route.Provider, Model: route.Model}, nil
 }
 
 func (s *Service) NarrateFindings(

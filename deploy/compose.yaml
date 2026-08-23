@@ -506,6 +506,14 @@ services:
       # `model` profile's own instructions carry the one-line export, and
       # `deploy/.env` is where a self-hoster running the model puts it for good.
       KINDLAST_INTELLIGENCE_URL: ${KINDLAST_INTELLIGENCE_URL:-}
+      # Where the deployment's own model answers (ENT-256, part five). Every
+      # completion goes through core-api now: Intelligence asks, core-api
+      # resolves the organisation's choice, opens the key only it holds, and
+      # dials this (or the organisation's provider). The service name
+      # resolves only when the `model` profile is up; without it a completion
+      # is refused with a reason and nothing dials anything.
+      KINDLAST_MODEL_ENDPOINT: http://model:8080
+      KINDLAST_MODEL_NAME: ${KINDLAST_MODEL_NAME:-Qwen3.5-4B-Q4_K_M}
 
       # The credential core-api mints its own token with, to call Intelligence.
       #
@@ -978,7 +986,9 @@ services:
       # Through the edge, the same door a host caller uses, so there is no
       # development-only shortcut.
       KINDLAST_CORE_API_URL: http://edge:80
-      KINDLAST_MODEL_URL: http://model:8080
+      # No model URL here, since ENT-256 part five: this service dials no
+      # model. Completions go through core-api's CompletionService, which
+      # holds KINDLAST_MODEL_ENDPOINT and every organisation's key.
 
       # Recorded on every run, so a stored finding names the weights that
       # produced it rather than "a 4B".
