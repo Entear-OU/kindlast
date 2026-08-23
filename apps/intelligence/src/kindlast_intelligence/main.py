@@ -21,7 +21,8 @@ from .auth.tokens import ClientCredentialsToken
 from .auth.verifier import Verifier
 from .coreapi import CoreAPI
 from .harness.budget import Budget
-from .harness.model import ModelClient
+from .harness.model import ProxiedModelClient
+from .worker import start_in_background
 from .service import (
     IntelligenceService,
     _client_from_file,
@@ -149,14 +150,34 @@ def build_app():
         host_header=config["host_header"],
     )
 
+    # Every completion goes through core-api, bound to the organisation the
+    # run is for (ENT-256, part five). No model URL is read here, by design.
+    core_api_url = config["core_api_url"]
     service = IntelligenceService(
         verifier=verifier,
-        model=ModelClient(config["model_url"]),
-        core_api=CoreAPI(config["core_api_url"], tokens=tokens),
+        core_api=CoreAPI(core_api_url, tokens=tokens),
         model_name=os.getenv("KINDLAST_MODEL_NAME", "unknown"),
         model_version=os.getenv("KINDLAST_MODEL_VERSION", "unknown"),
+        model_factory=lambda org_id: ProxiedModelClient(core_api_url, tokens, org_id),
         budget=Budget(),
     )
+
+    # The worker half (ENT-256, part five): the same service, polling the
+    # `intelligence` task queue for drafts the Go worker's sweep workflow
+    # schedules. Empty means no worker, which is the RPC half alone.
+    temporal_addr = os.getenv("KINDLAST_TEMPORAL_ADDR", "").strip()
+    if temporal_addr:
+        start_in_background(
+            service,
+            temporal_addr,
+            os.getenv("KINDLAST_TEMPORAL_NAMESPACE", "default"),
+            int(os.getenv("KINDLAST_INTELLIGENCE_CONCURRENCY", "2")),
+        )
+    else:
+        logging.getLogger("kindlast.intelligence").warning(
+            "no temporal worker: KINDLAST_TEMPORAL_ADDR is not set, so findings are "
+            "narrated only when NarrateFindings is called by hand"
+        )
 
     return intelligence_connect.IntelligenceServiceWSGIApplication(service)
 

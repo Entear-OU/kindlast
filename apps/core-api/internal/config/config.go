@@ -149,6 +149,25 @@ type Config struct {
 	// `kindlast_ingest` holds grants on the ten regulatory tables and no others.
 	IngestDatabaseURL string
 
+	// ModelURL is where the deployment's own model answers
+	// (KINDLAST_MODEL_ENDPOINT): llama-server on the bundled stack, behind the
+	// `model` compose profile (ENT-256, part five). Every organisation that
+	// has chosen no provider completes here. Empty is supported and means
+	// this deployment runs no model: a completion for an organisation with no
+	// choice is refused with a reason.
+	//
+	// ENDPOINT rather than URL in the variable name, because KINDLAST_MODEL_URL
+	// already names the GGUF download for `model-init`, and one name for two
+	// things is how an operator points core-api at Hugging Face.
+	//
+	// On core-api rather than on Intelligence, because core-api makes the
+	// model call now: the Python service holds neither an endpoint nor a
+	// credential, by construction, and asks CompletionService instead.
+	ModelURL string
+	// ModelName is the model name on the wire for the deployment's own
+	// endpoint, which llama-server ignores and a run record carries.
+	ModelName string
+
 	// IntelligenceURL is where the Intelligence service answers (ENT-245).
 	//
 	// EMPTY IS A SUPPORTED DEPLOYMENT AND NOT A MISCONFIGURATION. The model
@@ -279,6 +298,8 @@ func Load() (*Config, error) {
 		HumanClientID:        fileOrValue("KINDLAST_HUMAN_CLIENT_ID"),
 		AgentDatabaseURL:     os.Getenv("KINDLAST_AGENT_DATABASE_URL"),
 		IntelligenceURL:      os.Getenv("KINDLAST_INTELLIGENCE_URL"),
+		ModelURL:             strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_MODEL_ENDPOINT")), "/"),
+		ModelName:            strings.TrimSpace(os.Getenv("KINDLAST_MODEL_NAME")),
 		InternalClientID:     internalClientID,
 		InternalClientSecret: internalClientSecret,
 		BillingEnabled:       truthy(os.Getenv("KINDLAST_BILLING_ENABLED")),

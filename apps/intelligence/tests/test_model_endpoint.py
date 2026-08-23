@@ -1,29 +1,28 @@
-"""One organisation's own provider, for one run (ENT-236, §26.6).
+"""One organisation's own provider, for one run (ENT-236, §26.6), as it
+stands after ENT-256 part five: names in, nothing else.
 
 # WHAT THESE TESTS ARE REALLY ABOUT
 
-`AGENTS.md` says no third-party credential reaches this service. ENT-236 puts
-one in a request to it, because an organisation that has chosen a hosted
-provider needs its runs to go there and core-api is the only process that can
-decide whose key it is entitled to open.
+`AGENTS.md` says no third-party credential reaches this service. ENT-236 put
+one in a request to it for one call, and tested the bound on that relaxation.
+ENT-256 retired the relaxation: every completion goes through core-api's
+CompletionService, bound to the organisation, and core-api resolves the choice,
+opens the key and makes the call. So the bound these tests keep is now:
 
-That is a real relaxation of a stated rule, so what replaces the rule has to be
-tested rather than asserted in a comment. The bound is:
+  THE REQUEST CARRIES PROVIDER AND MODEL NAMES FOR THE RUN RECORD AND NOTHING
+  ELSE. A request carrying an endpoint or a key is REFUSED, before any model
+  call, and the model client built for the run is bound to the organisation
+  the run is for and to nothing the request said.
 
-  THE KEY ARRIVES IN ONE FIELD OF ONE REQUEST, IS USED FOR THAT CALL, AND
-  LEAVES NO TRACE. It is never read from configuration, never written to the
-  run record, never logged, and never held past the response.
-
-Each of those is a test below. `test_no_third_party_credential.py` next door
-keeps the half of the rule that did not change: this service still cannot
-OBTAIN a credential, only receive one.
+`test_no_third_party_credential.py` next door keeps the config-layer half:
+this service reads no model URL and no key from anywhere.
 
 # AND THE FAILURE MODE THAT MATTERS MOST
 
-A run whose provider refuses the key must FAIL, visibly, and must not quietly
-be answered by the deployment's own model. Falling back would mean an
-organisation's findings were processed somewhere other than where its own
-record of processing says, with nothing in the product saying so.
+A run whose provider refuses, or whose organisation's choice cannot be
+honoured, FAILS, visibly: core-api answers the completion with an error and
+the run records that. Nothing in this process can fall back to the bundled
+model, because this process has no bundled model to fall back to.
 """
 
 from __future__ import annotations
@@ -47,7 +46,11 @@ OBLIGATION = intelligence_pb2.ObligationContext(
     summary="Article 30 requires a written record of what you do with personal data.",
 )
 
-HOSTED = intelligence_pb2.ModelEndpoint(
+# What core-api sends now: names only.
+HOSTED = intelligence_pb2.ModelEndpoint(provider="openai", model="gpt-oss-120b")
+
+# What a caller that has not heard would send, and is refused.
+WITH_KEY = intelligence_pb2.ModelEndpoint(
     provider="openai",
     base_url="https://api.openai.com",
     model="gpt-oss-120b",
@@ -84,14 +87,15 @@ class FakeModel:
 
 
 class RecordingFactory:
-    """Stands in for `ModelClient`, and remembers how it was built."""
+    """Stands in for `ProxiedModelClient`'s construction, and remembers which
+    organisation each client was bound to."""
 
     def __init__(self, client):
         self._client = client
         self.built = []
 
-    def __call__(self, base_url, api_key=None, model=None):
-        self.built.append({"base_url": base_url, "api_key": api_key, "model": model})
+    def __call__(self, org_id):
+        self.built.append(org_id)
         return self._client
 
 
@@ -104,19 +108,18 @@ class FakeCoreAPI:
         return "11111111-1111-4111-8111-111111111111"
 
 
-def a_service(auth_server: AuthServer, *, model, factory=None, core_api=None):
+def a_service(auth_server: AuthServer, *, factory, core_api=None):
     document = discover(auth_server.issuer)
     keys = KeySet(document["jwks_uri"])
     keys.warm()
 
     return IntelligenceService(
         verifier=Verifier(keys, issuer=document["issuer"], audience=TEST_AUDIENCE),
-        model=model,
         core_api=core_api or FakeCoreAPI(),
         model_name="Qwen3.5-2B-Q4_K_M",
         model_version="aaf42c8b",
-        budget=Budget(),
         model_factory=factory,
+        budget=Budget(),
     )
 
 
@@ -144,6 +147,10 @@ def call(service, request, token: str):
         captured["status"] = status
 
     chunks = b"".join(app(environ, start_response))
+    if "200" not in captured["status"]:
+        # A Connect error envelope, not a response message. The tests that
+        # expect a refusal read the status and the absence of side effects.
+        return captured, None
     response = intelligence_pb2.DraftNarrativeResponse()
     response.ParseFromString(chunks)
     return captured, response
@@ -158,136 +165,128 @@ def a_request(endpoint=None):
     )
 
 
-def test_with_no_endpoint_the_deployments_own_model_serves_the_run(auth_server):
-    """The default, and the case where nothing leaves."""
-    bundled = FakeModel(a_good_answer())
+ORG = "1961c05f-5e88-4f2f-92a1-d26600e0bcd0"
+
+
+def test_the_model_client_is_bound_to_the_organisation_and_to_nothing_the_request_said(auth_server):
+    # The one thing core-api needs to decide whose model answers is the
+    # organisation, so the one thing the client is built from is the
+    # organisation. Not a URL, not a key: there is nowhere in the request for
+    # either to come from any more.
+    proxied = FakeModel(a_good_answer())
+    factory = RecordingFactory(proxied)
+    service = a_service(auth_server, factory=factory)
+
+    captured, response = call(service, a_request(), auth_server.mint(auth_server.claims()))
+
+    assert "200" in captured["status"]
+    assert proxied.calls == 1
+    assert factory.built == [ORG], "the client was bound to something other than the organisation"
+    assert response.outcome == intelligence_pb2.DRAFT_OUTCOME_SUCCEEDED
+
+
+def test_with_no_endpoint_the_record_names_the_deployments_own_model(auth_server):
     factory = RecordingFactory(FakeModel(a_good_answer()))
     core_api = FakeCoreAPI()
-    service = a_service(auth_server, model=bundled, factory=factory, core_api=core_api)
+    service = a_service(auth_server, factory=factory, core_api=core_api)
 
     captured, _ = call(service, a_request(), auth_server.mint(auth_server.claims()))
 
     assert "200" in captured["status"]
-    assert bundled.calls == 1
-    assert factory.built == [], "a client was built for an organisation that chose none"
-
     _, run = core_api.recorded[0]
     assert run.provider == "instance", (
-        "a run on the deployment own endpoint must say so, because `local` "
-        "would be a claim the record cannot back: ENT-235 makes that endpoint "
-        "configurable"
+        "an organisation that chose nothing is recorded against the instance model"
     )
+    assert run.model == "Qwen3.5-2B-Q4_K_M"
+    assert run.model_version == "aaf42c8b"
 
 
-def test_a_chosen_provider_serves_the_run_and_the_bundled_model_is_untouched(auth_server):
-    hosted = FakeModel(a_good_answer())
-    bundled = FakeModel(a_good_answer())
-    factory = RecordingFactory(hosted)
+def test_a_chosen_provider_is_recorded_by_name_and_the_client_is_still_bound_to_the_org(auth_server):
+    factory = RecordingFactory(FakeModel(a_good_answer()))
     core_api = FakeCoreAPI()
-    service = a_service(auth_server, model=bundled, factory=factory, core_api=core_api)
+    service = a_service(auth_server, factory=factory, core_api=core_api)
 
     captured, _ = call(service, a_request(HOSTED), auth_server.mint(auth_server.claims()))
 
     assert "200" in captured["status"]
-    assert bundled.calls == 0, "the deployment own model answered a hosted run"
-    assert hosted.calls == 1
-    assert factory.built == [
-        {
-            "base_url": "https://api.openai.com",
-            "api_key": "sk-proj-abcdefgh1234",
-            "model": "gpt-oss-120b",
-        }
-    ]
-
+    assert factory.built == [ORG]
     _, run = core_api.recorded[0]
     assert run.provider == "openai"
     assert run.model == "gpt-oss-120b", (
-        "the run must name the model the provider was asked for, not the one "
-        "this container environment happens to hold"
+        "the record names the model the provider serves, not the instance model"
     )
+    assert run.model_version == "provider-managed"
 
 
-def test_the_run_record_carries_the_provider_and_never_the_key(auth_server):
-    """`agent_runs` is a record a customer reads and exports.
-
-    The provider belongs in it, because it is what a sub-processor record needs.
-    The key does not belong anywhere in it, and the strongest form of that is
-    the field not existing.
-    """
-    factory = RecordingFactory(FakeModel(a_good_answer()))
+def test_a_request_carrying_an_endpoint_or_a_key_is_refused_before_any_model_call(auth_server):
+    # THE TEST THE RULE RESTS ON. A key arriving here is the retired exception
+    # coming back through a door that is no longer open, and it is refused
+    # rather than used, so the caller that sent it gets fixed.
+    proxied = FakeModel(a_good_answer())
+    factory = RecordingFactory(proxied)
     core_api = FakeCoreAPI()
-    service = a_service(
-        auth_server, model=FakeModel(a_good_answer()), factory=factory, core_api=core_api
+    service = a_service(auth_server, factory=factory, core_api=core_api)
+
+    captured, _ = call(service, a_request(WITH_KEY), auth_server.mint(auth_server.claims()))
+
+    assert "400" in captured["status"], captured
+    assert proxied.calls == 0, "a model call was made for a request carrying a key"
+    assert factory.built == [], "a client was built for a request carrying a key"
+    assert core_api.recorded == [], "a run was recorded for a refused request"
+
+    # An endpoint alone, with no key, is refused for the same reason: this
+    # process dials nothing, so an endpoint is a caller that has not heard.
+    endpoint_only = intelligence_pb2.ModelEndpoint(
+        provider="byo", base_url="https://models.example.com", model="m"
     )
+    captured, _ = call(service, a_request(endpoint_only), auth_server.mint(auth_server.claims()))
+    assert "400" in captured["status"], captured
+    assert proxied.calls == 0
+
+
+def test_the_run_record_carries_the_provider_and_never_a_key(auth_server):
+    # Belt and braces on the record itself: even a request that carries names
+    # only produces a record whose every string is free of anything key-shaped.
+    core_api = FakeCoreAPI()
+    service = a_service(auth_server, factory=RecordingFactory(FakeModel(a_good_answer())), core_api=core_api)
 
     call(service, a_request(HOSTED), auth_server.mint(auth_server.claims()))
 
     _, run = core_api.recorded[0]
-    serialised = run.model_dump_json()
-    assert "sk-proj" not in serialised, "the key reached the run record"
-
+    serialised = json.dumps(
+        {k: v for k, v in vars(run).items() if isinstance(v, (str, int, float, bool, list, dict))},
+        default=str,
+    )
+    assert "sk-proj" not in serialised
+    assert "api_key" not in serialised
     forbidden = [
         name
         for name in AgentRun.model_fields
-        if any(
-            marker in name.lower()
-            # Not "token": `input_tokens` and its siblings are a usage count,
-            # which is exactly the sort of false positive that gets a guard
-            # like this one deleted rather than fixed.
-            for marker in ("key", "credential", "secret", "bearer", "api")
-        )
+        if "key" in name.lower() or "secret" in name.lower() or "url" in name.lower()
     ]
-    assert not forbidden, (
-        f"{forbidden} would let a provider credential into `agent_runs`, which "
-        "is a table a customer exports and hands to somebody else"
+    assert not forbidden, f"AgentRun has a field that could hold a credential: {forbidden}"
+
+
+def test_a_completion_core_api_refuses_fails_the_run_and_says_why(auth_server):
+    # core-api answers the completion with an error when the organisation's
+    # provider cannot be honoured or refuses the key. This process records a
+    # failed run with the reason and does not, cannot, fall back: it has no
+    # other model to fall back to.
+    refusing = FakeModel(
+        raises=ModelError(
+            "core-api could not complete the call: failed_precondition: "
+            "the openai endpoint refused this organisation credential (HTTP 401)"
+        )
     )
-
-
-def test_a_refused_provider_key_fails_the_run_and_never_falls_back(auth_server):
-    """The failure mode ENT-236 names explicitly.
-
-    A silent fallback would process this organisation finding on the
-    deployment own model while its own record of processing says otherwise, and
-    nothing in the product would say it happened.
-    """
-    bundled = FakeModel(a_good_answer())
-    refusing = FakeModel(raises=ModelError("the model endpoint failed: 401 Unauthorized"))
-    factory = RecordingFactory(refusing)
     core_api = FakeCoreAPI()
-    service = a_service(auth_server, model=bundled, factory=factory, core_api=core_api)
+    service = a_service(auth_server, factory=RecordingFactory(refusing), core_api=core_api)
 
-    wrong = intelligence_pb2.ModelEndpoint(
-        provider="openai",
-        base_url="https://api.openai.com",
-        model="gpt-oss-120b",
-        api_key="sk-proj-wrongkey1234",
-    )
-    captured, response = call(
-        service, a_request(wrong), auth_server.mint(auth_server.claims())
-    )
+    captured, response = call(service, a_request(HOSTED), auth_server.mint(auth_server.claims()))
 
     assert "200" in captured["status"]
-    assert bundled.calls == 0, "the run silently fell back to the bundled model"
     assert response.outcome == intelligence_pb2.DRAFT_OUTCOME_FAILED
     assert response.narrative == ""
-
+    assert refusing.calls == 1
     _, run = core_api.recorded[0]
-    assert run.provider == "openai", (
-        "a run that failed at a provider must still be attributable to it"
-    )
-    assert "sk-proj" not in run.outcome_detail, (
-        "the key appeared in a message a customer reads"
-    )
-
-
-def test_an_endpoint_with_no_key_is_a_real_configuration(auth_server):
-    """A provider on the customer own network may need no bearer token."""
-    factory = RecordingFactory(FakeModel(a_good_answer()))
-    service = a_service(auth_server, model=FakeModel(a_good_answer()), factory=factory)
-
-    endpoint = intelligence_pb2.ModelEndpoint(
-        provider="byo", base_url="https://models.example.com", model="m"
-    )
-    call(service, a_request(endpoint), auth_server.mint(auth_server.claims()))
-
-    assert factory.built[0]["api_key"] is None
+    assert run.provider == "openai", "the failed run is recorded against the provider that refused"
+    assert "refused" in run.outcome_detail

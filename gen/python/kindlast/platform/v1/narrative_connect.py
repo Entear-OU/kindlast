@@ -20,6 +20,12 @@ class NarrativeService(Protocol):
     async def narrate_findings(self, request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.NarrateFindingsRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.NarrateFindingsResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def next_finding_to_narrate(self, request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def record_narrative(self, request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class NarrativeServiceASGIApplication(ConnectASGIApplication[NarrativeService]):
     def __init__(self, service: NarrativeService | AsyncGenerator[NarrativeService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -35,6 +41,26 @@ class NarrativeServiceASGIApplication(ConnectASGIApplication[NarrativeService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.narrate_findings,
+                ),
+                "/kindlast.platform.v1.NarrativeService/NextFindingToNarrate": Endpoint.unary(
+                    method=MethodInfo(
+                        name="NextFindingToNarrate",
+                        service_name="kindlast.platform.v1.NarrativeService",
+                        input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.next_finding_to_narrate,
+                ),
+                "/kindlast.platform.v1.NarrativeService/RecordNarrative": Endpoint.unary(
+                    method=MethodInfo(
+                        name="RecordNarrative",
+                        service_name="kindlast.platform.v1.NarrativeService",
+                        input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.record_narrative,
                 ),
             },
             interceptors=interceptors,
@@ -69,9 +95,53 @@ class NarrativeServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def next_finding_to_narrate(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="NextFindingToNarrate",
+                service_name="kindlast.platform.v1.NarrativeService",
+                input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateRequest,
+                output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def record_narrative(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RecordNarrative",
+                service_name="kindlast.platform.v1.NarrativeService",
+                input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeRequest,
+                output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class NarrativeServiceSync(Protocol):
     def narrate_findings(self, request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.NarrateFindingsRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.NarrateFindingsResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def next_finding_to_narrate(self, request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def record_narrative(self, request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -88,6 +158,26 @@ class NarrativeServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.narrate_findings,
+                ),
+                "/kindlast.platform.v1.NarrativeService/NextFindingToNarrate": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="NextFindingToNarrate",
+                        service_name="kindlast.platform.v1.NarrativeService",
+                        input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.next_finding_to_narrate,
+                ),
+                "/kindlast.platform.v1.NarrativeService/RecordNarrative": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="RecordNarrative",
+                        service_name="kindlast.platform.v1.NarrativeService",
+                        input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.record_narrative,
                 ),
             },
             interceptors=interceptors,
@@ -116,6 +206,46 @@ class NarrativeServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.NarrativeService",
                 input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NarrateFindingsRequest,
                 output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NarrateFindingsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def next_finding_to_narrate(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="NextFindingToNarrate",
+                service_name="kindlast.platform.v1.NarrativeService",
+                input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateRequest,
+                output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.NextFindingToNarrateResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def record_narrative(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RecordNarrative",
+                service_name="kindlast.platform.v1.NarrativeService",
+                input=kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeRequest,
+                output=kindlast_dot_platform_dot_v1_dot_narrative__pb2.RecordNarrativeResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

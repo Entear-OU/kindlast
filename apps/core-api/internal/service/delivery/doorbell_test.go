@@ -1,4 +1,4 @@
-package dispatch
+package delivery
 
 import (
 	"context"
@@ -9,15 +9,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 )
 
-// The decision half of §8's approve link (ENT-249).
-//
-// The boundary is in the schema: 00027 refuses a finding-bound delegation for
-// an address nobody proved they control, for every writer including the schema
-// owner that the mint runs as. What is tested here is the decision that keeps
-// the dispatcher from meeting that boundary as an exception, because an
+// The decision half of §8's approve link (ENT-249), ported from the loop this
+// package replaced, and unchanged: what is tested is the decision that keeps
+// the sender from meeting 00027's boundary as an exception, because an
 // exception inside the delivery transaction would abort the notification and
 // retry it forever, and the visible symptom would be one person silently
 // receiving no compliance mail at all.
@@ -26,10 +24,10 @@ import (
 // approveLink turns "mints nothing for an unverified address" red on its own,
 // with the rest green.
 
-// mintRecorder is the Doorbells surface, with only the two calls these tests
-// reach implemented. Everything else panics rather than returning a zero
-// value, so a test that starts exercising more of the dispatcher fails loudly
-// instead of asserting against a fake that quietly agreed with it.
+// mintRecorder is the Outbox surface, with only the calls these tests reach
+// implemented. Everything else panics rather than returning a zero value, so a
+// test that starts exercising more of the handler fails loudly instead of
+// asserting against a fake that quietly agreed with it.
 type mintRecorder struct {
 	minted  []string
 	decline bool
@@ -48,14 +46,20 @@ func (m *mintRecorder) MintApprovalDelegation(
 	if lifetime > time.Hour {
 		// The database would refuse it, and a test that let it through would be
 		// asserting about a delegation nobody can mint.
-		return false, errors.New("dispatch: asked for a delegation longer than the ceiling")
+		return false, errors.New("delivery: asked for a delegation longer than the ceiling")
 	}
 	m.minted = append(m.minted, userID)
 	return true, nil
 }
 
 func (m *mintRecorder) Begin(context.Context) (pgx.Tx, error) { panic("not used") }
-func (m *mintRecorder) ClaimDoorbell(context.Context, pgx.Tx) (postgres.Doorbell, error) {
+func (m *mintRecorder) PendingDoorbellIDs(context.Context, int) ([]string, error) {
+	panic("not used")
+}
+func (m *mintRecorder) Doorbell(context.Context, string) (postgres.Doorbell, error) {
+	panic("not used")
+}
+func (m *mintRecorder) LockDoorbell(context.Context, pgx.Tx, string) (postgres.Doorbell, error) {
 	panic("not used")
 }
 func (m *mintRecorder) Recipients(context.Context, pgx.Tx, string) ([]postgres.Recipient, error) {
@@ -73,10 +77,22 @@ func (m *mintRecorder) MarkDoorbellSkipped(context.Context, pgx.Tx, string, stri
 func (m *mintRecorder) MarkDoorbellFailed(context.Context, pgx.Tx, string, error) error {
 	panic("not used")
 }
-
-func dispatcherFor(store Doorbells) *DoorbellDispatcher {
-	return &DoorbellDispatcher{store: store, baseURL: "http://localhost:3000"}
+func (m *mintRecorder) PendingMessageIDs(context.Context, int) ([]string, error) { panic("not used") }
+func (m *mintRecorder) DeliverMessage(context.Context, string, postgres.Deliver) (postgres.Delivery, error) {
+	panic("not used")
 }
+func (m *mintRecorder) ReclaimOutbox(context.Context, time.Duration, int) (postgres.ReclaimResult, error) {
+	panic("not used")
+}
+
+func serviceFor(store Outbox) *Service {
+	return &Service{outbox: store, channel: silentChannel{}, baseURL: "http://localhost:3000", now: time.Now}
+}
+
+type silentChannel struct{}
+
+func (silentChannel) Name() string                                 { return "test" }
+func (silentChannel) Send(context.Context, delivery.Message) error { return nil }
 
 var doorbell = postgres.Doorbell{
 	ID:        "b0a1c2d3-0000-0000-0000-000000000001",
@@ -88,7 +104,7 @@ func TestAVerifiedAddressGetsALinkNamingTheFinding(t *testing.T) {
 	t.Parallel()
 
 	store := &mintRecorder{}
-	link, err := dispatcherFor(store).approveLink(t.Context(), nil, doorbell,
+	link, err := serviceFor(store).approveLink(t.Context(), nil, doorbell,
 		postgres.Recipient{UserID: "someone", Email: "a@example.invalid", EmailVerified: true})
 	if err != nil {
 		t.Fatalf("minting an approve link failed: %v", err)
@@ -115,7 +131,7 @@ func TestAnUnverifiedAddressGetsTheDoorbellAndNoAuthority(t *testing.T) {
 	// missing is anybody having proved the address is theirs, and an approve
 	// link is authority to make a regulatory decision.
 	store := &mintRecorder{}
-	link, err := dispatcherFor(store).approveLink(t.Context(), nil, doorbell,
+	link, err := serviceFor(store).approveLink(t.Context(), nil, doorbell,
 		postgres.Recipient{UserID: "miko", Email: "miko@example.invalid", EmailVerified: false})
 	if err != nil {
 		t.Fatalf("an unverified recipient failed the delivery: %v", err)
@@ -132,11 +148,11 @@ func TestADeclinedMintStillDeliversTheNotification(t *testing.T) {
 	t.Parallel()
 
 	// The outbox row went away, or the person is no longer a member: ordinary
-	// races against a row claimed moments ago. The doorbell still has to ring,
+	// races against a row locked moments ago. The doorbell still has to ring,
 	// because a compliance finding nobody hears about is the failure this
 	// product exists to prevent.
 	store := &mintRecorder{decline: true}
-	link, err := dispatcherFor(store).approveLink(t.Context(), nil, doorbell,
+	link, err := serviceFor(store).approveLink(t.Context(), nil, doorbell,
 		postgres.Recipient{UserID: "ada", Email: "ada@example.invalid", EmailVerified: true})
 	if err != nil {
 		t.Fatalf("a declined mint failed the delivery: %v", err)
@@ -153,7 +169,7 @@ func TestAFailedMintFailsTheDeliveryRatherThanSendingALinkThatCannotWork(t *test
 	// link in somebody's mailbox with no row behind it, and they would find out
 	// by clicking it and being told it has expired.
 	store := &mintRecorder{fail: errors.New("connection reset")}
-	if _, err := dispatcherFor(store).approveLink(t.Context(), nil, doorbell,
+	if _, err := serviceFor(store).approveLink(t.Context(), nil, doorbell,
 		postgres.Recipient{UserID: "ada", Email: "ada@example.invalid", EmailVerified: true},
 	); err == nil {
 		t.Fatal("a failed mint was treated as no link rather than as a failure")

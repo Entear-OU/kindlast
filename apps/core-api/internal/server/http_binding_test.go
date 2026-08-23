@@ -450,6 +450,63 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.SweepService.ExpireSnoozes": {
 			Method: "POST", Path: "/internal/v1/snoozes:expire",
 		},
+		// ENT-256, part four. The sweep as two steps (the Analyst alone is
+		// the second), and the two lists the schedules ask for: triggers
+		// somebody enqueued, and every organisation with a profile. All
+		// cross-organisation or header-named as RunSweep is; none takes an
+		// {org_id} in the path.
+		"kindlast.platform.v1.SweepService.RunAnalyst": {
+			Method: "POST", Path: "/internal/v1/sweep:analyse",
+		},
+		"kindlast.platform.v1.SweepService.ListSweepTriggers": {
+			Method: "POST", Path: "/internal/v1/sweep-triggers:pending",
+		},
+		"kindlast.platform.v1.SweepService.SettleSweepTrigger": {
+			Method: "POST", Path: "/internal/v1/sweep-triggers:settle",
+		},
+		"kindlast.platform.v1.SweepService.ListSweepTargets": {
+			Method: "POST", Path: "/internal/v1/sweep-targets:list",
+		},
+		// ENT-256, part three. The outbox's delivery half, three custom
+		// actions over the messages, all cross-organisation by design and all
+		// on the internal prefix: what is pending, deliver this one, reclaim
+		// what no longer needs keeping. POST for the list too, because the
+		// convention on this surface is one verb and a body, and a GET with
+		// a query string would be the only one of its kind here.
+		"kindlast.platform.v1.DeliveryService.ListUndelivered": {
+			Method: "POST", Path: "/internal/v1/messages:pending",
+		},
+		"kindlast.platform.v1.DeliveryService.DeliverMessage": {
+			Method: "POST", Path: "/internal/v1/messages:deliver",
+		},
+		"kindlast.platform.v1.DeliveryService.ReclaimMessages": {
+			Method: "POST", Path: "/internal/v1/messages:reclaim",
+		},
+		// The doorbell path's three verbs, same shape: the workflow plans,
+		// sends to whoever is due, and settles the row when nobody is left.
+		"kindlast.platform.v1.DeliveryService.PlanNotification": {
+			Method: "POST", Path: "/internal/v1/notifications:plan",
+		},
+		"kindlast.platform.v1.DeliveryService.NotifyRecipients": {
+			Method: "POST", Path: "/internal/v1/notifications:notify",
+		},
+		"kindlast.platform.v1.DeliveryService.SettleNotification": {
+			Method: "POST", Path: "/internal/v1/notifications:settle",
+		},
+		// ENT-256, part five. One model call, through core-api, so the
+		// organisation's key never leaves Go. The prompt crosses here as
+		// data; the route and the credential are resolved on the far side.
+		"kindlast.platform.v1.CompletionService.Complete": {
+			Method: "POST", Path: "/internal/v1/completions",
+		},
+		// The narration chain's load and persist steps (ENT-256, part five):
+		// what the Go worker calls either side of the Python activity.
+		"kindlast.platform.v1.NarrativeService.NextFindingToNarrate": {
+			Method: "POST", Path: "/internal/v1/findings:next-to-narrate",
+		},
+		"kindlast.platform.v1.NarrativeService.RecordNarrative": {
+			Method: "POST", Path: "/internal/v1/findings:record-narrative",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

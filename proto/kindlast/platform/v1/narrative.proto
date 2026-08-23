@@ -4,6 +4,7 @@ package kindlast.platform.v1;
 
 import "google/api/annotations.proto";
 import "kindlast/options/v1/scope.proto";
+import "kindlast/platform/v1/intelligence.proto";
 
 // Narrating findings that have none (ENT-245, ENT-162, §26.2, §26.3).
 //
@@ -60,6 +61,42 @@ service NarrativeService {
       body: "*"
     };
   }
+
+  // The load step of a narration run, for the Temporal chain (ENT-256, part
+  // five): the next finding in this organisation that has no narrative yet,
+  // with the DraftNarrative request built for it exactly as NarrateFindings
+  // builds one (the signal, the one obligation it may cite, the provider and
+  // model names for the run record). The workflow hands that request to the
+  // Python worker as an activity on the `intelligence` task queue, and brings
+  // the answer back to RecordNarrative. Go loads, Python drafts, Go persists
+  // (§16.4).
+  //
+  // `intelligence_available` false means this deployment runs no
+  // Intelligence, which is supported; the workflow stops there. `found` false
+  // means nothing is waiting. The same finding is offered again until
+  // something is recorded for it, which is what makes a crashed draft a
+  // retry rather than a skipped finding.
+  rpc NextFindingToNarrate(NextFindingToNarrateRequest) returns (NextFindingToNarrateResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/findings:next-to-narrate"
+      body: "*"
+    };
+  }
+
+  // The persist step: what the draft produced, recorded against the finding
+  // exactly as NarrateFindings records it. A succeeded draft writes the
+  // narrative and the run id; a refused or failed one writes the refusal with
+  // its reason, so the finding is not offered again and an operator can read
+  // why it has no explanation. Recording the same draft twice writes the same
+  // thing twice, so a retried activity is harmless.
+  rpc RecordNarrative(RecordNarrativeRequest) returns (RecordNarrativeResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/findings:record-narrative"
+      body: "*"
+    };
+  }
 }
 
 message NarrateFindingsRequest {
@@ -90,4 +127,32 @@ message NarrateFindingsResponse {
   // supported rather than broken: the model service sits behind a compose
   // profile and a stack without it still produces findings.
   bool intelligence_available = 5;
+}
+
+message NextFindingToNarrateRequest {
+  string org_id = 1;
+}
+
+message NextFindingToNarrateResponse {
+  bool intelligence_available = 1;
+  bool found = 2;
+  string finding_id = 3;
+  // The request the Python worker's DraftNarrative activity takes, built
+  // here so that the activity is a pure function of its input and the
+  // obligation it may cite is the finding's own.
+  DraftNarrativeRequest draft = 4;
+}
+
+message RecordNarrativeRequest {
+  string org_id = 1;
+  string finding_id = 2;
+  // What the draft produced, as the Python worker returned it.
+  DraftNarrativeResponse draft = 3;
+}
+
+message RecordNarrativeResponse {
+  // True when the record was written. A retried activity that records the
+  // same draft twice writes the same thing twice, which is the idempotency
+  // NarrateFindings already had.
+  bool recorded = 1;
 }

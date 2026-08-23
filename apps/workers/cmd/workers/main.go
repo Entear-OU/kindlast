@@ -152,7 +152,8 @@ func run(logger *slog.Logger) error {
 		// symptom of forgetting the worker is "nothing ever runs on a
 		// schedule", which should be a log line rather than a mystery.
 		logger.Warn("no temporal worker: KINDLAST_TEMPORAL_ADDR is not set, " +
-			"so nothing in this deployment runs on a schedule (snoozed findings will not come back)")
+			"so nothing in this deployment runs on a schedule " +
+			"(no sweeps, snoozed findings will not come back, and no mail will leave)")
 	}
 
 	handler, err := server.New(server.Dependencies{
@@ -255,19 +256,35 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 		return nil, fmt.Errorf("building the worker's token source: %w", err)
 	}
 
-	coreAPI := platformv1connect.NewSweepServiceClient(
-		&http.Client{
-			Timeout:   2 * time.Minute,
-			Transport: &oidc.Bearer{Source: tokens},
-		}, t.CoreAPIURL)
+	// One HTTP client, one token source, two generated clients: the sweep
+	// surface for the snooze expiry and the delivery surface for the outbox.
+	// Both are the same service principal presenting the same credential to
+	// the same door.
+	httpClient := &http.Client{
+		Timeout:   2 * time.Minute,
+		Transport: &oidc.Bearer{Source: tokens},
+	}
+	coreAPI := platformv1connect.NewSweepServiceClient(httpClient, t.CoreAPIURL)
+	mail := platformv1connect.NewDeliveryServiceClient(httpClient, t.CoreAPIURL)
+	// The narrative client gets its own, longer timeout: one NarrateFindings
+	// call is one draft on whatever model the organisation runs, and a local
+	// model takes minutes per finding. The activity's own timeout is the
+	// bound that matters; this one only has to not fire first.
+	narratives := platformv1connect.NewNarrativeServiceClient(
+		&http.Client{Timeout: 10 * time.Minute, Transport: &oidc.Bearer{Source: tokens}},
+		t.CoreAPIURL)
 
 	opts := schedule.Options{
-		Addr:                 t.Addr,
-		Namespace:            t.Namespace,
-		TaskQueue:            t.TaskQueue,
-		SnoozeExpirySchedule: t.SnoozeExpirySchedule,
-		Activities:           &schedule.Activities{CoreAPI: coreAPI},
-		Logger:               logger,
+		Addr:                  t.Addr,
+		Namespace:             t.Namespace,
+		TaskQueue:             t.TaskQueue,
+		SnoozeExpirySchedule:  t.SnoozeExpirySchedule,
+		OutboxRelayInterval:   t.OutboxRelayInterval,
+		OutboxReclaimSchedule: t.OutboxReclaimSchedule,
+		SweepRelayInterval:    t.SweepRelayInterval,
+		SweepSchedule:         t.SweepSchedule,
+		Activities:            &schedule.Activities{CoreAPI: coreAPI, Sweeps: coreAPI, Mail: mail, Narratives: narratives},
+		Logger:                logger,
 	}
 	c, err := schedule.Connect(ctx, opts)
 	if err != nil {

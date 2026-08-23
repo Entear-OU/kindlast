@@ -35,7 +35,7 @@ future one nobody has written yet:
 - The append-only trigger on `audit_log`
 - Indexes
 - The `SECURITY DEFINER` functions that exist because RLS structurally cannot
-  express the check. There are eight:
+  express the check. There are nine:
 
   | Function | Added by | Why it cannot be a policy |
   |---|---|---|
@@ -47,9 +47,10 @@ future one nobody has written yet:
   | `resolve_act_delegation` | `00021` | Same reason as redeeming a capability token: the delegation is what establishes the session, so nothing is set yet for a policy to read |
   | `mint_finding_approval_delegation` | `00027` | The dispatcher mints it and holds no grant on `memberships`, so it cannot check the eligibility the mint depends on |
   | `expire_snoozed_findings` | `00034` | A maintenance pass over every organisation at once, started by a schedule with no tenant and no person; every `findings` policy is scoped by one organisation's GUC and the producer role cannot list organisations to iterate them |
+  | `sweep_targets` | `00035` | The daily sweep is "sweep everyone", written deliberately as a workflow that visits one organisation per activity; the producer role holds nothing on `organisations` and its `compliance_profiles` policies see nothing with no GUC set, so the list of tenants with something to sweep is a question only a definer can answer, and it answers with ids alone |
 
 Each carries its justification in the migration that creates it. A definer
-function is how RLS gets bypassed by accident, so adding a ninth means
+function is how RLS gets bypassed by accident, so adding a tenth means
 writing down why none of these eight already covers you.
 
 **This table went stale twice before anyone noticed, which is the argument for
@@ -208,6 +209,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_agent` | `regulatory_articles` | select |
 | `kindlast_agent` | `regulatory_documents` | select |
 | `kindlast_agent` | `regulatory_recitals` | select |
+| `kindlast_agent` | `sweep_triggers` | select, update |
 | `kindlast_agent` | `transactional_outbox` | select, update |
 | `kindlast_agent` | `watcher_findings` | insert, select, update |
 | `kindlast_app` | `act_delegations` | insert, select, update |
@@ -247,6 +249,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_app` | `regulatory_guidelines` | select |
 | `kindlast_app` | `regulatory_recitals` | select |
 | `kindlast_app` | `subscriptions` | select |
+| `kindlast_app` | `sweep_triggers` | insert |
 | `kindlast_app` | `transactional_outbox` | insert, select |
 | `kindlast_app` | `user_identities` | insert, select, update |
 | `kindlast_app` | `watcher_findings` | select |

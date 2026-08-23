@@ -29,6 +29,10 @@ const (
 	RoleAssistant = "assistant"
 )
 
+// ReasonOnboardingConfirmed is the `sweep_triggers.reason` (00035) a
+// confirmed interview enqueues, matching the database's check constraint.
+const ReasonOnboardingConfirmed = "onboarding_confirmed"
+
 // SkippedContent is what a declined question leaves in the transcript.
 //
 // Neutral on purpose. The transcript is read back to the person who wrote it,

@@ -24,6 +24,486 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type SettleSweepTriggerRequest_Outcome int32
+
+const (
+	SettleSweepTriggerRequest_OUTCOME_UNSPECIFIED SettleSweepTriggerRequest_Outcome = 0
+	// The Watcher and the Analyst both ran. The row becomes `done`.
+	SettleSweepTriggerRequest_OUTCOME_DONE SettleSweepTriggerRequest_Outcome = 1
+	// An attempt failed; `error` says how. The row stays pending with the
+	// attempt and the reason recorded.
+	SettleSweepTriggerRequest_OUTCOME_FAILED SettleSweepTriggerRequest_Outcome = 2
+)
+
+// Enum value maps for SettleSweepTriggerRequest_Outcome.
+var (
+	SettleSweepTriggerRequest_Outcome_name = map[int32]string{
+		0: "OUTCOME_UNSPECIFIED",
+		1: "OUTCOME_DONE",
+		2: "OUTCOME_FAILED",
+	}
+	SettleSweepTriggerRequest_Outcome_value = map[string]int32{
+		"OUTCOME_UNSPECIFIED": 0,
+		"OUTCOME_DONE":        1,
+		"OUTCOME_FAILED":      2,
+	}
+)
+
+func (x SettleSweepTriggerRequest_Outcome) Enum() *SettleSweepTriggerRequest_Outcome {
+	p := new(SettleSweepTriggerRequest_Outcome)
+	*p = x
+	return p
+}
+
+func (x SettleSweepTriggerRequest_Outcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SettleSweepTriggerRequest_Outcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_kindlast_platform_v1_sweep_proto_enumTypes[0].Descriptor()
+}
+
+func (SettleSweepTriggerRequest_Outcome) Type() protoreflect.EnumType {
+	return &file_kindlast_platform_v1_sweep_proto_enumTypes[0]
+}
+
+func (x SettleSweepTriggerRequest_Outcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SettleSweepTriggerRequest_Outcome.Descriptor instead.
+func (SettleSweepTriggerRequest_Outcome) EnumDescriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{5, 0}
+}
+
+type RunAnalystRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunAnalystRequest) Reset() {
+	*x = RunAnalystRequest{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunAnalystRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunAnalystRequest) ProtoMessage() {}
+
+func (x *RunAnalystRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunAnalystRequest.ProtoReflect.Descriptor instead.
+func (*RunAnalystRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{0}
+}
+
+type RunAnalystResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Findings the Analyst created or refreshed from the signals waiting for
+	// it. Zero is the ordinary answer for an organisation whose profile has not
+	// changed since its last sweep.
+	Findings int32 `protobuf:"varint,1,opt,name=findings,proto3" json:"findings,omitempty"`
+	// When this ran, from the database's clock inside the same transaction.
+	RanAt         *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=ran_at,json=ranAt,proto3" json:"ran_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunAnalystResponse) Reset() {
+	*x = RunAnalystResponse{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunAnalystResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunAnalystResponse) ProtoMessage() {}
+
+func (x *RunAnalystResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunAnalystResponse.ProtoReflect.Descriptor instead.
+func (*RunAnalystResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RunAnalystResponse) GetFindings() int32 {
+	if x != nil {
+		return x.Findings
+	}
+	return 0
+}
+
+func (x *RunAnalystResponse) GetRanAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RanAt
+	}
+	return nil
+}
+
+type ListSweepTriggersRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// At most this many. Zero means the server's default.
+	Limit         int32 `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSweepTriggersRequest) Reset() {
+	*x = ListSweepTriggersRequest{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSweepTriggersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSweepTriggersRequest) ProtoMessage() {}
+
+func (x *ListSweepTriggersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSweepTriggersRequest.ProtoReflect.Descriptor instead.
+func (*ListSweepTriggersRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListSweepTriggersRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ListSweepTriggersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Triggers      []*SweepTrigger        `protobuf:"bytes,1,rep,name=triggers,proto3" json:"triggers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSweepTriggersResponse) Reset() {
+	*x = ListSweepTriggersResponse{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSweepTriggersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSweepTriggersResponse) ProtoMessage() {}
+
+func (x *ListSweepTriggersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSweepTriggersResponse.ProtoReflect.Descriptor instead.
+func (*ListSweepTriggersResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ListSweepTriggersResponse) GetTriggers() []*SweepTrigger {
+	if x != nil {
+		return x.Triggers
+	}
+	return nil
+}
+
+type SweepTrigger struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	TriggerId string                 `protobuf:"bytes,1,opt,name=trigger_id,json=triggerId,proto3" json:"trigger_id,omitempty"`
+	OrgId     string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// Why the row exists; `onboarding_confirmed` today.
+	Reason        string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SweepTrigger) Reset() {
+	*x = SweepTrigger{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SweepTrigger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SweepTrigger) ProtoMessage() {}
+
+func (x *SweepTrigger) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SweepTrigger.ProtoReflect.Descriptor instead.
+func (*SweepTrigger) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SweepTrigger) GetTriggerId() string {
+	if x != nil {
+		return x.TriggerId
+	}
+	return ""
+}
+
+func (x *SweepTrigger) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *SweepTrigger) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type SettleSweepTriggerRequest struct {
+	state         protoimpl.MessageState            `protogen:"open.v1"`
+	TriggerId     string                            `protobuf:"bytes,1,opt,name=trigger_id,json=triggerId,proto3" json:"trigger_id,omitempty"`
+	Outcome       SettleSweepTriggerRequest_Outcome `protobuf:"varint,2,opt,name=outcome,proto3,enum=kindlast.platform.v1.SettleSweepTriggerRequest_Outcome" json:"outcome,omitempty"`
+	Error         string                            `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SettleSweepTriggerRequest) Reset() {
+	*x = SettleSweepTriggerRequest{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SettleSweepTriggerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SettleSweepTriggerRequest) ProtoMessage() {}
+
+func (x *SettleSweepTriggerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SettleSweepTriggerRequest.ProtoReflect.Descriptor instead.
+func (*SettleSweepTriggerRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SettleSweepTriggerRequest) GetTriggerId() string {
+	if x != nil {
+		return x.TriggerId
+	}
+	return ""
+}
+
+func (x *SettleSweepTriggerRequest) GetOutcome() SettleSweepTriggerRequest_Outcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return SettleSweepTriggerRequest_OUTCOME_UNSPECIFIED
+}
+
+func (x *SettleSweepTriggerRequest) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type SettleSweepTriggerResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True when this call changed the row; false when it was already done.
+	Settled       bool `protobuf:"varint,1,opt,name=settled,proto3" json:"settled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SettleSweepTriggerResponse) Reset() {
+	*x = SettleSweepTriggerResponse{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SettleSweepTriggerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SettleSweepTriggerResponse) ProtoMessage() {}
+
+func (x *SettleSweepTriggerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SettleSweepTriggerResponse.ProtoReflect.Descriptor instead.
+func (*SettleSweepTriggerResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SettleSweepTriggerResponse) GetSettled() bool {
+	if x != nil {
+		return x.Settled
+	}
+	return false
+}
+
+type ListSweepTargetsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSweepTargetsRequest) Reset() {
+	*x = ListSweepTargetsRequest{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSweepTargetsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSweepTargetsRequest) ProtoMessage() {}
+
+func (x *ListSweepTargetsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSweepTargetsRequest.ProtoReflect.Descriptor instead.
+func (*ListSweepTargetsRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{7}
+}
+
+type ListSweepTargetsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Organisation ids, in a stable order.
+	OrgIds        []string `protobuf:"bytes,1,rep,name=org_ids,json=orgIds,proto3" json:"org_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSweepTargetsResponse) Reset() {
+	*x = ListSweepTargetsResponse{}
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSweepTargetsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSweepTargetsResponse) ProtoMessage() {}
+
+func (x *ListSweepTargetsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSweepTargetsResponse.ProtoReflect.Descriptor instead.
+func (*ListSweepTargetsResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListSweepTargetsResponse) GetOrgIds() []string {
+	if x != nil {
+		return x.OrgIds
+	}
+	return nil
+}
+
 type RunSweepRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Run the Watcher only, and skip converting its signals into findings.
@@ -39,7 +519,7 @@ type RunSweepRequest struct {
 
 func (x *RunSweepRequest) Reset() {
 	*x = RunSweepRequest{}
-	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[0]
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -51,7 +531,7 @@ func (x *RunSweepRequest) String() string {
 func (*RunSweepRequest) ProtoMessage() {}
 
 func (x *RunSweepRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[0]
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64,7 +544,7 @@ func (x *RunSweepRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunSweepRequest.ProtoReflect.Descriptor instead.
 func (*RunSweepRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{0}
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RunSweepRequest) GetDetectOnly() bool {
@@ -94,7 +574,7 @@ type RunSweepResponse struct {
 
 func (x *RunSweepResponse) Reset() {
 	*x = RunSweepResponse{}
-	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[1]
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -106,7 +586,7 @@ func (x *RunSweepResponse) String() string {
 func (*RunSweepResponse) ProtoMessage() {}
 
 func (x *RunSweepResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[1]
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -119,7 +599,7 @@ func (x *RunSweepResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunSweepResponse.ProtoReflect.Descriptor instead.
 func (*RunSweepResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{1}
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RunSweepResponse) GetSignals() int32 {
@@ -151,7 +631,7 @@ type ExpireSnoozesRequest struct {
 
 func (x *ExpireSnoozesRequest) Reset() {
 	*x = ExpireSnoozesRequest{}
-	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[2]
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -163,7 +643,7 @@ func (x *ExpireSnoozesRequest) String() string {
 func (*ExpireSnoozesRequest) ProtoMessage() {}
 
 func (x *ExpireSnoozesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[2]
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -176,7 +656,7 @@ func (x *ExpireSnoozesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExpireSnoozesRequest.ProtoReflect.Descriptor instead.
 func (*ExpireSnoozesRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{2}
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{11}
 }
 
 type ExpireSnoozesResponse struct {
@@ -193,7 +673,7 @@ type ExpireSnoozesResponse struct {
 
 func (x *ExpireSnoozesResponse) Reset() {
 	*x = ExpireSnoozesResponse{}
-	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[3]
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -205,7 +685,7 @@ func (x *ExpireSnoozesResponse) String() string {
 func (*ExpireSnoozesResponse) ProtoMessage() {}
 
 func (x *ExpireSnoozesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[3]
+	mi := &file_kindlast_platform_v1_sweep_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -218,7 +698,7 @@ func (x *ExpireSnoozesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExpireSnoozesResponse.ProtoReflect.Descriptor instead.
 func (*ExpireSnoozesResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{3}
+	return file_kindlast_platform_v1_sweep_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ExpireSnoozesResponse) GetReemerged() int32 {
@@ -239,7 +719,34 @@ var File_kindlast_platform_v1_sweep_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_sweep_proto_rawDesc = "" +
 	"\n" +
-	" kindlast/platform/v1/sweep.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"2\n" +
+	" kindlast/platform/v1/sweep.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\x13\n" +
+	"\x11RunAnalystRequest\"c\n" +
+	"\x12RunAnalystResponse\x12\x1a\n" +
+	"\bfindings\x18\x01 \x01(\x05R\bfindings\x121\n" +
+	"\x06ran_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05ranAt\"0\n" +
+	"\x18ListSweepTriggersRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\"[\n" +
+	"\x19ListSweepTriggersResponse\x12>\n" +
+	"\btriggers\x18\x01 \x03(\v2\".kindlast.platform.v1.SweepTriggerR\btriggers\"\\\n" +
+	"\fSweepTrigger\x12\x1d\n" +
+	"\n" +
+	"trigger_id\x18\x01 \x01(\tR\ttriggerId\x12\x15\n" +
+	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xed\x01\n" +
+	"\x19SettleSweepTriggerRequest\x12\x1d\n" +
+	"\n" +
+	"trigger_id\x18\x01 \x01(\tR\ttriggerId\x12Q\n" +
+	"\aoutcome\x18\x02 \x01(\x0e27.kindlast.platform.v1.SettleSweepTriggerRequest.OutcomeR\aoutcome\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"H\n" +
+	"\aOutcome\x12\x17\n" +
+	"\x13OUTCOME_UNSPECIFIED\x10\x00\x12\x10\n" +
+	"\fOUTCOME_DONE\x10\x01\x12\x12\n" +
+	"\x0eOUTCOME_FAILED\x10\x02\"6\n" +
+	"\x1aSettleSweepTriggerResponse\x12\x18\n" +
+	"\asettled\x18\x01 \x01(\bR\asettled\"\x19\n" +
+	"\x17ListSweepTargetsRequest\"3\n" +
+	"\x18ListSweepTargetsResponse\x12\x17\n" +
+	"\aorg_ids\x18\x01 \x03(\tR\x06orgIds\"2\n" +
 	"\x0fRunSweepRequest\x12\x1f\n" +
 	"\vdetect_only\x18\x01 \x01(\bR\n" +
 	"detectOnly\"{\n" +
@@ -250,10 +757,15 @@ const file_kindlast_platform_v1_sweep_proto_rawDesc = "" +
 	"\x14ExpireSnoozesRequest\"h\n" +
 	"\x15ExpireSnoozesResponse\x12\x1c\n" +
 	"\treemerged\x18\x01 \x01(\x05R\treemerged\x121\n" +
-	"\x06ran_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05ranAt2\xc2\x02\n" +
+	"\x06ran_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05ranAt2\x87\b\n" +
 	"\fSweepService\x12\x8b\x01\n" +
 	"\bRunSweep\x12%.kindlast.platform.v1.RunSweepRequest\x1a&.kindlast.platform.v1.RunSweepResponse\"0\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/internal/v1/sweep\x12\xa3\x01\n" +
-	"\rExpireSnoozes\x12*.kindlast.platform.v1.ExpireSnoozesRequest\x1a+.kindlast.platform.v1.ExpireSnoozesResponse\"9\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/internal/v1/snoozes:expireB\xde\x01\n" +
+	"\rExpireSnoozes\x12*.kindlast.platform.v1.ExpireSnoozesRequest\x1a+.kindlast.platform.v1.ExpireSnoozesResponse\"9\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/internal/v1/snoozes:expire\x12\x99\x01\n" +
+	"\n" +
+	"RunAnalyst\x12'.kindlast.platform.v1.RunAnalystRequest\x1a(.kindlast.platform.v1.RunAnalystResponse\"8\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/internal/v1/sweep:analyse\x12\xb7\x01\n" +
+	"\x11ListSweepTriggers\x12..kindlast.platform.v1.ListSweepTriggersRequest\x1a/.kindlast.platform.v1.ListSweepTriggersResponse\"A\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02(:\x01*\"#/internal/v1/sweep-triggers:pending\x12\xb9\x01\n" +
+	"\x12SettleSweepTrigger\x12/.kindlast.platform.v1.SettleSweepTriggerRequest\x1a0.kindlast.platform.v1.SettleSweepTriggerResponse\"@\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02':\x01*\"\"/internal/v1/sweep-triggers:settle\x12\xb0\x01\n" +
+	"\x10ListSweepTargets\x12-.kindlast.platform.v1.ListSweepTargetsRequest\x1a..kindlast.platform.v1.ListSweepTargetsResponse\"=\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02$:\x01*\"\x1f/internal/v1/sweep-targets:listB\xde\x01\n" +
 	"\x18com.kindlast.platform.v1B\n" +
 	"SweepProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
@@ -269,26 +781,48 @@ func file_kindlast_platform_v1_sweep_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_sweep_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_sweep_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_kindlast_platform_v1_sweep_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_kindlast_platform_v1_sweep_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_kindlast_platform_v1_sweep_proto_goTypes = []any{
-	(*RunSweepRequest)(nil),       // 0: kindlast.platform.v1.RunSweepRequest
-	(*RunSweepResponse)(nil),      // 1: kindlast.platform.v1.RunSweepResponse
-	(*ExpireSnoozesRequest)(nil),  // 2: kindlast.platform.v1.ExpireSnoozesRequest
-	(*ExpireSnoozesResponse)(nil), // 3: kindlast.platform.v1.ExpireSnoozesResponse
-	(*timestamppb.Timestamp)(nil), // 4: google.protobuf.Timestamp
+	(SettleSweepTriggerRequest_Outcome)(0), // 0: kindlast.platform.v1.SettleSweepTriggerRequest.Outcome
+	(*RunAnalystRequest)(nil),              // 1: kindlast.platform.v1.RunAnalystRequest
+	(*RunAnalystResponse)(nil),             // 2: kindlast.platform.v1.RunAnalystResponse
+	(*ListSweepTriggersRequest)(nil),       // 3: kindlast.platform.v1.ListSweepTriggersRequest
+	(*ListSweepTriggersResponse)(nil),      // 4: kindlast.platform.v1.ListSweepTriggersResponse
+	(*SweepTrigger)(nil),                   // 5: kindlast.platform.v1.SweepTrigger
+	(*SettleSweepTriggerRequest)(nil),      // 6: kindlast.platform.v1.SettleSweepTriggerRequest
+	(*SettleSweepTriggerResponse)(nil),     // 7: kindlast.platform.v1.SettleSweepTriggerResponse
+	(*ListSweepTargetsRequest)(nil),        // 8: kindlast.platform.v1.ListSweepTargetsRequest
+	(*ListSweepTargetsResponse)(nil),       // 9: kindlast.platform.v1.ListSweepTargetsResponse
+	(*RunSweepRequest)(nil),                // 10: kindlast.platform.v1.RunSweepRequest
+	(*RunSweepResponse)(nil),               // 11: kindlast.platform.v1.RunSweepResponse
+	(*ExpireSnoozesRequest)(nil),           // 12: kindlast.platform.v1.ExpireSnoozesRequest
+	(*ExpireSnoozesResponse)(nil),          // 13: kindlast.platform.v1.ExpireSnoozesResponse
+	(*timestamppb.Timestamp)(nil),          // 14: google.protobuf.Timestamp
 }
 var file_kindlast_platform_v1_sweep_proto_depIdxs = []int32{
-	4, // 0: kindlast.platform.v1.RunSweepResponse.ran_at:type_name -> google.protobuf.Timestamp
-	4, // 1: kindlast.platform.v1.ExpireSnoozesResponse.ran_at:type_name -> google.protobuf.Timestamp
-	0, // 2: kindlast.platform.v1.SweepService.RunSweep:input_type -> kindlast.platform.v1.RunSweepRequest
-	2, // 3: kindlast.platform.v1.SweepService.ExpireSnoozes:input_type -> kindlast.platform.v1.ExpireSnoozesRequest
-	1, // 4: kindlast.platform.v1.SweepService.RunSweep:output_type -> kindlast.platform.v1.RunSweepResponse
-	3, // 5: kindlast.platform.v1.SweepService.ExpireSnoozes:output_type -> kindlast.platform.v1.ExpireSnoozesResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	14, // 0: kindlast.platform.v1.RunAnalystResponse.ran_at:type_name -> google.protobuf.Timestamp
+	5,  // 1: kindlast.platform.v1.ListSweepTriggersResponse.triggers:type_name -> kindlast.platform.v1.SweepTrigger
+	0,  // 2: kindlast.platform.v1.SettleSweepTriggerRequest.outcome:type_name -> kindlast.platform.v1.SettleSweepTriggerRequest.Outcome
+	14, // 3: kindlast.platform.v1.RunSweepResponse.ran_at:type_name -> google.protobuf.Timestamp
+	14, // 4: kindlast.platform.v1.ExpireSnoozesResponse.ran_at:type_name -> google.protobuf.Timestamp
+	10, // 5: kindlast.platform.v1.SweepService.RunSweep:input_type -> kindlast.platform.v1.RunSweepRequest
+	12, // 6: kindlast.platform.v1.SweepService.ExpireSnoozes:input_type -> kindlast.platform.v1.ExpireSnoozesRequest
+	1,  // 7: kindlast.platform.v1.SweepService.RunAnalyst:input_type -> kindlast.platform.v1.RunAnalystRequest
+	3,  // 8: kindlast.platform.v1.SweepService.ListSweepTriggers:input_type -> kindlast.platform.v1.ListSweepTriggersRequest
+	6,  // 9: kindlast.platform.v1.SweepService.SettleSweepTrigger:input_type -> kindlast.platform.v1.SettleSweepTriggerRequest
+	8,  // 10: kindlast.platform.v1.SweepService.ListSweepTargets:input_type -> kindlast.platform.v1.ListSweepTargetsRequest
+	11, // 11: kindlast.platform.v1.SweepService.RunSweep:output_type -> kindlast.platform.v1.RunSweepResponse
+	13, // 12: kindlast.platform.v1.SweepService.ExpireSnoozes:output_type -> kindlast.platform.v1.ExpireSnoozesResponse
+	2,  // 13: kindlast.platform.v1.SweepService.RunAnalyst:output_type -> kindlast.platform.v1.RunAnalystResponse
+	4,  // 14: kindlast.platform.v1.SweepService.ListSweepTriggers:output_type -> kindlast.platform.v1.ListSweepTriggersResponse
+	7,  // 15: kindlast.platform.v1.SweepService.SettleSweepTrigger:output_type -> kindlast.platform.v1.SettleSweepTriggerResponse
+	9,  // 16: kindlast.platform.v1.SweepService.ListSweepTargets:output_type -> kindlast.platform.v1.ListSweepTargetsResponse
+	11, // [11:17] is the sub-list for method output_type
+	5,  // [5:11] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_sweep_proto_init() }
@@ -301,13 +835,14 @@ func file_kindlast_platform_v1_sweep_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_sweep_proto_rawDesc), len(file_kindlast_platform_v1_sweep_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   4,
+			NumEnums:      1,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_kindlast_platform_v1_sweep_proto_goTypes,
 		DependencyIndexes: file_kindlast_platform_v1_sweep_proto_depIdxs,
+		EnumInfos:         file_kindlast_platform_v1_sweep_proto_enumTypes,
 		MessageInfos:      file_kindlast_platform_v1_sweep_proto_msgTypes,
 	}.Build()
 	File_kindlast_platform_v1_sweep_proto = out.File

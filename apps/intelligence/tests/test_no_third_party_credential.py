@@ -27,28 +27,26 @@ for the reason that file gives: a package that is not declared cannot be
 imported by accident later, and a setting that is not read cannot be set by
 accident either.
 
-# WHAT ENT-236 CHANGED, AND WHAT IT DID NOT
+# WHAT ENT-236 CHANGED, AND WHAT ENT-256 CHANGED BACK
 
-One thing changed and it is worth stating here rather than only in the file
-that changed it. An organisation may choose a hosted model provider, and its
-API key then arrives in one field of one `DraftNarrative` request, is used for
-that call, and is not held. `AGENTS.md` says no third-party credential reaches
-this service, so that is a real relaxation and not a reading of the rule.
+ENT-236 put one thing through the rule: an organisation that chose a hosted
+model provider had its API key arrive in one field of one `DraftNarrative`
+request, used for that call and not held. It was a recorded relaxation, with
+the half that mattered preserved: this service could not OBTAIN a credential.
 
-What these tests keep is the half that did not move, which is the half the rule
-exists for: this service still cannot OBTAIN a credential. It reads none from
-its configuration, declares no library that could fetch one, holds no database
-handle to look one up in, and has no way to ask for a key belonging to an
-organisation core-api did not hand it. It can only receive one, for one call,
-from the one caller that is entitled to decide.
-
-`test_model_endpoint.py` carries the other half: that the received key is used
-for that call and leaves no trace, and that a provider refusing it fails the run
-rather than quietly falling back to the deployment own model.
+ENT-256 part five retired the relaxation rather than keeping it. Every
+completion now goes through core-api's CompletionService, bound to the
+organisation; core-api resolves the choice, opens the key and makes the call.
+This service dials no model, reads no model URL, and refuses a request that
+carries an endpoint or a key. The tests below assert the config-layer half (no
+model URL, no credential in `config_from_env`), and `test_model_endpoint.py`
+asserts the request-layer half (a key in a request is refused before any model
+call, and the client built for a run is bound to the organisation alone).
 """
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -271,3 +269,26 @@ def test_the_provider_key_arrives_in_a_request_and_never_in_configuration():
         "call, from core-api, which is the only process holding the key that "
         "seals them (ENT-236)."
     )
+
+
+def test_the_configuration_carries_no_model_endpoint(monkeypatch):
+    """Since ENT-256 part five this service dials no model at all: the
+    deployment's own model URL is core-api's setting (`KINDLAST_MODEL_URL` on
+    core-api), and a URL read here would be a second place to dial from, and
+    the first step back towards holding a key to dial with."""
+    monkeypatch.setenv("KINDLAST_OIDC_ISSUER", "http://localhost:8300")
+    monkeypatch.setenv("KINDLAST_CORE_API_URL", "http://edge:80")
+    monkeypatch.setenv("KINDLAST_MODEL_URL", "http://model:8080")
+
+    settings = config_from_env()
+
+    assert not any("model" in key.lower() and "url" in key.lower() for key in settings), (
+        f"the service reads a model URL from its configuration: {sorted(settings)}"
+    )
+    # And the source that wires the service builds no direct model client.
+    wiring = (SRC / "kindlast_intelligence" / "main.py").read_text()
+    assert not re.search(r"(?<![A-Za-z])ModelClient\(", wiring), (
+        "main.py builds a direct model client; the service's completions go "
+        "through core-api (ProxiedModelClient)"
+    )
+    assert "KINDLAST_MODEL_URL" not in wiring

@@ -191,20 +191,71 @@ func InQuietHours(now time.Time, start, end string) bool {
 	return minutes >= fromMin || minutes < toMin
 }
 
-// ShouldNotify decides whether one person hears about one finding, and says why
-// not when they do not.
+// QuietHoursEnd is the moment somebody's quiet window next ends, in the
+// location of `now`, or false when they are not inside one.
 //
-// The reason is returned rather than logged because it ends up in the outbox
-// row's `last_error` when nobody at all wanted a notification, and an operator
-// asking "why did nothing go out" deserves an answer better than silence.
-func ShouldNotify(findingSeverity, floor string, now time.Time, quietStart, quietEnd string) (bool, string) {
+// The answer is what a durable timer sleeps until (ENT-256, part three): a
+// notification that arrives inside the window is held, not dropped, and this
+// is how long. Built from the clock fields in the caller's zone, so a window
+// of 22:00 to 07:00 for somebody in Helsinki ends at 07:00 Helsinki time on
+// whichever calendar day that next is, including across a daylight-saving
+// change, which a "now plus nine hours" arithmetic would get wrong twice a
+// year.
+func QuietHoursEnd(now time.Time, start, end string) (time.Time, bool) {
+	if !InQuietHours(now, start, end) {
+		return time.Time{}, false
+	}
+	to, err := time.Parse("15:04", end)
+	if err != nil {
+		return time.Time{}, false
+	}
+	candidate := time.Date(now.Year(), now.Month(), now.Day(), to.Hour(), to.Minute(), 0, 0, now.Location())
+	if !candidate.After(now) {
+		candidate = candidate.AddDate(0, 0, 1)
+	}
+	return candidate, true
+}
+
+// Decision is what one person should get about one finding, as of now.
+type Decision struct {
+	// Send: they want it and nothing is in the way.
+	Send bool
+	// HoldUntil is set when they want it and are inside quiet hours: the
+	// moment their window ends, in their zone. Zero otherwise.
+	HoldUntil time.Time
+	// Reason says why not, for a hold and for a skip. It ends up in the
+	// outbox row's `last_error` when nobody at all wanted a notification, and
+	// an operator asking "why did nothing go out" deserves an answer better
+	// than silence.
+	Reason string
+}
+
+// Held reports whether the decision is "later rather than never".
+func (d Decision) Held() bool { return !d.HoldUntil.IsZero() }
+
+// Decide says whether one person hears about one finding now, later, or not
+// at all.
+//
+// Three answers rather than two, because quiet hours are not a refusal: the
+// person asked to hear about findings, and asked not to be woken for them.
+// Before there was a scheduler the only honest thing to do with "later" was
+// to record it and drop the message (§17.5); with one, "later" is a time.
+func Decide(findingSeverity, floor string, now time.Time, quietStart, quietEnd string) Decision {
 	if !MeetsSeverity(findingSeverity, floor) {
-		return false, fmt.Sprintf("severity %s is below the %s floor", findingSeverity, floor)
+		return Decision{Reason: fmt.Sprintf("severity %s is below the %s floor", findingSeverity, floor)}
 	}
-	if InQuietHours(now, quietStart, quietEnd) {
-		return false, "inside quiet hours"
+	if until, held := QuietHoursEnd(now, quietStart, quietEnd); held {
+		return Decision{HoldUntil: until, Reason: "inside quiet hours"}
 	}
-	return true, ""
+	return Decision{Send: true}
+}
+
+// ShouldNotify decides whether one person hears about one finding right now,
+// and says why not when they do not. Decide is the three-way form; this is
+// kept for the callers and tests that only ask "now or not".
+func ShouldNotify(findingSeverity, floor string, now time.Time, quietStart, quietEnd string) (bool, string) {
+	d := Decide(findingSeverity, floor, now, quietStart, quietEnd)
+	return d.Send, d.Reason
 }
 
 // Doorbell is what one finding notification needs in order to be rendered.

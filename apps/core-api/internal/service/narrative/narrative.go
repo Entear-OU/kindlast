@@ -33,8 +33,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
 )
@@ -59,61 +58,34 @@ type Drafter interface {
 	) (*connect.Response[platformv1.DraftNarrativeResponse], error)
 }
 
-// ModelChoices resolves which endpoint an organisation's runs go to (ENT-236).
-//
-// An interface for the same reason Findings is one, and nil is a supported
-// deployment: a stack that permits no hosted provider narrates on whatever
-// endpoint Intelligence was configured with, which is every stack by default.
-type ModelChoices interface {
-	ActiveModelChoiceForOrg(ctx context.Context, orgID string) (postgres.Choice, postgres.Sealed, error)
+// Router answers where an organisation's completions go (ENT-236), and is
+// asked here only so that a batch whose provider cannot be honoured fails
+// before it starts rather than one finding in. The route's credential is not
+// read: since ENT-256 part five, the Python service makes every completion
+// through CompletionService, and what NarrateFindings sends it is the
+// provider and model names for the run record.
+type Router interface {
+	Resolve(ctx context.Context, orgID string) (modelroute.Route, error)
 }
 
 type Service struct {
 	findings Findings
 	drafter  Drafter
 	logger   *slog.Logger
-
-	choices   ModelChoices
-	keys      *secrets.Keyring
-	providers []modelchoice.Provider
-	lookup    modelchoice.Lookup
+	router   Router
 }
 
 // Option configures the service.
-//
-// Options rather than more parameters, because a deployment with no agent pool
-// and no hosted providers is the ordinary one and it should not have to pass
-// four nils to say so.
 type Option func(*Service)
 
-// WithModelChoice makes this service honour an organisation's chosen provider.
-//
-// A nil store or a nil keyring is treated as absent, because honouring a choice
-// means reading it and opening a sealed key, and doing either without the other
-// is not a degraded version of this feature but a broken one.
-//
-// AN EMPTY PROVIDER LIST IS NOT ABSENT, AND THAT IS THE SUBTLE ONE. The obvious
-// reading is that a deployment permitting nothing has no work for this to do,
-// so it should not be wired. That is wrong in the one direction that matters:
-// an operator can withdraw the last provider while an organisation still has a
-// row, and an unwired resolver would then narrate that organisation on the
-// deployment's own model, silently, with nothing saying its choice had stopped
-// being honoured. Wired with an empty list, the same case fails loudly, because
-// `Permitted` refuses every name.
-func WithModelChoice(
-	choices ModelChoices,
-	keys *secrets.Keyring,
-	providers []modelchoice.Provider,
-	lookup modelchoice.Lookup,
-) Option {
+// WithRouter makes this service check, and name for the run record, the
+// model an organisation's choice resolves to. Nil is the same as absent:
+// runs are recorded against the deployment's own model.
+func WithRouter(router Router) Option {
 	return func(s *Service) {
-		if choices == nil || keys == nil {
-			return
+		if router != nil {
+			s.router = router
 		}
-		if lookup == nil {
-			lookup = modelchoice.SystemLookup
-		}
-		s.choices, s.keys, s.providers, s.lookup = choices, keys, providers, lookup
 	}
 }
 
@@ -130,7 +102,8 @@ func New(findings Findings, drafter Drafter, logger *slog.Logger, options ...Opt
 	return service
 }
 
-// modelEndpointFor resolves where this organisation's runs go.
+// modelEndpointFor names, for the run record, the model this organisation's
+// runs go to, and refuses when that model cannot be honoured.
 //
 // # A REFUSAL HERE FAILS THE JOB RATHER THAN FALLING BACK
 //
@@ -142,52 +115,17 @@ func New(findings Findings, drafter Drafter, logger *slog.Logger, options ...Opt
 // that stops and says why is recoverable; one that silently processes elsewhere
 // is a disclosure nobody can date.
 //
-// Nil with a nil error means exactly one thing: this organisation has made no
-// choice and uses the model this deployment runs.
+// Names only. `base_url` and `api_key` on ModelEndpoint are deprecated and
+// never set: the Python service refuses a request carrying either.
 func (s *Service) modelEndpointFor(ctx context.Context, orgID string) (*platformv1.ModelEndpoint, error) {
-	if s.choices == nil {
+	if s.router == nil {
 		return nil, nil
 	}
-
-	choice, sealed, err := s.choices.ActiveModelChoiceForOrg(ctx, orgID)
-	if errors.Is(err, postgres.ErrNoModelChoice) {
-		return nil, nil
-	}
+	route, err := s.router.Resolve(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
-
-	// RE-CHECKED, NOT TRUSTED BECAUSE IT WAS CHECKED WHEN IT WAS WRITTEN. The
-	// allow-list is deployment configuration, so a provider an operator has
-	// withdrawn has to stop being reachable for organisations that already
-	// chose it, and an endpoint that has since started resolving inside the
-	// deployment has to stop being dialled. 00025 makes the same argument about
-	// a connection endpoint.
-	provider, err := modelchoice.Permitted(s.providers, choice.Provider)
-	if err != nil {
-		return nil, fmt.Errorf("this organisation model provider is no longer permitted here: %w", err)
-	}
-	if err := modelchoice.ValidateEndpoint(ctx, choice.BaseURL, provider, s.lookup); err != nil {
-		return nil, fmt.Errorf("this organisation model endpoint can no longer be reached safely: %w", err)
-	}
-
-	endpoint := &platformv1.ModelEndpoint{
-		Provider: choice.Provider,
-		BaseUrl:  choice.BaseURL,
-		Model:    choice.Model,
-	}
-	if len(sealed.Ciphertext) > 0 {
-		key, err := s.keys.Open(sealed.Ciphertext, sealed.KeyID, choice.ID)
-		if err != nil {
-			// A key this deployment can no longer open. Refused rather than
-			// dialled without one, because an unauthenticated request to a
-			// hosted provider fails at the far end and takes the customer
-			// signal with it on the way.
-			return nil, fmt.Errorf("this organisation provider key cannot be opened: %w", err)
-		}
-		endpoint.ApiKey = key
-	}
-	return endpoint, nil
+	return &platformv1.ModelEndpoint{Provider: route.Provider, Model: route.Model}, nil
 }
 
 func (s *Service) NarrateFindings(
@@ -265,6 +203,21 @@ func (s *Service) narrate(
 	finding postgres.PendingFinding,
 	endpoint *platformv1.ModelEndpoint,
 ) (platformv1.DraftOutcome, error) {
+	response, err := s.drafter.DraftNarrative(ctx,
+		connect.NewRequest(s.draftRequestFor(orgID, finding, endpoint)))
+	if err != nil {
+		return platformv1.DraftOutcome_DRAFT_OUTCOME_UNSPECIFIED, err
+	}
+	return s.recordOutcome(ctx, orgID, finding.ID, response.Msg)
+}
+
+// draftRequestFor builds the request a draft of this finding takes, whether
+// the drafter is Intelligence's RPC (NarrateFindings) or its activity on the
+// `intelligence` task queue (NextFindingToNarrate): one function, so the two
+// paths cannot offer different obligations or different grounds.
+func (s *Service) draftRequestFor(
+	orgID string, finding postgres.PendingFinding, endpoint *platformv1.ModelEndpoint,
+) *platformv1.DraftNarrativeRequest {
 	// THE SIGNAL IS THE SWEEP'S OWN WORDS, AND IT IS DATA RATHER THAN
 	// INSTRUCTION.
 	//
@@ -275,67 +228,140 @@ func (s *Service) narrate(
 	signal := fmt.Sprintf("%s\n\nProposed action: %s\nSeverity: %s",
 		finding.Detected, finding.ProposedAction, finding.Severity)
 
-	response, err := s.drafter.DraftNarrative(ctx, connect.NewRequest(
-		&platformv1.DraftNarrativeRequest{
-			OrgId:  orgID,
-			Signal: signal,
-			// ONE OBLIGATION, WHICH IS THE STRONGEST FORM OF THE CHECK.
+	return &platformv1.DraftNarrativeRequest{
+		OrgId:  orgID,
+		Signal: signal,
+		// ONE OBLIGATION, WHICH IS THE STRONGEST FORM OF THE CHECK.
+		//
+		// The validator refuses any citation outside what was offered, so
+		// offering exactly the obligation this finding is about means a
+		// narrative citing any other article is refused even when that
+		// article genuinely exists. Offering the whole corpus would make a
+		// fabrication indistinguishable from a good citation.
+		Obligations: []*platformv1.ObligationContext{{
+			Slug:    finding.ObligationSlug,
+			Title:   finding.ObligationTitle,
+			Summary: finding.ObligationSummary,
+			// WHY THE OBLIGATION APPLIES, RATHER THAN LEAVING THE MODEL TO
+			// WORK IT OUT (ENT-248).
 			//
-			// The validator refuses any citation outside what was offered, so
-			// offering exactly the obligation this finding is about means a
-			// narrative citing any other article is refused even when that
-			// article genuinely exists. Offering the whole corpus would make a
-			// fabrication indistinguishable from a good citation.
-			Obligations: []*platformv1.ObligationContext{{
-				Slug:    finding.ObligationSlug,
-				Title:   finding.ObligationTitle,
-				Summary: finding.ObligationSummary,
-				// WHY THE OBLIGATION APPLIES, RATHER THAN LEAVING THE MODEL TO
-				// WORK IT OUT (ENT-248).
-				//
-				// Both narratives ENT-248 was filed for invented their own
-				// grounds, because nothing had given them any: one asserted the
-				// obligation binds every controller regardless of size, the
-				// other reasoned from a missing record to a headcount
-				// exemption. A model with no grounds reaches for what it
-				// remembers about the regulation, which is the single thing a
-				// 2B is worst at.
-				//
-				// Rendered from the obligation's own conditions rather than
-				// re-evaluated here. The sweep already decided they hold, and
-				// a second evaluator disagreeing with the first is what
-				// produced ENT-246.
-				AppliesBecause: corpus.AppliesBecause(finding.ObligationAppliesWhen),
-			}},
-			// Nil for an organisation on the deployment own model, which is the
-			// default and the case where nothing leaves.
-			ModelEndpoint: endpoint,
-		}))
-	if err != nil {
-		return platformv1.DraftOutcome_DRAFT_OUTCOME_UNSPECIFIED, err
+			// Both narratives ENT-248 was filed for invented their own
+			// grounds, because nothing had given them any: one asserted the
+			// obligation binds every controller regardless of size, the
+			// other reasoned from a missing record to a headcount
+			// exemption. A model with no grounds reaches for what it
+			// remembers about the regulation, which is the single thing a
+			// 2B is worst at.
+			//
+			// Rendered from the obligation's own conditions rather than
+			// re-evaluated here. The sweep already decided they hold, and
+			// a second evaluator disagreeing with the first is what
+			// produced ENT-246.
+			AppliesBecause: corpus.AppliesBecause(finding.ObligationAppliesWhen),
+		}},
+		// Nil for an organisation on the deployment own model, which is the
+		// default and the case where nothing leaves.
+		ModelEndpoint: endpoint,
 	}
+}
 
-	msg := response.Msg
+// recordOutcome writes what a draft produced against the finding: the
+// narrative and run id for a success, the refusal and its reason otherwise.
+func (s *Service) recordOutcome(
+	ctx context.Context, orgID string, findingID uuid.UUID, msg *platformv1.DraftNarrativeResponse,
+) (platformv1.DraftOutcome, error) {
 	if msg.GetOutcome() == platformv1.DraftOutcome_DRAFT_OUTCOME_SUCCEEDED {
 		if err := s.findings.RecordNarrative(
-			ctx, orgID, finding.ID, msg.GetNarrative(), msg.GetAgentRunId(),
+			ctx, orgID, findingID, msg.GetNarrative(), msg.GetAgentRunId(),
 		); err != nil {
 			return platformv1.DraftOutcome_DRAFT_OUTCOME_UNSPECIFIED, err
 		}
 		return msg.GetOutcome(), nil
 	}
 
-	// Refused or failed. Recorded rather than retried on the next pass: a
-	// finding the model cannot narrate correctly would otherwise be picked up
-	// forever and burn the whole budget in a loop.
 	reason := msg.GetOutcomeDetail()
 	if reason == "" {
 		reason = "the run produced no narrative and gave no reason"
 	}
 	if err := s.findings.RecordNarrativeRefusal(
-		ctx, orgID, finding.ID, reason, msg.GetAgentRunId(),
+		ctx, orgID, findingID, reason, msg.GetAgentRunId(),
 	); err != nil {
 		return platformv1.DraftOutcome_DRAFT_OUTCOME_UNSPECIFIED, err
 	}
 	return msg.GetOutcome(), nil
+}
+
+// NextFindingToNarrate is the load step of the Temporal narration chain
+// (ENT-256, part five): the next finding with no narrative, with its draft
+// request built.
+func (s *Service) NextFindingToNarrate(
+	ctx context.Context,
+	req *connect.Request[platformv1.NextFindingToNarrateRequest],
+) (*connect.Response[platformv1.NextFindingToNarrateResponse], error) {
+	orgID := req.Msg.GetOrgId()
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("org_id is required"))
+	}
+	if s.drafter == nil {
+		// The same answer NarrateFindings gives: a deployment without the
+		// model profile is supported, and says so rather than failing.
+		return connect.NewResponse(&platformv1.NextFindingToNarrateResponse{
+			IntelligenceAvailable: false,
+		}), nil
+	}
+
+	endpoint, err := s.modelEndpointFor(ctx, orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	pending, err := s.findings.FindingsAwaitingNarrative(ctx, orgID, 1)
+	if err != nil {
+		if errors.Is(err, postgres.ErrBadOrganisation) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if len(pending) == 0 {
+		return connect.NewResponse(&platformv1.NextFindingToNarrateResponse{
+			IntelligenceAvailable: true,
+		}), nil
+	}
+	finding := pending[0]
+	return connect.NewResponse(&platformv1.NextFindingToNarrateResponse{
+		IntelligenceAvailable: true,
+		Found:                 true,
+		FindingId:             finding.ID.String(),
+		Draft:                 s.draftRequestFor(orgID, finding, endpoint),
+	}), nil
+}
+
+// RecordNarrative is the persist step of the Temporal narration chain.
+func (s *Service) RecordNarrative(
+	ctx context.Context,
+	req *connect.Request[platformv1.RecordNarrativeRequest],
+) (*connect.Response[platformv1.RecordNarrativeResponse], error) {
+	orgID := req.Msg.GetOrgId()
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("org_id is required"))
+	}
+	findingID, err := uuid.Parse(req.Msg.GetFindingId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("finding_id is not a uuid"))
+	}
+	if req.Msg.GetDraft() == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("draft is required"))
+	}
+
+	if _, err := s.recordOutcome(ctx, orgID, findingID, req.Msg.GetDraft()); err != nil {
+		if errors.Is(err, postgres.ErrBadOrganisation) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&platformv1.RecordNarrativeResponse{Recorded: true}), nil
 }

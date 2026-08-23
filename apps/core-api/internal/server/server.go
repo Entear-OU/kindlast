@@ -9,16 +9,18 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	auditservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/audit"
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
+	completionservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/completion"
 	corpusservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/corpus"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
+	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	narrativeservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/notifications"
 	onboardingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/onboarding"
@@ -64,6 +66,18 @@ type Dependencies struct {
 	// on-demand trigger leaves KINDLAST_AGENT_DATABASE_URL unset, which is
 	// better than serving an endpoint that fails on every call.
 	Producer sweepservice.Producer
+
+	// Outbox is the transactional outbox on the same agent pool, served as
+	// DeliveryService to the Temporal worker (ENT-256, part three). Nil means
+	// the service is not served, which goes with Producer: no agent pool, no
+	// internal surface.
+	Outbox deliveryservice.Outbox
+	// Mail is the channel DeliveryService sends on. Nil is the supported state
+	// before KINDLAST_SMTP_ADDR is set: the rows queue, the list and the
+	// reclaim still answer, and a delivery is refused with a message naming
+	// the setting rather than the service being absent. Finding notifications
+	// also need AppBaseURL below, for the links they carry.
+	Mail delivery.Channel
 
 	// HumanClientID is the OAuth client whose tokens carry the human scope set
 	// (ENT-221). Empty leaves the scope interceptor reading granted scopes for
@@ -165,18 +179,15 @@ type Dependencies struct {
 	// operator.
 	Drafter narrativeservice.Drafter
 
-	// ModelChoices, ModelKeys and ModelProviders let the narration job honour an
-	// organisation's chosen provider (ENT-236).
-	//
-	// Three fields rather than one, because the narration job needs all three to
-	// honour a choice safely: the rows to read it from, the keyring to open the
-	// sealed credential with, and the operator's allow-list to re-check the
-	// provider against on every pass. Any one missing means the job narrates on
-	// the deployment's own endpoint, which is the default rather than a
-	// degradation.
-	ModelChoices   narrativeservice.ModelChoices
-	ModelKeys      *secrets.Keyring
-	ModelProviders []modelchoice.Provider
+	// ModelRouter answers where an organisation's completions go: the
+	// deployment's own model, or the provider it chose (ENT-236), with the
+	// sealed key opened only here in Go (ENT-256, part five). Two services
+	// ask it: NarrativeService, to refuse a batch whose provider cannot be
+	// honoured before it starts, and CompletionService, to make the call.
+	// Always set by main, even on a deployment with no model: the resolver
+	// then refuses every completion with a reason, which is better than a
+	// service that is absent.
+	ModelRouter *modelroute.Resolver
 
 	// Integrations serves the console's control over which customer systems
 	// Kindlast may reach (ENT-231).
@@ -342,6 +353,18 @@ func New(deps Dependencies) (http.Handler, error) {
 			sweepservice.New(deps.Producer), internal))
 	}
 
+	// Delivering mail (ENT-256, part three). On the same chain, because the
+	// caller is the same service principal: the Temporal worker, listing what
+	// is pending, delivering one row, reclaiming what no longer needs keeping.
+	// Registered with the outbox rather than with the channel, so a deployment
+	// with rows and no mail server answers "no channel configured" rather than
+	// 404, which is the difference between a setting to add and a route to
+	// debug.
+	if deps.Outbox != nil {
+		mux.Handle(platformv1connect.NewDeliveryServiceHandler(
+			deliveryservice.New(deps.Outbox, deps.Mail, deps.AppBaseURL), internal))
+	}
+
 	// Writing the corpus (ENT-207). On the same shorter chain, for the same
 	// reason plus one of its own: the corpus has no `org_id` because it is the
 	// same law for every customer, so there is no organisation for a tenancy
@@ -376,9 +399,19 @@ func New(deps Dependencies) (http.Handler, error) {
 	if deps.Narratives != nil {
 		mux.Handle(platformv1connect.NewNarrativeServiceHandler(
 			narrativeservice.New(deps.Narratives, deps.Drafter, deps.Logger,
-				narrativeservice.WithModelChoice(
-					deps.ModelChoices, deps.ModelKeys, deps.ModelProviders, nil)),
+				narrativeservice.WithRouter(routerOrNil(deps.ModelRouter))),
 			internal))
+	}
+
+	// Completions through core-api (ENT-256, part five). The Python service
+	// asks here for every model call, naming the organisation; this resolves
+	// the route and opens the key, and the key goes to the model endpoint and
+	// nowhere else. Registered whenever a router exists, which main makes
+	// always: a deployment with no model answers failed_precondition with a
+	// reason rather than 404.
+	if deps.ModelRouter != nil {
+		mux.Handle(platformv1connect.NewCompletionServiceHandler(
+			completionservice.New(deps.ModelRouter, nil), internal))
 	}
 
 	// Unauthenticated by design, and bound to the internal listener only.
@@ -546,4 +579,13 @@ func New(deps Dependencies) (http.Handler, error) {
 	})
 
 	return mux, nil
+}
+
+// routerOrNil keeps a nil *Resolver out of a non-nil interface: the same
+// typed-nil trap main guards every optional dependency against.
+func routerOrNil(r *modelroute.Resolver) narrativeservice.Router {
+	if r == nil {
+		return nil
+	}
+	return r
 }

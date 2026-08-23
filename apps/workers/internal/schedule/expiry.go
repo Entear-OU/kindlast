@@ -30,7 +30,6 @@ package schedule
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
@@ -94,30 +93,15 @@ type Expirer interface {
 	ExpireSnoozes(ctx context.Context, req *connect.Request[platformv1.ExpireSnoozesRequest]) (*connect.Response[platformv1.ExpireSnoozesResponse], error)
 }
 
-// Activities holds the dependencies the activities close over. Registered as
-// a struct so the worker registers its methods by name once.
-type Activities struct {
-	CoreAPI Expirer
-}
-
 // ExpireSnoozes calls core-api's pass and returns what it reported.
 //
-// Errors are returned as they are, and that is the retry policy working
-// rather than this code being lazy about them: a network error, a 503 from
-// the edge, an Unavailable from core-api are all "try again in a bit", and the
-// policy on the workflow side says how. What is NOT retryable is a permission
-// error, because retrying a refusal a thousand times produces a thousand
-// refusals, and the thing to do is tell an operator their credential no longer
-// holds `internal:ingest`.
+// Errors are returned as they are, which is the retry policy working rather
+// than this code being lazy about them; see nonRetryableIfRefused for the one
+// exception and why.
 func (a *Activities) ExpireSnoozes(ctx context.Context) (ExpiryResult, error) {
 	res, err := a.CoreAPI.ExpireSnoozes(ctx, connect.NewRequest(&platformv1.ExpireSnoozesRequest{}))
 	if err != nil {
-		if connect.CodeOf(err) == connect.CodePermissionDenied || connect.CodeOf(err) == connect.CodeUnauthenticated {
-			return ExpiryResult{}, temporal.NewNonRetryableApplicationError(
-				fmt.Sprintf("core-api refused the worker's credential: %v", err),
-				"credential", err)
-		}
-		return ExpiryResult{}, err
+		return ExpiryResult{}, nonRetryableIfRefused(err)
 	}
 	result := ExpiryResult{Reemerged: res.Msg.GetReemerged()}
 	if ranAt := res.Msg.GetRanAt(); ranAt != nil {

@@ -655,7 +655,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.FindingsService", "SnoozeFinding"]
             },
-            "description": "Defers a finding. Required scope: `findings:act`. **Implemented as of ENT-203**, and reachable by a signed-in human as of ENT-221; see List findings for why this collection's own token is not.\n\n`days` is clamped to 1..365 by the database; `0` or an omitted value means the default of 7. A snoozed finding returns to `pending` when `expire_snoozed_findings()` next runs, and nothing schedules that yet — the pg_cron jobs were dropped in 00001 and the schedules move to Temporal at build-order step 8.\n\n**Unlike approve and reject, this is deliberately not idempotent.** Snoozing an already-snoozed finding writes a second audit row, because deferring again is a second decision with a new date. A trail that recorded only the first would say a finding was deferred once when a human deferred it four times, which is precisely what an auditor is looking for."
+            "description": "Defers a finding. Required scope: `findings:act`. **Implemented as of ENT-203**, and reachable by a signed-in human as of ENT-221; see List findings for why this collection's own token is not.\n\n`days` is clamped to 1..365 by the database; `0` or an omitted value means the default of 7. A snoozed finding returns to `pending` when `expire_snoozed_findings()` next runs, which the `expire-snoozed-findings` Temporal Schedule does hourly as of ENT-256 (see Expire snoozes).\n\n**Unlike approve and reject, this is deliberately not idempotent.** Snoozing an already-snoozed finding writes a second audit row, because deferring again is a second decision with a new date. A trail that recorded only the first would say a finding was deferred once when a human deferred it four times, which is precisely what an auditor is looking for."
           }
         },
         {
@@ -676,7 +676,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.platform.v1.SweepService", "RunSweep"]
             },
-            "description": "Runs the Watcher and then the Analyst for the organisation the header names. **Implemented as of ENT-203.** Required scope: `internal:ingest`.\n\n**This is the one request here the client-credentials token above is actually for.** Every other Core API request needs a human scope, which a machine client does not hold; this one needs `internal:ingest`, which is a machine scope and nothing else is meant to have.\n\n**The seed grants it as of ENT-221**, so this works from here where the others do not. That asymmetry is the design rather than an accident: `internal:*` is issued to service users and never to a browser client, and the human scope set in core-api deliberately contains none of it.\n\n**Why this endpoint exists at all.** Nothing runs the sweeps on a schedule. 00001 dropped the three pg_cron jobs when the schema moved off Supabase, and the schedules return with Temporal at build-order step 8. Between those points a perfectly correct feed shows an empty state forever, because nothing has ever looked. This is how you make something happen now, and when Temporal lands it becomes the thing Temporal calls rather than being replaced.\n\n**It runs as a different database role.** `core-api` serves requests as `kindlast_app`, which deliberately cannot create findings: the thing exposed to the world should not be able to fabricate a claim about a customer's legal exposure. Sweeps run on a second pool as `kindlast_agent` (00008). If `KINDLAST_AGENT_DATABASE_URL` is unset the service is not served at all and this answers `unimplemented`, which is a supported configuration rather than a fault.\n\n**Per-organisation, never global.** A request with no `Kindlast-Org-Id` is refused with `invalid_argument` rather than defaulting. Doing nothing would look like success, and sweeping everyone has every customer in its blast radius, so sweeping the estate is a loop somebody writes deliberately.\n\n`detectOnly` runs the Watcher and skips the Analyst. Use it when the feed is empty and you need to know which half is quiet: the Watcher finding nothing wrong is a different failure from the Analyst failing to resolve an obligation.\n\n`findings` lower than `signals` is normal, not an error. A signal whose obligation slug resolves to nothing is skipped and logged, because a finding with no obligation behind it could not cite anything."
+            "description": "Runs the Watcher and then the Analyst for the organisation the header names. **Implemented as of ENT-203.** Required scope: `internal:ingest`.\n\n**This is the one request here the client-credentials token above is actually for.** Every other Core API request needs a human scope, which a machine client does not hold; this one needs `internal:ingest`, which is a machine scope and nothing else is meant to have.\n\n**The seed grants it as of ENT-221**, so this works from here where the others do not. That asymmetry is the design rather than an accident: `internal:*` is issued to service users and never to a browser client, and the human scope set in core-api deliberately contains none of it.\n\n**Why this endpoint still exists.** As of ENT-256 (part four) sweeps run on Temporal: confirming onboarding enqueues one (see List sweep triggers) and `sweep-every-organisation` runs daily at 06:00 UTC over every organisation with a profile. Both workflows call this surface as activities (Run sweep with `detectOnly: true`, then Run analyst), so this request is what the worker calls, kept for an operator who wants to sweep one organisation now and see the counts.\n\n**It runs as a different database role.** `core-api` serves requests as `kindlast_app`, which deliberately cannot create findings: the thing exposed to the world should not be able to fabricate a claim about a customer's legal exposure. Sweeps run on a second pool as `kindlast_agent` (00008). If `KINDLAST_AGENT_DATABASE_URL` is unset the service is not served at all and this answers `unimplemented`, which is a supported configuration rather than a fault.\n\n**Per-organisation, never global.** A request with no `Kindlast-Org-Id` is refused with `invalid_argument` rather than defaulting. Doing nothing would look like success, and sweeping everyone has every customer in its blast radius, so sweeping the estate is a loop somebody writes deliberately.\n\n`detectOnly` runs the Watcher and skips the Analyst. Use it when the feed is empty and you need to know which half is quiet: the Watcher finding nothing wrong is a different failure from the Analyst failing to resolve an obligation.\n\n`findings` lower than `signals` is normal, not an error. A signal whose obligation slug resolves to nothing is skipped and logged, because a finding with no obligation behind it could not cite anything."
           }
         },
         {
@@ -697,6 +697,207 @@
               "path": ["kindlast.platform.v1.SweepService", "ExpireSnoozes"]
             },
             "description": "Brings back every finding whose deferral has run out, across every organisation at once. **Served as of ENT-256 (part two).** Required scope: `internal:ingest`, the same machine scope as Run sweep, so use the client-credentials token.\n\n**No `Kindlast-Org-Id` header, and that is the point.** A sweep names one organisation because sweeping everyone is a blast radius somebody should have to write a loop for. Expiring snoozes is the opposite: a maintenance pass whose whole job is every organisation, that decides nothing (the person decided when they deferred), and the database function behind it is `SECURITY DEFINER` and executable by the producer role alone (migration 00034). Sending the header changes nothing.\n\n**You will not normally call this.** It is the activity behind the `expire-snoozed-findings` Temporal Schedule, which `workers` registers at boot and runs hourly. It is here so an operator can run a pass by hand and see the count, and because the collection documents every RPC on the internal surface. Idempotent: a second call in the same hour reports `reemerged: 0`.\n\nThe response carries `reemerged` (how many findings returned to needing a decision) and `ranAt` (the database clock inside the transaction, so it is the instant they actually moved)."
+          }
+        },
+        {
+          "name": "Run analyst",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.SweepService/RunAnalyst",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.SweepService", "RunAnalyst"]
+            },
+            "description": "Runs the Analyst alone for the organisation the header names: turns the signals the Watcher raised and nobody has analysed yet into findings. **Served as of ENT-256 (part four).** Required scope: `internal:ingest`, so use the client-credentials token. Refused with `invalid_argument` without `Kindlast-Org-Id`, for Run sweep's reason.\n\nThis is the second activity of every sweep workflow, after Run sweep with `detectOnly: true`: the design's point is that the Analyst is the next step in the workflow, not a second schedule five minutes later hoping the first finished, and part five puts the Python narrative step between them. Idempotent: the Analyst works over unprocessed signals, so a second call finds none and reports `findings: 0`."
+          }
+        },
+        {
+          "name": "List sweep triggers",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.SweepService/ListSweepTriggers",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.SweepService", "ListSweepTriggers"]
+            },
+            "description": "Lists the sweeps somebody asked for and nothing has run yet: trigger id, organisation and reason, oldest first. **Served as of ENT-256 (part four).** Required scope: `internal:ingest`. No `Kindlast-Org-Id`: the list is every organisation's.\n\nConfirming onboarding writes a `sweep_triggers` row (migration 00035) in the same transaction as the profile, so a row here cannot name a profile that is not yet visible. The `relay-sweep-triggers` Temporal Schedule asks this every fifteen seconds and starts one `sweep/{trigger id}` workflow per row. You will not normally call it; it is here so an operator can see what is waiting."
+          }
+        },
+        {
+          "name": "Settle sweep trigger",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"triggerId\": \"{{sweep_trigger_id}}\",\n  \"outcome\": \"OUTCOME_DONE\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.SweepService/SettleSweepTrigger",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.SweepService", "SettleSweepTrigger"]
+            },
+            "description": "Records what a triggered sweep did. **Served as of ENT-256 (part four).** Required scope: `internal:ingest`. `OUTCOME_DONE` marks the row done; `OUTCOME_FAILED` with `error` records the attempt and the reason and leaves the row pending, so the relay offers it again once the workflow that held it has closed. Idempotent: a row already done answers `settled: false`."
+          }
+        },
+        {
+          "name": "List sweep targets",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.SweepService/ListSweepTargets",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.SweepService", "ListSweepTargets"]
+            },
+            "description": "Lists every organisation a scheduled sweep should visit: the ones with a compliance profile, by id alone. **Served as of ENT-256 (part four).** Required scope: `internal:ingest`.\n\n**This is \"sweep everyone\", written deliberately.** Run sweep refuses to sweep more than one organisation because the blast radius is every customer at once; this RPC exists so that the loop is the `sweep-every-organisation` workflow, one organisation per activity pair, visible and pausable in the Temporal UI, rather than a parameter somebody can pass by accident. The producer role cannot enumerate tenants, so the answer comes from `sweep_targets()`, the ninth SECURITY DEFINER function (migration 00035), which returns ids and nothing else."
+          }
+        },
+        {
+          "name": "List undelivered",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/ListUndelivered",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "ListUndelivered"]
+            },
+            "description": "Lists what is waiting to leave core-api, oldest first, by row id only: `messageIds` for invitation emails in the transactional outbox and `notificationIds` for finding notifications (ENT-256, part three, second half). **Served as of ENT-256 (part three).** Required scope: `internal:ingest`, the machine scope, so use the client-credentials token. No `Kindlast-Org-Id` header: the outbox is every organisation's, and the worker that calls this holds no tenant.\n\n**Ids and nothing else, on purpose.** This is the relay's question, asked every fifteen seconds by the `relay-transactional-outbox` Temporal Schedule, and its answer is written into a workflow history that is kept for the namespace's retention and readable in the UI. The address, the subject and the body (which for an invitation carries the raw bearer token in the clear, migration 00030) are read by Deliver message inside core-api and never cross that boundary.\n\n`limit` bounds one call (default 200, at most 1000); what is not listed now is listed on the next tick. You will not normally call this; it is here so an operator can see what is waiting, and because the collection documents every RPC on the internal surface."
+          }
+        },
+        {
+          "name": "Deliver message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageId\": \"{{message_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/DeliverMessage",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "DeliverMessage"]
+            },
+            "description": "Delivers one message from the transactional outbox: claims the row `for update`, sends it on core-api's configured SMTP channel, and records the outcome, in one transaction on the agent pool. **Served as of ENT-256 (part three).** Required scope: `internal:ingest`.\n\n**This is the activity behind every `deliver-message/{id}` workflow**, and the contract is written for being retried. A message already sent, abandoned by the reclaim, or gone answers `outcome: OUTCOME_ALREADY_SETTLED` and succeeds, so a retry after a timeout never sends twice. A refused send answers `unavailable` after the attempt and the mail server's reply have been written to the row; the worker's retry policy (ten seconds, doubling, capped at ten minutes, no attempt limit) decides when to try again. No configured channel answers `failed_precondition` naming `KINDLAST_SMTP_ADDR`, and is retried too, because the row is exactly as deliverable once the setting exists.\n\n`messageId` comes from List undelivered. A value that is not a uuid is `invalid_argument` and the worker does not retry it. Calling this by hand delivers a real message to the real recipient, so on a laptop stack check Mailpit at http://localhost:8025 afterwards rather than an inbox."
+          }
+        },
+        {
+          "name": "Reclaim messages",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/ReclaimMessages",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "ReclaimMessages"]
+            },
+            "description": "Clears the personal data out of messages that no longer need it (ENT-242, migration 00030): redacts the recipient's address and the rendered body from delivered messages after seven days, and gives up on undelivered messages whose invitation can no longer be accepted, marking them `failed`. **Served as of ENT-256 (part three).** Required scope: `internal:ingest`.\n\nIt is the activity behind the `reclaim-transactional-outbox` Temporal Schedule, hourly at forty past. The window (seven days, `postgres.InvitationLifetime`) is a decision and lives in core-api; the rule that a message which can still be delivered is never touched is an invariant and lives in the database's definer function, where no caller of this RPC can reach past it. Idempotent: a second pass in the same hour reports zero for both counts.\n\nThe response carries `redacted`, `abandoned` and `ranAt`."
+          }
+        },
+        {
+          "name": "Plan notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notificationId\": \"{{notification_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/PlanNotification",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "PlanNotification"]
+            },
+            "description": "Works out who a finding notification goes to, and when, as of now. **Served as of ENT-256 (part three, second half).** Required scope: `internal:ingest`. Read only and side-effect free: for each candidate recipient (a member of the organisation with a deliverable address, via the `notification_recipients` definer function) one of three decisions, decided in Go from the raw preference fields: `DECISION_SEND`, they want it and nothing is in the way; `DECISION_HOLD` with `holdUntil`, they want it and are inside their quiet hours, so the moment their window ends in their own zone; `DECISION_SKIP` with `reason`, the finding is below their severity floor.\n\nThis is the first verb of the `deliver-notification/{id}` workflow, and it is asked again after every hold rather than once, because a hold can be nine hours and preferences change. A row that is no longer pending answers `settled: true`. The answer carries user ids, decisions and times, never an address, because it lands in a workflow history.\n\n`notificationId` comes from List undelivered's `notificationIds`."
+          }
+        },
+        {
+          "name": "Notify recipients",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notificationId\": \"{{notification_id}}\",\n  \"userIds\": [\"{{user_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/NotifyRecipients",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "NotifyRecipients"]
+            },
+            "description": "Sends one finding notification to the named recipients, now. **Served as of ENT-256 (part three, second half).** Required scope: `internal:ingest`. One transaction on the agent pool, row locked `for update`, one unsubscribe token and (for a verified address) one approve link minted per person, one email per person, exactly as the in-process loop did. The row is **not** marked sent here: the workflow may still be holding other recipients, and `sent` is one fact about the whole notification, recorded by Settle notification.\n\nA refused send is recorded on the row (attempts, the server's answer) and answers `unavailable` for the retry policy. No mail channel answers `failed_precondition` naming `KINDLAST_SMTP_ADDR`; no console address answers the same naming `KINDLAST_APP_BASE_URL`, because every notification carries a link into `/o/{slug}/`. Somebody named in `userIds` who is no longer a recipient is left out rather than failing the call. Calling this by hand sends real mail; on a laptop stack read it in Mailpit at http://localhost:8025."
+          }
+        },
+        {
+          "name": "Settle notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notificationId\": \"{{notification_id}}\",\n  \"outcome\": \"OUTCOME_SENT\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/SettleNotification",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "SettleNotification"]
+            },
+            "description": "Marks a finding notification sent or skipped, once the workflow has nobody left to send to. **Served as of ENT-256 (part three, second half).** Required scope: `internal:ingest`. Idempotent: a row already settled answers `settled: false` and changes nothing.\n\n`OUTCOME_SENT` when at least one email left; `OUTCOME_SKIPPED` when nobody wanted it, in which case `reason` is required and stored on the row, so an operator asking \"why did nothing go out\" gets an answer. `skipped` rather than `sent` is not cosmetic: `sent` means an email left the building, and a delivery no message supports would be a claim in the database that is not true."
           }
         },
         {
@@ -1715,7 +1916,27 @@
               "host": ["{{intelligence_base_url}}"],
               "path": ["kindlast.platform.v1.IntelligenceService", "DraftNarrative"]
             },
-            "description": "The Analyst, as an RPC. Required scope: `internal:intelligence`. **Served as of ENT-218.**\n\n**A DIFFERENT SERVICE FROM EVERYTHING ELSE IN THIS COLLECTION.** This is Python, not core-api, which is why it has its own base URL. \u00a71.6 splits the languages so Go loads and Go persists while Python drafts and returns, and this sits on the far side of that line: it holds no database credential, sets no tenancy GUC, and has no way to write a finding. The one thing it writes, it writes through core-api's `RecordAgentRun`.\n\n**Use the client-credentials token.** No user token reaches this on any path. Two independent things enforce it: the audience is `kindlast-intelligence` and a human's console token carries a different one, and `internal:intelligence` is granted only to the machine user. That is not belt and braces: Intelligence has no tenancy GUCs and no RLS session, so it cannot check whether a human should see what it is processing. It never needs to, because a human cannot reach it.\n\n**THE CALLER PASSES THE OBLIGATIONS, AND THEY ARE THE ONLY ONES THAT MAY BE CITED.** There is no fetch-them-yourself here and the absence is deliberate (\u00a726.2). Inputs are what a skill needs before it starts and there is no decision in fetching them, so the caller assembles them in Go where the corpus is already readable. That keeps a run a pure function of its inputs, which is what makes it activity-shaped for Temporal at step 8.\n\nThe validator checks citations against **this list**, not against the corpus, and that is stronger than it sounds. A citation to an obligation that genuinely exists but is not in the list is still a fabrication: the model produced it from somewhere other than its context. Asking the corpus \"does this exist\" would have accepted it.\n\n**A REFUSAL IS A 200, NOT AN ERROR.** \u00a726.3 makes refusal what a working guardrail produces: a budget exhausted, a citation that did not resolve, a tool outside the allow-list. Returning `internal` for those would tell you the harness broke when it did exactly what it was built to do. Check `outcome`, not the status code.\n\n**A refused narrative is not returned at all**, not even with a warning attached. `AGENTS.md` calls a fabricated citation worse than nothing, and handing a caller prose plus a note is how that prose reaches a customer.\n\n**THE MODEL EXPLAINS APPLICABILITY AND DOES NOT STATE THE LAW, AS OF ENT-248.** The output field is `whyItAppliesToYou`, not `narrative`, and the rename is half the fix: a field called narrative gets a narrative, and a narrative contains whatever the model thinks belongs in one. Two live runs on the 2B tier cited Article 30 correctly and stated Article 30(5) backwards beside it, one asserting the obligation applies to every controller regardless of size and the other reasoning from a missing record to a headcount exemption. The citation validator passed both, correctly. Nothing validated the claim.\n\nThe statement of law comes from `summary`, which a person wrote, and `FindingsService` returns it as `citation.obligationSummary` so a client renders it beside the generated prose. If the model is never asked to state the law, it cannot misstate it, and that is a property of the design rather than a probability.\n\n**AND A CLAIM CRITIC REFUSES A DRAFT THAT STATES THE LAW ANYWAY.** A prompt is a request; only code refuses. It matches by named pattern, never by a second model's opinion: an article or recital number, a universal quantifier over legal subjects (\"applies to every controller\"), \"regardless of\", the vocabulary of exemptions and thresholds, an instrument as the subject or object of a requirement verb, and a class of legal persons attached to \"must\". \"You must write this down\" passes; \"controllers must\" does not, and the subject is the whole distinction. `outcomeDetail` names the rule that fired and quotes the words around it. It cannot catch a false statement of law that avoids every one of those shapes, and it refuses a TRUE statement of law as readily as a false one, because the product does not need the model to state the law at all.\n\n**`appliesBecause` IS WHY THE OBLIGATION WAS RAISED FOR THIS ORGANISATION, AND IT IS AN INPUT.** Both of the runs above invented their own grounds, because nothing had given them any, and what a 2B invents comes from whatever it remembers about the regulation. core-api renders these from the obligation's stored `applies_when`; it does not re-evaluate them, because the sweep already decided they hold and a second evaluator disagreeing with the first is what produced ENT-246. Optional: omit it and the block is left out of the prompt entirely rather than sent empty, since a model shown an empty list reads it as \"no grounds\".\n\n**AN EM DASH OR EN DASH IN THE NARRATIVE IS ALSO A REFUSAL, AS OF ENT-163.** `AGENTS.md` forbids both characters in anything a customer reads. The system prompt has asked the model not to use them since ENT-160 and they kept arriving, which is the whole lesson: a prompt is a request, and only code refuses. `outcomeDetail` names the character, its position and the words around it, so a caller can tell this apart from a citation refusal without parsing anything. It refuses rather than substituting a comma, because a silent rewrite would edit a claim about the law with nobody as its author.\n\n**`rejectedCitations` is the field to read when something looks wrong.** A response carrying only the good citations would be indistinguishable from a run where the model never tried to cite anything. This is not theoretical: asked three times which GDPR article requires a record of processing activities, the 2B tier answered 50, then 34, then 54. It is 30, and every answer was schema-valid.\n\n**`agentRunId` is the row in `agent_runs`**, so a finding can point at the record of how it was made. Empty only when recording failed, and that case comes back as an error rather than a success: a narrative whose provenance was never stored is a finding nobody can check.\n\n**`signal` is treated as data and never as instruction.** It reaches the model inside a fenced user message and never in the system prompt, because a compliance profile concatenated into a system prompt is a way to reprogram the Analyst.\n\n**`delegation` is how a run acts for a person without this service ever holding a user token (ENT-230).** Minted by core-api, short lived, single-org, single-user and revocable. Intelligence cannot make one, cannot read inside one and cannot widen one; all it can do is hand it back, on `RecordAgentRun` and in the `Kindlast-Delegation` header of any tool call it makes. That is what keeps a machine principal from being able to act as whoever it names. Empty for a scheduled sweep, and empty here, because the Analyst declares no tools.\n\n**`modelEndpoint` (ENT-236).** Null for an organisation using the model this deployment runs, which is the default and the case where nothing leaves. Set, it names the provider, the endpoint, the model and the API key for THIS RUN only, and core-api is what resolves and checks it: the allow-list and the address check run on every use, so a provider an operator withdraws stops being reachable for organisations that already chose it. Intelligence does no such check and must not be relied on to. It holds the key for the length of one call, never writes it to the run record, and never logs it. A provider that refuses the key **fails the run** and is never quietly answered by the bundled model, because a silent fallback would process a customer's findings somewhere other than where their own record of processing says."
+            "description": "The Analyst, as an RPC. Required scope: `internal:intelligence`. **Served as of ENT-218.**\n\n**A DIFFERENT SERVICE FROM EVERYTHING ELSE IN THIS COLLECTION.** This is Python, not core-api, which is why it has its own base URL. \u00a71.6 splits the languages so Go loads and Go persists while Python drafts and returns, and this sits on the far side of that line: it holds no database credential, sets no tenancy GUC, and has no way to write a finding. The one thing it writes, it writes through core-api's `RecordAgentRun`.\n\n**Use the client-credentials token.** No user token reaches this on any path. Two independent things enforce it: the audience is `kindlast-intelligence` and a human's console token carries a different one, and `internal:intelligence` is granted only to the machine user. That is not belt and braces: Intelligence has no tenancy GUCs and no RLS session, so it cannot check whether a human should see what it is processing. It never needs to, because a human cannot reach it.\n\n**THE CALLER PASSES THE OBLIGATIONS, AND THEY ARE THE ONLY ONES THAT MAY BE CITED.** There is no fetch-them-yourself here and the absence is deliberate (\u00a726.2). Inputs are what a skill needs before it starts and there is no decision in fetching them, so the caller assembles them in Go where the corpus is already readable. That keeps a run a pure function of its inputs, which is what makes it activity-shaped for Temporal at step 8.\n\nThe validator checks citations against **this list**, not against the corpus, and that is stronger than it sounds. A citation to an obligation that genuinely exists but is not in the list is still a fabrication: the model produced it from somewhere other than its context. Asking the corpus \"does this exist\" would have accepted it.\n\n**A REFUSAL IS A 200, NOT AN ERROR.** \u00a726.3 makes refusal what a working guardrail produces: a budget exhausted, a citation that did not resolve, a tool outside the allow-list. Returning `internal` for those would tell you the harness broke when it did exactly what it was built to do. Check `outcome`, not the status code.\n\n**A refused narrative is not returned at all**, not even with a warning attached. `AGENTS.md` calls a fabricated citation worse than nothing, and handing a caller prose plus a note is how that prose reaches a customer.\n\n**THE MODEL EXPLAINS APPLICABILITY AND DOES NOT STATE THE LAW, AS OF ENT-248.** The output field is `whyItAppliesToYou`, not `narrative`, and the rename is half the fix: a field called narrative gets a narrative, and a narrative contains whatever the model thinks belongs in one. Two live runs on the 2B tier cited Article 30 correctly and stated Article 30(5) backwards beside it, one asserting the obligation applies to every controller regardless of size and the other reasoning from a missing record to a headcount exemption. The citation validator passed both, correctly. Nothing validated the claim.\n\nThe statement of law comes from `summary`, which a person wrote, and `FindingsService` returns it as `citation.obligationSummary` so a client renders it beside the generated prose. If the model is never asked to state the law, it cannot misstate it, and that is a property of the design rather than a probability.\n\n**AND A CLAIM CRITIC REFUSES A DRAFT THAT STATES THE LAW ANYWAY.** A prompt is a request; only code refuses. It matches by named pattern, never by a second model's opinion: an article or recital number, a universal quantifier over legal subjects (\"applies to every controller\"), \"regardless of\", the vocabulary of exemptions and thresholds, an instrument as the subject or object of a requirement verb, and a class of legal persons attached to \"must\". \"You must write this down\" passes; \"controllers must\" does not, and the subject is the whole distinction. `outcomeDetail` names the rule that fired and quotes the words around it. It cannot catch a false statement of law that avoids every one of those shapes, and it refuses a TRUE statement of law as readily as a false one, because the product does not need the model to state the law at all.\n\n**`appliesBecause` IS WHY THE OBLIGATION WAS RAISED FOR THIS ORGANISATION, AND IT IS AN INPUT.** Both of the runs above invented their own grounds, because nothing had given them any, and what a 2B invents comes from whatever it remembers about the regulation. core-api renders these from the obligation's stored `applies_when`; it does not re-evaluate them, because the sweep already decided they hold and a second evaluator disagreeing with the first is what produced ENT-246. Optional: omit it and the block is left out of the prompt entirely rather than sent empty, since a model shown an empty list reads it as \"no grounds\".\n\n**AN EM DASH OR EN DASH IN THE NARRATIVE IS ALSO A REFUSAL, AS OF ENT-163.** `AGENTS.md` forbids both characters in anything a customer reads. The system prompt has asked the model not to use them since ENT-160 and they kept arriving, which is the whole lesson: a prompt is a request, and only code refuses. `outcomeDetail` names the character, its position and the words around it, so a caller can tell this apart from a citation refusal without parsing anything. It refuses rather than substituting a comma, because a silent rewrite would edit a claim about the law with nobody as its author.\n\n**`rejectedCitations` is the field to read when something looks wrong.** A response carrying only the good citations would be indistinguishable from a run where the model never tried to cite anything. This is not theoretical: asked three times which GDPR article requires a record of processing activities, the 2B tier answered 50, then 34, then 54. It is 30, and every answer was schema-valid.\n\n**`agentRunId` is the row in `agent_runs`**, so a finding can point at the record of how it was made. Empty only when recording failed, and that case comes back as an error rather than a success: a narrative whose provenance was never stored is a finding nobody can check.\n\n**`signal` is treated as data and never as instruction.** It reaches the model inside a fenced user message and never in the system prompt, because a compliance profile concatenated into a system prompt is a way to reprogram the Analyst.\n\n**`delegation` is how a run acts for a person without this service ever holding a user token (ENT-230).** Minted by core-api, short lived, single-org, single-user and revocable. Intelligence cannot make one, cannot read inside one and cannot widen one; all it can do is hand it back, on `RecordAgentRun` and in the `Kindlast-Delegation` header of any tool call it makes. That is what keeps a machine principal from being able to act as whoever it names. Empty for a scheduled sweep, and empty here, because the Analyst declares no tools.\n\n**`modelEndpoint` (ENT-236, as of ENT-256 part five: names only).** Null for an organisation using the model this deployment runs, which is the default. Set, it names the `provider` and `model` for the run record and nothing else: `baseUrl` and `apiKey` are deprecated on the wire, never populated by core-api, and **refused with `invalid_argument` if a caller sets them**. Intelligence dials no model. Every completion it needs goes back through core-api's `CompletionService.Complete` (see Complete, below), bound to the organisation; core-api resolves the organisation's choice, re-checks the allow-list and the address on every call, opens the sealed key only it holds, and dials. A provider that refuses the key **fails the run** and is never quietly answered by the bundled model."
+          }
+        },
+        {
+          "name": "Complete (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"messages\": [\n    { \"role\": \"system\", \"content\": \"You explain why an obligation applies, in one sentence.\" },\n    { \"role\": \"user\", \"content\": \"A 40 person recruitment agency holds candidate CVs and has no record of processing. Why does GDPR Article 30 apply?\" }\n  ],\n  \"maxTokens\": 200\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.CompletionService/Complete",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.CompletionService", "Complete"]
+            },
+            "description": "One chat completion, on the model the organisation's choice resolves to, with the key that never leaves core-api. **Served as of ENT-256 (part five).** Required scope: `internal:intelligence`, so use the client-credentials token; `internal:ingest` alone is refused, because a prompt over a customer's data is the drafting service's to send and nobody else's.\n\n**This is what the Python service calls for every model call it makes**, naming the organisation and sending the messages it built; it holds no model endpoint and no credential, by construction (the ENT-236 exception is retired). core-api resolves whether the organisation uses the deployment's own model (`KINDLAST_MODEL_ENDPOINT`) or a provider it chose, re-checks the allow-list and the endpoint's address on every call, opens the sealed provider key, forwards the messages on the OpenAI chat-completions wire as data, and returns `content`, usage and which provider and model served it. The key is on the outbound request to the endpoint and nowhere a caller can see.\n\nCodes: `invalid_argument` (no organisation, no messages, a malformed schema, or the endpoint rejected the request); `failed_precondition` (the organisation's provider cannot be honoured, the provider refused the key, or this deployment runs no model: the run fails and says why, nothing falls back); `unavailable` (the endpoint did not answer or answered 5xx; try again).\n\nCalling this by hand sends your prompt to whatever the organisation's choice resolves to. On the bundled stack that is the local `model` service, which answers only with `--profile model` up."
           }
         },
         {
@@ -1735,7 +1956,47 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.platform.v1.NarrativeService", "NarrateFindings"]
             },
-            "description": "Draft narratives for findings that have none. Required scope: `internal:intelligence`. **Served as of ENT-245.**\n\n**THE HALF ENT-218 ASSUMED AND NOBODY SCHEDULED.** ENT-218 shipped the harness, the guardrail ring, the citation validator and the `agent_runs` record, and nothing in the product called any of it. This is the call.\n\n**A JOB, NOT PART OF THE SWEEP.** A model call inside the sweep's transaction would hold it open for minutes per finding on a local model, block the act path behind its locks, and lose everything on a timeout. The sweep stays fast and deterministic; this runs afterwards over findings that have no narrative. Latency and refusals become a queue's problem rather than a request's, which is also what makes it activity-shaped for Temporal at step 8.\n\n**A NARRATIVE IS ADDED AND NEVER SUBSTITUTED.** It writes `findings.narrative`, `findings.agent_run_id` and `findings.narrative_generated_at`, and touches `detected`, `proposed_action`, `severity` and `status` not at all. The version that overwrote the sweep's text is ENT-164: model prose landed in `detected`, which the feed card renders as a heading, so a short phrase became a paragraph. Adding rather than overwriting means a refused run costs nothing and a deployment with no model is quieter rather than degraded.\n\n**EACH RUN IS OFFERED EXACTLY ONE OBLIGATION: the finding's own.** The validator refuses any citation outside what was offered, so a narrative citing a different article is refused even when that article genuinely exists. This is the check that catches what the local model actually does: asked which GDPR article requires a record of processing activities, the 2B answered 50, then 34, then 54. It is 30. Offering the whole corpus would make that fabrication indistinguishable from a good citation.\n\n**`intelligenceAvailable: false` IS A SUPPORTED ANSWER, NOT AN ERROR.** Intelligence sits behind the `model` compose profile, and `KINDLAST_INTELLIGENCE_URL` defaults to empty. A stack without it still produces findings with their deterministic text. \u201cWe have no model\u201d and \"the model is broken\" want different reactions from an operator, so they are different responses.\n\n**Read all four counts.** `narrated` plus `refused` plus `failed` should equal `attempted`. \"3 of 10 narrated\" is a different situation from \"3 tried and 7 refused\", and refusal is the guardrail working (\u00a726.3) rather than a failure. A refusal is recorded on the finding so the next pass does not retry it forever, and so a customer can see that we tried and what was wrong with the answer.\n\n**Runs are sequential.** One `llama-server` serves one request at a time, so firing these concurrently moves the queue rather than shortening it. Expect this to take minutes per finding on a local model.\n\n**core-api NEEDS ITS OWN CREDENTIAL TO SERVE THIS, and the first version had none.** Intelligence declares `internal:intelligence` on `DraftNarrative` and refuses an unauthenticated call, so a core-api that sent no bearer token reported every finding as `failed` with \u201ca bearer token is required\u201d. Set `KINDLAST_INTERNAL_CLIENT_FILE` (the compose stack points it at the same `/machinekey/core-api-client.json` Intelligence reads, so both sides of the call are one credential rather than two that can drift) or `KINDLAST_INTERNAL_CLIENT_ID` and `KINDLAST_INTERNAL_CLIENT_SECRET`. Without it core-api warns at boot and answers `intelligenceAvailable: false`, because a narrator that cannot authenticate is not a degraded one, it is one that fails every call.\n\n**A NARRATIVE THAT STATES THE LAW IS NOW ONE OF THE REFUSALS, AS OF ENT-248.** The first two live narrations of the seeded Article 30 finding both cited the obligation correctly and stated Article 30(5) backwards in the prose beside it, and both were recorded as `SUCCEEDED`. The claim critic refuses that, `narrative_refusal` carries the rule that fired and the words around it, and `agent_runs.refusal` carries the whole rejected text and the machine-readable rule names. The rejected text is deliberately NOT in `outcomeDetail`: that string is what the finding page prints under a heading saying the draft was refused, and a false statement of law must not reach a reader through the page that exists to say it was rejected.\n\n**Measured on the running stack, not assumed.** With the credential set, a seeded Article 30 finding narrated in about 40 seconds on the 2B tier, and `detected`, `proposed_action` and `status` were byte-identical afterwards. Re-measured on 2026-08-18 after ENT-248: four consecutive runs over the same finding gave three narratives that explained the organisation without stating the law and one refusal, the refusal naming `an obligation stated over a class of organisations` on the phrase \"the rule that businesses must keep these records\"."
+            "description": "Draft narratives for findings that have none. Required scope: `internal:intelligence`. **Served as of ENT-245.**\n\n**THE HALF ENT-218 ASSUMED, NOW SCHEDULED (ENT-256, part five).** ENT-218 shipped the harness, the guardrail ring, the citation validator and the `agent_runs` record, and for a while nothing in the product called any of it but this request. Now every sweep workflow (the one confirming onboarding triggers, and the daily `sweep-every-organisation`) narrates as its third step, after the Watcher and the Analyst and after the trigger is settled, but not through this request: it uses Next finding to narrate, the Python worker's `DraftNarrative` activity on the `intelligence` task queue, and Record narrative (Go loads, Python drafts, Go persists), one finding at a time, up to fifty per run, with a retry policy per step. This request is kept for an operator who wants to narrate a batch now, synchronously, from one call.\n\n**A JOB, NOT PART OF THE SWEEP'S TRANSACTION.** A model call inside the sweep's transaction would hold it open for minutes per finding on a local model, block the act path behind its locks, and lose everything on a timeout. The sweep stays fast and deterministic; this runs afterwards over findings that have no narrative.\n\n**A NARRATIVE IS ADDED AND NEVER SUBSTITUTED.** It writes `findings.narrative`, `findings.agent_run_id` and `findings.narrative_generated_at`, and touches `detected`, `proposed_action`, `severity` and `status` not at all. The version that overwrote the sweep's text is ENT-164: model prose landed in `detected`, which the feed card renders as a heading, so a short phrase became a paragraph. Adding rather than overwriting means a refused run costs nothing and a deployment with no model is quieter rather than degraded.\n\n**EACH RUN IS OFFERED EXACTLY ONE OBLIGATION: the finding's own.** The validator refuses any citation outside what was offered, so a narrative citing a different article is refused even when that article genuinely exists. This is the check that catches what the local model actually does: asked which GDPR article requires a record of processing activities, the 2B answered 50, then 34, then 54. It is 30. Offering the whole corpus would make that fabrication indistinguishable from a good citation.\n\n**`intelligenceAvailable: false` IS A SUPPORTED ANSWER, NOT AN ERROR.** Intelligence sits behind the `model` compose profile, and `KINDLAST_INTELLIGENCE_URL` defaults to empty. A stack without it still produces findings with their deterministic text. \u201cWe have no model\u201d and \"the model is broken\" want different reactions from an operator, so they are different responses.\n\n**Read all four counts.** `narrated` plus `refused` plus `failed` should equal `attempted`. \"3 of 10 narrated\" is a different situation from \"3 tried and 7 refused\", and refusal is the guardrail working (\u00a726.3) rather than a failure. A refusal is recorded on the finding so the next pass does not retry it forever, and so a customer can see that we tried and what was wrong with the answer.\n\n**Runs are sequential.** One `llama-server` serves one request at a time, so firing these concurrently moves the queue rather than shortening it. Expect this to take minutes per finding on a local model.\n\n**core-api NEEDS ITS OWN CREDENTIAL TO SERVE THIS, and the first version had none.** Intelligence declares `internal:intelligence` on `DraftNarrative` and refuses an unauthenticated call, so a core-api that sent no bearer token reported every finding as `failed` with \u201ca bearer token is required\u201d. Set `KINDLAST_INTERNAL_CLIENT_FILE` (the compose stack points it at the same `/machinekey/core-api-client.json` Intelligence reads, so both sides of the call are one credential rather than two that can drift) or `KINDLAST_INTERNAL_CLIENT_ID` and `KINDLAST_INTERNAL_CLIENT_SECRET`. Without it core-api warns at boot and answers `intelligenceAvailable: false`, because a narrator that cannot authenticate is not a degraded one, it is one that fails every call.\n\n**A NARRATIVE THAT STATES THE LAW IS NOW ONE OF THE REFUSALS, AS OF ENT-248.** The first two live narrations of the seeded Article 30 finding both cited the obligation correctly and stated Article 30(5) backwards in the prose beside it, and both were recorded as `SUCCEEDED`. The claim critic refuses that, `narrative_refusal` carries the rule that fired and the words around it, and `agent_runs.refusal` carries the whole rejected text and the machine-readable rule names. The rejected text is deliberately NOT in `outcomeDetail`: that string is what the finding page prints under a heading saying the draft was refused, and a false statement of law must not reach a reader through the page that exists to say it was rejected.\n\n**Measured on the running stack, not assumed.** With the credential set, a seeded Article 30 finding narrated in about 40 seconds on the 2B tier, and `detected`, `proposed_action` and `status` were byte-identical afterwards. Re-measured on 2026-08-18 after ENT-248: four consecutive runs over the same finding gave three narratives that explained the organisation without stating the law and one refusal, the refusal naming `an obligation stated over a class of organisations` on the phrase \"the rule that businesses must keep these records\"."
+          }
+        },
+        {
+          "name": "Next finding to narrate (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.NarrativeService/NextFindingToNarrate",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.NarrativeService", "NextFindingToNarrate"]
+            },
+            "description": "The load step of the Temporal narration chain (ENT-256, part five): the next finding in the organisation that has no narrative yet, with the `DraftNarrative` request built for it exactly as Narrate findings builds one (the signal, the one obligation it may cite, the provider and model names for the run record). **Served as of ENT-256.** Required scope: `internal:ingest`.\n\nThe Go worker's sweep workflow calls this, hands `draft` to the Python worker's `DraftNarrative` activity on the `intelligence` task queue, and brings the answer to Record narrative. Go loads, Python drafts, Go persists. `intelligenceAvailable: false` means this deployment runs no Intelligence; `found: false` means nothing is waiting. The same finding is offered again until something is recorded for it."
+          }
+        },
+        {
+          "name": "Record narrative (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"findingId\": \"{{finding_id}}\",\n  \"draft\": {\n    \"outcome\": \"DRAFT_OUTCOME_REFUSED\",\n    \"outcomeDetail\": \"recorded by hand from the collection\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.NarrativeService/RecordNarrative",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.NarrativeService", "RecordNarrative"]
+            },
+            "description": "The persist step of the Temporal narration chain: what the draft produced, recorded against the finding exactly as Narrate findings records it. **Served as of ENT-256.** Required scope: `internal:ingest`. A succeeded draft writes the narrative and the run id; a refused or failed one writes the refusal with its reason, so the finding is not offered again and an operator can read why it has no explanation. Recording the same draft twice writes the same thing twice, so a retried activity is harmless."
           }
         },
         {

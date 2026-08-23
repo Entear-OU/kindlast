@@ -272,3 +272,63 @@ func TestTheApproveLinkIsNotTheUnsubscribeLink(t *testing.T) {
 		t.Fatal("the approve token appears under the unsubscribe sentence")
 	}
 }
+
+// The hold (ENT-256, part three): a notification inside quiet hours is held
+// until the window ends, in the recipient's zone, rather than dropped.
+func TestQuietHoursEndIsTheNextEndOfTheWindowInTheRecipientsZone(t *testing.T) {
+	helsinki, err := time.LoadLocation("Europe/Helsinki")
+	if err != nil {
+		t.Skip("no tzdata")
+	}
+
+	// 23:30 Helsinki, window 22:00 to 07:00: ends at 07:00 tomorrow, Helsinki.
+	now := time.Date(2026, 8, 23, 23, 30, 0, 0, helsinki)
+	until, held := QuietHoursEnd(now, "22:00", "07:00")
+	if !held {
+		t.Fatal("23:30 inside 22:00 to 07:00 was not held")
+	}
+	want := time.Date(2026, 8, 24, 7, 0, 0, 0, helsinki)
+	if !until.Equal(want) {
+		t.Fatalf("hold until %v, want %v", until, want)
+	}
+
+	// 03:00, same window: ends at 07:00 today.
+	now = time.Date(2026, 8, 24, 3, 0, 0, 0, helsinki)
+	until, _ = QuietHoursEnd(now, "22:00", "07:00")
+	if !until.Equal(want) {
+		t.Fatalf("hold until %v, want %v", until, want)
+	}
+
+	// A window that does not wrap, from inside it.
+	now = time.Date(2026, 8, 24, 13, 0, 0, 0, helsinki)
+	until, held = QuietHoursEnd(now, "12:00", "14:00")
+	if !held || !until.Equal(time.Date(2026, 8, 24, 14, 0, 0, 0, helsinki)) {
+		t.Fatalf("hold until %v (held %v), want 14:00 today", until, held)
+	}
+
+	// Outside the window: not held at all.
+	if _, held := QuietHoursEnd(now, "22:00", "07:00"); held {
+		t.Fatal("13:00 was held by a 22:00 to 07:00 window")
+	}
+	// No window: never held.
+	if _, held := QuietHoursEnd(now, "", ""); held {
+		t.Fatal("held with no quiet hours configured")
+	}
+}
+
+func TestDecideIsSendHoldOrSkip(t *testing.T) {
+	noon := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	midnight := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
+
+	if d := Decide("high", "medium", noon, "22:00", "07:00"); !d.Send || d.Held() {
+		t.Fatalf("a wanted finding outside quiet hours = %+v, want send", d)
+	}
+	if d := Decide("high", "medium", midnight, "22:00", "07:00"); d.Send || !d.Held() || d.Reason == "" {
+		t.Fatalf("a wanted finding inside quiet hours = %+v, want held with a reason", d)
+	}
+	// Below the floor is a skip even inside quiet hours: there is nothing to
+	// hold for.
+	if d := Decide("low", "high", midnight, "22:00", "07:00"); d.Send || d.Held() || d.Reason == "" {
+		t.Fatalf("a finding below the floor = %+v, want skip with a reason", d)
+	}
+}

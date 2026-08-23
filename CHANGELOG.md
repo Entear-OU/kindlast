@@ -14,6 +14,180 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **Findings are narrated on both task queues: Go loads, Python drafts, Go
+  persists** (ENT-256, part five, second half; design §16.4, which is now
+  built as written). The `intelligence` container runs a Temporal worker
+  beside its RPC server, polling the `intelligence` task queue, and every
+  sweep's narration step is three activities per finding: `workers` asks
+  core-api for the next finding with no narrative and the draft request built
+  for it (`NarrativeService.NextFindingToNarrate`), the Python worker drafts
+  it (`DraftNarrative`, the same harness, guardrails and run record as the
+  RPC of that name, with every model call going back through core-api), and
+  `workers` records the narrative or the refusal
+  (`NarrativeService.RecordNarrative`). A draft that fails retries as a
+  draft, on its own queue, with its own history.
+
+  **Operators:** the `intelligence` container now takes `KINDLAST_TEMPORAL_ADDR`
+  (the bundled stack sets it) and `KINDLAST_INTELLIGENCE_CONCURRENCY` (drafts
+  in flight at once, default 2, what one local model serves). With no Python
+  worker polling, a sweep waits two minutes for a draft to be picked up,
+  records narration as skipped with that reason, and completes: an
+  `intelligence` container that is down costs explanations, never sweeps.
+  `NarrateFindings` remains for an operator who wants to narrate a batch by
+  hand.
+
+### Changed
+
+- **Every model call now goes through core-api, and the Python service holds
+  no model endpoint and no credential again** (ENT-256, part five, second
+  half; the hardening ENT-236 parked). A new internal RPC,
+  `CompletionService.Complete`, takes the messages and the organisation;
+  core-api resolves whether that organisation uses the deployment's own model
+  or a provider it chose, opens the sealed provider key with the key only
+  core-api holds, makes the call, and returns the content and usage. The
+  Python service asks it for every completion and reads no model URL from its
+  configuration. `DraftNarrative`'s `model_endpoint.base_url` and `.api_key`
+  are deprecated on the wire, never populated, and **refused** if a caller
+  sets them.
+
+  Why: drafts are becoming Temporal activities on a Python worker, and an
+  activity's input is written into a workflow history; a key cannot ride
+  there, so it no longer rides anywhere. What it costs, said plainly: every
+  prompt passes through core-api, which already holds the finding, the
+  obligation and the profile it is built from.
+
+  **Operators: `KINDLAST_MODEL_ENDPOINT` is a new core-api setting** (the
+  bundled stack sets it to the `model` service; `KINDLAST_MODEL_NAME` joins
+  it for the run record), and `KINDLAST_MODEL_URL` on the `intelligence`
+  service is no longer read. An organisation's chosen provider (ENT-236)
+  keeps working unchanged from the organisation's side; the difference is
+  where the key is used.
+
+### Added
+
+- **Findings get their explanation on the sweep, without anybody asking**
+  (ENT-256, part five, first half). `NarrateFindings` (ENT-245) was written as
+  the job that runs after a sweep over findings that have no narrative, and
+  nothing in the product ran it: every finding showed only the deterministic
+  text the sweep wrote. It is now the third step of every sweep workflow,
+  after the Watcher and the Analyst and, for a triggered sweep, after the
+  trigger is settled, so the feed shows the finding the moment it exists and
+  the explanation arrives as the model drafts it. One finding per activity,
+  up to fifty per run, with a retry policy; a deployment without the `model`
+  profile costs one activity per run and nothing is wrong; an organisation
+  whose provider cannot be honoured is recorded as skipped in the run's
+  result and the sweep is not failed. The daily run narrates one organisation
+  at a time after its fan-out, because one local model serves one request at
+  a time.
+
+  Not in this change, and why: the design's "Go loads, Python drafts, Go
+  persists" as three activities with the draft on an `intelligence` task
+  queue served by the Python service. That puts the draft's input into a
+  workflow history, and an organisation's own provider key (ENT-236) cannot
+  ride in it; the model call therefore stays behind core-api's
+  `NarrateFindings`, which opens the key and makes the call. Whether the
+  local-model path alone moves to a Python queue is a decision recorded on
+  ENT-256 for the maintainers.
+
+- **The Watcher and the Analyst run on a schedule again, and confirming
+  onboarding triggers the organisation's first sweep on its own** (ENT-256,
+  part four of five; closes the gap ENT-212 left). Since the Supabase schema
+  went, nothing ran a sweep unless somebody called `SweepService.RunSweep`
+  with a service credential: a member could finish the interview, confirm,
+  and land on a dashboard that had no findings and no way to get any. Two
+  things change that.
+
+  Confirming writes a row to a new `sweep_triggers` table, in the same
+  transaction as the confirmed facts (migration 00035), and the `workers`
+  relay starts one `sweep/{trigger id}` Temporal workflow per row within
+  fifteen seconds: the Watcher, then the Analyst, then the row marked done.
+  The two-step shape is not incidental: `ConfirmProfile` and the sweep run on
+  separate connection pools under separate roles (00008), and a synchronous
+  call from the first to the second would have raced the transaction that has
+  to commit before the facts it wrote are visible to any other connection,
+  silently sweeping an empty profile. Writing a durable marker inside the same
+  transaction and relaying it afterwards, the same shape `transactional_outbox`
+  already uses for invitation mail, closes that race by construction rather
+  than by timing.
+
+  And a daily Schedule, `sweep-every-organisation` (06:00 UTC,
+  `KINDLAST_SWEEP_SCHEDULE`), lists every organisation with a compliance
+  profile and runs the Watcher and then the Analyst over each, four at a
+  time, one organisation's failure never stopping the rest; the run's result
+  in the Temporal UI says how many were visited and which failed. This is
+  what pg_cron's `watcher-daily` and `analyst-daily` were, with the Analyst
+  now the next step in the same workflow rather than a second job five
+  minutes later. The list comes from `sweep_targets()`, the ninth
+  `SECURITY DEFINER` function (agent-only, ids only), because the producer
+  role deliberately cannot enumerate tenants; `db/README.md` carries the
+  argument.
+
+  Four RPCs join `SweepService` on the internal surface (`RunAnalyst`,
+  `ListSweepTriggers`, `SettleSweepTrigger`, `ListSweepTargets`), all on
+  `internal:ingest`; `RunSweep` stays for an operator who wants one
+  organisation swept now. `docs/self-hosting.md` no longer lists a scheduler
+  as a requirement or opens with the silent-nothing failure mode: the
+  schedules are inside the stack.
+
+- **Invitation email now leaves through Temporal, one workflow per message**
+  (ENT-256, part three of five). The ticker inside core-api that drained the
+  transactional outbox every ten seconds is gone. In its place, a
+  `relay-transactional-outbox` Schedule (every fifteen seconds,
+  `KINDLAST_OUTBOX_RELAY_INTERVAL`) asks core-api what is waiting and starts a
+  `DeliverMessageWorkflow` for each row, named `deliver-message/{row id}`, so
+  a message is never being delivered twice at once. Each delivery retries with
+  backoff (ten seconds, doubling, capped at ten minutes, no attempt limit) and
+  every attempt, with what the mail server answered, is in that workflow's
+  history. A message that is not leaving is a running workflow in the Temporal
+  UI with a reason, rather than a counter in a table.
+
+  What an operator has to know. Mail is still sent by core-api: the worker
+  asks it to deliver a message by id through a new internal service,
+  `DeliveryService` (`ListUndelivered`, `DeliverMessage`, `ReclaimMessages`,
+  all on `internal:ingest`), and core-api claims, sends on its SMTP channel and
+  records the outcome in one transaction, as before. So `KINDLAST_SMTP_ADDR`
+  stays on core-api, a workflow history never carries an address, a subject or
+  a body (the body of an invitation holds the raw token), and a deployment
+  without SMTP sees its deliveries retrying with a reason naming the setting,
+  and draining on their own once it is set. **`workers` must be running with
+  `KINDLAST_TEMPORAL_ADDR` set for invitation mail to leave at all**; a
+  gateway-only `workers` says so at boot.
+
+  The retention pass (ENT-242) moves with it: `reclaim-transactional-outbox`
+  runs hourly at forty past (`KINDLAST_OUTBOX_RECLAIM_SCHEDULE`) instead of on
+  a timer inside core-api, with the same window and the same rule that a
+  message which can still be delivered is never touched. It no longer runs at
+  core-api boot, because a schedule fires whether or not the process that
+  owns it has restarted, which was the reason the boot-time pass existed.
+
+  The outbox table stays. §16.2 says "an activity with a retry policy is the
+  outbox", and for the retry half that is what this is; the table remains the
+  durable handoff because the message is written in the same transaction as
+  the invitation, which a workflow started after the commit cannot promise.
+
+- **Finding notifications inside somebody's quiet hours are now held and
+  delivered when the window ends, instead of dropped** (ENT-256, part three,
+  second half). A notification is one Temporal workflow,
+  `deliver-notification/{row id}`, started by the same relay that starts
+  invitation mail. It asks core-api who should hear about the finding and
+  when; sends to everybody who is due; sleeps on a durable timer until the
+  earliest held recipient's quiet hours end, in their own time zone; asks
+  again; and marks the row sent (or skipped, with the reason) when nobody is
+  left. A person is told once however many rounds their colleagues take.
+  Until now a notification that arrived inside quiet hours was recorded as
+  skipped with "inside quiet hours" on the row and never sent, which the code
+  documented as the limitation of dispatching on a plain timer.
+
+  Everything else about a notification is unchanged: one unsubscribe link per
+  person, one approve link per person with a verified address, the doorbell
+  copy that names the finding without quoting it, and the `notification_
+  recipients` definer function answering who. The three new internal RPCs
+  (`PlanNotification`, `NotifyRecipients`, `SettleNotification`) are on
+  `DeliveryService` with the rest. The last in-process delivery timer in
+  core-api goes with this; `KINDLAST_APP_BASE_URL` is still required on
+  core-api for notifications to leave, and its absence is said at boot and on
+  every attempt.
+
 - **Deferred findings come back on their date, on a schedule, which is the
   first thing Temporal runs** (ENT-256, part two of five). Since the Supabase
   schema went, every finding anybody deferred has stayed deferred: the job that

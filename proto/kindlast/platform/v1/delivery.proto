@@ -1,0 +1,301 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kindlast/options/v1/scope.proto";
+
+// The delivery seam on the platform surface (ENT-256, part three): how a
+// message that core-api wrote leaves the process, now that the thing deciding
+// WHEN is Temporal rather than a ticker inside core-api.
+//
+// WHY THE OUTBOX TABLE STAYS, WHEN THE DESIGN SAYS AN ACTIVITY IS THE OUTBOX
+//
+// §16.2's end state reads "an activity with a retry policy is the outbox", and
+// for the retry half that is exactly what this delivers. The table stays for
+// the other half, which ENT-242 argued and nothing here weakens: the message is
+// written in the same transaction as the fact it announces, because an
+// invitation committed without its message is permanently undeliverable (the
+// raw token exists nowhere else) and a message committed without its invitation
+// names a link that redeems nothing. A workflow started after the commit can be
+// lost between the commit and the start; a row written inside the commit
+// cannot. So the row is the durable handoff, and a Schedule relays what is
+// sitting in it into one workflow per message.
+//
+// WHY core-api SENDS THE MAIL, RATHER THAN HANDING THE BODY TO THE WORKER
+//
+// `workers` holds no database credential by design (§21.4), so "an activity"
+// means "an RPC on this surface". It could have been an RPC that returns the
+// rendered message for the worker to send, and it deliberately is not: the
+// body of an invitation carries a bearer token in the clear (00030), and an
+// activity's inputs and results are written into a workflow history that is
+// kept for the namespace's retention and readable in the UI (§16.3). The
+// history gets a row id and a count. The address, the subject and the token
+// stay inside core-api, which already holds the SMTP channel, and the RPC
+// reports whether they left.
+//
+// THE DOORBELL PATH RIDES THE SAME SEAM, WITH ONE MORE MOVING PART
+//
+// A finding notification (ENT-209) is a row in `notification_outbox` whose
+// recipients are worked out at delivery time from memberships and
+// preferences, and a recipient's preferences may say "not now": quiet hours.
+// The in-process loop this replaces could only drop such a notification with
+// the reason on the row, because holding one needs a scheduler (§17.5). Now
+// there is one. The workflow asks this service to PLAN (who is due now, who
+// is held until when, who is skipped and why), sends to whoever is due,
+// sleeps on a durable timer until the earliest hold ends, plans again, and
+// settles the row when nobody is left. The three RPCs below are those three
+// verbs, and every decision in them is Go over rows the database fetched.
+//
+// WHAT TEMPORAL ADDS, STATED SO THE EXTRA HOP IS SEEN TO BUY SOMETHING
+//
+// The ticker this replaces retried every pending row every ten seconds forever,
+// with no backoff, no record of attempts beyond a counter, and nothing an
+// operator could look at except the table. Each message is now its own
+// workflow, with a retry policy that backs off, an attempt history that says
+// what the mail server answered each time, and a schedule whose last run is a
+// line in `temporal schedule list`. A deployment whose mail is not leaving
+// shows it in the UI rather than in a log nobody is reading.
+service DeliveryService {
+  // Lists the messages waiting to be delivered, oldest first, by id only.
+  //
+  // The relay's question, asked every few seconds by a Schedule: what is
+  // pending? It returns ids and nothing else, because the answer goes into an
+  // activity result and from there into a workflow history. The body, the
+  // address and the token are read by DeliverMessage, inside core-api, and
+  // never leave it.
+  rpc ListUndelivered(ListUndeliveredRequest) returns (ListUndeliveredResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/messages:pending"
+      body: "*"
+    };
+  }
+
+  // Delivers one message: claims the row, sends it on the configured channel,
+  // and records the outcome, all inside one transaction on the agent pool.
+  //
+  // THE ONE CALL TEMPORAL RETRIES, and the contract is written for that:
+  //
+  //   - It is idempotent on the row. A message already sent, abandoned, or
+  //     gone reports `OUTCOME_ALREADY_SETTLED` and succeeds, so an activity
+  //     that timed out after the mail left is retried safely rather than
+  //     sending twice. The row is locked `for update` without `skip locked`,
+  //     so a retry that arrives while the first attempt is still mid-send
+  //     waits for it and then sees the settled row.
+  //   - A failed send is an error, after the attempt and the mail server's
+  //     answer have been written to the row and committed. The error carries
+  //     `unavailable`, which is the code the worker treats as "try again with
+  //     backoff". Nothing here decides how many times: that is the retry
+  //     policy on the workflow, where it is one declaration rather than a
+  //     counter in a table.
+  //   - No configured channel is `failed_precondition`, retried too, because
+  //     it is the supported state a deployment is in before KINDLAST_SMTP_ADDR
+  //     is set, and the row is exactly as deliverable tomorrow as today.
+  rpc DeliverMessage(DeliverMessageRequest) returns (DeliverMessageResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/messages:deliver"
+      body: "*"
+    };
+  }
+
+  // Works out who a finding notification goes to, and when.
+  //
+  // Read only, no lock, no side effect: it answers what the workflow should
+  // do next, as of now. For each candidate recipient one of three decisions,
+  // decided in Go from the raw preference fields (§14.5): SEND, they want it
+  // and nothing is in the way; HOLD, they want it and are inside their quiet
+  // hours, with the moment the window ends in their zone; SKIP, with the
+  // reason, because the finding is below their severity floor. A row that is
+  // no longer pending answers `settled` and the workflow stops.
+  //
+  // What crosses into the workflow history is a user id, a decision and a
+  // time. Not an address.
+  rpc PlanNotification(PlanNotificationRequest) returns (PlanNotificationResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/notifications:plan"
+      body: "*"
+    };
+  }
+
+  // Sends one notification to the named recipients, now.
+  //
+  // One transaction on the agent pool, row locked `for update`, one
+  // unsubscribe token and (for a verified address) one approve link minted
+  // per person, one email per person, exactly as the in-process loop did
+  // (ENT-209, ENT-249). The row is NOT marked sent here: the workflow may
+  // still be holding other recipients, and "sent" is one fact about the
+  // whole notification, recorded by SettleNotification when nobody is left.
+  //
+  // A failed send is recorded on the row (attempts, the server's answer) and
+  // returned as `unavailable` for the retry policy, after which the whole
+  // batch is retried. That means a second attempt can re-send to somebody
+  // earlier in the batch who already received it, which is the same trade
+  // the loop made and the same direction: a duplicate doorbell is a
+  // nuisance, a finding nobody hears about is the failure this product
+  // exists to prevent. Recipients named here who are no longer members are
+  // left out rather than failing the call.
+  rpc NotifyRecipients(NotifyRecipientsRequest) returns (NotifyRecipientsResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/notifications:notify"
+      body: "*"
+    };
+  }
+
+  // Marks a notification sent or skipped, once the workflow has nobody left
+  // to send to. Idempotent: a row already settled answers `settled: false`
+  // and changes nothing.
+  //
+  // `skipped` rather than `sent` when nobody wanted it, and the distinction
+  // is not cosmetic: `sent` means an email left the building, and recording
+  // a delivery no message supports would put a claim in the database that is
+  // not true. The reason is stored so an operator asking "why did nothing go
+  // out" gets an answer.
+  rpc SettleNotification(SettleNotificationRequest) returns (SettleNotificationResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/notifications:settle"
+      body: "*"
+    };
+  }
+
+  // Clears the personal data out of messages that no longer need it
+  // (ENT-242, migration 00030): redacts delivered bodies once their window
+  // has passed, and gives up on undelivered messages whose invitation can no
+  // longer be accepted.
+  //
+  // Hourly, from a Schedule. The window is a decision and lives in core-api
+  // (§14.5); the rule that a message which can still be delivered is never
+  // touched is an invariant and lives in the database, where no caller of
+  // this RPC can reach past it. Idempotent: a second pass finds nothing.
+  rpc ReclaimMessages(ReclaimMessagesRequest) returns (ReclaimMessagesResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/messages:reclaim"
+      body: "*"
+    };
+  }
+}
+
+message ListUndeliveredRequest {
+  // At most this many ids. Zero means the server's default, which bounds one
+  // relay run rather than the backlog: what is not listed now is listed next
+  // tick.
+  int32 limit = 1;
+}
+
+message ListUndeliveredResponse {
+  // Row ids of pending transactional messages, oldest first. Ids, not
+  // messages: see the service comment for why nothing else crosses here.
+  repeated string message_ids = 1;
+  // Row ids of pending finding notifications, oldest first. Same rule.
+  repeated string notification_ids = 2;
+}
+
+message DeliverMessageRequest {
+  // The row to deliver, from ListUndelivered.
+  string message_id = 1;
+}
+
+message DeliverMessageResponse {
+  enum Outcome {
+    OUTCOME_UNSPECIFIED = 0;
+    // Handed to the channel on this call, and the row marked sent.
+    OUTCOME_DELIVERED = 1;
+    // There was nothing pending by that id: it was delivered earlier, given
+    // up on by the reclaim, or never existed. Success, because the job of
+    // the call is that the row is settled, and it is.
+    OUTCOME_ALREADY_SETTLED = 2;
+  }
+  Outcome outcome = 1;
+  // How many attempts the row now records, including this one when it sent.
+  // In the history so "it took four tries" is readable without the table.
+  int32 attempts = 2;
+  // When it left, from the database's clock inside the same transaction.
+  // Unset for OUTCOME_ALREADY_SETTLED.
+  google.protobuf.Timestamp sent_at = 3;
+}
+
+message PlanNotificationRequest {
+  // The notification_outbox row, from ListUndelivered.
+  string notification_id = 1;
+}
+
+message PlanNotificationResponse {
+  // True when there is nothing pending by that id: it was sent or skipped
+  // earlier, or never existed. The workflow stops.
+  bool settled = 1;
+  // Every candidate recipient, with the decision for each as of now. Empty
+  // when the organisation has nobody with a deliverable address, which the
+  // workflow settles as skipped.
+  repeated PlannedRecipient recipients = 2;
+}
+
+message PlannedRecipient {
+  enum Decision {
+    DECISION_UNSPECIFIED = 0;
+    // Wants it, nothing in the way: send now.
+    DECISION_SEND = 1;
+    // Wants it, inside quiet hours: send at `hold_until`, when the window
+    // ends in their zone. The workflow sleeps and plans again.
+    DECISION_HOLD = 2;
+    // Does not want it: below their severity floor. `reason` says so.
+    DECISION_SKIP = 3;
+  }
+  string user_id = 1;
+  Decision decision = 2;
+  // Set for DECISION_HOLD.
+  google.protobuf.Timestamp hold_until = 3;
+  // Set for DECISION_SKIP and DECISION_HOLD, in the words the row's
+  // `last_error` would carry if nobody at all wanted it.
+  string reason = 4;
+}
+
+message NotifyRecipientsRequest {
+  string notification_id = 1;
+  // Who to send to now, from a PlanNotification answer. Somebody named here
+  // who is no longer a recipient (left the organisation since the plan) is
+  // left out rather than failing the call.
+  repeated string user_ids = 2;
+}
+
+message NotifyRecipientsResponse {
+  // How many emails left.
+  int32 sent = 1;
+  // True when the row was no longer pending and nothing was sent.
+  bool settled = 2;
+}
+
+message SettleNotificationRequest {
+  enum Outcome {
+    OUTCOME_UNSPECIFIED = 0;
+    // At least one email left.
+    OUTCOME_SENT = 1;
+    // Nobody wanted it. `reason` is required and is stored on the row.
+    OUTCOME_SKIPPED = 2;
+  }
+  string notification_id = 1;
+  Outcome outcome = 2;
+  string reason = 3;
+}
+
+message SettleNotificationResponse {
+  // True when this call settled the row; false when it was already settled.
+  bool settled = 1;
+}
+
+message ReclaimMessagesRequest {}
+
+message ReclaimMessagesResponse {
+  // Delivered messages whose body was cleared on this pass.
+  int32 redacted = 1;
+  // Undelivered messages given up on, because the invitation they carry can no
+  // longer be accepted.
+  int32 abandoned = 2;
+  // When the pass ran.
+  google.protobuf.Timestamp ran_at = 3;
+}

@@ -3,21 +3,25 @@
 Kindlast is AGPL-3.0 licensed and you are free to run your own instance. This
 document covers what that actually takes.
 
-Read the failure mode section first. It is the one thing that will bite you.
+Read the failure mode section first. It is the one thing that used to bite,
+and the paragraph is kept so you know what to check.
 
-## The failure mode that matters
+## The failure mode that used to matter
 
-**Kindlast's background agents run on scheduled HTTP calls, not on an in-process
-timer.** On Vercel these are declared in `vercel.json` and the platform calls
-them. Anywhere else, nothing calls them.
+Until ENT-256, Kindlast's background agents ran on scheduled HTTP calls: on
+Vercel the platform made them, and anywhere else nothing did. A deployment
+without a scheduler looked completely healthy (sign up, onboard, browse) and
+silently did nothing: the Analyst never ran, no findings were ever created, no
+notification was ever sent.
 
-If you deploy without setting up scheduling, the app looks completely healthy.
-You can sign up, complete onboarding, and browse the console. No error appears
-anywhere. But the Analyst never runs, no findings are ever created, and no
-notification is ever sent. The product silently does nothing, which is a worse
-outcome than crashing.
-
-Set up scheduling. It is described below.
+**That failure mode is gone. The schedules are inside the stack.** The
+`workers` container registers every schedule with Temporal when it boots, and
+Temporal runs them wherever the stack runs, including air-gapped. There is no
+cron to set up on the host and no endpoint to call on a timer. What remains
+worth checking after an upgrade is that `workers` is running with
+`KINDLAST_TEMPORAL_ADDR` set: a gateway-only `workers` says at boot that
+nothing will run on a schedule, and `temporal schedule list` (below) shows
+five schedules when all is well.
 
 ## Requirements
 
@@ -27,7 +31,6 @@ Set up scheduling. It is described below.
 | Node.js | 22.13 or later, since Next.js runs on it |
 | Docker | For the bundled stack, which includes the console itself. On a host that only runs Kindlast, this is the only requirement in this table |
 | Postgres | 17 with pgvector, supplied by the stack |
-| Scheduler | Anything that can make an authenticated HTTP GET on a cron schedule |
 
 ## The stack
 
@@ -158,6 +161,7 @@ an actual deployment, so a real install passes the flag.
 | `KINDLAST_MODEL_CTX` | `16384` | Context window. A **memory** decision, not a capability one: the model supports 262144 natively, and allocating that would want far more RAM than the weights. |
 | `KINDLAST_MODEL_PARALLEL` | `2` | Concurrent slots. |
 | `KINDLAST_MODEL_PORT` | `8081` | Host port for the endpoint. |
+| `KINDLAST_MODEL_ENDPOINT` | `http://model:8080` (on core-api) | Where core-api sends the deployment's own completions. **core-api makes every model call** (ENT-256, part five): the Python service asks core-api for each completion, naming only the organisation, and core-api resolves whether that organisation uses this endpoint or a provider it chose, opens the provider key only it holds, and dials. The Python service holds no model endpoint and no key. Empty means this deployment runs no model; a completion is then refused with a reason and nothing dials anything. Not `KINDLAST_MODEL_URL`, which is `model-init`'s download URL. |
 
 Sizing, so you can pick before rather than after:
 
@@ -180,10 +184,13 @@ a filename from one model and a digest from another is a configuration that
 deletes a good file and fetches the wrong one.
 
 **Using a hosted provider instead.** Anything OpenAI-compatible works, so point
-the client at it and leave the `model` service out. Understand what that
-changes: your compliance profile, findings and DSAR content start leaving the
-deployment, and the provider becomes a processor you are responsible for
-recording.
+`KINDLAST_MODEL_ENDPOINT` on core-api at it and leave the `model` service out.
+Understand what that changes: your compliance profile, findings and DSAR
+content start leaving the deployment, and the provider becomes a processor you
+are responsible for recording. (A deployment-wide hosted endpoint that needs a
+key is not supported through this setting: the deployment's own endpoint is
+dialled without one. An organisation that wants a keyed provider chooses it
+per organisation, below, and core-api holds the key.)
 
 ### Letting an organisation choose its own provider (ENT-236)
 
@@ -496,12 +503,67 @@ does nothing but fail.
 | Schedule id | When | What it does |
 |---|---|---|
 | `expire-snoozed-findings` | Hourly at ten past (`KINDLAST_SNOOZE_EXPIRY_SCHEDULE`) | Brings back every finding whose deferral has run out, in every organisation, so "defer for seven days" means seven days rather than until somebody remembers. One pass, idempotent, run as the producer role. |
+| `relay-transactional-outbox` | Every 15 seconds (`KINDLAST_OUTBOX_RELAY_INTERVAL`) | Asks core-api what is waiting to leave and starts one workflow per row: `deliver-message/{row id}` for an invitation email, `deliver-notification/{row id}` for a finding notification. Each has a retry policy that backs off (ten seconds, doubling, capped at ten minutes) and no attempt limit: every attempt and what the mail server answered is in that workflow's history. A message that is not leaving is a running workflow in the UI with a reason. |
+| `reclaim-transactional-outbox` | Hourly at forty past (`KINDLAST_OUTBOX_RECLAIM_SCHEDULE`) | Clears the recipient's address and the rendered body out of delivered messages after seven days, and gives up on undelivered ones whose invitation can no longer be accepted. The rendered body of an invitation carries the raw token, so this is a credential-lifetime pass before it is a data-minimisation one. A message that can still be delivered is never touched. |
+| `relay-sweep-triggers` | Every 15 seconds (`KINDLAST_SWEEP_RELAY_INTERVAL`) | Asks core-api which sweeps somebody asked for and nothing has run (today: an onboarding somebody just confirmed writes a `sweep_triggers` row in the same transaction as the profile) and starts one `TriggeredSweepWorkflow` per row, named `sweep/{trigger id}`. So a fresh organisation sees findings within seconds of confirming, without anybody calling `RunSweep`. |
+| `sweep-every-organisation` | Daily at 06:00 UTC (`KINDLAST_SWEEP_SCHEDULE`) | Lists every organisation with a compliance profile and runs the Watcher and then the Analyst over each, four at a time, as two activities per organisation with their own retries. One organisation's failure is recorded in the run's result and does not stop the rest. This is what pg_cron's `watcher-daily` and `analyst-daily` were; the Analyst is now the next step in the same workflow rather than a second job five minutes later. Then, one organisation at a time, it drafts the narrative for findings that have none (see below). |
 
-The rest arrive in the changes that follow, in this order: notification
-dispatch, then the Watcher and Analyst chain, each replacing a polling loop or
-a hand trigger that exists today. Until the last of those lands, a sweep is
-still started by calling `SweepService.RunSweep` with a service credential,
-exactly as before; see the Postman collection for the request.
+Mail itself is sent by core-api, not by the worker: the worker asks core-api
+to deliver a message by id, and core-api, which holds the SMTP channel, claims
+the row, sends and records the outcome in one transaction. So a workflow
+history carries row ids and counts, never an address, a subject or a body.
+Without `KINDLAST_SMTP_ADDR` on core-api the deliveries retry with a reason
+naming that setting, and drain on their own once it is set. Finding
+notifications also need `KINDLAST_APP_BASE_URL` on core-api, for the link
+into the console every one of them carries; without it they wait the same
+way.
+
+**A finding notification is one workflow that may live for hours**, and that
+is the feature rather than a stuck run. The workflow asks core-api who should
+hear about the finding and when: somebody whose preferences say "not inside
+my quiet hours" is held on a durable timer until their window ends in their
+own time zone, and told then. Until this change such a notification was
+dropped with the reason on its row, because holding one needs a scheduler.
+So a `deliver-notification/...` workflow showing as running overnight is a
+person asleep, and its history says who was told, who is being held, and
+until when. Nobody's address appears in it.
+
+**Narration is the third step of every sweep, and it runs on two task
+queues.** After the Watcher and the Analyst, and after a triggered sweep has
+settled its trigger, the workflow narrates the organisation's findings that
+have none, up to fifty per run, as three activities per finding: `workers`
+(Go, the `core` queue) asks core-api for the next finding and the draft
+request built for it; **the `intelligence` container (Python, the
+`intelligence` queue) drafts it**, with every model call going back through
+core-api's `CompletionService` so it holds no endpoint and no key; and
+`workers` records the narrative or the refusal through core-api. Go loads,
+Python drafts, Go persists, each retrying on its own. The feed shows every
+finding with its deterministic text as soon as the sweep is done; explanations
+arrive as they are drafted.
+
+Three things an operator will see in a run's result: `Available: false` on a
+stack without the `model` profile (one activity, nothing wrong); `Skipped`
+naming the reason when an organisation's chosen provider cannot be honoured
+(a withdrawn provider, a key that will not open), or when **no Python worker
+is polling the `intelligence` queue**: the draft activity waits two minutes
+for a worker and then the sweep records that and moves on, so an
+`intelligence` container that is down costs explanations, never sweeps. The
+Python worker starts with the container and needs `KINDLAST_TEMPORAL_ADDR`
+(the bundled stack sets it); with it empty the container serves the RPC half
+alone and says so at boot.
+
+`SweepService.RunSweep` still exists for an operator who wants to sweep one
+organisation now, with a service credential; see the Postman collection. It is
+no longer how anything gets swept in the ordinary course of things. To sweep
+the whole estate now rather than at 06:00, which is how to check an upgrade:
+
+```bash
+docker compose -f deploy/compose.yaml exec temporal \
+  temporal schedule trigger --schedule-id sweep-every-organisation --address temporal:7233
+```
+
+The run's result in the UI says how many organisations were visited, how
+many signals and findings came of it, and which organisations (by id) failed.
 
 The worker that runs these is the `workers` container, the same binary as the
 integrations gateway, polling the `core` task queue. It registers its
@@ -515,6 +577,10 @@ Its settings:
 | `KINDLAST_TEMPORAL_NAMESPACE` | `default` | The namespace the schedules live in, which is the one auto-setup creates with the retention above. |
 | `KINDLAST_TEMPORAL_TASK_QUEUE` | `core` | The queue this worker polls. |
 | `KINDLAST_SNOOZE_EXPIRY_SCHEDULE` | `10 * * * *` | Five-field cron, UTC, for bringing deferred findings back. |
+| `KINDLAST_OUTBOX_RELAY_INTERVAL` | `15s` | How often the relay looks for invitation mail waiting to leave. A Go duration. |
+| `KINDLAST_OUTBOX_RECLAIM_SCHEDULE` | `40 * * * *` | Five-field cron, UTC, for clearing addresses and bodies out of delivered and abandoned messages. |
+| `KINDLAST_SWEEP_RELAY_INTERVAL` | `15s` | How often the relay looks for sweeps somebody asked for. A Go duration. |
+| `KINDLAST_SWEEP_SCHEDULE` | `0 6 * * *` | Five-field cron, UTC, for sweeping every organisation with a profile. |
 | `KINDLAST_CORE_API_URL` | `http://edge:80` | Where the activities call. Through the edge, the same door Intelligence uses. |
 | `KINDLAST_OIDC_*`, `KINDLAST_INTERNAL_CLIENT_FILE` | as core-api | The worker mints a token to call core-api, with the same service credential Intelligence presents. The bundled stack mounts the seed's files; an operator pointing at their own IdP sets these the way they did for core-api. |
 
@@ -536,6 +602,13 @@ docker compose -f deploy/compose.yaml exec temporal \
 A deferred finding whose date has passed comes back to "needs a decision" in
 the feed within a few seconds, and the run's history in the UI says how many
 moved.
+
+To see an invitation email leave, invite somebody from the members page and
+watch `temporal workflow list`: a `deliver-message/...` workflow appears within
+the relay interval and completes when Mailpit (or your mail server) has
+accepted the message. If it does not complete, its history says what the mail
+server answered on each attempt, which is the question the old in-process
+dispatcher could only answer from a counter in a table.
 
 Or without the UI:
 

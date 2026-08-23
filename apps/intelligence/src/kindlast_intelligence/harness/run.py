@@ -39,7 +39,7 @@ from .budget import Budget, BudgetExhausted
 from .citations import Citation, CitationValidator
 from .claims import ClaimCritic
 from .critics import Critic, first_breach
-from .model import Completion, ModelClient, ModelError
+from .model import Completer, Completion, ModelError
 from .prose import ProseCritic
 
 # THE CRITICS, IN THE ORDER THEY FIRE (ENT-248).
@@ -199,7 +199,7 @@ def draft_narrative(
     *,
     signal: str,
     obligations: list[dict[str, Any]],
-    model: ModelClient,
+    model: Completer,
     validator: CitationValidator,
     model_name: str,
     model_version: str,
@@ -315,7 +315,7 @@ def draft_narrative(
 
 
 def _call_model(
-    model: ModelClient, messages: list[dict[str, str]], budget: Budget, run: AgentRun
+    model: Completer, messages: list[dict[str, str]], budget: Budget, run: AgentRun
 ) -> Completion:
     completion = model.complete(messages, schema=analyst.output_schema())
 

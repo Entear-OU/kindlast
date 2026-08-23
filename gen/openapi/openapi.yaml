@@ -2022,6 +2022,41 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/completions:
+        post:
+            tags:
+                - CompletionService
+            description: |-
+                One chat completion, on the model the organisation's choice resolves to.
+
+                   invalid_argument      no organisation, no messages, or a malformed body
+                   failed_precondition   the organisation's provider cannot be honoured
+                                         (withdrawn, unreachable, a key that will not open,
+                                         or a provider that refused the key), or this
+                                         deployment runs no model at all; the run fails
+                                         and says why, and nothing falls back
+                   unavailable           the model endpoint did not answer or answered
+                                         with a server error; try again
+            operationId: CompletionService_Complete
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CompleteRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CompleteResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/corpus:ingest:
         post:
             tags:
@@ -2209,6 +2244,76 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/findings:next-to-narrate:
+        post:
+            tags:
+                - NarrativeService
+            description: |-
+                The load step of a narration run, for the Temporal chain (ENT-256, part
+                 five): the next finding in this organisation that has no narrative yet,
+                 with the DraftNarrative request built for it exactly as NarrateFindings
+                 builds one (the signal, the one obligation it may cite, the provider and
+                 model names for the run record). The workflow hands that request to the
+                 Python worker as an activity on the `intelligence` task queue, and brings
+                 the answer back to RecordNarrative. Go loads, Python drafts, Go persists
+                 (§16.4).
+
+                 `intelligence_available` false means this deployment runs no
+                 Intelligence, which is supported; the workflow stops there. `found` false
+                 means nothing is waiting. The same finding is offered again until
+                 something is recorded for it, which is what makes a crashed draft a
+                 retry rather than a skipped finding.
+            operationId: NarrativeService_NextFindingToNarrate
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/NextFindingToNarrateRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/NextFindingToNarrateResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/findings:record-narrative:
+        post:
+            tags:
+                - NarrativeService
+            description: |-
+                The persist step: what the draft produced, recorded against the finding
+                 exactly as NarrateFindings records it. A succeeded draft writes the
+                 narrative and the run id; a refused or failed one writes the refusal with
+                 its reason, so the finding is not offered again and an operator can read
+                 why it has no explanation. Recording the same draft twice writes the same
+                 thing twice, so a retried activity is harmless.
+            operationId: NarrativeService_RecordNarrative
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RecordNarrativeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecordNarrativeResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/gateway/tools:call:
         post:
             tags:
@@ -2273,6 +2378,117 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/messages:deliver:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Delivers one message: claims the row, sends it on the configured channel,
+                 and records the outcome, all inside one transaction on the agent pool.
+
+                 THE ONE CALL TEMPORAL RETRIES, and the contract is written for that:
+
+                   - It is idempotent on the row. A message already sent, abandoned, or
+                     gone reports `OUTCOME_ALREADY_SETTLED` and succeeds, so an activity
+                     that timed out after the mail left is retried safely rather than
+                     sending twice. The row is locked `for update` without `skip locked`,
+                     so a retry that arrives while the first attempt is still mid-send
+                     waits for it and then sees the settled row.
+                   - A failed send is an error, after the attempt and the mail server's
+                     answer have been written to the row and committed. The error carries
+                     `unavailable`, which is the code the worker treats as "try again with
+                     backoff". Nothing here decides how many times: that is the retry
+                     policy on the workflow, where it is one declaration rather than a
+                     counter in a table.
+                   - No configured channel is `failed_precondition`, retried too, because
+                     it is the supported state a deployment is in before KINDLAST_SMTP_ADDR
+                     is set, and the row is exactly as deliverable tomorrow as today.
+            operationId: DeliveryService_DeliverMessage
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeliverMessageRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DeliverMessageResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/messages:pending:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Lists the messages waiting to be delivered, oldest first, by id only.
+
+                 The relay's question, asked every few seconds by a Schedule: what is
+                 pending? It returns ids and nothing else, because the answer goes into an
+                 activity result and from there into a workflow history. The body, the
+                 address and the token are read by DeliverMessage, inside core-api, and
+                 never leave it.
+            operationId: DeliveryService_ListUndelivered
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ListUndeliveredRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListUndeliveredResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/messages:reclaim:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Clears the personal data out of messages that no longer need it
+                 (ENT-242, migration 00030): redacts delivered bodies once their window
+                 has passed, and gives up on undelivered messages whose invitation can no
+                 longer be accepted.
+
+                 Hourly, from a Schedule. The window is a decision and lives in core-api
+                 (§14.5); the rule that a message which can still be delivered is never
+                 touched is an invariant and lives in the database, where no caller of
+                 this RPC can reach past it. Idempotent: a second pass finds nothing.
+            operationId: DeliveryService_ReclaimMessages
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReclaimMessagesRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReclaimMessagesResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/narratives:draft:
         post:
             tags:
@@ -2312,6 +2528,119 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DraftNarrativeResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/notifications:notify:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Sends one notification to the named recipients, now.
+
+                 One transaction on the agent pool, row locked `for update`, one
+                 unsubscribe token and (for a verified address) one approve link minted
+                 per person, one email per person, exactly as the in-process loop did
+                 (ENT-209, ENT-249). The row is NOT marked sent here: the workflow may
+                 still be holding other recipients, and "sent" is one fact about the
+                 whole notification, recorded by SettleNotification when nobody is left.
+
+                 A failed send is recorded on the row (attempts, the server's answer) and
+                 returned as `unavailable` for the retry policy, after which the whole
+                 batch is retried. That means a second attempt can re-send to somebody
+                 earlier in the batch who already received it, which is the same trade
+                 the loop made and the same direction: a duplicate doorbell is a
+                 nuisance, a finding nobody hears about is the failure this product
+                 exists to prevent. Recipients named here who are no longer members are
+                 left out rather than failing the call.
+            operationId: DeliveryService_NotifyRecipients
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/NotifyRecipientsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/NotifyRecipientsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/notifications:plan:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Works out who a finding notification goes to, and when.
+
+                 Read only, no lock, no side effect: it answers what the workflow should
+                 do next, as of now. For each candidate recipient one of three decisions,
+                 decided in Go from the raw preference fields (§14.5): SEND, they want it
+                 and nothing is in the way; HOLD, they want it and are inside their quiet
+                 hours, with the moment the window ends in their zone; SKIP, with the
+                 reason, because the finding is below their severity floor. A row that is
+                 no longer pending answers `settled` and the workflow stops.
+
+                 What crosses into the workflow history is a user id, a decision and a
+                 time. Not an address.
+            operationId: DeliveryService_PlanNotification
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PlanNotificationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PlanNotificationResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/notifications:settle:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Marks a notification sent or skipped, once the workflow has nobody left
+                 to send to. Idempotent: a row already settled answers `settled: false`
+                 and changes nothing.
+
+                 `skipped` rather than `sent` when nobody wanted it, and the distinction
+                 is not cosmetic: `sent` means an email left the building, and recording
+                 a delivery no message supports would put a claim in the database that is
+                 not true. The reason is stored so an operator asking "why did nothing go
+                 out" gets an answer.
+            operationId: DeliveryService_SettleNotification
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SettleNotificationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SettleNotificationResponse'
                 default:
                     description: Default error response
                     content:
@@ -2397,6 +2726,132 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/RunSweepResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/sweep-targets:list:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Lists every organisation a scheduled sweep should visit: the ones with a
+                 compliance profile, by id alone. The daily workflow's first activity.
+
+                 THIS IS "SWEEP EVERYONE", WRITTEN DELIBERATELY. RunSweep refuses to sweep
+                 more than one organisation because the blast radius is every customer at
+                 once; this RPC exists so that the loop is a workflow an operator can watch,
+                 pause and read the history of, one organisation per activity, rather than
+                 a parameter. The producer role cannot enumerate tenants, so the list comes
+                 from `sweep_targets()`, a SECURITY DEFINER function that answers this one
+                 question (00035).
+            operationId: SweepService_ListSweepTargets
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ListSweepTargetsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListSweepTargetsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/sweep-triggers:pending:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Lists the sweeps somebody asked for and nothing has run yet (00035):
+                 trigger id and organisation, oldest first. The relay's question, asked
+                 every few seconds; ids only, because the answer goes into a workflow
+                 history. No organisation header: the list is every organisation's.
+            operationId: SweepService_ListSweepTriggers
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ListSweepTriggersRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListSweepTriggersResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/sweep-triggers:settle:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Records what a triggered sweep did: done, or an attempt that failed with
+                 why. A failed attempt leaves the row pending, so the relay offers it
+                 again once the workflow that held it has closed; `done` is reserved for a
+                 sweep that actually ran. Idempotent on a settled row.
+            operationId: SweepService_SettleSweepTrigger
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SettleSweepTriggerRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SettleSweepTriggerResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/sweep:analyse:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Runs the Analyst alone for one organisation: turns the signals the
+                 Watcher raised and nobody has analysed yet into findings.
+
+                 The second activity of a sweep workflow, after RunSweep with detect_only.
+                 Same organisation header, same producer pool, same refusal without a
+                 header. Idempotent: the Analyst works over unprocessed signals, so a
+                 second call finds none and reports zero, which is what lets a workflow
+                 retry it on its own.
+            operationId: SweepService_RunAnalyst
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RunAnalystRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RunAnalystResponse'
                 default:
                     description: Default error response
                     content:
@@ -2851,6 +3306,14 @@ components:
                     description: |-
                         When the endpoint answered, RFC 3339. The gateway's clock, because the
                          endpoint's is not ours to trust and `observed_at` needs to mean something.
+        ChatMessage:
+            type: object
+            properties:
+                role:
+                    type: string
+                    description: '`system`, `user` or `assistant`.'
+                content:
+                    type: string
         Citation:
             type: object
             properties:
@@ -2927,6 +3390,60 @@ components:
                  See the service comment: every field is a value the database already holds.
                  A client renders `label` and links `url`; the structured parts are present so
                  a client can filter or group by regulation, not so it can rebuild the label.
+        CompleteRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                    description: |-
+                        Whose model. Resolves the organisation's choice (ENT-236) or the
+                         deployment's own model when it has made none.
+                messages:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatMessage'
+                    description: The conversation, in order. The caller builds it; core-api forwards it.
+                responseSchemaJson:
+                    type: string
+                    description: |-
+                        A JSON Schema the answer must conform to, serialised, or empty for free
+                         text. Forwarded as the endpoint's structured-output request.
+                maxTokens:
+                    type: integer
+                    description: Zero means the endpoint's default.
+                    format: int32
+                temperature:
+                    type: number
+                    description: |-
+                        Zero means the endpoint's default; the caller that wants exactly zero
+                         sets `temperature_set`.
+                    format: float
+                temperatureSet:
+                    type: boolean
+        CompleteResponse:
+            type: object
+            properties:
+                content:
+                    type: string
+                inputTokens:
+                    type: integer
+                    format: int32
+                cachedInputTokens:
+                    type: integer
+                    format: int32
+                outputTokens:
+                    type: integer
+                    format: int32
+                finishReason:
+                    type: string
+                provider:
+                    type: string
+                    description: |-
+                        Which model served it, for the run record: the provider name the
+                         organisation chose (`instance` for the deployment's own model) and the
+                         model name on the wire.
+                model:
+                    type: string
         ConfirmProfileRequest:
             type: object
             properties: {}
@@ -3118,6 +3635,34 @@ components:
                     allOf:
                         - $ref: '#/components/schemas/ProcessingActivity'
                     description: The created record, so a client renders it without a second call.
+        DeliverMessageRequest:
+            type: object
+            properties:
+                messageId:
+                    type: string
+                    description: The row to deliver, from ListUndelivered.
+        DeliverMessageResponse:
+            type: object
+            properties:
+                outcome:
+                    enum:
+                        - OUTCOME_UNSPECIFIED
+                        - OUTCOME_DELIVERED
+                        - OUTCOME_ALREADY_SETTLED
+                    type: string
+                    format: enum
+                attempts:
+                    type: integer
+                    description: |-
+                        How many attempts the row now records, including this one when it sent.
+                         In the history so "it took four tries" is readable without the table.
+                    format: int32
+                sentAt:
+                    type: string
+                    description: |-
+                        When it left, from the database's clock inside the same transaction.
+                         Unset for OUTCOME_ALREADY_SETTLED.
+                    format: date-time
         DiscoverIntegrationRequest:
             type: object
             properties:
@@ -3246,35 +3791,30 @@ components:
                     allOf:
                         - $ref: '#/components/schemas/ModelEndpoint'
                     description: |-
-                        Where this run's model calls go, when the organisation has chosen a hosted
-                         provider (ENT-236, §26.6).
+                        Which model this run is recorded against: the organisation's chosen
+                         provider and model name (ENT-236, §26.6), as a hint for the run record
+                         and nothing more.
 
-                         # WHY THE CALLER PASSES THIS RATHER THAN THE HARNESS LOOKING IT UP
+                         # WHAT CHANGED HERE, AND WHY (ENT-256, part five)
 
-                         The same rule as the obligations above (§26.2), and here it is load
-                         bearing rather than stylistic. Intelligence holds no database handle and no
-                         tenancy GUC, so it has no way to decide which organisation's key it is
-                         entitled to and no way to be wrong about it: core-api resolves the choice
-                         inside the tenant's own rows, opens the sealed credential with the key only
-                         it holds, and hands over exactly one endpoint for exactly this run.
+                         ENT-236 put the organisation's own API key in this field for one call, a
+                         recorded relaxation of the rule that no third-party credential reaches
+                         the Python service. It was the pass-through shape, and the alternative
+                         considered then, proxying every completion through core-api so the key
+                         never leaves Go, was parked in §25.
 
-                         # AND WHY THIS IS A REAL RELAXATION OF A RULE, SAID OUT LOUD
+                         Temporal unparked it. A draft that runs as a Python activity has its
+                         input written into a workflow history, and a key cannot ride there; so
+                         the key no longer rides anywhere. Intelligence asks core-api's
+                         CompletionService for every completion, naming only the organisation,
+                         and core-api resolves the choice inside the tenant's own rows, opens the
+                         sealed credential with the key only it holds, and makes the call. The
+                         Python service holds no endpoint and no credential, by construction,
+                         again. `base_url` and `api_key` are kept on the wire for compatibility
+                         and are refused if set: a request carrying either is a caller that has
+                         not heard, and answering it would be the old exception by the back door.
 
-                         `AGENTS.md` says no third-party credential reaches the Python service. This
-                         puts one in a request to it, and pretending otherwise would be worse than
-                         the change. What is preserved is the part the rule exists for: Intelligence
-                         cannot OBTAIN a credential, cannot enumerate them, cannot persist one, and
-                         holds this one for the life of one call. What is given up is that the
-                         process is no longer credential-free by construction.
-
-                         The alternative considered was proxying every completion through core-api
-                         or the workers gateway so the key never leaves Go. It is stronger and it is
-                         written up in the PR; it was not built here because it puts every prompt
-                         and every token of a customer's compliance data through a second service
-                         that currently carries none of it, which trades one exposure for a larger
-                         one.
-
-                         Absent means the deployment's own endpoint, which is the default and the
+                         Absent means the deployment's own model, which is the default and the
                          case where nothing leaves.
         DraftNarrativeResponse:
             type: object
@@ -4497,6 +5037,31 @@ components:
                     items:
                         $ref: '#/components/schemas/ProfileFact'
                     description: Only the open values. History is one RPC away and is a different question.
+        ListSweepTargetsRequest:
+            type: object
+            properties: {}
+        ListSweepTargetsResponse:
+            type: object
+            properties:
+                orgIds:
+                    type: array
+                    items:
+                        type: string
+                    description: Organisation ids, in a stable order.
+        ListSweepTriggersRequest:
+            type: object
+            properties:
+                limit:
+                    type: integer
+                    description: At most this many. Zero means the server's default.
+                    format: int32
+        ListSweepTriggersResponse:
+            type: object
+            properties:
+                triggers:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/SweepTrigger'
         ListToolsRequest:
             type: object
             properties:
@@ -4514,6 +5079,31 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/GatewayTool'
+        ListUndeliveredRequest:
+            type: object
+            properties:
+                limit:
+                    type: integer
+                    description: |-
+                        At most this many ids. Zero means the server's default, which bounds one
+                         relay run rather than the backlog: what is not listed now is listed next
+                         tick.
+                    format: int32
+        ListUndeliveredResponse:
+            type: object
+            properties:
+                messageIds:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Row ids of pending transactional messages, oldest first. Ids, not
+                         messages: see the service comment for why nothing else crosses here.
+                notificationIds:
+                    type: array
+                    items:
+                        type: string
+                    description: Row ids of pending finding notifications, oldest first. Same rule.
         LogDsarRequest:
             type: object
             properties:
@@ -4646,17 +5236,23 @@ components:
                     type: string
                 baseUrl:
                     type: string
+                    description: |-
+                        No longer read. Intelligence dials no model; a request setting this is
+                         refused with invalid_argument (ENT-256, part five).
                 model:
                     type: string
                 apiKey:
                     type: string
+                    description: |-
+                        No longer read, and never populated by core-api. A request setting this
+                         is refused with invalid_argument: a credential arriving this way is the
+                         retired exception, not a feature (ENT-256, part five).
             description: |-
-                ModelEndpoint is one organisation's chosen provider, for one run.
+                ModelEndpoint is one organisation's chosen provider, for the run record.
 
-                 NEVER RECORDED AS PART OF THE RUN. `api_key` does not reach `agent_runs`,
-                 does not reach a trace, and does not reach a log line. What the run records
-                 is `provider`, which is what a sub-processor record needs and is not a
-                 secret.
+                 Names only: `provider`, which is what a sub-processor record needs and is
+                 not a secret, and `model`. Where the call goes and what authenticates it
+                 are core-api's to know (CompletionService).
         ModelSetting:
             type: object
             properties:
@@ -4738,6 +5334,27 @@ components:
                         Empty when Intelligence is not configured for this deployment, which is
                          supported rather than broken: the model service sits behind a compose
                          profile and a stack without it still produces findings.
+        NextFindingToNarrateRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+        NextFindingToNarrateResponse:
+            type: object
+            properties:
+                intelligenceAvailable:
+                    type: boolean
+                found:
+                    type: boolean
+                findingId:
+                    type: string
+                draft:
+                    allOf:
+                        - $ref: '#/components/schemas/DraftNarrativeRequest'
+                    description: |-
+                        The request the Python worker's DraftNarrative activity takes, built
+                         here so that the activity is a pure function of its input and the
+                         obligation it may cite is the finding's own.
         NotificationChannel:
             type: object
             properties:
@@ -4799,6 +5416,29 @@ components:
                          during quiet hours is one nobody can trust with a statutory clock.
                 quietHoursEnd:
                     type: string
+        NotifyRecipientsRequest:
+            type: object
+            properties:
+                notificationId:
+                    type: string
+                userIds:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Who to send to now, from a PlanNotification answer. Somebody named here
+                         who is no longer a recipient (left the organisation since the plan) is
+                         left out rather than failing the call.
+        NotifyRecipientsResponse:
+            type: object
+            properties:
+                sent:
+                    type: integer
+                    description: How many emails left.
+                    format: int32
+                settled:
+                    type: boolean
+                    description: True when the row was no longer pending and nothing was sent.
         Obligation:
             type: object
             properties:
@@ -5050,6 +5690,50 @@ components:
                  Analyst are doing. Its first honest content is this: when they last ran, and
                  whether they ever have. Everything conversational comes later; this is the
                  part that stops the console implying work that has not happened.
+        PlanNotificationRequest:
+            type: object
+            properties:
+                notificationId:
+                    type: string
+                    description: The notification_outbox row, from ListUndelivered.
+        PlanNotificationResponse:
+            type: object
+            properties:
+                settled:
+                    type: boolean
+                    description: |-
+                        True when there is nothing pending by that id: it was sent or skipped
+                         earlier, or never existed. The workflow stops.
+                recipients:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PlannedRecipient'
+                    description: |-
+                        Every candidate recipient, with the decision for each as of now. Empty
+                         when the organisation has nobody with a deliverable address, which the
+                         workflow settles as skipped.
+        PlannedRecipient:
+            type: object
+            properties:
+                userId:
+                    type: string
+                decision:
+                    enum:
+                        - DECISION_UNSPECIFIED
+                        - DECISION_SEND
+                        - DECISION_HOLD
+                        - DECISION_SKIP
+                    type: string
+                    format: enum
+                holdUntil:
+                    type: string
+                    description: Set for DECISION_HOLD.
+                    format: date-time
+                reason:
+                    type: string
+                    description: |-
+                        Set for DECISION_SKIP and DECISION_HOLD, in the words the row's
+                         `last_error` would carry if nobody at all wanted it.
         ProcessingActivity:
             type: object
             properties:
@@ -5263,6 +5947,26 @@ components:
                     format: int32
                 summary:
                     type: string
+        ReclaimMessagesRequest:
+            type: object
+            properties: {}
+        ReclaimMessagesResponse:
+            type: object
+            properties:
+                redacted:
+                    type: integer
+                    description: Delivered messages whose body was cleared on this pass.
+                    format: int32
+                abandoned:
+                    type: integer
+                    description: |-
+                        Undelivered messages given up on, because the invitation they carry can no
+                         longer be accepted.
+                    format: int32
+                ranAt:
+                    type: string
+                    description: When the pass ran.
+                    format: date-time
         RecordAgentRunRequest:
             type: object
             properties:
@@ -5434,6 +6138,26 @@ components:
                     description: |-
                         The stored run's id, so a caller can reference it from whatever it goes on
                          to write.
+        RecordNarrativeRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                findingId:
+                    type: string
+                draft:
+                    allOf:
+                        - $ref: '#/components/schemas/DraftNarrativeResponse'
+                    description: What the draft produced, as the Python worker returned it.
+        RecordNarrativeResponse:
+            type: object
+            properties:
+                recorded:
+                    type: boolean
+                    description: |-
+                        True when the record was written. A retried activity that records the
+                         same draft twice writes the same thing twice, which is the idempotency
+                         NarrateFindings already had.
         RegulationPack:
             type: object
             properties:
@@ -5563,6 +6287,23 @@ components:
             properties:
                 integration:
                     $ref: '#/components/schemas/Integration'
+        RunAnalystRequest:
+            type: object
+            properties: {}
+        RunAnalystResponse:
+            type: object
+            properties:
+                findings:
+                    type: integer
+                    description: |-
+                        Findings the Analyst created or refreshed from the signals waiting for
+                         it. Zero is the ordinary answer for an organisation whose profile has not
+                         changed since its last sweep.
+                    format: int32
+                ranAt:
+                    type: string
+                    description: When this ran, from the database's clock inside the same transaction.
+                    format: date-time
         RunSweepRequest:
             type: object
             properties:
@@ -5598,6 +6339,46 @@ components:
                     type: string
                     description: When this sweep ran, which is what the console's "last checked" reads.
                     format: date-time
+        SettleNotificationRequest:
+            type: object
+            properties:
+                notificationId:
+                    type: string
+                outcome:
+                    enum:
+                        - OUTCOME_UNSPECIFIED
+                        - OUTCOME_SENT
+                        - OUTCOME_SKIPPED
+                    type: string
+                    format: enum
+                reason:
+                    type: string
+        SettleNotificationResponse:
+            type: object
+            properties:
+                settled:
+                    type: boolean
+                    description: True when this call settled the row; false when it was already settled.
+        SettleSweepTriggerRequest:
+            type: object
+            properties:
+                triggerId:
+                    type: string
+                outcome:
+                    enum:
+                        - OUTCOME_UNSPECIFIED
+                        - OUTCOME_DONE
+                        - OUTCOME_FAILED
+                    type: string
+                    format: enum
+                error:
+                    type: string
+        SettleSweepTriggerResponse:
+            type: object
+            properties:
+                settled:
+                    type: boolean
+                    description: True when this call changed the row; false when it was already done.
         SeverityCounts:
             type: object
             properties:
@@ -5682,6 +6463,16 @@ components:
                 sourceUrl:
                     type: string
             description: One quoted passage supporting a finding, from `finding_supporting_chunks`.
+        SweepTrigger:
+            type: object
+            properties:
+                triggerId:
+                    type: string
+                orgId:
+                    type: string
+                reason:
+                    type: string
+                    description: Why the row exists; `onboarding_confirmed` today.
         ToolPolicy:
             type: object
             properties:
@@ -5958,6 +6749,48 @@ tags:
          than a degraded one. So this service answers "billing is not configured here"
          as a first-class response rather than erroring, and a console that reads it
          shows a settings page with no checkout rather than a broken one.
+    - name: CompletionService
+      description: |-
+        Completions through core-api (ENT-256, part five; the §25 hardening,
+         unparked).
+
+         WHY THE MODEL CALL MOVES INTO GO
+
+         Intelligence used to dial the model itself: the deployment's own endpoint
+         from its configuration, or, for an organisation that chose a hosted
+         provider, an endpoint and an API key that core-api put in the DraftNarrative
+         request for that one call (ENT-236). That was the recorded exception to "no
+         third-party credential reaches the Python service", and it held because the
+         key lived for one request and was written nowhere.
+
+         Temporal retires the exception rather than widening it. A draft that runs as
+         a Python activity has its input written into a workflow history that is kept
+         for the namespace's retention and readable in the UI; a key cannot ride
+         there. So the key no longer rides anywhere: every completion, for every
+         organisation, comes through this service. Python sends the messages and
+         names the organisation; core-api resolves the organisation's model choice
+         inside the tenant's own rows, opens the sealed key with the key only it
+         holds, makes the call, and returns the content and what it cost. The Python
+         service holds no endpoint and no credential, by construction, and the
+         credential-rule tests in apps/intelligence assert the absence again.
+
+         WHAT IT COSTS, SAID OUT LOUD
+
+         Every prompt and every token of a customer's compliance data now passes
+         through core-api, which carried none of it before. That is the cost §25
+         priced, and it was taken deliberately: core-api already holds the finding,
+         the obligation and the profile the prompt is built from, so this is the
+         same data taking one more hop inside the trust boundary rather than new
+         data entering it. What does not change: the prompt is data, never
+         instruction, and core-api forwards it to the model without reading it.
+
+         NO FALLBACK, EVER
+
+         An organisation that chose a provider gets that provider or gets an error.
+         There is no branch that answers a hosted request with the deployment's own
+         model, because a silent fallback would process a customer's findings
+         somewhere other than where their own record of processing says, and nothing
+         in the product would say it happened.
     - name: CorpusService
       description: |-
         The regulatory corpus, read (§10, §24; ENT-207).
@@ -5989,6 +6822,59 @@ tags:
          a formality.
     - name: DashboardService
       description: The dashboard's posture and the pipeline's honesty (§5).
+    - name: DeliveryService
+      description: |-
+        The delivery seam on the platform surface (ENT-256, part three): how a
+         message that core-api wrote leaves the process, now that the thing deciding
+         WHEN is Temporal rather than a ticker inside core-api.
+
+         WHY THE OUTBOX TABLE STAYS, WHEN THE DESIGN SAYS AN ACTIVITY IS THE OUTBOX
+
+         §16.2's end state reads "an activity with a retry policy is the outbox", and
+         for the retry half that is exactly what this delivers. The table stays for
+         the other half, which ENT-242 argued and nothing here weakens: the message is
+         written in the same transaction as the fact it announces, because an
+         invitation committed without its message is permanently undeliverable (the
+         raw token exists nowhere else) and a message committed without its invitation
+         names a link that redeems nothing. A workflow started after the commit can be
+         lost between the commit and the start; a row written inside the commit
+         cannot. So the row is the durable handoff, and a Schedule relays what is
+         sitting in it into one workflow per message.
+
+         WHY core-api SENDS THE MAIL, RATHER THAN HANDING THE BODY TO THE WORKER
+
+         `workers` holds no database credential by design (§21.4), so "an activity"
+         means "an RPC on this surface". It could have been an RPC that returns the
+         rendered message for the worker to send, and it deliberately is not: the
+         body of an invitation carries a bearer token in the clear (00030), and an
+         activity's inputs and results are written into a workflow history that is
+         kept for the namespace's retention and readable in the UI (§16.3). The
+         history gets a row id and a count. The address, the subject and the token
+         stay inside core-api, which already holds the SMTP channel, and the RPC
+         reports whether they left.
+
+         THE DOORBELL PATH RIDES THE SAME SEAM, WITH ONE MORE MOVING PART
+
+         A finding notification (ENT-209) is a row in `notification_outbox` whose
+         recipients are worked out at delivery time from memberships and
+         preferences, and a recipient's preferences may say "not now": quiet hours.
+         The in-process loop this replaces could only drop such a notification with
+         the reason on the row, because holding one needs a scheduler (§17.5). Now
+         there is one. The workflow asks this service to PLAN (who is due now, who
+         is held until when, who is skipped and why), sends to whoever is due,
+         sleeps on a durable timer until the earliest hold ends, plans again, and
+         settles the row when nobody is left. The three RPCs below are those three
+         verbs, and every decision in them is Go over rows the database fetched.
+
+         WHAT TEMPORAL ADDS, STATED SO THE EXTRA HOP IS SEEN TO BUY SOMETHING
+
+         The ticker this replaces retried every pending row every ten seconds forever,
+         with no backoff, no record of attempts beyond a counter, and nothing an
+         operator could look at except the table. Each message is now its own
+         workflow, with a retry policy that backs off, an attempt history that says
+         what the mail server answered each time, and a schedule whose last run is a
+         line in `temporal schedule list`. A deployment whose mail is not leaving
+         shows it in the UI rather than in a log nobody is reading.
     - name: FindingsService
       description: |-
         Findings, the feed, and the dashboard (core-api-surface §3 and §5).
@@ -6580,14 +7466,20 @@ tags:
          them apart makes "is this reachable by a person" a question answered by the
          import path.
 
-         WHY A SWEEP HAS TO BE TRIGGERED AT ALL
+         HOW A SWEEP GETS RUN, AS OF ENT-256 PART FOUR
 
-         Nothing runs the Watcher or the Analyst on a schedule. 00001 dropped the
-         three pg_cron jobs when the schema moved off Supabase, and the schedules
-         return with Temporal at build-order step 8. Between those two points a
-         perfectly correct feed shows an empty state forever, because nothing has ever
-         looked.
+         00001 dropped the three pg_cron jobs when the schema moved off Supabase,
+         and for a while nothing ran the Watcher or the Analyst unless somebody called
+         RunSweep with a service credential. That is over: Temporal Schedules on
+         `workers` call this surface, exactly as this comment always said they would,
+         and RunSweep survived as the activity rather than being replaced.
 
-         This is the seam that fills the gap: something outside can ask for a sweep
-         now. When Temporal lands it becomes the thing Temporal calls rather than
-         being replaced, so the schedule arrives as a caller rather than a rewrite.
+         Two things start a sweep now. Confirming onboarding writes a `sweep_triggers`
+         row in the same transaction as the profile (00035), a relay lists it within
+         seconds and starts one workflow for it; and a daily schedule lists every
+         organisation with a profile (ListSweepTargets) and sweeps each. Both
+         workflows run the Watcher (RunSweep with detect_only) and then the Analyst
+         (RunAnalyst) as two activities, because the design's point is that the
+         Analyst is the next step in the workflow, not a second schedule five minutes
+         later hoping the first has finished. RunSweep with detect_only false still
+         does both in one transaction, for an operator who wants one call.

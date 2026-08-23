@@ -127,35 +127,30 @@ type DraftNarrativeRequest struct {
 	// Empty for a scheduled sweep. A skill given no delegation has no tools that
 	// reach a tenant's data, which is the Analyst today: it declares none.
 	Delegation string `protobuf:"bytes,5,opt,name=delegation,proto3" json:"delegation,omitempty"`
-	// Where this run's model calls go, when the organisation has chosen a hosted
-	// provider (ENT-236, §26.6).
+	// Which model this run is recorded against: the organisation's chosen
+	// provider and model name (ENT-236, §26.6), as a hint for the run record
+	// and nothing more.
 	//
-	// # WHY THE CALLER PASSES THIS RATHER THAN THE HARNESS LOOKING IT UP
+	// # WHAT CHANGED HERE, AND WHY (ENT-256, part five)
 	//
-	// The same rule as the obligations above (§26.2), and here it is load
-	// bearing rather than stylistic. Intelligence holds no database handle and no
-	// tenancy GUC, so it has no way to decide which organisation's key it is
-	// entitled to and no way to be wrong about it: core-api resolves the choice
-	// inside the tenant's own rows, opens the sealed credential with the key only
-	// it holds, and hands over exactly one endpoint for exactly this run.
+	// ENT-236 put the organisation's own API key in this field for one call, a
+	// recorded relaxation of the rule that no third-party credential reaches
+	// the Python service. It was the pass-through shape, and the alternative
+	// considered then, proxying every completion through core-api so the key
+	// never leaves Go, was parked in §25.
 	//
-	// # AND WHY THIS IS A REAL RELAXATION OF A RULE, SAID OUT LOUD
+	// Temporal unparked it. A draft that runs as a Python activity has its
+	// input written into a workflow history, and a key cannot ride there; so
+	// the key no longer rides anywhere. Intelligence asks core-api's
+	// CompletionService for every completion, naming only the organisation,
+	// and core-api resolves the choice inside the tenant's own rows, opens the
+	// sealed credential with the key only it holds, and makes the call. The
+	// Python service holds no endpoint and no credential, by construction,
+	// again. `base_url` and `api_key` are kept on the wire for compatibility
+	// and are refused if set: a request carrying either is a caller that has
+	// not heard, and answering it would be the old exception by the back door.
 	//
-	// `AGENTS.md` says no third-party credential reaches the Python service. This
-	// puts one in a request to it, and pretending otherwise would be worse than
-	// the change. What is preserved is the part the rule exists for: Intelligence
-	// cannot OBTAIN a credential, cannot enumerate them, cannot persist one, and
-	// holds this one for the life of one call. What is given up is that the
-	// process is no longer credential-free by construction.
-	//
-	// The alternative considered was proxying every completion through core-api
-	// or the workers gateway so the key never leaves Go. It is stronger and it is
-	// written up in the PR; it was not built here because it puts every prompt
-	// and every token of a customer's compliance data through a second service
-	// that currently carries none of it, which trades one exposure for a larger
-	// one.
-	//
-	// Absent means the deployment's own endpoint, which is the default and the
+	// Absent means the deployment's own model, which is the default and the
 	// case where nothing leaves.
 	ModelEndpoint *ModelEndpoint `protobuf:"bytes,6,opt,name=model_endpoint,json=modelEndpoint,proto3" json:"model_endpoint,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -234,18 +229,26 @@ func (x *DraftNarrativeRequest) GetModelEndpoint() *ModelEndpoint {
 	return nil
 }
 
-// ModelEndpoint is one organisation's chosen provider, for one run.
+// ModelEndpoint is one organisation's chosen provider, for the run record.
 //
-// NEVER RECORDED AS PART OF THE RUN. `api_key` does not reach `agent_runs`,
-// does not reach a trace, and does not reach a log line. What the run records
-// is `provider`, which is what a sub-processor record needs and is not a
-// secret.
+// Names only: `provider`, which is what a sub-processor record needs and is
+// not a secret, and `model`. Where the call goes and what authenticates it
+// are core-api's to know (CompletionService).
 type ModelEndpoint struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
-	BaseUrl       string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
-	Model         string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
-	ApiKey        string                 `protobuf:"bytes,4,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Provider string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	// No longer read. Intelligence dials no model; a request setting this is
+	// refused with invalid_argument (ENT-256, part five).
+	//
+	// Deprecated: Marked as deprecated in kindlast/platform/v1/intelligence.proto.
+	BaseUrl string `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	Model   string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	// No longer read, and never populated by core-api. A request setting this
+	// is refused with invalid_argument: a credential arriving this way is the
+	// retired exception, not a feature (ENT-256, part five).
+	//
+	// Deprecated: Marked as deprecated in kindlast/platform/v1/intelligence.proto.
+	ApiKey        string `protobuf:"bytes,4,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -287,6 +290,7 @@ func (x *ModelEndpoint) GetProvider() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in kindlast/platform/v1/intelligence.proto.
 func (x *ModelEndpoint) GetBaseUrl() string {
 	if x != nil {
 		return x.BaseUrl
@@ -301,6 +305,7 @@ func (x *ModelEndpoint) GetModel() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in kindlast/platform/v1/intelligence.proto.
 func (x *ModelEndpoint) GetApiKey() string {
 	if x != nil {
 		return x.ApiKey
@@ -573,12 +578,12 @@ const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\n" +
 	"delegation\x18\x05 \x01(\tR\n" +
 	"delegation\x12J\n" +
-	"\x0emodel_endpoint\x18\x06 \x01(\v2#.kindlast.platform.v1.ModelEndpointR\rmodelEndpoint\"u\n" +
+	"\x0emodel_endpoint\x18\x06 \x01(\v2#.kindlast.platform.v1.ModelEndpointR\rmodelEndpoint\"}\n" +
 	"\rModelEndpoint\x12\x1a\n" +
-	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x19\n" +
-	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
-	"\x05model\x18\x03 \x01(\tR\x05model\x12\x17\n" +
-	"\aapi_key\x18\x04 \x01(\tR\x06apiKey\"\x80\x01\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x1d\n" +
+	"\bbase_url\x18\x02 \x01(\tB\x02\x18\x01R\abaseUrl\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12\x1b\n" +
+	"\aapi_key\x18\x04 \x01(\tB\x02\x18\x01R\x06apiKey\"\x80\x01\n" +
 	"\x11ObligationContext\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +

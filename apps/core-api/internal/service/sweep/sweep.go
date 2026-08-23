@@ -25,6 +25,7 @@ package sweep
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -38,8 +39,20 @@ import (
 // used rather than exported from the store (§21.6).
 type Producer interface {
 	RunSweep(ctx context.Context, orgID string, detectOnly bool) (postgres.Sweep, error)
+	RunAnalyst(ctx context.Context, orgID string) (postgres.Analysis, error)
 	ExpireSnoozes(ctx context.Context) (postgres.Expiry, error)
+	PendingSweepTriggers(ctx context.Context, limit int) ([]postgres.SweepTrigger, error)
+	SettleSweepTrigger(ctx context.Context, id string, cause error) (bool, error)
+	SweepTargets(ctx context.Context) ([]string, error)
 }
+
+// Bounds on one listing. What is not listed now is listed on the next relay
+// tick, a few seconds later; a backlog that hits this is a worker that was
+// down for a while.
+const (
+	DefaultListLimit = 200
+	MaxListLimit     = 1000
+)
 
 // Service implements internalv1connect.SweepServiceHandler.
 type Service struct {
@@ -110,4 +123,122 @@ func (s *Service) ExpireSnoozes(
 		Reemerged: result.Reemerged,
 		RanAt:     timestamppb.New(result.RanAt),
 	}), nil
+}
+
+// RunAnalyst runs the Analyst alone for one organisation (ENT-256, part four).
+func (s *Service) RunAnalyst(
+	ctx context.Context,
+	req *connect.Request[platformv1.RunAnalystRequest],
+) (*connect.Response[platformv1.RunAnalystResponse], error) {
+	if _, ok := interceptor.ClaimsFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			errors.New("handler reached with no verified identity"))
+	}
+
+	orgID := req.Header().Get(interceptor.OrgHeader)
+	if orgID == "" {
+		// Refused rather than defaulted, for RunSweep's reason.
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("an analysis names one organisation; send the "+
+				interceptor.OrgHeader+" header"))
+	}
+
+	result, err := s.producer.RunAnalyst(ctx, orgID)
+	if errors.Is(err, postgres.ErrBadOrganisation) {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("the organisation header is not a uuid"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&platformv1.RunAnalystResponse{
+		Findings: result.Findings,
+		RanAt:    timestamppb.New(result.RanAt),
+	}), nil
+}
+
+// ListSweepTriggers lists the sweeps somebody asked for and nothing has run
+// (00035).
+func (s *Service) ListSweepTriggers(
+	ctx context.Context,
+	req *connect.Request[platformv1.ListSweepTriggersRequest],
+) (*connect.Response[platformv1.ListSweepTriggersResponse], error) {
+	if _, ok := interceptor.ClaimsFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			errors.New("handler reached with no verified identity"))
+	}
+	limit := int(req.Msg.GetLimit())
+	switch {
+	case limit <= 0:
+		limit = DefaultListLimit
+	case limit > MaxListLimit:
+		limit = MaxListLimit
+	}
+
+	triggers, err := s.producer.PendingSweepTriggers(ctx, limit)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	res := &platformv1.ListSweepTriggersResponse{}
+	for _, t := range triggers {
+		res.Triggers = append(res.Triggers, &platformv1.SweepTrigger{
+			TriggerId: t.ID, OrgId: t.OrgID, Reason: t.Reason,
+		})
+	}
+	return connect.NewResponse(res), nil
+}
+
+// SettleSweepTrigger records what a triggered sweep did.
+func (s *Service) SettleSweepTrigger(
+	ctx context.Context,
+	req *connect.Request[platformv1.SettleSweepTriggerRequest],
+) (*connect.Response[platformv1.SettleSweepTriggerResponse], error) {
+	if _, ok := interceptor.ClaimsFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			errors.New("handler reached with no verified identity"))
+	}
+	if req.Msg.GetTriggerId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("settling names one trigger; send trigger_id"))
+	}
+	var cause error
+	switch req.Msg.GetOutcome() {
+	case platformv1.SettleSweepTriggerRequest_OUTCOME_DONE:
+	case platformv1.SettleSweepTriggerRequest_OUTCOME_FAILED:
+		msg := req.Msg.GetError()
+		if msg == "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument,
+				errors.New("a failed attempt records why; send error"))
+		}
+		cause = fmt.Errorf("%s", msg)
+	default:
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("settling names an outcome; send done or failed"))
+	}
+
+	settled, err := s.producer.SettleSweepTrigger(ctx, req.Msg.GetTriggerId(), cause)
+	if errors.Is(err, postgres.ErrBadTriggerID) {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("trigger_id is not a uuid"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&platformv1.SettleSweepTriggerResponse{Settled: settled}), nil
+}
+
+// ListSweepTargets lists every organisation a scheduled sweep should visit.
+func (s *Service) ListSweepTargets(
+	ctx context.Context,
+	_ *connect.Request[platformv1.ListSweepTargetsRequest],
+) (*connect.Response[platformv1.ListSweepTargetsResponse], error) {
+	if _, ok := interceptor.ClaimsFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			errors.New("handler reached with no verified identity"))
+	}
+	ids, err := s.producer.SweepTargets(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&platformv1.ListSweepTargetsResponse{OrgIds: ids}), nil
 }

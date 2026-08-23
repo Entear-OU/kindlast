@@ -506,6 +506,14 @@ services:
       # `model` profile's own instructions carry the one-line export, and
       # `deploy/.env` is where a self-hoster running the model puts it for good.
       KINDLAST_INTELLIGENCE_URL: ${KINDLAST_INTELLIGENCE_URL:-}
+      # Where the deployment's own model answers (ENT-256, part five). Every
+      # completion goes through core-api now: Intelligence asks, core-api
+      # resolves the organisation's choice, opens the key only it holds, and
+      # dials this (or the organisation's provider). The service name
+      # resolves only when the `model` profile is up; without it a completion
+      # is refused with a reason and nothing dials anything.
+      KINDLAST_MODEL_ENDPOINT: http://model:8080
+      KINDLAST_MODEL_NAME: ${KINDLAST_MODEL_NAME:-Qwen3.5-4B-Q4_K_M}
 
       # The credential core-api mints its own token with, to call Intelligence.
       #
@@ -944,6 +952,9 @@ services:
         condition: service_completed_successfully
       core-api:
         condition: service_healthy
+      # The worker half registers with the engine at boot (ENT-256).
+      temporal:
+        condition: service_healthy
       model:
         condition: service_healthy
     environment:
@@ -978,7 +989,18 @@ services:
       # Through the edge, the same door a host caller uses, so there is no
       # development-only shortcut.
       KINDLAST_CORE_API_URL: http://edge:80
-      KINDLAST_MODEL_URL: http://model:8080
+      # No model URL here, since ENT-256 part five: this service dials no
+      # model. Completions go through core-api's CompletionService, which
+      # holds KINDLAST_MODEL_ENDPOINT and every organisation's key.
+
+      # THE TEMPORAL WORKER (ENT-256, part five): this service also polls the
+      # `intelligence` task queue for the drafts the Go worker's sweep
+      # workflow schedules (Go loads, Python drafts, Go persists). Empty means
+      # the RPC half alone, and the sweep then records narration as skipped.
+      KINDLAST_TEMPORAL_ADDR: ${KINDLAST_TEMPORAL_ADDR:-temporal:7233}
+      KINDLAST_TEMPORAL_NAMESPACE: default
+      # Drafts in flight at once: what one local model serves (ENT-235).
+      KINDLAST_INTELLIGENCE_CONCURRENCY: "2"
 
       # Recorded on every run, so a stored finding names the weights that
       # produced it rather than "a 4B".
@@ -1041,6 +1063,22 @@ services:
       # same pass daily at 06:10 and a finding deferred "for seven days" came
       # back up to a day late. Five-field cron, UTC.
       KINDLAST_SNOOZE_EXPIRY_SCHEDULE: ${KINDLAST_SNOOZE_EXPIRY_SCHEDULE:-10 * * * *}
+      # How often the relay looks for invitation mail waiting in core-api's
+      # outbox and starts a delivery for each row (ENT-256, part three). An
+      # interval rather than a cron because mail a person is waiting for
+      # should leave in seconds; each tick is one indexed query.
+      KINDLAST_OUTBOX_RELAY_INTERVAL: ${KINDLAST_OUTBOX_RELAY_INTERVAL:-15s}
+      # When delivered and abandoned messages have their addresses and bodies
+      # cleared (ENT-242). Hourly at forty past, offset from the snooze expiry
+      # so the two passes do not share a minute on the producer pool.
+      KINDLAST_OUTBOX_RECLAIM_SCHEDULE: ${KINDLAST_OUTBOX_RECLAIM_SCHEDULE:-40 * * * *}
+      # How often the relay looks for sweeps somebody asked for, which today
+      # means an onboarding somebody just confirmed (ENT-256, part four), and
+      # when the Watcher and then the Analyst run over every organisation
+      # with a profile. Daily at 06:00 UTC is what pg_cron's watcher-daily
+      # ran; the Analyst no longer needs its own 06:05.
+      KINDLAST_SWEEP_RELAY_INTERVAL: ${KINDLAST_SWEEP_RELAY_INTERVAL:-15s}
+      KINDLAST_SWEEP_SCHEDULE: ${KINDLAST_SWEEP_SCHEDULE:-0 6 * * *}
 
       # Where the activities call: through the edge, the same door Intelligence
       # uses, so there is no development-only shortcut. The edge routes

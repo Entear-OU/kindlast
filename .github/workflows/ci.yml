@@ -570,19 +570,29 @@ jobs:
           docker run --rm --network kindlast_default curlimages/curl:8.11.1 \
             --fail --silent --show-error http://core-api:8080/healthz
 
-      # The worker registered its schedule (ENT-256, part two). This is the
-      # thing that would silently not happen: an engine that is healthy and a
-      # worker that is healthy, and no schedule, is a deployment where nothing
-      # ever runs on a timer and nothing says so. `workers` creates the
-      # schedule at boot, so by the time core-api is healthy (it waits on
-      # workers) the schedule must exist.
-      - name: The snooze-expiry schedule exists
+      # The worker registered its schedules (ENT-256, parts two to four).
+      # This is the thing that would silently not happen: an engine that is
+      # healthy and a worker that is healthy, and no schedule, is a deployment
+      # where nothing ever runs on a timer and nothing says so. `workers`
+      # creates them at boot, so by the time core-api is healthy (it waits on
+      # workers) every one must exist. The list here is the list in
+      # apps/workers/internal/schedule/worker.go, and a schedule added there
+      # and not here is exactly the kind of gap this step is for.
+      - name: Every schedule the worker owns exists
         run: |
-          docker compose -f deploy/compose.yaml exec -T temporal \
-            temporal schedule describe --schedule-id expire-snoozed-findings --address temporal:7233 \
-            | grep -q ExpireSnoozedFindingsWorkflow \
-            || { echo "the expire-snoozed-findings schedule is missing"; \
-                 docker compose -f deploy/compose.yaml logs workers --tail 50; exit 1; }
+          for pair in \
+            expire-snoozed-findings:ExpireSnoozedFindingsWorkflow \
+            relay-transactional-outbox:RelayOutboxWorkflow \
+            reclaim-transactional-outbox:ReclaimOutboxWorkflow \
+            relay-sweep-triggers:RelaySweepTriggersWorkflow \
+            sweep-every-organisation:DailySweepWorkflow; do
+            id=${pair%%:*}; workflow=${pair##*:}
+            docker compose -f deploy/compose.yaml exec -T temporal \
+              temporal schedule describe --schedule-id "$id" --address temporal:7233 \
+              | grep -q "$workflow" \
+              || { echo "the $id schedule is missing"; \
+                   docker compose -f deploy/compose.yaml logs workers --tail 50; exit 1; }
+          done
 
       # Same statement as core-api's, for the same reason: the workflow engine
       # is reachable on the compose network and nowhere else. Its UI is the

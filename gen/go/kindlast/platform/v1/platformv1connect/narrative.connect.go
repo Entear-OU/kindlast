@@ -36,6 +36,12 @@ const (
 	// NarrativeServiceNarrateFindingsProcedure is the fully-qualified name of the NarrativeService's
 	// NarrateFindings RPC.
 	NarrativeServiceNarrateFindingsProcedure = "/kindlast.platform.v1.NarrativeService/NarrateFindings"
+	// NarrativeServiceNextFindingToNarrateProcedure is the fully-qualified name of the
+	// NarrativeService's NextFindingToNarrate RPC.
+	NarrativeServiceNextFindingToNarrateProcedure = "/kindlast.platform.v1.NarrativeService/NextFindingToNarrate"
+	// NarrativeServiceRecordNarrativeProcedure is the fully-qualified name of the NarrativeService's
+	// RecordNarrative RPC.
+	NarrativeServiceRecordNarrativeProcedure = "/kindlast.platform.v1.NarrativeService/RecordNarrative"
 )
 
 // NarrativeServiceClient is a client for the kindlast.platform.v1.NarrativeService service.
@@ -55,6 +61,28 @@ type NarrativeServiceClient interface {
 	// corpus and the findings are already readable, gathers what each run may
 	// cite, and hands it over.
 	NarrateFindings(context.Context, *connect.Request[v1.NarrateFindingsRequest]) (*connect.Response[v1.NarrateFindingsResponse], error)
+	// The load step of a narration run, for the Temporal chain (ENT-256, part
+	// five): the next finding in this organisation that has no narrative yet,
+	// with the DraftNarrative request built for it exactly as NarrateFindings
+	// builds one (the signal, the one obligation it may cite, the provider and
+	// model names for the run record). The workflow hands that request to the
+	// Python worker as an activity on the `intelligence` task queue, and brings
+	// the answer back to RecordNarrative. Go loads, Python drafts, Go persists
+	// (§16.4).
+	//
+	// `intelligence_available` false means this deployment runs no
+	// Intelligence, which is supported; the workflow stops there. `found` false
+	// means nothing is waiting. The same finding is offered again until
+	// something is recorded for it, which is what makes a crashed draft a
+	// retry rather than a skipped finding.
+	NextFindingToNarrate(context.Context, *connect.Request[v1.NextFindingToNarrateRequest]) (*connect.Response[v1.NextFindingToNarrateResponse], error)
+	// The persist step: what the draft produced, recorded against the finding
+	// exactly as NarrateFindings records it. A succeeded draft writes the
+	// narrative and the run id; a refused or failed one writes the refusal with
+	// its reason, so the finding is not offered again and an operator can read
+	// why it has no explanation. Recording the same draft twice writes the same
+	// thing twice, so a retried activity is harmless.
+	RecordNarrative(context.Context, *connect.Request[v1.RecordNarrativeRequest]) (*connect.Response[v1.RecordNarrativeResponse], error)
 }
 
 // NewNarrativeServiceClient constructs a client for the kindlast.platform.v1.NarrativeService
@@ -74,17 +102,41 @@ func NewNarrativeServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(narrativeServiceMethods.ByName("NarrateFindings")),
 			connect.WithClientOptions(opts...),
 		),
+		nextFindingToNarrate: connect.NewClient[v1.NextFindingToNarrateRequest, v1.NextFindingToNarrateResponse](
+			httpClient,
+			baseURL+NarrativeServiceNextFindingToNarrateProcedure,
+			connect.WithSchema(narrativeServiceMethods.ByName("NextFindingToNarrate")),
+			connect.WithClientOptions(opts...),
+		),
+		recordNarrative: connect.NewClient[v1.RecordNarrativeRequest, v1.RecordNarrativeResponse](
+			httpClient,
+			baseURL+NarrativeServiceRecordNarrativeProcedure,
+			connect.WithSchema(narrativeServiceMethods.ByName("RecordNarrative")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // narrativeServiceClient implements NarrativeServiceClient.
 type narrativeServiceClient struct {
-	narrateFindings *connect.Client[v1.NarrateFindingsRequest, v1.NarrateFindingsResponse]
+	narrateFindings      *connect.Client[v1.NarrateFindingsRequest, v1.NarrateFindingsResponse]
+	nextFindingToNarrate *connect.Client[v1.NextFindingToNarrateRequest, v1.NextFindingToNarrateResponse]
+	recordNarrative      *connect.Client[v1.RecordNarrativeRequest, v1.RecordNarrativeResponse]
 }
 
 // NarrateFindings calls kindlast.platform.v1.NarrativeService.NarrateFindings.
 func (c *narrativeServiceClient) NarrateFindings(ctx context.Context, req *connect.Request[v1.NarrateFindingsRequest]) (*connect.Response[v1.NarrateFindingsResponse], error) {
 	return c.narrateFindings.CallUnary(ctx, req)
+}
+
+// NextFindingToNarrate calls kindlast.platform.v1.NarrativeService.NextFindingToNarrate.
+func (c *narrativeServiceClient) NextFindingToNarrate(ctx context.Context, req *connect.Request[v1.NextFindingToNarrateRequest]) (*connect.Response[v1.NextFindingToNarrateResponse], error) {
+	return c.nextFindingToNarrate.CallUnary(ctx, req)
+}
+
+// RecordNarrative calls kindlast.platform.v1.NarrativeService.RecordNarrative.
+func (c *narrativeServiceClient) RecordNarrative(ctx context.Context, req *connect.Request[v1.RecordNarrativeRequest]) (*connect.Response[v1.RecordNarrativeResponse], error) {
+	return c.recordNarrative.CallUnary(ctx, req)
 }
 
 // NarrativeServiceHandler is an implementation of the kindlast.platform.v1.NarrativeService
@@ -105,6 +157,28 @@ type NarrativeServiceHandler interface {
 	// corpus and the findings are already readable, gathers what each run may
 	// cite, and hands it over.
 	NarrateFindings(context.Context, *connect.Request[v1.NarrateFindingsRequest]) (*connect.Response[v1.NarrateFindingsResponse], error)
+	// The load step of a narration run, for the Temporal chain (ENT-256, part
+	// five): the next finding in this organisation that has no narrative yet,
+	// with the DraftNarrative request built for it exactly as NarrateFindings
+	// builds one (the signal, the one obligation it may cite, the provider and
+	// model names for the run record). The workflow hands that request to the
+	// Python worker as an activity on the `intelligence` task queue, and brings
+	// the answer back to RecordNarrative. Go loads, Python drafts, Go persists
+	// (§16.4).
+	//
+	// `intelligence_available` false means this deployment runs no
+	// Intelligence, which is supported; the workflow stops there. `found` false
+	// means nothing is waiting. The same finding is offered again until
+	// something is recorded for it, which is what makes a crashed draft a
+	// retry rather than a skipped finding.
+	NextFindingToNarrate(context.Context, *connect.Request[v1.NextFindingToNarrateRequest]) (*connect.Response[v1.NextFindingToNarrateResponse], error)
+	// The persist step: what the draft produced, recorded against the finding
+	// exactly as NarrateFindings records it. A succeeded draft writes the
+	// narrative and the run id; a refused or failed one writes the refusal with
+	// its reason, so the finding is not offered again and an operator can read
+	// why it has no explanation. Recording the same draft twice writes the same
+	// thing twice, so a retried activity is harmless.
+	RecordNarrative(context.Context, *connect.Request[v1.RecordNarrativeRequest]) (*connect.Response[v1.RecordNarrativeResponse], error)
 }
 
 // NewNarrativeServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -120,10 +194,26 @@ func NewNarrativeServiceHandler(svc NarrativeServiceHandler, opts ...connect.Han
 		connect.WithSchema(narrativeServiceMethods.ByName("NarrateFindings")),
 		connect.WithHandlerOptions(opts...),
 	)
+	narrativeServiceNextFindingToNarrateHandler := connect.NewUnaryHandler(
+		NarrativeServiceNextFindingToNarrateProcedure,
+		svc.NextFindingToNarrate,
+		connect.WithSchema(narrativeServiceMethods.ByName("NextFindingToNarrate")),
+		connect.WithHandlerOptions(opts...),
+	)
+	narrativeServiceRecordNarrativeHandler := connect.NewUnaryHandler(
+		NarrativeServiceRecordNarrativeProcedure,
+		svc.RecordNarrative,
+		connect.WithSchema(narrativeServiceMethods.ByName("RecordNarrative")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.NarrativeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NarrativeServiceNarrateFindingsProcedure:
 			narrativeServiceNarrateFindingsHandler.ServeHTTP(w, r)
+		case NarrativeServiceNextFindingToNarrateProcedure:
+			narrativeServiceNextFindingToNarrateHandler.ServeHTTP(w, r)
+		case NarrativeServiceRecordNarrativeProcedure:
+			narrativeServiceRecordNarrativeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -135,4 +225,12 @@ type UnimplementedNarrativeServiceHandler struct{}
 
 func (UnimplementedNarrativeServiceHandler) NarrateFindings(context.Context, *connect.Request[v1.NarrateFindingsRequest]) (*connect.Response[v1.NarrateFindingsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.NarrativeService.NarrateFindings is not implemented"))
+}
+
+func (UnimplementedNarrativeServiceHandler) NextFindingToNarrate(context.Context, *connect.Request[v1.NextFindingToNarrateRequest]) (*connect.Response[v1.NextFindingToNarrateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.NarrativeService.NextFindingToNarrate is not implemented"))
+}
+
+func (UnimplementedNarrativeServiceHandler) RecordNarrative(context.Context, *connect.Request[v1.RecordNarrativeRequest]) (*connect.Response[v1.RecordNarrativeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.NarrativeService.RecordNarrative is not implemented"))
 }
