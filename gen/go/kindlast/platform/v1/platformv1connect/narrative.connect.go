@@ -80,7 +80,8 @@ type NarrativeServiceClient interface {
 	// exactly as NarrateFindings records it. A succeeded draft writes the
 	// narrative and the run id; a refused or failed one writes the refusal with
 	// its reason, so the finding is not offered again and an operator can read
-	// why it has no explanation. Idempotent on a finding that already has one.
+	// why it has no explanation. Recording the same draft twice writes the same
+	// thing twice, so a retried activity is harmless.
 	RecordNarrative(context.Context, *connect.Request[v1.RecordNarrativeRequest]) (*connect.Response[v1.RecordNarrativeResponse], error)
 }
 
@@ -175,7 +176,8 @@ type NarrativeServiceHandler interface {
 	// exactly as NarrateFindings records it. A succeeded draft writes the
 	// narrative and the run id; a refused or failed one writes the refusal with
 	// its reason, so the finding is not offered again and an operator can read
-	// why it has no explanation. Idempotent on a finding that already has one.
+	// why it has no explanation. Recording the same draft twice writes the same
+	// thing twice, so a retried activity is harmless.
 	RecordNarrative(context.Context, *connect.Request[v1.RecordNarrativeRequest]) (*connect.Response[v1.RecordNarrativeResponse], error)
 }
 

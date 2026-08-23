@@ -344,9 +344,9 @@ func (x *RecordNarrativeRequest) GetDraft() *DraftNarrativeResponse {
 
 type RecordNarrativeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// True when this call wrote something; false when the finding already had
-	// a narrative or a refusal recorded, which a retried activity reads as
-	// done.
+	// True when the record was written. A retried activity that records the
+	// same draft twice writes the same thing twice, which is the idempotency
+	// NarrateFindings already had.
 	Recorded      bool `protobuf:"varint,1,opt,name=recorded,proto3" json:"recorded,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

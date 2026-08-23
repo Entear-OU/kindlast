@@ -2292,7 +2292,8 @@ paths:
                  exactly as NarrateFindings records it. A succeeded draft writes the
                  narrative and the run id; a refused or failed one writes the refusal with
                  its reason, so the finding is not offered again and an operator can read
-                 why it has no explanation. Idempotent on a finding that already has one.
+                 why it has no explanation. Recording the same draft twice writes the same
+                 thing twice, so a retried activity is harmless.
             operationId: NarrativeService_RecordNarrative
             requestBody:
                 content:
@@ -6154,9 +6155,9 @@ components:
                 recorded:
                     type: boolean
                     description: |-
-                        True when this call wrote something; false when the finding already had
-                         a narrative or a refusal recorded, which a retried activity reads as
-                         done.
+                        True when the record was written. A retried activity that records the
+                         same draft twice writes the same thing twice, which is the idempotency
+                         NarrateFindings already had.
         RegulationPack:
             type: object
             properties:
