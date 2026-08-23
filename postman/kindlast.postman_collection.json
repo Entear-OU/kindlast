@@ -533,6 +533,89 @@
           }
         },
         {
+          "name": "List API keys",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.ApiKeyService/ListApiKeys",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.ApiKeyService", "ListApiKeys"]
+            },
+            "description": "Every API key the organisation in the header owns, newest first, including revoked ones. **Implemented as of ENT-262.** Required scope: `org:read`, not `org:manage`, because seeing which credentials your organisation runs on is not an administrative act, and a viewer who could not see them could not report a leak.\n\nRevoked keys are in the list on purpose. \"Was this stopped, and when\" is the question somebody auditing access is asking, and a list of live keys only cannot answer it.\n\n**No secret is returned, and none can be.** The response carries `handle`, which is the public half of the credential and is what lets you match a row here against a value in a partner's configuration without either of you handling the secret. `kindlast_app` holds no select privilege on the digest column at all (a column-level grant in 00043), so this query could not read one if it asked.\n\n**This is also the one call a key itself has a reason to make.** `org:read` is grantable to a key, so a partner can present their own credential here to check that it is still live and which scopes it carries. That is what the `Authorization: ApiKey` variant below does.\n\n`lastUsedAt` is unset until first use and coarsened to a minute afterwards. Exact would mean a write on every API call, which turns a read into a write and puts a row lock on the busiest key's hot path."
+          }
+        },
+        {
+          "name": "Create API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nightly export\",\n  \"scopes\": [\"records:read\", \"findings:read\"]\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.ApiKeyService/CreateApiKey",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.ApiKeyService", "CreateApiKey"]
+            },
+            "description": "Mints a key and returns the credential **exactly once**. **Implemented as of ENT-262.** Required scope: `org:manage`, and owner-only, checked in the handler because a role threshold is a decision rather than something a policy should express.\n\n**Copy `credential` out of the response now.** That value exists nowhere else, ever. Nothing stores it and nothing can recover it: the row holds a SHA-256 of its second half. Lose it and the only remedy is to mint another and revoke this one.\n\nThe credential looks like `kl_<16 hex>_<43 base64url>`. The `kl_` prefix is there so a secret scanner can recognise one in a commit or a paste bin, which is the difference between a leaked key being revoked within the hour and being found by somebody else first.\n\n**`scopes` is a subset of what a key may carry, and asking for anything else is refused rather than trimmed.** Silently dropping a scope would hand you a key that is not the one you asked for, and you would find out when an integration started returning 403 at three in the morning. The grantable set is in `apps/core-api/internal/domain/apikey/scopes.go`.\n\nThree absences are deliberate. `org:manage` is not grantable, so **a key can never mint another key**: a credential that could multiply itself with no human in the loop is not one a customer can reason about. `billing:manage` is out because a partner integration should not be able to change what a customer pays. `model:write` is out because choosing a sub-processor is a decision a named person takes and acknowledges the consequence of.\n\nNo `internal:*` scope is accepted, and that is a CHECK constraint as well as a Go rule, so it holds against a migration and against a psql prompt.\n\n`openid` is not grantable either, and the reason is worth stating: it means \"signed in\", and a key is not a session. GetCurrentUser is therefore unreachable on a key by construction rather than by a check somebody could forget.\n\nCopy `key.id` from the response into the `api_key_id` environment variable for Revoke API key, and `credential` into `api_key`."
+          }
+        },
+        {
+          "name": "Revoke API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyId\": \"{{api_key_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.ApiKeyService/RevokeApiKey",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.ApiKeyService", "RevokeApiKey"]
+            },
+            "description": "Stops a key, **immediately**. **Implemented as of ENT-262.** Required scope: `org:manage`, owner-only.\n\nImmediately is literal, and it is the one advantage a key has over a short-lived token. The next request presenting this credential finds no live row and is refused at `core-api` itself, with no cache to expire and nothing to propagate to the edge. Measured on the running stack rather than assumed: after this call the same credential answers 401 both through `edge` and when `core-api` is called directly on the compose network.\n\n`keyId` is the `id` from List API keys, not the `handle`. The handle is the lookup key authentication uses; the id is what names the row.\n\nThe contract binds this to DELETE on the resource rather than a `:revoke` verb, because from a caller's point of view the credential ceases to exist. The row actually survives with `revoked_at` set, because what a customer granted and when they took it back is evidence and evidence is not deleted, but that is the schema's business rather than the caller's. `kindlast_app` holds no delete grant on the table.\n\nRevoking a key that is already revoked answers `not_found`, so a second click tells you it did nothing. So does revoking a key that was never yours: the store cannot tell the two apart and should not, because distinguishing them would make this a way to ask which key ids are real.\n\nBoth the mint and the revoke are written to `audit_log`, and neither row contains the credential."
+          }
+        },
+        {
+          "name": "List API keys, authenticated with an API key (no session)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "ApiKey {{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.ApiKeyService/ListApiKeys",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.ApiKeyService", "ListApiKeys"]
+            },
+            "description": "The same call as List API keys above, presented **as a partner rather than as a person**: no session, no bearer token, no `Kindlast-Org-Id`.\n\nThis is the whole point of ENT-262, so it is worth being precise about what is and is not being sent. The only credential is `Authorization: ApiKey <the value Create API key returned once>`. **Set `api_key` in the environment** to that value.\n\n**`ApiKey` is its own scheme, not a flavour of `Bearer`.** The two never fall back to one another: a key presented under `Bearer` fails as a token, and a token presented under `ApiKey` fails as a key. A shared path would have to guess which kind of credential it was handed, and the fallback is exactly where a value gets a second chance at a verifier that was not meant for it.\n\n**The organisation comes from the key and a header cannot move it.** Send `Kindlast-Org-Id` naming a different organisation and the call is refused with `permission_denied` rather than served. Without that rule a consultancy's one integration credential would reach every client company it serves by changing one header.\n\n**The key acts as the person who minted it**, narrowed to the scopes it carries, and their membership is rechecked on every request. Offboarding that person stops their keys with them, on the next call, with no sweep to run.\n\nNote which paths reach this. Connect-protocol paths under `/kindlast.core.v1.*` are routed by the edge today, so this works through `localhost:8000` as it stands. The REST aliases such as `/api/v1/api-keys` are **not** routed there yet: opening the REST surface carries a CORS policy, per-key rate limiting and the rest of ENT-262's gateway half with it, and `deploy/edge/Caddyfile` says so explicitly rather than letting a wildcard make that decision by accident."
+          }
+        },
+        {
           "name": "List findings",
           "request": {
             "method": "POST",

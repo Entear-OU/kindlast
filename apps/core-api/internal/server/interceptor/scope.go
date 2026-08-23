@@ -217,8 +217,10 @@ func human(want string) bool {
 func (s *Scope) Interceptor() connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			key, isKey := APIKeyFrom(ctx)
+
 			claims, ok := ClaimsFrom(ctx)
-			if !ok {
+			if !ok && !isKey {
 				// Reachable only by wiring this interceptor before Auth, which
 				// is a programming error rather than a request the caller
 				// controls. Refuse rather than assume anything about identity.
@@ -236,6 +238,29 @@ func (s *Scope) Interceptor() connect.UnaryInterceptorFunc {
 				// permission the caller could go and acquire.
 				return nil, connect.NewError(connect.CodePermissionDenied,
 					fmt.Errorf("%s declares no required scope", procedure))
+			}
+
+			// A PARTNER'S KEY IS MEASURED AGAINST WHAT IT WAS MINTED WITH, AND
+			// AGAINST NOTHING ELSE (ENT-262).
+			//
+			// Not the human set, even though the key acts under a person's
+			// membership, and that asymmetry is the point of a key. Its minter
+			// holds all of HumanScopes; the key holds the subset somebody chose
+			// for it, so a reporting integration can be given `records:read`
+			// and be unable to approve a finding. Falling back to the human set
+			// for anything the key does not carry would make every key as wide
+			// as the console and make the subset decorative.
+			//
+			// `openid` is NOT excused here, unlike the human path. It means
+			// "signed in", and a key is not signed in: the bootstrap calls that
+			// declare it are about a person establishing a session, which is
+			// the one thing a partner credential is never doing.
+			if isKey {
+				if !key.Holds(declared) {
+					return nil, connect.NewError(connect.CodePermissionDenied,
+						fmt.Errorf("this API key does not carry the %q scope", declared))
+				}
+				return next(ctx, req)
 			}
 
 			// A delegation, if one was presented and resolved, decides which

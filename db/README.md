@@ -217,6 +217,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_app` | `act_delegations` | insert, select, update |
 | `kindlast_app` | `agent_runs` | select |
 | `kindlast_app` | `ai_systems` | delete, insert, select, update |
+| `kindlast_app` | `api_keys` | insert (created_by, id, key_id, name, org_id, scopes, secret_hash), select (created_at, created_by, id, key_id, last_used_at, name, org_id, revoked_at, revoked_by, scopes), update (revoked_at, revoked_by) |
 | `kindlast_app` | `audit_evidence` | insert, select |
 | `kindlast_app` | `audit_log` | insert, select |
 | `kindlast_app` | `compliance_profiles` | delete, insert, select, update |
@@ -282,6 +283,30 @@ It needs the compose stack. **It self-skips when the stack is unreachable**, so
 a green local run does not prove it ran; check the test count. CI boots the
 stack and fails loudly if it cannot, which is what stops coverage disappearing
 silently.
+
+## An API key is revoked, never deleted, and never readable
+
+`api_keys` (00043) holds partner credentials, and two absences in the matrix
+above are the controls rather than oversights.
+
+**No delete grant, for any role.** A key is stopped by setting `revoked_at`, and
+a trigger refuses to clear it again. What a customer granted, to whom, and when
+they took it back is evidence, and evidence that can be deleted is worth less
+than evidence that cannot. Same argument as `act_delegations` (00021).
+
+**No select on `secret_hash`.** The `select` grant is column-level and names
+every column except that one, which is why it reads as a list rather than the
+bare word. RLS is row-level: a select policy scoped to the caller's organisation
+still admits every column of the rows it returns, so a policy alone cannot say
+"may list its keys, may never read a digest". A column grant can, and it means
+the listing path could not leak a digest even if a handler asked it to. The one
+thing that reads the column is `authenticate_api_key`, which is `SECURITY
+DEFINER` and answers only for an exact key handle.
+
+The `update` grant is column-level for the same kind of reason: it names
+`revoked_at` and `revoked_by` and nothing else, so the privilege that makes
+revocation possible cannot also widen a key's scopes or repoint it at another
+organisation. Both are checked by name in `db/tests/grant-surface.test.ts`.
 
 ## `audit_log` has no retention policy, and that is a decision
 

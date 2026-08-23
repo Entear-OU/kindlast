@@ -10,6 +10,14 @@
 //	                            this kind
 //	                            of thing
 //
+// Auth answers "who" in one of two ways, and which one it was decides what
+// every later stage does. A `Bearer` credential is a person or a machine
+// principal, verified against the JWKS, and the chain behaves as it always has.
+// An `ApiKey` credential is a partner's key (ENT-262), verified against the
+// database, and each of the four stages below carries an explicit branch for it
+// saying why its ordinary work does or does not apply. There is no third
+// possibility: a request with neither is refused at Auth.
+//
 // Each stage may only assume the stages before it have run. Auth is first
 // because nothing downstream means anything without a verified subject. JTI
 // follows immediately, so a revoked token is refused before it can cost a
@@ -51,6 +59,11 @@ const (
 	// could write one of these into a context could make any request read as
 	// anybody.
 	grantKey
+	// apiKeyKey holds the partner credential this request authenticated with
+	// (ENT-262). Unexported for the same reason as the rest, and the reason has
+	// most force here: a package that could write one of these could hand any
+	// request an organisation and a scope set of its choosing.
+	apiKeyKey
 )
 
 // WithClaims attaches a verified identity to the context.

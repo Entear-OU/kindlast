@@ -75,6 +75,15 @@ func Services() []protoreflect.ServiceDescriptor {
 		// write owner-only is a role check in Go, because a scope bounds what a
 		// client may do and this bounds which person may.
 		corev1.File_kindlast_core_v1_model_proto,
+		// ApiKeyService (ENT-262). The third token model: a partner's key,
+		// listed on `org:read` and minted and revoked on `org:manage`.
+		//
+		// `org:manage` is deliberately not a scope a key may itself carry, so a
+		// key can see the list and can never add to it. That is enforced in Go
+		// (apikey.GrantableScopes), by a CHECK constraint in 00043, and again
+		// in the handler, which is three refusals for the one property that
+		// stops a credential multiplying itself.
+		corev1.File_kindlast_core_v1_apikeys_proto,
 		// The internal surface is enumerated here too, so the scope-declaration
 		// test covers it. An internal RPC is the last place an undeclared scope
 		// should be able to hide: these carry `internal:*`, which is the

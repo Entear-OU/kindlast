@@ -6,6 +6,108 @@ info:
     title: Kindlast Core API
     version: 1.0.0
 paths:
+    /api/v1/api-keys:
+        get:
+            tags:
+                - ApiKeyService
+            description: |-
+                Lists the active organisation's keys, newest first.
+
+                 Revoked keys are included, and that is the point rather than an oversight:
+                 "was this stopped, and when" is the question somebody auditing access is
+                 asking, and a list that showed only live keys could not answer it.
+
+                 No secret is returned, and none can be. The application role holds no
+                 select privilege on the digest column at all (00043), so this query could
+                 not read one if it asked.
+            operationId: ApiKeyService_ListApiKeys
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListApiKeysResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - ApiKeyService
+            description: |-
+                Mints a key and returns the credential exactly once.
+
+                 The `credential` field in the response is the only time that value exists
+                 outside the caller's own memory. Nothing stores it and nothing can recover
+                 it: the row holds a SHA-256 of its second half. A caller who loses it mints
+                 another and revokes this one.
+
+                 Owner-only, checked in the handler. A role threshold is a decision, so it
+                 is Go's rather than a policy's (db/README.md); the policy's job is the
+                 boundary, that a key is minted in the caller's organisation and in the
+                 caller's name, and it holds that whatever the handler does.
+            operationId: ApiKeyService_CreateApiKey
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateApiKeyRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateApiKeyResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/api-keys/{keyId}:
+        delete:
+            tags:
+                - ApiKeyService
+            description: |-
+                Revokes a key, immediately.
+
+                 Immediately is literal. The next request presenting this key finds no live
+                 row and is refused at `core-api`, on the internal network, with no cache to
+                 expire and nothing to propagate to `edge`. That is the one advantage a key
+                 has over a short-lived token and it is worth stating in the contract.
+
+                 DELETE on the resource, not a `:revoke` verb, because from a caller's point
+                 of view the credential ceases to exist. What actually happens is that a
+                 column is set, because the row is evidence and evidence is not deleted, but
+                 that is the schema's business and not the caller's.
+            operationId: ApiKeyService_RevokeApiKey
+            parameters:
+                - name: keyId
+                  in: path
+                  description: |-
+                    The key's id, from ListApiKeys. Not the public handle: the handle is a
+                     lookup key for authentication and the id is what names the row.
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RevokeApiKeyResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/audit:
         get:
             tags:
@@ -3317,6 +3419,48 @@ components:
             properties:
                 state:
                     $ref: '#/components/schemas/OnboardingState'
+        ApiKey:
+            type: object
+            properties:
+                id:
+                    type: string
+                handle:
+                    type: string
+                    description: |-
+                        The public half of the credential, shown so a person can match a key in
+                         this list against one in a partner's configuration without either of them
+                         handling the secret.
+                name:
+                    type: string
+                scopes:
+                    type: array
+                    items:
+                        type: string
+                createdBy:
+                    type: string
+                    description: |-
+                        The person whose authority this key borrows. Their membership is what the
+                         key's every request is checked against, so this is the field that answers
+                         "why did this key stop working".
+                createdAt:
+                    type: string
+                    format: date-time
+                lastUsedAt:
+                    type: string
+                    description: |-
+                        Unset until the key is first used, and coarsened to a minute afterwards.
+                         Exact would mean a write on every API call, which turns a read into a write
+                         and puts a row lock on the busiest key's hot path.
+                    format: date-time
+                revokedAt:
+                    type: string
+                    description: |-
+                        Unset while the key is live. Both revocation fields are set together or
+                         neither is, which the schema enforces.
+                    format: date-time
+                revokedBy:
+                    type: string
+            description: ApiKey is a key's metadata. It never carries a secret, in any field.
         ApproveFindingRequest:
             type: object
             properties:
@@ -3832,6 +3976,38 @@ components:
             properties:
                 aiSystem:
                     $ref: '#/components/schemas/AiSystem'
+        CreateApiKeyRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+                    description: |-
+                        What a person will call it when deciding whether to revoke it. One to a
+                         hundred characters, matching the column.
+                scopes:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        What this key may do. Every entry must be one a key may carry, and a scope
+                         that is not is refused rather than dropped: silently narrowing a request
+                         would hand back a key that is not the one that was asked for, and the caller
+                         would find out when an integration started returning 403.
+
+                         No `internal:*` scope is ever accepted, and that is a CHECK constraint as
+                         well as a Go rule, so it holds against a migration and a psql prompt too.
+        CreateApiKeyResponse:
+            type: object
+            properties:
+                key:
+                    $ref: '#/components/schemas/ApiKey'
+                credential:
+                    type: string
+                    description: |-
+                        THE ONLY TIME THIS VALUE EXISTS OUTSIDE THE CALLER'S MEMORY.
+
+                         Shown once. A console must present it as something to copy now, not as
+                         something to come back for, because there is nothing to come back to.
         CreateOrganisationRequest:
             type: object
             properties:
@@ -5168,6 +5344,13 @@ components:
                         $ref: '#/components/schemas/AiSystem'
                 nextPageToken:
                     type: string
+        ListApiKeysResponse:
+            type: object
+            properties:
+                keys:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ApiKey'
         ListAuditEntriesResponse:
             type: object
             properties:
@@ -6590,6 +6773,11 @@ components:
         RemoveMemberResponse:
             type: object
             properties: {}
+        RevokeApiKeyResponse:
+            type: object
+            properties:
+                key:
+                    $ref: '#/components/schemas/ApiKey'
         RevokeIntegrationRequest:
             type: object
             properties:
@@ -7213,6 +7401,45 @@ components:
                 modelName:
                     type: string
 tags:
+    - name: ApiKeyService
+      description: |-
+        Partner API keys: the third token model (ENT-262, §23, §1.7).
+
+         §23 names three, and this is the one for callers that are neither a browser
+         nor a person's phone: a session for the web console, a bearer-on-device token
+         for mobile, and a key for a partner's integration. `core-api` validates every
+         one of the three itself. Nothing here trusts the gateway, and nothing here
+         becomes true because `edge` said so.
+
+         WHAT A KEY IS, IN ONE SENTENCE
+
+         A key borrows the authority of the person who minted it, in the one
+         organisation it was minted in, narrowed to the scopes it was given. It is not
+         an identity, it has no membership of its own, and the person's membership is
+         re-checked on every single request. Offboarding somebody stops their keys with
+         them.
+
+         THE ORGANISATION IS NEVER IN THE PATH, AND FOR KEYS IT IS NEVER IN THE HEADER
+         EITHER
+
+         The three RPCs below are ordinary console calls and take the organisation from
+         `Kindlast-Org-Id`, like everything else on this surface. A REQUEST THAT
+         ARRIVES ON A KEY is different: the organisation comes from the key itself, and
+         a `Kindlast-Org-Id` naming a different one is refused rather than obeyed. That
+         is not a style rule, it is the thing that stops one partner credential
+         reaching every client company a consultancy serves by changing one header.
+
+         THE SCOPES ARE org:read AND org:manage, WHICH IS DELIBERATE
+
+         Listing keys is `org:read`, because seeing which credentials your organisation
+         runs on is not an administrative act and a viewer who could not see them could
+         not report a leak. Minting and revoking are `org:manage`, because both change
+         who can reach a compliance record.
+
+         `org:manage` is also the scope a key may NEVER be minted with
+         (`apikey.GrantableScopes`), so a key can list keys and can never make one. A
+         credential that could multiply itself with no human in the loop is not one a
+         customer can reason about.
     - name: AuditService
       description: |-
         The audit log: what was decided, by whom, and when (§7.2, §24; ENT-223).

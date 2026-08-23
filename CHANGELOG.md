@@ -872,6 +872,62 @@ what they have to do about it, which no commit subject knows.
   "what is this citation called" free to diverge. There is still exactly one, now
   `corpus.Citation`'s `Label` and `URL`, and its output is asserted against the
   plpgsql over the whole stored corpus.
+- **Partner API keys: the API opens to callers that are neither a browser nor
+  a person's phone** (ENT-262, part one of three). An owner can mint a key in
+  an organisation, hand it to an integration, and revoke it. The credential is
+  shown exactly once and stored only as a digest.
+
+  What a key is, because the shape decides everything else: a key **borrows
+  the authority of the person who minted it**, in the one organisation it was
+  minted in, narrowed to the scopes it was given. It is not an identity, it
+  holds no membership of its own, and that person's membership is checked
+  again on every request. Offboarding somebody therefore stops their keys with
+  them, on the next call, with no sweep to run and nothing for an
+  administrator to remember. A key also reads exactly the rows its minter
+  reads and is refused exactly where they would be, because as far as Postgres
+  is concerned it is them: there is no second policy surface for keys to get
+  wrong.
+
+  Three properties worth knowing before you hand one out. **The organisation
+  comes from the key and the `Kindlast-Org-Id` header cannot move it**, so one
+  credential cannot be redirected at another tenant by whoever sets a header.
+  **A key can never mint another key**, because `org:manage` is not a scope a
+  key may carry, so a credential cannot extend its own reach with no human
+  involved. And **no key can ever hold an `internal:*` scope**, which is a
+  CHECK constraint rather than only a Go rule, so it holds against a migration
+  and against a psql prompt as well as against the application.
+
+  **Revocation is immediate and it is enforced by `core-api`, not by the
+  edge.** The next request presenting a revoked key finds no live row and is
+  refused, with no cache to expire and nothing to propagate. Minting and
+  revoking are both written to `audit_log`, and neither row contains the
+  credential. An act a key performs is attributed to the key rather than to
+  the human who minted it, through a new `audit_log.actor_api_key_id` column.
+
+  Keys arrive under their own `Authorization` scheme, `ApiKey`, rather than as
+  a second kind of `Bearer`. The two verification paths never fall back to one
+  another: a key presented as a bearer token fails as a token, and a token
+  presented as a key fails as a key.
+
+  **For self-hosters:** migration `00043` adds `api_keys`, two `SECURITY
+  DEFINER` functions used only to authenticate a caller who has no session
+  yet, and a nullable `actor_api_key_id` column on `audit_log`. Nothing
+  existing changes behaviour and no data is rewritten. Two grants on the new
+  table are deliberately column-level, and `db/README.md` explains why:
+  `kindlast_app` can list keys and **cannot read a digest**, and the privilege
+  that permits revocation cannot also widen a key's scopes. No role holds a
+  delete grant on the table, because a revoked key is a record that access
+  once existed.
+
+  **Not in this change, and named so nobody assumes otherwise:** the REST
+  aliases (`/api/v1/api-keys` and the rest of the annotated surface) are still
+  not routed by the edge. Reaching a key-authenticated call today means the
+  Connect path under `/kindlast.core.v1.*`, which the edge already routes.
+  Opening the REST surface carries a CORS policy, per-key rate limiting and a
+  WAF with it, and that is ENT-262's second part. The deprecation and sunset
+  policy is its third. There is also no console screen for keys yet, so
+  minting one means calling the API; the Postman collection carries the
+  requests.
 
 ## [0.1.0]
 
