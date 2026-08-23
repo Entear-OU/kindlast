@@ -31,12 +31,14 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
+	executorservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/executor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	integrationsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/integrations"
 	modelchoiceservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelchoice"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
+	watcherservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/watcher"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1/platformv1connect"
@@ -348,7 +350,13 @@ func run(logger *slog.Logger) error {
 		Producer:      producer,
 		// The outbox's delivery half (ENT-256, part three), on the same agent
 		// pool as the producer and behind the same typed-nil guard.
-		Outbox:         outboxDependency(outbox),
+		Outbox: outboxDependency(outbox),
+		// The Executor (ENT-271): the producer lists, the application
+		// executes as the approver. Same typed-nil guard as the rest.
+		ExecutorJobs: executorJobsDependency(outbox),
+		// The agentic Watcher's surface (ENT-258), on the producer pool.
+		Watcher:        watcherDependency(outbox),
+		Executions:     store,
 		Mail:           mail,
 		BillingEnabled: cfg.BillingEnabled,
 		AppBaseURL:     cfg.AppBaseURL,
@@ -586,6 +594,22 @@ func corpusDependency(store *postgres.CorpusStore) ingest.Writer {
 // The same typed-nil guard, for the delivery half of the transactional outbox
 // (ENT-256, part three).
 func outboxDependency(store *postgres.AgentStore) deliveryservice.Outbox {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+// The same typed-nil guard, for the Executor's listing half (ENT-271).
+func executorJobsDependency(store *postgres.AgentStore) executorservice.Jobs {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+// The same typed-nil guard, for the Watcher's surface (ENT-258).
+func watcherDependency(store *postgres.AgentStore) watcherservice.Producer {
 	if store == nil {
 		return nil
 	}

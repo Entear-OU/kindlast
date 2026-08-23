@@ -134,6 +134,12 @@ type Temporal struct {
 	// it is the next step in the same workflow.
 	SweepSchedule string
 
+	// ExecutorRelayInterval is how often the relay looks for approvals whose
+	// record has not been created yet (ENT-271). Fifteen seconds, like the
+	// other two relays: somebody clicked approve and is looking for what
+	// they approved.
+	ExecutorRelayInterval time.Duration
+
 	// CoreAPIURL is where the activities call. Through the edge on the bundled
 	// stack, the same door Intelligence uses, so there is no
 	// development-only shortcut.
@@ -173,6 +179,7 @@ func Load() (*Config, error) {
 			OutboxReclaimSchedule: valueOr("KINDLAST_OUTBOX_RECLAIM_SCHEDULE", "40 * * * *"),
 			SweepRelayInterval:    durationOr("KINDLAST_SWEEP_RELAY_INTERVAL", 15*time.Second),
 			SweepSchedule:         valueOr("KINDLAST_SWEEP_SCHEDULE", "0 6 * * *"),
+			ExecutorRelayInterval: durationOr("KINDLAST_EXECUTOR_RELAY_INTERVAL", 15*time.Second),
 			CoreAPIURL:            strings.TrimSpace(os.Getenv("KINDLAST_CORE_API_URL")),
 			OIDCIssuer:            strings.TrimSpace(os.Getenv("KINDLAST_OIDC_ISSUER")),
 			OIDCDiscoveryURL:      strings.TrimSpace(os.Getenv("KINDLAST_OIDC_DISCOVERY_URL")),

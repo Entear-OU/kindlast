@@ -273,6 +273,7 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 	narratives := platformv1connect.NewNarrativeServiceClient(
 		&http.Client{Timeout: 10 * time.Minute, Transport: &oidc.Bearer{Source: tokens}},
 		t.CoreAPIURL)
+	executions := platformv1connect.NewExecutorServiceClient(httpClient, t.CoreAPIURL)
 
 	opts := schedule.Options{
 		Addr:                  t.Addr,
@@ -283,8 +284,12 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 		OutboxReclaimSchedule: t.OutboxReclaimSchedule,
 		SweepRelayInterval:    t.SweepRelayInterval,
 		SweepSchedule:         t.SweepSchedule,
-		Activities:            &schedule.Activities{CoreAPI: coreAPI, Sweeps: coreAPI, Mail: mail, Narratives: narratives},
-		Logger:                logger,
+		ExecutorRelayInterval: t.ExecutorRelayInterval,
+		Activities: &schedule.Activities{
+			CoreAPI: coreAPI, Sweeps: coreAPI, Mail: mail,
+			Narratives: narratives, Executions: executions,
+		},
+		Logger: logger,
 	}
 	c, err := schedule.Connect(ctx, opts)
 	if err != nil {

@@ -1,7 +1,9 @@
 package findings_test
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/findings"
 )
@@ -192,5 +194,82 @@ func TestCountSeveritiesIgnoresAnUnknownValue(t *testing.T) {
 	}
 	if got.Low != 0 {
 		t.Fatalf("an unknown severity was counted as low")
+	}
+}
+
+// The Executor's two domain rules (ENT-271).
+
+func TestOnlyTheThreeRecordActionsEnqueueAnExecution(t *testing.T) {
+	for _, action := range []string{findings.ActionCreateROPA, findings.ActionCreateDSAR, findings.ActionCreateAISystem} {
+		if !findings.Executes(action) {
+			t.Errorf("%q does not execute, so approving it would create nothing", action)
+		}
+	}
+	// `review` is every finding until the corpus is classified (ENT-165), and
+	// approving one creates no record and must enqueue no job.
+	for _, action := range []string{"review", "", "create_something_else"} {
+		if findings.Executes(action) {
+			t.Errorf("%q executes, so approving it would enqueue a job nothing can run", action)
+		}
+	}
+}
+
+func TestOnlyAnUnreviewedHighRiskClassificationIsRefused(t *testing.T) {
+	// THE GATE. It used to be a `raise check_violation` inside the trigger;
+	// it is checked before the approval now, so a refusal leaves nothing
+	// behind. Proven able to fail: dropping the `!reviewed` term turns this
+	// red on the first case.
+	if !findings.RequiresReview(findings.ActionCreateAISystem, findings.RiskHigh, false) {
+		t.Error("an unreviewed High-Risk classification was allowed")
+	}
+	if findings.RequiresReview(findings.ActionCreateAISystem, findings.RiskHigh, true) {
+		t.Error("a reviewed High-Risk classification was refused")
+	}
+	// Not the gate: a lower classification, and any other action type. A gate
+	// that fired on every approval is one people learn to click through.
+	if findings.RequiresReview(findings.ActionCreateAISystem, "limited", false) {
+		t.Error("a limited-risk classification was gated")
+	}
+	if findings.RequiresReview(findings.ActionCreateAISystem, "", false) {
+		t.Error("an unclassified system was gated")
+	}
+	if findings.RequiresReview(findings.ActionCreateROPA, findings.RiskHigh, false) {
+		t.Error("a processing activity was gated by an AI Act rule")
+	}
+}
+
+// The DSAR receipt rule (ENT-224), now a Go decision (ENT-271).
+func TestADsarApprovalNeedsAReceiptDateItCanBelieve(t *testing.T) {
+	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	arrived := now.Add(-7 * 24 * time.Hour)
+
+	ok := findings.Receipt{Present: true, Valid: true, At: arrived}
+	if err := findings.CheckReceipt(findings.ActionCreateDSAR, ok, now); err != nil {
+		t.Fatalf("a request that arrived a week ago was refused: %v", err)
+	}
+
+	// The three refusals, each for its own reason, because "we cannot log
+	// this because we do not know when it arrived" is actionable and a
+	// deadline computed from the wrong date is not.
+	for name, tc := range map[string]struct {
+		receipt findings.Receipt
+		want    error
+	}{
+		"no receipt at all": {findings.Receipt{}, findings.ErrReceiptRequired},
+		"not a timestamp":   {findings.Receipt{Present: true}, findings.ErrReceiptMalformed},
+		"arrived in the future": {
+			findings.Receipt{Present: true, Valid: true, At: now.Add(time.Hour)},
+			findings.ErrReceiptInFuture,
+		},
+	} {
+		if err := findings.CheckReceipt(findings.ActionCreateDSAR, tc.receipt, now); !errors.Is(err, tc.want) {
+			t.Errorf("%s: err = %v, want %v", name, err, tc.want)
+		}
+	}
+
+	// And it is a DSAR rule and nothing else's: a processing activity has no
+	// statutory clock to start.
+	if err := findings.CheckReceipt(findings.ActionCreateROPA, findings.Receipt{}, now); err != nil {
+		t.Errorf("a processing activity was gated by a DSAR rule: %v", err)
 	}
 }

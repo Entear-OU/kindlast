@@ -138,10 +138,38 @@ export async function approve(
 
   return {
     status: 'ok',
-    message: 'Approved.',
+    message: approvedMessage(String(form.get('actionType') ?? '')),
     createdRecordId: result.value.createdRecordId,
     createdRecordTable: result.value.createdRecordTable,
   }
+}
+
+/**
+ * What to say after an approval (ENT-271).
+ *
+ * The Executor became a workflow, so approving a finding that creates a
+ * record no longer creates it inside the same transaction: the approval is
+ * durable immediately and the record follows a moment later. "Approved."
+ * alone would send somebody to Records, find nothing there yet, and read a
+ * working system as a broken one. So the confirmation says what is happening
+ * and what will exist.
+ *
+ * A finding whose action type creates nothing (`review`, which is every
+ * finding until its obligation is classified) keeps the plain message,
+ * because there is nothing being prepared and saying otherwise would be a
+ * promise nobody is keeping.
+ */
+const RECORD_BEING_PREPARED: Record<string, string> = {
+  create_ropa:
+    'Approved. The processing activity is being prepared and will appear in Records shortly.',
+  create_dsar:
+    'Approved. The request is being logged and will appear in Records shortly.',
+  create_ai_system:
+    'Approved. The AI system is being prepared and will appear in Records shortly.',
+}
+
+function approvedMessage(actionType: string): string {
+  return RECORD_BEING_PREPARED[actionType] ?? 'Approved.'
 }
 
 export async function reject(

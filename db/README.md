@@ -35,7 +35,7 @@ future one nobody has written yet:
 - The append-only trigger on `audit_log`
 - Indexes
 - The `SECURITY DEFINER` functions that exist because RLS structurally cannot
-  express the check. There are nine:
+  express the check. There are ten:
 
   | Function | Added by | Why it cannot be a policy |
   |---|---|---|
@@ -48,9 +48,10 @@ future one nobody has written yet:
   | `mint_finding_approval_delegation` | `00027` | The dispatcher mints it and holds no grant on `memberships`, so it cannot check the eligibility the mint depends on |
   | `expire_snoozed_findings` | `00034` | A maintenance pass over every organisation at once, started by a schedule with no tenant and no person; every `findings` policy is scoped by one organisation's GUC and the producer role cannot list organisations to iterate them |
   | `sweep_targets` | `00035` | The daily sweep is "sweep everyone", written deliberately as a workflow that visits one organisation per activity; the producer role holds nothing on `organisations` and its `compliance_profiles` policies see nothing with no GUC set, so the list of tenants with something to sweep is a question only a definer can answer, and it answers with ids alone |
+  | `executor_job_context` | `00036` | The Executor runs as the approver, and the row that says who that is is protected by a policy testing the very GUCs it would set: no tenant transaction can read the row that tells it which tenant to be. The function answers that one question about one row by primary key, and every read after it, including the claim of the same row, happens under the ordinary policy |
 
 Each carries its justification in the migration that creates it. A definer
-function is how RLS gets bypassed by accident, so adding a tenth means
+function is how RLS gets bypassed by accident, so adding an eleventh means
 writing down why none of these eight already covers you.
 
 **This table went stale twice before anyone noticed, which is the argument for
@@ -196,6 +197,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_agent` | `capability_tokens` | insert, select, update |
 | `kindlast_agent` | `compliance_profiles` | select, update |
 | `kindlast_agent` | `dsars` | select |
+| `kindlast_agent` | `executor_jobs` | select |
 | `kindlast_agent` | `findings` | insert, select, update |
 | `kindlast_agent` | `integration_fetches` | insert, select |
 | `kindlast_agent` | `integration_tools` | select |
@@ -221,6 +223,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_app` | `deadline_alert_log` | select |
 | `kindlast_app` | `dsar_trail_entries` | insert, select |
 | `kindlast_app` | `dsars` | delete, insert, select, update |
+| `kindlast_app` | `executor_jobs` | insert, select, update |
 | `kindlast_app` | `findings` | select, update |
 | `kindlast_app` | `integration_consents` | insert, select |
 | `kindlast_app` | `integration_fetches` | insert, select |

@@ -14,6 +14,57 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **The machine surface an agentic Watcher needs: what it may read, and the
+  one thing it may write** (ENT-258, first of three). The Watcher today is
+  three fixed detectors over the compliance profile and the DSAR table; it
+  cannot see anything a customer has connected, and it decides nothing. The
+  agent version will, and this is the seam it needs: a new internal
+  `WatcherService` with `WatcherContext` (the organisation's open profile
+  facts, its connections and which of their tools are granted, the signals
+  already open, and when the sweep last ran, assembled by core-api in one
+  read) and `RaiseSignal`.
+
+  Two properties are worth an operator's attention. **A signal is not a
+  finding, and this surface cannot write one**: the Analyst still turns a
+  signal into a finding under the citation validator and a human still
+  decides, so the separation is enforced by the absence of the RPC rather
+  than by a rule. And **no endpoint URL reaches the agent**: it decides what
+  to look at, not where to dial, and a fetch still goes through the gateway
+  with its egress allow-list.
+
+  No new grant and no migration: the producer role could already read profile
+  facts, and read connections and their tools without credentials, and write
+  signals. Nothing calls these yet; the skill that will is the next change.
+
+### Changed
+
+- **Approving a finding creates its record a moment later, through the
+  Executor workflow, instead of inside the approving transaction** (ENT-271,
+  ENT-225 phase 2). Three database triggers used to insert the processing
+  activity, DSAR or AI system while the approval was still being written.
+  Approving now writes the finding, its audit row and one `executor_jobs` row
+  in that transaction (migration 00036), a relay starts one
+  `execute/{job id}` workflow per job within fifteen seconds, and the record
+  is created **as the person who approved it**, with the same columns and the
+  same audit entry the trigger wrote. This is what the design always
+  specified: execution belongs behind the event boundary.
+
+  What an operator sees: a record appears in Records a second or two after the
+  approval rather than in the same instant; an approval whose record has not
+  appeared is a pending row in `executor_jobs` with its attempt count and last
+  error, and a workflow in the Temporal UI with the reason in its history. The
+  execution retries with backoff and no attempt limit, because a person
+  approved a finding and a record is owed.
+
+  **One refusal changes shape, for the better.** Approving a finding that
+  would create a High-Risk AI system without ticking the review used to fail
+  inside the trigger with a `check_violation`, which reached the caller as an
+  internal error. It is now refused before anything is written, with
+  `failed_precondition` and the reason, and the finding stays pending so the
+  same person can review and approve again.
+
+### Added
+
 - **Findings are narrated on both task queues: Go loads, Python drafts, Go
   persists** (ENT-256, part five, second half; design §16.4, which is now
   built as written). The `intelligence` container runs a Temporal worker

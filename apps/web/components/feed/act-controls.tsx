@@ -23,11 +23,19 @@ export function ActControls({
   slug,
   findingId,
   status,
+  actionType,
   actions,
 }: {
   slug: string
   findingId: string
   status: string
+  /**
+   * What approving this finding will do, so the confirmation can say it
+   * (ENT-271). Since the Executor became a workflow the record is created a
+   * moment after the approval rather than inside it, and "Approved." alone
+   * would send somebody to Records to find nothing and wonder.
+   */
+  actionType?: string
   actions: {
     approve: (
       state: FindingActionState,
@@ -83,6 +91,7 @@ export function ActControls({
         <form action={approveAction} className="space-y-3">
           <input type="hidden" name="slug" value={slug} />
           <input type="hidden" name="findingId" value={findingId} />
+          <input type="hidden" name="actionType" value={actionType ?? ''} />
 
           {/* Recorded on the finding and carried into the audit row. "Approved"
               and "approved having read the regulation" are different claims. */}
