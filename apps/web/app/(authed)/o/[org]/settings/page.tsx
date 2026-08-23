@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
@@ -9,6 +10,14 @@ import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { NotificationsForm } from '@/components/settings/notifications-form'
 import { channelsFor, membersOf, notificationsFor } from './actions'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'Settings',
+}
 
 /**
  * Organisation settings (ENT-202).

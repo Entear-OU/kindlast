@@ -12,6 +12,23 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Console tabs and bookmarks now say which organisation they are showing**
+  (ENT-269). Every page under `/o/{slug}/` inherited the marketing site's
+  title, so a consultant with three client organisations open had three tabs
+  reading "Kindlast: AI-Powered GDPR & AI Act Compliance" and a bookmark bar
+  where nothing could be told apart. A console page now titles itself
+  "{Organisation}, {Section}, Kindlast", organisation first because a tab
+  strip truncates from the end and the organisation is the half that differs.
+
+  Nothing to do on upgrade, and nothing changes on the marketing or sign-in
+  pages. Two details worth knowing: a slug you do not belong to keeps the
+  generic "Kindlast" title, so a 404 still says nothing about whether that
+  organisation exists, and detail pages title themselves by section rather
+  than by item, so a data subject's name never reaches a tab, a bookmark or
+  browser history.
+
 ### Added
 
 - **The machine surface an agentic Watcher needs: what it may read, and the

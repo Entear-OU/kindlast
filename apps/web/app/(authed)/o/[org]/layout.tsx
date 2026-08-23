@@ -1,8 +1,76 @@
+import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 
 import { ConsoleShell } from '@/components/console/shell'
 import { currentSession } from '@/lib/auth/session'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
+
+/**
+ * The title every console page inherits when we do not know whose console it
+ * is: nobody signed in, a slug that is not the caller's, or core-api down.
+ *
+ * A template rather than a bare string, so the section a page names still
+ * shows. It carries no organisation, which is the whole point of it.
+ */
+const ANONYMOUS_TITLE: Metadata = {
+  title: { template: '%s, Kindlast', default: 'Kindlast' },
+}
+
+/**
+ * What a browser tab says it is showing (ENT-269).
+ *
+ * Until this existed, every page under `/o/{slug}/` inherited the root
+ * layout's marketing title, so a consultant with three client organisations
+ * open had three tabs reading "Kindlast: AI-Powered GDPR & AI Act Compliance"
+ * and eleven bookmarks that all read the same. The tab strip was the last
+ * place in the console where which organisation you were looking at was
+ * ambiguous, and §20.1 puts the slug in the URL precisely so that it never is.
+ *
+ * # THE ORGANISATION GOES FIRST
+ *
+ * A tab truncates from the end, and the organisation is the half that differs
+ * between tabs. "Ada Furniture Group, Feed" still identifies the client after
+ * the strip has cut it to fifteen characters; "Feed, Ada Furniture Group"
+ * would give three tabs reading "Feed..." and answer nothing.
+ *
+ * # THE 404 CASE
+ *
+ * A slug the caller does not belong to must not be distinguishable, through
+ * the title or anything else, from one that does not exist. It is not, and the
+ * reason is structural rather than careful: the only name this can learn comes
+ * from the caller's own memberships, so for a foreign slug there is no name
+ * here to leak. Both cases fall to `ANONYMOUS_TITLE`, byte for byte.
+ *
+ * # WHAT IT COSTS
+ *
+ * Nothing worth counting. `resolveOrg` reads through `loadCurrentUser`, which
+ * is wrapped in React's `cache`, so this shares the one GetCurrentUser the
+ * layout below already makes rather than adding a second round trip.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ org: string }>
+}): Promise<Metadata> {
+  const { org: slug } = await params
+
+  const session = await currentSession()
+  // The layout redirects this request to sign-in. Asking core-api who the
+  // caller is, with no token to ask it with, would be a round trip for a page
+  // nobody is going to see.
+  if (!session) return ANONYMOUS_TITLE
+
+  const resolved = await resolveOrg(session.accessToken, slug)
+  if (resolved.status !== 'ok') return ANONYMOUS_TITLE
+
+  // The slug when core-api sends no name, which is what the dashboard heading
+  // already does. A title reading ", Kindlast" would be worse than a slug.
+  const name = resolved.membership.orgName || slug
+
+  return {
+    title: { template: `${name}, %s, Kindlast`, default: `${name}, Kindlast` },
+  }
+}
 
 /**
  * The organisation a URL names (ENT-198, §20.1, §22.4).

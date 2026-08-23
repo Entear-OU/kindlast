@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 
 import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
@@ -5,6 +6,14 @@ import { ObligationList } from '@/components/corpus/obligation-list'
 import { listDocuments, listObligations } from '@/lib/corpus/client'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'Regulation',
+}
 
 /**
  * Regulation: what this deployment checks against (ENT-207).

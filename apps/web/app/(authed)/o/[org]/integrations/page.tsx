@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 
 import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
@@ -13,6 +14,14 @@ import {
   listFetches,
   listIntegrations,
 } from '@/lib/integrations/client'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'Integrations',
+}
 
 /**
  * The page that makes a connection something a customer controls (ENT-231,

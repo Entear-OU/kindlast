@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
@@ -7,6 +8,14 @@ import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { getDashboard, listFindings, type Failure } from '@/lib/findings/client'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'Feed',
+}
 
 /**
  * The feed (ENT-203), the first of ENT-200's six surfaces to return.

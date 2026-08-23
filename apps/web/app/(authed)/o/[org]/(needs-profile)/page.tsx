@@ -1,9 +1,18 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
 import { currentSession } from '@/lib/auth/session'
 import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'Overview',
+}
 
 /**
  * An organisation's home (ENT-197, re-homed under `/o/[org]/` by ENT-198).

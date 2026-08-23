@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
@@ -11,6 +12,18 @@ import { getFinding } from '@/lib/findings/client'
 import { effortSentence } from '@/lib/findings/effort'
 
 import { approve, reject, snooze } from '../actions'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ *
+ * The section rather than the finding's own text. A detected finding is a
+ * sentence about the customer's systems, and browser history is not where
+ * it should first show up.
+ */
+export const metadata: Metadata = {
+  title: 'Finding',
+}
 
 /**
  * One finding, with the regulation behind it (ENT-203).

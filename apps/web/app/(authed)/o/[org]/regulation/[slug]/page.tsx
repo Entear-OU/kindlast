@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
@@ -6,6 +7,14 @@ import { CitationLink } from '@/components/corpus/obligation-list'
 import { getObligation } from '@/lib/corpus/client'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'Obligation',
+}
 
 /**
  * One obligation, and the regulatory text behind it (ENT-207).
