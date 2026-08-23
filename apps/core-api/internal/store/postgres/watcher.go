@@ -401,6 +401,14 @@ const AgentDedupPrefix = "agent:"
 // is a deterministic finding silently restated by a 4B and exactly the failure
 // this product cannot have.
 //
+// Since 00039 (ENT-273) the schema also refuses it: every row records the
+// `source` that created it, and a trigger refuses an update that changes one.
+// That does not make the prefix redundant, and the two do different jobs. The
+// prefix means an agent echoing a detector's key writes its OWN row and the
+// run succeeds; without it the run would be refused by the trigger. Keeping
+// both is the same stance ENT-272 took on the producer's queries: the caller
+// says what it means, and the database is what enforces it.
+//
 // Prefixing closes it structurally rather than by a check that has to be
 // remembered. An agent-raised key cannot collide with a detector's, whatever
 // the model emits, including a model deliberately trying to. Deduplication
@@ -474,9 +482,19 @@ func (a *AgentStore) RaiseSignal(ctx context.Context, orgID string, signal Signa
 	if metadata == "" {
 		metadata = "{}"
 	}
+	// `agent` is the ninth argument, and it is what the row will say produced
+	// it (00039, ENT-273). The detectors in `run_watcher` pass nothing and get
+	// the `detector` default, which is why this is the only place in the
+	// codebase that names a source.
+	//
+	// It also arms the trigger that refuses a row changing hands. If this
+	// landed on a signal a detector owns, the update would state `agent` over
+	// `detector` and Postgres would refuse the whole statement. The prefix
+	// above means that should not be reachable from here; the point is that it
+	// is no longer reachable from anywhere.
 	var signalID string
 	if err := tx.QueryRow(ctx, `
-		select emit_watcher_finding($1::uuid, $2, $3, $4, $5, $6, $7, $8::jsonb)::text
+		select emit_watcher_finding($1::uuid, $2, $3, $4, $5, $6, $7, $8::jsonb, 'agent')::text
 	`, profileID, signal.Kind, dedupKey, signal.Title,
 		nullIfEmpty(signal.Detail), signal.Severity,
 		nullIfEmpty(signal.ObligationSlug), metadata).Scan(&signalID); err != nil {

@@ -783,6 +783,36 @@ what they have to do about it, which no commit subject knows.
   `capability_tokens`, the notification dispatch pair) are unchanged, because
   those legitimately list across every tenant.
 
+### Security
+
+- **A signal now records what produced it, and cannot change hands** (ENT-273).
+  The Watcher raises signals two ways: deterministic detectors that a person
+  can read as rules, and, since ENT-258, an agent. Both write through the same
+  function, which deduplicates on `(profile_id, dedup_key)`, so whoever writes
+  a key owns the row it lands on. The agent is shown every open signal with
+  its key, because a run that is not told what is already open repeats it.
+
+  Those two facts together were a hole. A model that echoes a key back does
+  not raise a duplicate, it overwrites the detector's row, and the CI
+  comparison caught exactly that on its first real run: a signal reading
+  "Profile gap: Records of Processing Activities" was retitled by the model
+  and dropped from high severity to medium, in a slot a rule owned, with
+  nothing on the row saying so.
+
+  It was closed at the time by namespacing every key the agent writes. That
+  held for the one writer that existed, and it was a convention in one function
+  rather than a property of the data. `watcher_findings` now carries a
+  `source` of `detector` or `agent`, and a trigger refuses any update that
+  changes it, so a signal raised by a rule cannot be taken over by a model, or
+  the reverse, whatever writes it and whether or not it goes through the
+  shared function.
+
+  **For self-hosters:** no action. Existing signals are recorded as `detector`,
+  except those the agentic Watcher raised on a development stack, which are
+  identified by their key prefix and recorded as `agent`. If you call
+  `emit_watcher_finding` yourself, it takes an optional ninth argument and
+  defaults to `detector`, so existing calls are unchanged.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,
