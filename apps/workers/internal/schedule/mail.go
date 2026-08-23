@@ -55,6 +55,19 @@ import (
 // activity asks core-api to send rather than asking it for the message, and
 // core-api, which already holds the SMTP channel, does.
 
+// # THE DOORBELL PATH, WHICH RIDES THE SAME RELAY WITH ONE MORE VERB
+//
+// A finding notification (ENT-209) is a `notification_outbox` row whose
+// recipients are decided at delivery from memberships and preferences, and a
+// preference may say "not now": quiet hours. The in-process loop could only
+// drop such a notification with the reason on the row, because holding one
+// needs a scheduler (§17.5). DeliverNotificationWorkflow holds it: it asks
+// core-api to PLAN (who is due, who is held until when, who is skipped),
+// sends to whoever is due, sleeps on a durable timer until the earliest hold
+// ends, plans again, and settles the row when nobody is left. The relay lists
+// notifications beside messages and starts one of these per row, id
+// `deliver-notification/{row id}`, with the same one-run-per-id guarantee.
+
 // Schedule ids, which are what an operator sees in `temporal schedule list`
 // and the UI, and what the CI step asks for.
 const (
@@ -65,16 +78,24 @@ const (
 // Registered activity names, pinned so the workflows and the registrations
 // cannot drift apart.
 const (
-	ListUndeliveredActivityName = "ListUndelivered"
-	StartDeliveriesActivityName = "StartDeliveries"
-	DeliverMessageActivityName  = "DeliverMessage"
-	ReclaimMessagesActivityName = "ReclaimMessages"
+	ListUndeliveredActivityName    = "ListUndelivered"
+	StartDeliveriesActivityName    = "StartDeliveries"
+	DeliverMessageActivityName     = "DeliverMessage"
+	ReclaimMessagesActivityName    = "ReclaimMessages"
+	PlanNotificationActivityName   = "PlanNotification"
+	NotifyRecipientsActivityName   = "NotifyRecipients"
+	SettleNotificationActivityName = "SettleNotification"
 )
 
 // deliveryWorkflowID is the workflow id for delivering one message, and the
 // thing that makes a row deliverable by at most one run at a time.
 func deliveryWorkflowID(messageID string) string {
 	return "deliver-message/" + messageID
+}
+
+// notificationWorkflowID is the same for one finding notification.
+func notificationWorkflowID(notificationID string) string {
+	return "deliver-notification/" + notificationID
 }
 
 // Deliverer is what the activities need of core-api's DeliveryService,
@@ -84,7 +105,18 @@ type Deliverer interface {
 	ListUndelivered(ctx context.Context, req *connect.Request[platformv1.ListUndeliveredRequest]) (*connect.Response[platformv1.ListUndeliveredResponse], error)
 	DeliverMessage(ctx context.Context, req *connect.Request[platformv1.DeliverMessageRequest]) (*connect.Response[platformv1.DeliverMessageResponse], error)
 	ReclaimMessages(ctx context.Context, req *connect.Request[platformv1.ReclaimMessagesRequest]) (*connect.Response[platformv1.ReclaimMessagesResponse], error)
+	PlanNotification(ctx context.Context, req *connect.Request[platformv1.PlanNotificationRequest]) (*connect.Response[platformv1.PlanNotificationResponse], error)
+	NotifyRecipients(ctx context.Context, req *connect.Request[platformv1.NotifyRecipientsRequest]) (*connect.Response[platformv1.NotifyRecipientsResponse], error)
+	SettleNotification(ctx context.Context, req *connect.Request[platformv1.SettleNotificationRequest]) (*connect.Response[platformv1.SettleNotificationResponse], error)
 }
+
+// Pending is what the relay found waiting: ids and nothing else.
+type Pending struct {
+	MessageIDs      []string
+	NotificationIDs []string
+}
+
+func (p Pending) empty() bool { return len(p.MessageIDs) == 0 && len(p.NotificationIDs) == 0 }
 
 // RelayOutboxWorkflow is the workflow behind the `relay-transactional-outbox`
 // Schedule: list what is pending, start a delivery for each.
@@ -108,24 +140,25 @@ func RelayOutboxWorkflow(ctx workflow.Context) (RelayResult, error) {
 		},
 	})
 
-	var ids []string
-	if err := workflow.ExecuteActivity(ctx, ListUndeliveredActivityName).Get(ctx, &ids); err != nil {
+	var pending Pending
+	if err := workflow.ExecuteActivity(ctx, ListUndeliveredActivityName).Get(ctx, &pending); err != nil {
 		return RelayResult{}, err
 	}
-	if len(ids) == 0 {
+	if pending.empty() {
 		return RelayResult{}, nil
 	}
 
 	var started RelayResult
-	if err := workflow.ExecuteActivity(ctx, StartDeliveriesActivityName, ids).Get(ctx, &started); err != nil {
+	if err := workflow.ExecuteActivity(ctx, StartDeliveriesActivityName, pending).Get(ctx, &started); err != nil {
 		return RelayResult{}, err
 	}
 	return started, nil
 }
 
-// RelayResult is what one relay tick did: how many rows were pending, how many
-// deliveries it started, and how many were already running from an earlier
-// tick. Counts only; see the package comment for why.
+// RelayResult is what one relay tick did: how many rows were pending (messages
+// and notifications together), how many deliveries it started, and how many
+// were already running from an earlier tick. Counts only; see the package
+// comment for why.
 type RelayResult struct {
 	Pending        int
 	Started        int
@@ -207,32 +240,37 @@ type ReclaimResult struct {
 	RanAt     time.Time
 }
 
-// ListUndelivered asks core-api which messages are pending.
-func (a *Activities) ListUndelivered(ctx context.Context) ([]string, error) {
+// ListUndelivered asks core-api what is pending: messages and notifications.
+func (a *Activities) ListUndelivered(ctx context.Context) (Pending, error) {
 	res, err := a.Mail.ListUndelivered(ctx, connect.NewRequest(&platformv1.ListUndeliveredRequest{}))
 	if err != nil {
-		return nil, nonRetryableIfRefused(err)
+		return Pending{}, nonRetryableIfRefused(err)
 	}
-	return res.Msg.GetMessageIds(), nil
+	return Pending{
+		MessageIDs:      res.Msg.GetMessageIds(),
+		NotificationIDs: res.Msg.GetNotificationIds(),
+	}, nil
 }
 
-// StartDeliveries starts one DeliverMessageWorkflow per id, and counts.
+// StartDeliveries starts one DeliverMessageWorkflow per message and one
+// DeliverNotificationWorkflow per notification, and counts.
 //
 // Starting is idempotent on the id: a row whose delivery is already running
-// (it is retrying, and a later relay tick listed it again) is reported as such
-// rather than started twice, because the engine refuses a second run of a
-// running id and this reads that refusal as the ordinary thing it is. A row
-// whose earlier delivery has closed (failed non-retryably, say, and then the
-// operator fixed the credential) is started again, which is what the default
-// id reuse policy allows and what an operator fixing a credential wants.
-func (a *Activities) StartDeliveries(ctx context.Context, ids []string) (RelayResult, error) {
-	result := RelayResult{Pending: len(ids)}
-	for _, id := range ids {
+// (it is retrying, or holding somebody through their quiet hours, and a later
+// relay tick listed it again) is reported as such rather than started twice,
+// because the engine refuses a second run of a running id and this reads that
+// refusal as the ordinary thing it is. A row whose earlier delivery has closed
+// (failed non-retryably, say, and then the operator fixed the credential) is
+// started again, which is what the default id reuse policy allows and what an
+// operator fixing a credential wants.
+func (a *Activities) StartDeliveries(ctx context.Context, pending Pending) (RelayResult, error) {
+	result := RelayResult{Pending: len(pending.MessageIDs) + len(pending.NotificationIDs)}
+	start := func(id string, wf any, arg string) error {
 		_, err := a.Starter.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-			ID:                       deliveryWorkflowID(id),
+			ID:                       id,
 			TaskQueue:                a.TaskQueue,
 			WorkflowIDConflictPolicy: enumspb.WORKFLOW_ID_CONFLICT_POLICY_FAIL,
-		}, DeliverMessageWorkflow, id)
+		}, wf, arg)
 		var already *serviceerror.WorkflowExecutionAlreadyStarted
 		switch {
 		case err == nil:
@@ -240,7 +278,18 @@ func (a *Activities) StartDeliveries(ctx context.Context, ids []string) (RelayRe
 		case errors.As(err, &already):
 			result.AlreadyRunning++
 		default:
-			return result, fmt.Errorf("starting the delivery of %s: %w", id, err)
+			return fmt.Errorf("starting %s: %w", id, err)
+		}
+		return nil
+	}
+	for _, id := range pending.MessageIDs {
+		if err := start(deliveryWorkflowID(id), DeliverMessageWorkflow, id); err != nil {
+			return result, err
+		}
+	}
+	for _, id := range pending.NotificationIDs {
+		if err := start(notificationWorkflowID(id), DeliverNotificationWorkflow, id); err != nil {
+			return result, err
 		}
 	}
 	return result, nil
@@ -258,11 +307,7 @@ func (a *Activities) DeliverMessage(ctx context.Context, messageID string) (Deli
 		MessageId: messageID,
 	}))
 	if err != nil {
-		if connect.CodeOf(err) == connect.CodeInvalidArgument {
-			return DeliveryResult{}, temporal.NewNonRetryableApplicationError(
-				fmt.Sprintf("core-api refused the message id: %v", err), "bad-request", err)
-		}
-		return DeliveryResult{}, nonRetryableIfRefused(err)
+		return DeliveryResult{}, badRequestOrRefusal(err)
 	}
 	result := DeliveryResult{
 		Delivered: res.Msg.GetOutcome() == platformv1.DeliverMessageResponse_OUTCOME_DELIVERED,

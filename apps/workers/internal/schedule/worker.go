@@ -92,6 +92,7 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 	w.RegisterWorkflow(RelayOutboxWorkflow)
 	w.RegisterWorkflow(DeliverMessageWorkflow)
 	w.RegisterWorkflow(ReclaimOutboxWorkflow)
+	w.RegisterWorkflow(DeliverNotificationWorkflow)
 	w.RegisterActivityWithOptions(opts.Activities.ExpireSnoozes,
 		activityOptions(ExpireSnoozesActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.ListUndelivered,
@@ -102,6 +103,12 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		activityOptions(DeliverMessageActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.ReclaimMessages,
 		activityOptions(ReclaimMessagesActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.PlanNotification,
+		activityOptions(PlanNotificationActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.NotifyRecipients,
+		activityOptions(NotifyRecipientsActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.SettleNotification,
+		activityOptions(SettleNotificationActivityName))
 
 	if err := w.Start(); err != nil {
 		return nil, fmt.Errorf("schedule: starting the worker: %w", err)
@@ -202,7 +209,7 @@ func schedules(opts Options) []scheduleDefinition {
 			CatchupWindow:    time.Minute,
 			Memo: map[string]any{
 				"owner": "workers (ENT-256)",
-				"what":  "starts a delivery for every message waiting in the transactional outbox",
+				"what":  "starts a delivery for every message and every finding notification waiting to leave",
 			},
 		},
 		{

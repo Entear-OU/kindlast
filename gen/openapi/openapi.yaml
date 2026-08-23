@@ -2429,6 +2429,119 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/notifications:notify:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Sends one notification to the named recipients, now.
+
+                 One transaction on the agent pool, row locked `for update`, one
+                 unsubscribe token and (for a verified address) one approve link minted
+                 per person, one email per person, exactly as the in-process loop did
+                 (ENT-209, ENT-249). The row is NOT marked sent here: the workflow may
+                 still be holding other recipients, and "sent" is one fact about the
+                 whole notification, recorded by SettleNotification when nobody is left.
+
+                 A failed send is recorded on the row (attempts, the server's answer) and
+                 returned as `unavailable` for the retry policy, after which the whole
+                 batch is retried. That means a second attempt can re-send to somebody
+                 earlier in the batch who already received it, which is the same trade
+                 the loop made and the same direction: a duplicate doorbell is a
+                 nuisance, a finding nobody hears about is the failure this product
+                 exists to prevent. Recipients named here who are no longer members are
+                 left out rather than failing the call.
+            operationId: DeliveryService_NotifyRecipients
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/NotifyRecipientsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/NotifyRecipientsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/notifications:plan:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Works out who a finding notification goes to, and when.
+
+                 Read only, no lock, no side effect: it answers what the workflow should
+                 do next, as of now. For each candidate recipient one of three decisions,
+                 decided in Go from the raw preference fields (§14.5): SEND, they want it
+                 and nothing is in the way; HOLD, they want it and are inside their quiet
+                 hours, with the moment the window ends in their zone; SKIP, with the
+                 reason, because the finding is below their severity floor. A row that is
+                 no longer pending answers `settled` and the workflow stops.
+
+                 What crosses into the workflow history is a user id, a decision and a
+                 time. Not an address.
+            operationId: DeliveryService_PlanNotification
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PlanNotificationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PlanNotificationResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/notifications:settle:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Marks a notification sent or skipped, once the workflow has nobody left
+                 to send to. Idempotent: a row already settled answers `settled: false`
+                 and changes nothing.
+
+                 `skipped` rather than `sent` when nobody wanted it, and the distinction
+                 is not cosmetic: `sent` means an email left the building, and recording
+                 a delivery no message supports would put a claim in the database that is
+                 not true. The reason is stored so an operator asking "why did nothing go
+                 out" gets an answer.
+            operationId: DeliveryService_SettleNotification
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SettleNotificationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SettleNotificationResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/snoozes:expire:
         post:
             tags:
@@ -4671,8 +4784,13 @@ components:
                     items:
                         type: string
                     description: |-
-                        Row ids of pending messages, oldest first. Ids, not messages: see the
-                         service comment for why nothing else crosses here.
+                        Row ids of pending transactional messages, oldest first. Ids, not
+                         messages: see the service comment for why nothing else crosses here.
+                notificationIds:
+                    type: array
+                    items:
+                        type: string
+                    description: Row ids of pending finding notifications, oldest first. Same rule.
         LogDsarRequest:
             type: object
             properties:
@@ -4958,6 +5076,29 @@ components:
                          during quiet hours is one nobody can trust with a statutory clock.
                 quietHoursEnd:
                     type: string
+        NotifyRecipientsRequest:
+            type: object
+            properties:
+                notificationId:
+                    type: string
+                userIds:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Who to send to now, from a PlanNotification answer. Somebody named here
+                         who is no longer a recipient (left the organisation since the plan) is
+                         left out rather than failing the call.
+        NotifyRecipientsResponse:
+            type: object
+            properties:
+                sent:
+                    type: integer
+                    description: How many emails left.
+                    format: int32
+                settled:
+                    type: boolean
+                    description: True when the row was no longer pending and nothing was sent.
         Obligation:
             type: object
             properties:
@@ -5209,6 +5350,50 @@ components:
                  Analyst are doing. Its first honest content is this: when they last ran, and
                  whether they ever have. Everything conversational comes later; this is the
                  part that stops the console implying work that has not happened.
+        PlanNotificationRequest:
+            type: object
+            properties:
+                notificationId:
+                    type: string
+                    description: The notification_outbox row, from ListUndelivered.
+        PlanNotificationResponse:
+            type: object
+            properties:
+                settled:
+                    type: boolean
+                    description: |-
+                        True when there is nothing pending by that id: it was sent or skipped
+                         earlier, or never existed. The workflow stops.
+                recipients:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PlannedRecipient'
+                    description: |-
+                        Every candidate recipient, with the decision for each as of now. Empty
+                         when the organisation has nobody with a deliverable address, which the
+                         workflow settles as skipped.
+        PlannedRecipient:
+            type: object
+            properties:
+                userId:
+                    type: string
+                decision:
+                    enum:
+                        - DECISION_UNSPECIFIED
+                        - DECISION_SEND
+                        - DECISION_HOLD
+                        - DECISION_SKIP
+                    type: string
+                    format: enum
+                holdUntil:
+                    type: string
+                    description: Set for DECISION_HOLD.
+                    format: date-time
+                reason:
+                    type: string
+                    description: |-
+                        Set for DECISION_SKIP and DECISION_HOLD, in the words the row's
+                         `last_error` would carry if nobody at all wanted it.
         ProcessingActivity:
             type: object
             properties:
@@ -5777,6 +5962,26 @@ components:
                     type: string
                     description: When this sweep ran, which is what the console's "last checked" reads.
                     format: date-time
+        SettleNotificationRequest:
+            type: object
+            properties:
+                notificationId:
+                    type: string
+                outcome:
+                    enum:
+                        - OUTCOME_UNSPECIFIED
+                        - OUTCOME_SENT
+                        - OUTCOME_SKIPPED
+                    type: string
+                    format: enum
+                reason:
+                    type: string
+        SettleNotificationResponse:
+            type: object
+            properties:
+                settled:
+                    type: boolean
+                    description: True when this call settled the row; false when it was already settled.
         SeverityCounts:
             type: object
             properties:
@@ -6198,6 +6403,19 @@ tags:
          history gets a row id and a count. The address, the subject and the token
          stay inside core-api, which already holds the SMTP channel, and the RPC
          reports whether they left.
+
+         THE DOORBELL PATH RIDES THE SAME SEAM, WITH ONE MORE MOVING PART
+
+         A finding notification (ENT-209) is a row in `notification_outbox` whose
+         recipients are worked out at delivery time from memberships and
+         preferences, and a recipient's preferences may say "not now": quiet hours.
+         The in-process loop this replaces could only drop such a notification with
+         the reason on the row, because holding one needs a scheduler (§17.5). Now
+         there is one. The workflow asks this service to PLAN (who is due now, who
+         is held until when, who is skipped and why), sends to whoever is due,
+         sleeps on a durable timer until the earliest hold ends, plans again, and
+         settles the row when nobody is left. The three RPCs below are those three
+         verbs, and every decision in them is Go over rows the database fetched.
 
          WHAT TEMPORAL ADDS, STATED SO THE EXTRA HOP IS SEEN TO BUY SOMETHING
 

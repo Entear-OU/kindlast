@@ -49,9 +49,29 @@ what they have to do about it, which no commit subject knows.
   outbox", and for the retry half that is what this is; the table remains the
   durable handoff because the message is written in the same transaction as
   the invitation, which a workflow started after the commit cannot promise.
-  Finding notifications (the "doorbell" emails) still go out on core-api's
-  timer and move next, as one workflow per notification with quiet hours held
-  rather than dropped.
+
+- **Finding notifications inside somebody's quiet hours are now held and
+  delivered when the window ends, instead of dropped** (ENT-256, part three,
+  second half). A notification is one Temporal workflow,
+  `deliver-notification/{row id}`, started by the same relay that starts
+  invitation mail. It asks core-api who should hear about the finding and
+  when; sends to everybody who is due; sleeps on a durable timer until the
+  earliest held recipient's quiet hours end, in their own time zone; asks
+  again; and marks the row sent (or skipped, with the reason) when nobody is
+  left. A person is told once however many rounds their colleagues take.
+  Until now a notification that arrived inside quiet hours was recorded as
+  skipped with "inside quiet hours" on the row and never sent, which the code
+  documented as the limitation of dispatching on a plain timer.
+
+  Everything else about a notification is unchanged: one unsubscribe link per
+  person, one approve link per person with a verified address, the doorbell
+  copy that names the finding without quoting it, and the `notification_
+  recipients` definer function answering who. The three new internal RPCs
+  (`PlanNotification`, `NotifyRecipients`, `SettleNotification`) are on
+  `DeliveryService` with the rest. The last in-process delivery timer in
+  core-api goes with this; `KINDLAST_APP_BASE_URL` is still required on
+  core-api for notifications to leave, and its absence is said at boot and on
+  every attempt.
 
 - **Deferred findings come back on their date, on a schedule, which is the
   first thing Temporal runs** (ENT-256, part two of five). Since the Supabase

@@ -23,6 +23,15 @@ class DeliveryService(Protocol):
     async def deliver_message(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.DeliverMessageRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.DeliverMessageResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def plan_notification(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def notify_recipients(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def settle_notification(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
     async def reclaim_messages(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.ReclaimMessagesRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.ReclaimMessagesResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
@@ -51,6 +60,36 @@ class DeliveryServiceASGIApplication(ConnectASGIApplication[DeliveryService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.deliver_message,
+                ),
+                "/kindlast.platform.v1.DeliveryService/PlanNotification": Endpoint.unary(
+                    method=MethodInfo(
+                        name="PlanNotification",
+                        service_name="kindlast.platform.v1.DeliveryService",
+                        input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.plan_notification,
+                ),
+                "/kindlast.platform.v1.DeliveryService/NotifyRecipients": Endpoint.unary(
+                    method=MethodInfo(
+                        name="NotifyRecipients",
+                        service_name="kindlast.platform.v1.DeliveryService",
+                        input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.notify_recipients,
+                ),
+                "/kindlast.platform.v1.DeliveryService/SettleNotification": Endpoint.unary(
+                    method=MethodInfo(
+                        name="SettleNotification",
+                        service_name="kindlast.platform.v1.DeliveryService",
+                        input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.settle_notification,
                 ),
                 "/kindlast.platform.v1.DeliveryService/ReclaimMessages": Endpoint.unary(
                     method=MethodInfo(
@@ -115,6 +154,66 @@ class DeliveryServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def plan_notification(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="PlanNotification",
+                service_name="kindlast.platform.v1.DeliveryService",
+                input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationRequest,
+                output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def notify_recipients(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="NotifyRecipients",
+                service_name="kindlast.platform.v1.DeliveryService",
+                input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsRequest,
+                output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def settle_notification(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="SettleNotification",
+                service_name="kindlast.platform.v1.DeliveryService",
+                input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationRequest,
+                output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
     async def reclaim_messages(
         self,
         request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.ReclaimMessagesRequest,
@@ -140,6 +239,12 @@ class DeliveryServiceSync(Protocol):
     def list_undelivered(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.ListUndeliveredRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.ListUndeliveredResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def deliver_message(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.DeliverMessageRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.DeliverMessageResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def plan_notification(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def notify_recipients(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def settle_notification(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def reclaim_messages(self, request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.ReclaimMessagesRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.ReclaimMessagesResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
@@ -168,6 +273,36 @@ class DeliveryServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.deliver_message,
+                ),
+                "/kindlast.platform.v1.DeliveryService/PlanNotification": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="PlanNotification",
+                        service_name="kindlast.platform.v1.DeliveryService",
+                        input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.plan_notification,
+                ),
+                "/kindlast.platform.v1.DeliveryService/NotifyRecipients": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="NotifyRecipients",
+                        service_name="kindlast.platform.v1.DeliveryService",
+                        input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.notify_recipients,
+                ),
+                "/kindlast.platform.v1.DeliveryService/SettleNotification": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="SettleNotification",
+                        service_name="kindlast.platform.v1.DeliveryService",
+                        input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.settle_notification,
                 ),
                 "/kindlast.platform.v1.DeliveryService/ReclaimMessages": EndpointSync.unary(
                     method=MethodInfo(
@@ -226,6 +361,66 @@ class DeliveryServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.DeliveryService",
                 input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.DeliverMessageRequest,
                 output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.DeliverMessageResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def plan_notification(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="PlanNotification",
+                service_name="kindlast.platform.v1.DeliveryService",
+                input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationRequest,
+                output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.PlanNotificationResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def notify_recipients(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="NotifyRecipients",
+                service_name="kindlast.platform.v1.DeliveryService",
+                input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsRequest,
+                output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.NotifyRecipientsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def settle_notification(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="SettleNotification",
+                service_name="kindlast.platform.v1.DeliveryService",
+                input=kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationRequest,
+                output=kindlast_dot_platform_dot_v1_dot_delivery__pb2.SettleNotificationResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

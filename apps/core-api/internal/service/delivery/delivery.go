@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
@@ -33,11 +34,13 @@ import (
 )
 
 // Outbox is what this handler needs of the agent pool, declared where it is
-// used rather than exported from the store (§21.6).
+// used rather than exported from the store (§21.6): the transactional outbox's
+// delivery half, and the doorbell path's (see doorbell.go).
 type Outbox interface {
 	PendingMessageIDs(ctx context.Context, limit int) ([]string, error)
 	DeliverMessage(ctx context.Context, id string, deliver postgres.Deliver) (postgres.Delivery, error)
 	ReclaimOutbox(ctx context.Context, bodyRetention time.Duration, batch int) (postgres.ReclaimResult, error)
+	Doorbells
 }
 
 // Retention on the outbox (ENT-242).
@@ -102,18 +105,34 @@ const (
 type Service struct {
 	outbox  Outbox
 	channel delivery.Channel
-	now     func() time.Time
+	// baseURL is where a browser reaches the console, for the links a
+	// notification carries. Empty refuses a notification send rather than
+	// building a link that 404s.
+	baseURL string
+	// now is injectable because quiet hours are the one rule here that
+	// depends on the clock, and a rule that can only be exercised by waiting
+	// until 22:00 is one nobody tests.
+	now func() time.Time
 }
 
 // New builds the handler.
 //
 // A nil channel is allowed and is the state a deployment is in before
-// KINDLAST_SMTP_ADDR is set: the list and the reclaim still answer, and a
-// delivery is refused with `failed_precondition` rather than the service being
-// absent, because the rows are there and an operator asking "why is mail not
-// leaving" should get an answer that names the setting.
-func New(outbox Outbox, channel delivery.Channel) *Service {
-	return &Service{outbox: outbox, channel: channel, now: time.Now}
+// KINDLAST_SMTP_ADDR is set: the list, the plan, the settle and the reclaim
+// still answer, and a send is refused with `failed_precondition` rather than
+// the service being absent, because the rows are there and an operator asking
+// "why is mail not leaving" should get an answer that names the setting. An
+// empty base URL is the same for notifications.
+func New(outbox Outbox, channel delivery.Channel, baseURL string) *Service {
+	return &Service{outbox: outbox, channel: channel, baseURL: baseURL, now: time.Now}
+}
+
+// WithClock replaces the clock the plan reads, for tests that need to be
+// inside or outside somebody's quiet hours on purpose rather than by the
+// time of day the suite happens to run.
+func (s *Service) WithClock(now func() time.Time) *Service {
+	s.now = now
+	return s
 }
 
 // ListUndelivered lists pending message ids, oldest first.
@@ -138,7 +157,21 @@ func (s *Service) ListUndelivered(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&platformv1.ListUndeliveredResponse{MessageIds: ids}), nil
+	bells, err := s.outbox.PendingDoorbellIDs(ctx, limit)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&platformv1.ListUndeliveredResponse{
+		MessageIds:      ids,
+		NotificationIds: bells,
+	}), nil
+}
+
+// isUUID is the shape check the store also makes, done here so a malformed
+// id is `invalid_argument` rather than a database error dressed as internal.
+func isUUID(raw string) bool {
+	_, err := uuid.Parse(raw)
+	return err == nil
 }
 
 // DeliverMessage claims one message, sends it, and records the outcome.

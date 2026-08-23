@@ -465,6 +465,17 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.DeliveryService.ReclaimMessages": {
 			Method: "POST", Path: "/internal/v1/messages:reclaim",
 		},
+		// The doorbell path's three verbs, same shape: the workflow plans,
+		// sends to whoever is due, and settles the row when nobody is left.
+		"kindlast.platform.v1.DeliveryService.PlanNotification": {
+			Method: "POST", Path: "/internal/v1/notifications:plan",
+		},
+		"kindlast.platform.v1.DeliveryService.NotifyRecipients": {
+			Method: "POST", Path: "/internal/v1/notifications:notify",
+		},
+		"kindlast.platform.v1.DeliveryService.SettleNotification": {
+			Method: "POST", Path: "/internal/v1/notifications:settle",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

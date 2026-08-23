@@ -716,7 +716,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.platform.v1.DeliveryService", "ListUndelivered"]
             },
-            "description": "Lists the invitation emails waiting in core-api's transactional outbox, oldest first, by row id only. **Served as of ENT-256 (part three).** Required scope: `internal:ingest`, the machine scope, so use the client-credentials token. No `Kindlast-Org-Id` header: the outbox is every organisation's, and the worker that calls this holds no tenant.\n\n**Ids and nothing else, on purpose.** This is the relay's question, asked every fifteen seconds by the `relay-transactional-outbox` Temporal Schedule, and its answer is written into a workflow history that is kept for the namespace's retention and readable in the UI. The address, the subject and the body (which for an invitation carries the raw bearer token in the clear, migration 00030) are read by Deliver message inside core-api and never cross that boundary.\n\n`limit` bounds one call (default 200, at most 1000); what is not listed now is listed on the next tick. You will not normally call this; it is here so an operator can see what is waiting, and because the collection documents every RPC on the internal surface."
+            "description": "Lists what is waiting to leave core-api, oldest first, by row id only: `messageIds` for invitation emails in the transactional outbox and `notificationIds` for finding notifications (ENT-256, part three, second half). **Served as of ENT-256 (part three).** Required scope: `internal:ingest`, the machine scope, so use the client-credentials token. No `Kindlast-Org-Id` header: the outbox is every organisation's, and the worker that calls this holds no tenant.\n\n**Ids and nothing else, on purpose.** This is the relay's question, asked every fifteen seconds by the `relay-transactional-outbox` Temporal Schedule, and its answer is written into a workflow history that is kept for the namespace's retention and readable in the UI. The address, the subject and the body (which for an invitation carries the raw bearer token in the clear, migration 00030) are read by Deliver message inside core-api and never cross that boundary.\n\n`limit` bounds one call (default 200, at most 1000); what is not listed now is listed on the next tick. You will not normally call this; it is here so an operator can see what is waiting, and because the collection documents every RPC on the internal surface."
           }
         },
         {
@@ -757,6 +757,66 @@
               "path": ["kindlast.platform.v1.DeliveryService", "ReclaimMessages"]
             },
             "description": "Clears the personal data out of messages that no longer need it (ENT-242, migration 00030): redacts the recipient's address and the rendered body from delivered messages after seven days, and gives up on undelivered messages whose invitation can no longer be accepted, marking them `failed`. **Served as of ENT-256 (part three).** Required scope: `internal:ingest`.\n\nIt is the activity behind the `reclaim-transactional-outbox` Temporal Schedule, hourly at forty past. The window (seven days, `postgres.InvitationLifetime`) is a decision and lives in core-api; the rule that a message which can still be delivered is never touched is an invariant and lives in the database's definer function, where no caller of this RPC can reach past it. Idempotent: a second pass in the same hour reports zero for both counts.\n\nThe response carries `redacted`, `abandoned` and `ranAt`."
+          }
+        },
+        {
+          "name": "Plan notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notificationId\": \"{{notification_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/PlanNotification",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "PlanNotification"]
+            },
+            "description": "Works out who a finding notification goes to, and when, as of now. **Served as of ENT-256 (part three, second half).** Required scope: `internal:ingest`. Read only and side-effect free: for each candidate recipient (a member of the organisation with a deliverable address, via the `notification_recipients` definer function) one of three decisions, decided in Go from the raw preference fields: `DECISION_SEND`, they want it and nothing is in the way; `DECISION_HOLD` with `holdUntil`, they want it and are inside their quiet hours, so the moment their window ends in their own zone; `DECISION_SKIP` with `reason`, the finding is below their severity floor.\n\nThis is the first verb of the `deliver-notification/{id}` workflow, and it is asked again after every hold rather than once, because a hold can be nine hours and preferences change. A row that is no longer pending answers `settled: true`. The answer carries user ids, decisions and times, never an address, because it lands in a workflow history.\n\n`notificationId` comes from List undelivered's `notificationIds`."
+          }
+        },
+        {
+          "name": "Notify recipients",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notificationId\": \"{{notification_id}}\",\n  \"userIds\": [\"{{user_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/NotifyRecipients",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "NotifyRecipients"]
+            },
+            "description": "Sends one finding notification to the named recipients, now. **Served as of ENT-256 (part three, second half).** Required scope: `internal:ingest`. One transaction on the agent pool, row locked `for update`, one unsubscribe token and (for a verified address) one approve link minted per person, one email per person, exactly as the in-process loop did. The row is **not** marked sent here: the workflow may still be holding other recipients, and `sent` is one fact about the whole notification, recorded by Settle notification.\n\nA refused send is recorded on the row (attempts, the server's answer) and answers `unavailable` for the retry policy. No mail channel answers `failed_precondition` naming `KINDLAST_SMTP_ADDR`; no console address answers the same naming `KINDLAST_APP_BASE_URL`, because every notification carries a link into `/o/{slug}/`. Somebody named in `userIds` who is no longer a recipient is left out rather than failing the call. Calling this by hand sends real mail; on a laptop stack read it in Mailpit at http://localhost:8025."
+          }
+        },
+        {
+          "name": "Settle notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notificationId\": \"{{notification_id}}\",\n  \"outcome\": \"OUTCOME_SENT\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/SettleNotification",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "SettleNotification"]
+            },
+            "description": "Marks a finding notification sent or skipped, once the workflow has nobody left to send to. **Served as of ENT-256 (part three, second half).** Required scope: `internal:ingest`. Idempotent: a row already settled answers `settled: false` and changes nothing.\n\n`OUTCOME_SENT` when at least one email left; `OUTCOME_SKIPPED` when nobody wanted it, in which case `reason` is required and stored on the row, so an operator asking \"why did nothing go out\" gets an answer. `skipped` rather than `sent` is not cosmetic: `sent` means an email left the building, and a delivery no message supports would be a claim in the database that is not true."
           }
         },
         {

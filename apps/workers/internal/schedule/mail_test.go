@@ -34,12 +34,67 @@ type fakeDeliverer struct {
 	// settled makes DeliverMessage answer "already settled".
 	settled  bool
 	reclaims int
+
+	// The doorbell half: pending notification ids, and a scripted plan per
+	// round (plans[0] is answered to the first PlanNotification call, and so
+	// on; the last one repeats).
+	pendingBells []string
+	plans        []*platformv1.PlanNotificationResponse
+	planCalls    int
+	notified     [][]string
+	settledWith  *platformv1.SettleNotificationRequest
+}
+
+func (f *fakeDeliverer) PlanNotification(
+	_ context.Context, _ *connect.Request[platformv1.PlanNotificationRequest],
+) (*connect.Response[platformv1.PlanNotificationResponse], error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	i := f.planCalls
+	if i >= len(f.plans) {
+		i = len(f.plans) - 1
+	}
+	f.planCalls++
+	return connect.NewResponse(f.plans[i]), nil
+}
+
+func (f *fakeDeliverer) NotifyRecipients(
+	_ context.Context, req *connect.Request[platformv1.NotifyRecipientsRequest],
+) (*connect.Response[platformv1.NotifyRecipientsResponse], error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.refuse != nil && len(f.notified) < f.refuseFor {
+		f.notified = append(f.notified, nil)
+		return nil, f.refuse
+	}
+	f.notified = append(f.notified, req.Msg.GetUserIds())
+	return connect.NewResponse(&platformv1.NotifyRecipientsResponse{Sent: int32(len(req.Msg.GetUserIds()))}), nil
+}
+
+func (f *fakeDeliverer) SettleNotification(
+	_ context.Context, req *connect.Request[platformv1.SettleNotificationRequest],
+) (*connect.Response[platformv1.SettleNotificationResponse], error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.settledWith = req.Msg
+	return connect.NewResponse(&platformv1.SettleNotificationResponse{Settled: true}), nil
+}
+
+func planned(userID string, decision platformv1.PlannedRecipient_Decision, holdUntil time.Time, reason string) *platformv1.PlannedRecipient {
+	p := &platformv1.PlannedRecipient{UserId: userID, Decision: decision, Reason: reason}
+	if !holdUntil.IsZero() {
+		p.HoldUntil = timestamppb.New(holdUntil)
+	}
+	return p
 }
 
 func (f *fakeDeliverer) ListUndelivered(
 	_ context.Context, _ *connect.Request[platformv1.ListUndeliveredRequest],
 ) (*connect.Response[platformv1.ListUndeliveredResponse], error) {
-	return connect.NewResponse(&platformv1.ListUndeliveredResponse{MessageIds: f.pending}), nil
+	return connect.NewResponse(&platformv1.ListUndeliveredResponse{
+		MessageIds:      f.pending,
+		NotificationIds: f.pendingBells,
+	}), nil
 }
 
 func (f *fakeDeliverer) DeliverMessage(
@@ -94,14 +149,20 @@ func registerMail(env *testsuite.TestWorkflowEnvironment, a *Activities) {
 	env.RegisterActivityWithOptions(a.StartDeliveries, activityOptions(StartDeliveriesActivityName))
 	env.RegisterActivityWithOptions(a.DeliverMessage, activityOptions(DeliverMessageActivityName))
 	env.RegisterActivityWithOptions(a.ReclaimMessages, activityOptions(ReclaimMessagesActivityName))
+	env.RegisterActivityWithOptions(a.PlanNotification, activityOptions(PlanNotificationActivityName))
+	env.RegisterActivityWithOptions(a.NotifyRecipients, activityOptions(NotifyRecipientsActivityName))
+	env.RegisterActivityWithOptions(a.SettleNotification, activityOptions(SettleNotificationActivityName))
 }
 
 func TestTheRelayStartsOneDeliveryPerPendingMessageOnItsOwnId(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 
-	mail := &fakeDeliverer{pending: []string{"aaa", "bbb", "ccc"}}
-	starter := &fakeStarter{running: map[string]bool{deliveryWorkflowID("bbb"): true}}
+	mail := &fakeDeliverer{pending: []string{"aaa", "bbb", "ccc"}, pendingBells: []string{"n1", "n2"}}
+	starter := &fakeStarter{running: map[string]bool{
+		deliveryWorkflowID("bbb"):    true,
+		notificationWorkflowID("n2"): true,
+	}}
 	activities := &Activities{Mail: mail, Starter: starter, TaskQueue: "core"}
 	registerMail(env, activities)
 
@@ -114,17 +175,18 @@ func TestTheRelayStartsOneDeliveryPerPendingMessageOnItsOwnId(t *testing.T) {
 	if err := env.GetWorkflowResult(&result); err != nil {
 		t.Fatalf("reading the result: %v", err)
 	}
-	if result.Pending != 3 || result.Started != 2 || result.AlreadyRunning != 1 {
-		t.Fatalf("result = %+v, want 3 pending, 2 started, 1 already running", result)
+	if result.Pending != 5 || result.Started != 3 || result.AlreadyRunning != 2 {
+		t.Fatalf("result = %+v, want 5 pending, 3 started, 2 already running", result)
 	}
 
 	// THE PROPERTY THE WHOLE DESIGN RESTS ON: the workflow id is the row id,
-	// so the engine will never run two deliveries of one message at once, and
-	// a row already being delivered is left to the run that has it.
-	if len(starter.started) != 2 {
-		t.Fatalf("started %d workflows, want 2", len(starter.started))
+	// so the engine will never run two deliveries of one message or one
+	// notification at once, and a row already being delivered (or held
+	// through somebody's quiet hours) is left to the run that has it.
+	if len(starter.started) != 3 {
+		t.Fatalf("started %d workflows, want 3", len(starter.started))
 	}
-	for i, want := range []string{deliveryWorkflowID("aaa"), deliveryWorkflowID("ccc")} {
+	for i, want := range []string{deliveryWorkflowID("aaa"), deliveryWorkflowID("ccc"), notificationWorkflowID("n1")} {
 		got := starter.started[i]
 		if got.ID != want {
 			t.Errorf("started[%d].ID = %q, want %q", i, got.ID, want)
@@ -316,5 +378,186 @@ func TestTheScheduleListIsTheDocumentedOne(t *testing.T) {
 	}
 	if got := defs[1].Spec.Intervals; len(got) != 1 || got[0].Every != 15*time.Second {
 		t.Errorf("the relay's interval = %+v, want the configured fifteen seconds", got)
+	}
+}
+
+// The doorbell path (ENT-209 on Temporal). The first three are the three
+// outcomes a plan can produce, and the middle one is the reason the path
+// moved: a recipient inside quiet hours is held on a durable timer and told
+// when the window ends, rather than dropped.
+
+func TestANotificationGoesToEverybodyDueAndSettlesAsSent(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+
+	mail := &fakeDeliverer{plans: []*platformv1.PlanNotificationResponse{{
+		Recipients: []*platformv1.PlannedRecipient{
+			planned("ada", platformv1.PlannedRecipient_DECISION_SEND, time.Time{}, ""),
+			planned("bob", platformv1.PlannedRecipient_DECISION_SEND, time.Time{}, ""),
+			planned("cy", platformv1.PlannedRecipient_DECISION_SKIP, time.Time{}, "severity low is below the high floor"),
+		},
+	}}}
+	registerMail(env, &Activities{Mail: mail})
+
+	env.ExecuteWorkflow(DeliverNotificationWorkflow, "n1")
+
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("the notification failed: %v", err)
+	}
+	var result NotificationResult
+	if err := env.GetWorkflowResult(&result); err != nil {
+		t.Fatalf("reading the result: %v", err)
+	}
+	if result.Sent != 2 || !result.Settled || result.Rounds != 0 {
+		t.Fatalf("result = %+v, want 2 sent, settled, no rounds slept", result)
+	}
+	if len(mail.notified) != 1 || len(mail.notified[0]) != 2 {
+		t.Fatalf("notified %v, want one call to the two due recipients", mail.notified)
+	}
+	if mail.settledWith == nil || mail.settledWith.GetOutcome() != platformv1.SettleNotificationRequest_OUTCOME_SENT {
+		t.Fatalf("settled with %v, want sent", mail.settledWith)
+	}
+}
+
+// THE TEST THE PATH MOVED FOR. Bob is inside quiet hours at the first plan.
+// The workflow sends to Ada now, sleeps until Bob's window ends (the test
+// environment skips the clock forward rather than waiting), plans again,
+// sends to Bob and not to Ada again, and settles as sent.
+func TestARecipientInsideQuietHoursIsHeldAndToldWhenTheWindowEnds(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+
+	start := env.Now()
+	windowEnds := start.Add(7 * time.Hour)
+	mail := &fakeDeliverer{plans: []*platformv1.PlanNotificationResponse{
+		{Recipients: []*platformv1.PlannedRecipient{
+			planned("ada", platformv1.PlannedRecipient_DECISION_SEND, time.Time{}, ""),
+			planned("bob", platformv1.PlannedRecipient_DECISION_HOLD, windowEnds, "inside quiet hours"),
+		}},
+		{Recipients: []*platformv1.PlannedRecipient{
+			planned("ada", platformv1.PlannedRecipient_DECISION_SEND, time.Time{}, ""),
+			planned("bob", platformv1.PlannedRecipient_DECISION_SEND, time.Time{}, ""),
+		}},
+	}}
+	registerMail(env, &Activities{Mail: mail})
+
+	env.ExecuteWorkflow(DeliverNotificationWorkflow, "n1")
+
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("the notification failed: %v", err)
+	}
+	var result NotificationResult
+	if err := env.GetWorkflowResult(&result); err != nil {
+		t.Fatalf("reading the result: %v", err)
+	}
+	if result.Sent != 2 || result.Rounds != 1 || !result.Settled {
+		t.Fatalf("result = %+v, want 2 sent over one hold, settled", result)
+	}
+	if len(mail.notified) != 2 {
+		t.Fatalf("notified %v, want two calls: Ada now, Bob after the window", mail.notified)
+	}
+	if len(mail.notified[0]) != 1 || mail.notified[0][0] != "ada" {
+		t.Fatalf("first send went to %v, want Ada alone", mail.notified[0])
+	}
+	if len(mail.notified[1]) != 1 || mail.notified[1][0] != "bob" {
+		t.Fatalf("second send went to %v, want Bob alone: Ada was already told", mail.notified[1])
+	}
+	if mail.planCalls != 2 {
+		t.Fatalf("planned %d times, want 2: once now, once after the window", mail.planCalls)
+	}
+	// And the workflow clock really did move past the window: the second
+	// plan happened no earlier than when Bob's quiet hours ended.
+	if env.Now().Before(windowEnds) {
+		t.Fatalf("the workflow finished at %v, before the window ended at %v", env.Now(), windowEnds)
+	}
+}
+
+func TestANotificationNobodyWantsIsSettledAsSkippedWithTheReason(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+
+	mail := &fakeDeliverer{plans: []*platformv1.PlanNotificationResponse{{
+		Recipients: []*platformv1.PlannedRecipient{
+			planned("cy", platformv1.PlannedRecipient_DECISION_SKIP, time.Time{}, "severity low is below the high floor"),
+		},
+	}}}
+	registerMail(env, &Activities{Mail: mail})
+
+	env.ExecuteWorkflow(DeliverNotificationWorkflow, "n1")
+
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("the notification failed: %v", err)
+	}
+	if len(mail.notified) != 0 {
+		t.Fatalf("notified %v for a notification nobody wanted", mail.notified)
+	}
+	if mail.settledWith == nil ||
+		mail.settledWith.GetOutcome() != platformv1.SettleNotificationRequest_OUTCOME_SKIPPED ||
+		mail.settledWith.GetReason() != "severity low is below the high floor" {
+		t.Fatalf("settled with %v, want skipped with the floor reason", mail.settledWith)
+	}
+}
+
+func TestANotificationWithNoRecipientsAtAllIsSkippedWithAReason(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+
+	mail := &fakeDeliverer{plans: []*platformv1.PlanNotificationResponse{{}}}
+	registerMail(env, &Activities{Mail: mail})
+
+	env.ExecuteWorkflow(DeliverNotificationWorkflow, "n1")
+
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("the notification failed: %v", err)
+	}
+	if mail.settledWith == nil || mail.settledWith.GetReason() == "" {
+		t.Fatalf("settled with %v, want skipped with a reason core-api will accept", mail.settledWith)
+	}
+}
+
+func TestASettledNotificationIsLeftAlone(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+
+	mail := &fakeDeliverer{plans: []*platformv1.PlanNotificationResponse{{Settled: true}}}
+	registerMail(env, &Activities{Mail: mail})
+
+	env.ExecuteWorkflow(DeliverNotificationWorkflow, "n1")
+
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("a settled notification failed the workflow: %v", err)
+	}
+	if len(mail.notified) != 0 || mail.settledWith != nil {
+		t.Fatal("a settled notification was sent or settled again")
+	}
+}
+
+// A refused send is retried by the policy, as for a message, and the
+// notification settles once it goes.
+func TestARefusedNotificationSendIsRetriedUntilItLeaves(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+
+	mail := &fakeDeliverer{
+		plans: []*platformv1.PlanNotificationResponse{{
+			Recipients: []*platformv1.PlannedRecipient{
+				planned("ada", platformv1.PlannedRecipient_DECISION_SEND, time.Time{}, ""),
+			},
+		}},
+		refuse:    connect.NewError(connect.CodeUnavailable, errors.New("451 try again later")),
+		refuseFor: 2,
+	}
+	registerMail(env, &Activities{Mail: mail})
+
+	env.ExecuteWorkflow(DeliverNotificationWorkflow, "n1")
+
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("the notification failed rather than retrying: %v", err)
+	}
+	if len(mail.notified) != 3 {
+		t.Fatalf("core-api was asked %d times, want 3 (two refusals, then success)", len(mail.notified))
+	}
+	if mail.settledWith == nil || mail.settledWith.GetOutcome() != platformv1.SettleNotificationRequest_OUTCOME_SENT {
+		t.Fatalf("settled with %v, want sent", mail.settledWith)
 	}
 }

@@ -144,25 +144,75 @@ type Recipient struct {
 	OrgName string
 }
 
-// ClaimDoorbell takes the oldest pending notification for delivery.
+// PendingDoorbellIDs lists up to `limit` pending notifications, oldest first,
+// by id alone (ENT-256, part three). Ids only, for the same reason as
+// PendingMessageIDs: the answer is written into a workflow history.
+func (a *AgentStore) PendingDoorbellIDs(ctx context.Context, limit int) ([]string, error) {
+	rows, err := a.pool.Query(ctx, `
+		select id::text
+		  from notification_outbox
+		 where status = 'pending'
+		 order by created_at
+		 limit $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: listing pending notifications: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("postgres: reading a pending notification id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: listing pending notifications: %w", err)
+	}
+	return ids, nil
+}
+
+// Doorbell reads one pending notification by id, without locking it.
 //
-// Same shape as the transactional outbox's drain and for the same reasons: the
-// row lock only exists inside a transaction, so the caller is handed a
-// transaction to work in rather than a row it thinks is reserved. See the
-// header on `Drain` in outbox.go.
+// For planning: the question is who should hear about it and when, which
+// changes nothing, so a lock would only make a concurrent send wait on a
+// read. Returns pgx.ErrNoRows when the row is not pending, which the caller
+// reads as "settled" rather than as a fault.
+func (a *AgentStore) Doorbell(ctx context.Context, id string) (Doorbell, error) {
+	var d Doorbell
+	err := a.pool.QueryRow(ctx, `
+		select id::text, org_id::text, finding_id::text, attempts
+		  from notification_outbox
+		 where id = $1::uuid and status = 'pending'
+	`, id).Scan(&d.ID, &d.OrgID, &d.FindingID, &d.Attempts)
+	if err != nil {
+		return Doorbell{}, err
+	}
+	return d, nil
+}
+
+// LockDoorbell takes one pending notification, by id, for the life of the
+// transaction.
 //
-// Returns pgx.ErrNoRows when the queue is empty, which the caller reads as
-// "nothing to do" rather than as a fault.
-func (a *AgentStore) ClaimDoorbell(ctx context.Context, tx pgx.Tx) (Doorbell, error) {
+// `for update` and not `skip locked`, for the reason postgres.DeliverMessage
+// gives: the only thing that can be holding this row is an earlier attempt
+// at this same notification (the engine runs one workflow per id), and a
+// retry should wait for that attempt to commit and then see what it did,
+// rather than report "nothing pending" while the mail is in flight.
+//
+// The row lock only exists inside a transaction, so the caller is handed a
+// transaction to work in rather than a row it thinks is reserved. Returns
+// pgx.ErrNoRows when the row is not pending.
+func (a *AgentStore) LockDoorbell(ctx context.Context, tx pgx.Tx, id string) (Doorbell, error) {
 	var d Doorbell
 	err := tx.QueryRow(ctx, `
 		select id::text, org_id::text, finding_id::text, attempts
 		  from notification_outbox
-		 where status = 'pending'
-		 order by created_at
-		 limit 1
-		 for update skip locked
-	`).Scan(&d.ID, &d.OrgID, &d.FindingID, &d.Attempts)
+		 where id = $1::uuid and status = 'pending'
+		 for update
+	`, id).Scan(&d.ID, &d.OrgID, &d.FindingID, &d.Attempts)
 	if err != nil {
 		return Doorbell{}, err
 	}

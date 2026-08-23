@@ -75,7 +75,8 @@ type Dependencies struct {
 	// Mail is the channel DeliveryService sends on. Nil is the supported state
 	// before KINDLAST_SMTP_ADDR is set: the rows queue, the list and the
 	// reclaim still answer, and a delivery is refused with a message naming
-	// the setting rather than the service being absent.
+	// the setting rather than the service being absent. Finding notifications
+	// also need AppBaseURL below, for the links they carry.
 	Mail delivery.Channel
 
 	// HumanClientID is the OAuth client whose tokens carry the human scope set
@@ -364,7 +365,7 @@ func New(deps Dependencies) (http.Handler, error) {
 	// debug.
 	if deps.Outbox != nil {
 		mux.Handle(platformv1connect.NewDeliveryServiceHandler(
-			deliveryservice.New(deps.Outbox, deps.Mail), internal))
+			deliveryservice.New(deps.Outbox, deps.Mail, deps.AppBaseURL), internal))
 	}
 
 	// Writing the corpus (ENT-207). On the same shorter chain, for the same

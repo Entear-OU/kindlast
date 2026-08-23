@@ -39,6 +39,15 @@ const (
 	// DeliveryServiceDeliverMessageProcedure is the fully-qualified name of the DeliveryService's
 	// DeliverMessage RPC.
 	DeliveryServiceDeliverMessageProcedure = "/kindlast.platform.v1.DeliveryService/DeliverMessage"
+	// DeliveryServicePlanNotificationProcedure is the fully-qualified name of the DeliveryService's
+	// PlanNotification RPC.
+	DeliveryServicePlanNotificationProcedure = "/kindlast.platform.v1.DeliveryService/PlanNotification"
+	// DeliveryServiceNotifyRecipientsProcedure is the fully-qualified name of the DeliveryService's
+	// NotifyRecipients RPC.
+	DeliveryServiceNotifyRecipientsProcedure = "/kindlast.platform.v1.DeliveryService/NotifyRecipients"
+	// DeliveryServiceSettleNotificationProcedure is the fully-qualified name of the DeliveryService's
+	// SettleNotification RPC.
+	DeliveryServiceSettleNotificationProcedure = "/kindlast.platform.v1.DeliveryService/SettleNotification"
 	// DeliveryServiceReclaimMessagesProcedure is the fully-qualified name of the DeliveryService's
 	// ReclaimMessages RPC.
 	DeliveryServiceReclaimMessagesProcedure = "/kindlast.platform.v1.DeliveryService/ReclaimMessages"
@@ -75,6 +84,47 @@ type DeliveryServiceClient interface {
 	//     it is the supported state a deployment is in before KINDLAST_SMTP_ADDR
 	//     is set, and the row is exactly as deliverable tomorrow as today.
 	DeliverMessage(context.Context, *connect.Request[v1.DeliverMessageRequest]) (*connect.Response[v1.DeliverMessageResponse], error)
+	// Works out who a finding notification goes to, and when.
+	//
+	// Read only, no lock, no side effect: it answers what the workflow should
+	// do next, as of now. For each candidate recipient one of three decisions,
+	// decided in Go from the raw preference fields (§14.5): SEND, they want it
+	// and nothing is in the way; HOLD, they want it and are inside their quiet
+	// hours, with the moment the window ends in their zone; SKIP, with the
+	// reason, because the finding is below their severity floor. A row that is
+	// no longer pending answers `settled` and the workflow stops.
+	//
+	// What crosses into the workflow history is a user id, a decision and a
+	// time. Not an address.
+	PlanNotification(context.Context, *connect.Request[v1.PlanNotificationRequest]) (*connect.Response[v1.PlanNotificationResponse], error)
+	// Sends one notification to the named recipients, now.
+	//
+	// One transaction on the agent pool, row locked `for update`, one
+	// unsubscribe token and (for a verified address) one approve link minted
+	// per person, one email per person, exactly as the in-process loop did
+	// (ENT-209, ENT-249). The row is NOT marked sent here: the workflow may
+	// still be holding other recipients, and "sent" is one fact about the
+	// whole notification, recorded by SettleNotification when nobody is left.
+	//
+	// A failed send is recorded on the row (attempts, the server's answer) and
+	// returned as `unavailable` for the retry policy, after which the whole
+	// batch is retried. That means a second attempt can re-send to somebody
+	// earlier in the batch who already received it, which is the same trade
+	// the loop made and the same direction: a duplicate doorbell is a
+	// nuisance, a finding nobody hears about is the failure this product
+	// exists to prevent. Recipients named here who are no longer members are
+	// left out rather than failing the call.
+	NotifyRecipients(context.Context, *connect.Request[v1.NotifyRecipientsRequest]) (*connect.Response[v1.NotifyRecipientsResponse], error)
+	// Marks a notification sent or skipped, once the workflow has nobody left
+	// to send to. Idempotent: a row already settled answers `settled: false`
+	// and changes nothing.
+	//
+	// `skipped` rather than `sent` when nobody wanted it, and the distinction
+	// is not cosmetic: `sent` means an email left the building, and recording
+	// a delivery no message supports would put a claim in the database that is
+	// not true. The reason is stored so an operator asking "why did nothing go
+	// out" gets an answer.
+	SettleNotification(context.Context, *connect.Request[v1.SettleNotificationRequest]) (*connect.Response[v1.SettleNotificationResponse], error)
 	// Clears the personal data out of messages that no longer need it
 	// (ENT-242, migration 00030): redacts delivered bodies once their window
 	// has passed, and gives up on undelivered messages whose invitation can no
@@ -110,6 +160,24 @@ func NewDeliveryServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(deliveryServiceMethods.ByName("DeliverMessage")),
 			connect.WithClientOptions(opts...),
 		),
+		planNotification: connect.NewClient[v1.PlanNotificationRequest, v1.PlanNotificationResponse](
+			httpClient,
+			baseURL+DeliveryServicePlanNotificationProcedure,
+			connect.WithSchema(deliveryServiceMethods.ByName("PlanNotification")),
+			connect.WithClientOptions(opts...),
+		),
+		notifyRecipients: connect.NewClient[v1.NotifyRecipientsRequest, v1.NotifyRecipientsResponse](
+			httpClient,
+			baseURL+DeliveryServiceNotifyRecipientsProcedure,
+			connect.WithSchema(deliveryServiceMethods.ByName("NotifyRecipients")),
+			connect.WithClientOptions(opts...),
+		),
+		settleNotification: connect.NewClient[v1.SettleNotificationRequest, v1.SettleNotificationResponse](
+			httpClient,
+			baseURL+DeliveryServiceSettleNotificationProcedure,
+			connect.WithSchema(deliveryServiceMethods.ByName("SettleNotification")),
+			connect.WithClientOptions(opts...),
+		),
 		reclaimMessages: connect.NewClient[v1.ReclaimMessagesRequest, v1.ReclaimMessagesResponse](
 			httpClient,
 			baseURL+DeliveryServiceReclaimMessagesProcedure,
@@ -121,9 +189,12 @@ func NewDeliveryServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 
 // deliveryServiceClient implements DeliveryServiceClient.
 type deliveryServiceClient struct {
-	listUndelivered *connect.Client[v1.ListUndeliveredRequest, v1.ListUndeliveredResponse]
-	deliverMessage  *connect.Client[v1.DeliverMessageRequest, v1.DeliverMessageResponse]
-	reclaimMessages *connect.Client[v1.ReclaimMessagesRequest, v1.ReclaimMessagesResponse]
+	listUndelivered    *connect.Client[v1.ListUndeliveredRequest, v1.ListUndeliveredResponse]
+	deliverMessage     *connect.Client[v1.DeliverMessageRequest, v1.DeliverMessageResponse]
+	planNotification   *connect.Client[v1.PlanNotificationRequest, v1.PlanNotificationResponse]
+	notifyRecipients   *connect.Client[v1.NotifyRecipientsRequest, v1.NotifyRecipientsResponse]
+	settleNotification *connect.Client[v1.SettleNotificationRequest, v1.SettleNotificationResponse]
+	reclaimMessages    *connect.Client[v1.ReclaimMessagesRequest, v1.ReclaimMessagesResponse]
 }
 
 // ListUndelivered calls kindlast.platform.v1.DeliveryService.ListUndelivered.
@@ -134,6 +205,21 @@ func (c *deliveryServiceClient) ListUndelivered(ctx context.Context, req *connec
 // DeliverMessage calls kindlast.platform.v1.DeliveryService.DeliverMessage.
 func (c *deliveryServiceClient) DeliverMessage(ctx context.Context, req *connect.Request[v1.DeliverMessageRequest]) (*connect.Response[v1.DeliverMessageResponse], error) {
 	return c.deliverMessage.CallUnary(ctx, req)
+}
+
+// PlanNotification calls kindlast.platform.v1.DeliveryService.PlanNotification.
+func (c *deliveryServiceClient) PlanNotification(ctx context.Context, req *connect.Request[v1.PlanNotificationRequest]) (*connect.Response[v1.PlanNotificationResponse], error) {
+	return c.planNotification.CallUnary(ctx, req)
+}
+
+// NotifyRecipients calls kindlast.platform.v1.DeliveryService.NotifyRecipients.
+func (c *deliveryServiceClient) NotifyRecipients(ctx context.Context, req *connect.Request[v1.NotifyRecipientsRequest]) (*connect.Response[v1.NotifyRecipientsResponse], error) {
+	return c.notifyRecipients.CallUnary(ctx, req)
+}
+
+// SettleNotification calls kindlast.platform.v1.DeliveryService.SettleNotification.
+func (c *deliveryServiceClient) SettleNotification(ctx context.Context, req *connect.Request[v1.SettleNotificationRequest]) (*connect.Response[v1.SettleNotificationResponse], error) {
+	return c.settleNotification.CallUnary(ctx, req)
 }
 
 // ReclaimMessages calls kindlast.platform.v1.DeliveryService.ReclaimMessages.
@@ -172,6 +258,47 @@ type DeliveryServiceHandler interface {
 	//     it is the supported state a deployment is in before KINDLAST_SMTP_ADDR
 	//     is set, and the row is exactly as deliverable tomorrow as today.
 	DeliverMessage(context.Context, *connect.Request[v1.DeliverMessageRequest]) (*connect.Response[v1.DeliverMessageResponse], error)
+	// Works out who a finding notification goes to, and when.
+	//
+	// Read only, no lock, no side effect: it answers what the workflow should
+	// do next, as of now. For each candidate recipient one of three decisions,
+	// decided in Go from the raw preference fields (§14.5): SEND, they want it
+	// and nothing is in the way; HOLD, they want it and are inside their quiet
+	// hours, with the moment the window ends in their zone; SKIP, with the
+	// reason, because the finding is below their severity floor. A row that is
+	// no longer pending answers `settled` and the workflow stops.
+	//
+	// What crosses into the workflow history is a user id, a decision and a
+	// time. Not an address.
+	PlanNotification(context.Context, *connect.Request[v1.PlanNotificationRequest]) (*connect.Response[v1.PlanNotificationResponse], error)
+	// Sends one notification to the named recipients, now.
+	//
+	// One transaction on the agent pool, row locked `for update`, one
+	// unsubscribe token and (for a verified address) one approve link minted
+	// per person, one email per person, exactly as the in-process loop did
+	// (ENT-209, ENT-249). The row is NOT marked sent here: the workflow may
+	// still be holding other recipients, and "sent" is one fact about the
+	// whole notification, recorded by SettleNotification when nobody is left.
+	//
+	// A failed send is recorded on the row (attempts, the server's answer) and
+	// returned as `unavailable` for the retry policy, after which the whole
+	// batch is retried. That means a second attempt can re-send to somebody
+	// earlier in the batch who already received it, which is the same trade
+	// the loop made and the same direction: a duplicate doorbell is a
+	// nuisance, a finding nobody hears about is the failure this product
+	// exists to prevent. Recipients named here who are no longer members are
+	// left out rather than failing the call.
+	NotifyRecipients(context.Context, *connect.Request[v1.NotifyRecipientsRequest]) (*connect.Response[v1.NotifyRecipientsResponse], error)
+	// Marks a notification sent or skipped, once the workflow has nobody left
+	// to send to. Idempotent: a row already settled answers `settled: false`
+	// and changes nothing.
+	//
+	// `skipped` rather than `sent` when nobody wanted it, and the distinction
+	// is not cosmetic: `sent` means an email left the building, and recording
+	// a delivery no message supports would put a claim in the database that is
+	// not true. The reason is stored so an operator asking "why did nothing go
+	// out" gets an answer.
+	SettleNotification(context.Context, *connect.Request[v1.SettleNotificationRequest]) (*connect.Response[v1.SettleNotificationResponse], error)
 	// Clears the personal data out of messages that no longer need it
 	// (ENT-242, migration 00030): redacts delivered bodies once their window
 	// has passed, and gives up on undelivered messages whose invitation can no
@@ -203,6 +330,24 @@ func NewDeliveryServiceHandler(svc DeliveryServiceHandler, opts ...connect.Handl
 		connect.WithSchema(deliveryServiceMethods.ByName("DeliverMessage")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deliveryServicePlanNotificationHandler := connect.NewUnaryHandler(
+		DeliveryServicePlanNotificationProcedure,
+		svc.PlanNotification,
+		connect.WithSchema(deliveryServiceMethods.ByName("PlanNotification")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deliveryServiceNotifyRecipientsHandler := connect.NewUnaryHandler(
+		DeliveryServiceNotifyRecipientsProcedure,
+		svc.NotifyRecipients,
+		connect.WithSchema(deliveryServiceMethods.ByName("NotifyRecipients")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deliveryServiceSettleNotificationHandler := connect.NewUnaryHandler(
+		DeliveryServiceSettleNotificationProcedure,
+		svc.SettleNotification,
+		connect.WithSchema(deliveryServiceMethods.ByName("SettleNotification")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deliveryServiceReclaimMessagesHandler := connect.NewUnaryHandler(
 		DeliveryServiceReclaimMessagesProcedure,
 		svc.ReclaimMessages,
@@ -215,6 +360,12 @@ func NewDeliveryServiceHandler(svc DeliveryServiceHandler, opts ...connect.Handl
 			deliveryServiceListUndeliveredHandler.ServeHTTP(w, r)
 		case DeliveryServiceDeliverMessageProcedure:
 			deliveryServiceDeliverMessageHandler.ServeHTTP(w, r)
+		case DeliveryServicePlanNotificationProcedure:
+			deliveryServicePlanNotificationHandler.ServeHTTP(w, r)
+		case DeliveryServiceNotifyRecipientsProcedure:
+			deliveryServiceNotifyRecipientsHandler.ServeHTTP(w, r)
+		case DeliveryServiceSettleNotificationProcedure:
+			deliveryServiceSettleNotificationHandler.ServeHTTP(w, r)
 		case DeliveryServiceReclaimMessagesProcedure:
 			deliveryServiceReclaimMessagesHandler.ServeHTTP(w, r)
 		default:
@@ -232,6 +383,18 @@ func (UnimplementedDeliveryServiceHandler) ListUndelivered(context.Context, *con
 
 func (UnimplementedDeliveryServiceHandler) DeliverMessage(context.Context, *connect.Request[v1.DeliverMessageRequest]) (*connect.Response[v1.DeliverMessageResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.DeliveryService.DeliverMessage is not implemented"))
+}
+
+func (UnimplementedDeliveryServiceHandler) PlanNotification(context.Context, *connect.Request[v1.PlanNotificationRequest]) (*connect.Response[v1.PlanNotificationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.DeliveryService.PlanNotification is not implemented"))
+}
+
+func (UnimplementedDeliveryServiceHandler) NotifyRecipients(context.Context, *connect.Request[v1.NotifyRecipientsRequest]) (*connect.Response[v1.NotifyRecipientsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.DeliveryService.NotifyRecipients is not implemented"))
+}
+
+func (UnimplementedDeliveryServiceHandler) SettleNotification(context.Context, *connect.Request[v1.SettleNotificationRequest]) (*connect.Response[v1.SettleNotificationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.DeliveryService.SettleNotification is not implemented"))
 }
 
 func (UnimplementedDeliveryServiceHandler) ReclaimMessages(context.Context, *connect.Request[v1.ReclaimMessagesRequest]) (*connect.Response[v1.ReclaimMessagesResponse], error) {

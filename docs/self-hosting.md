@@ -496,7 +496,7 @@ does nothing but fail.
 | Schedule id | When | What it does |
 |---|---|---|
 | `expire-snoozed-findings` | Hourly at ten past (`KINDLAST_SNOOZE_EXPIRY_SCHEDULE`) | Brings back every finding whose deferral has run out, in every organisation, so "defer for seven days" means seven days rather than until somebody remembers. One pass, idempotent, run as the producer role. |
-| `relay-transactional-outbox` | Every 15 seconds (`KINDLAST_OUTBOX_RELAY_INTERVAL`) | Asks core-api which invitation emails are waiting in its outbox and starts one `DeliverMessageWorkflow` per message. Each delivery is its own workflow, named `deliver-message/{row id}`, with a retry policy that backs off (ten seconds, doubling, capped at ten minutes) and no attempt limit: every attempt and what the mail server answered is in that workflow's history. A message that is not leaving is a running workflow in the UI with a reason. |
+| `relay-transactional-outbox` | Every 15 seconds (`KINDLAST_OUTBOX_RELAY_INTERVAL`) | Asks core-api what is waiting to leave and starts one workflow per row: `deliver-message/{row id}` for an invitation email, `deliver-notification/{row id}` for a finding notification. Each has a retry policy that backs off (ten seconds, doubling, capped at ten minutes) and no attempt limit: every attempt and what the mail server answered is in that workflow's history. A message that is not leaving is a running workflow in the UI with a reason. |
 | `reclaim-transactional-outbox` | Hourly at forty past (`KINDLAST_OUTBOX_RECLAIM_SCHEDULE`) | Clears the recipient's address and the rendered body out of delivered messages after seven days, and gives up on undelivered ones whose invitation can no longer be accepted. The rendered body of an invitation carries the raw token, so this is a credential-lifetime pass before it is a data-minimisation one. A message that can still be delivered is never touched. |
 
 Mail itself is sent by core-api, not by the worker: the worker asks core-api
@@ -504,15 +504,25 @@ to deliver a message by id, and core-api, which holds the SMTP channel, claims
 the row, sends and records the outcome in one transaction. So a workflow
 history carries row ids and counts, never an address, a subject or a body.
 Without `KINDLAST_SMTP_ADDR` on core-api the deliveries retry with a reason
-naming that setting, and drain on their own once it is set.
+naming that setting, and drain on their own once it is set. Finding
+notifications also need `KINDLAST_APP_BASE_URL` on core-api, for the link
+into the console every one of them carries; without it they wait the same
+way.
+
+**A finding notification is one workflow that may live for hours**, and that
+is the feature rather than a stuck run. The workflow asks core-api who should
+hear about the finding and when: somebody whose preferences say "not inside
+my quiet hours" is held on a durable timer until their window ends in their
+own time zone, and told then. Until this change such a notification was
+dropped with the reason on its row, because holding one needs a scheduler.
+So a `deliver-notification/...` workflow showing as running overnight is a
+person asleep, and its history says who was told, who is being held, and
+until when. Nobody's address appears in it.
 
 The rest arrives in the change that follows: the Watcher and Analyst chain,
 replacing the hand trigger that exists today. Until it lands, a sweep is still
 started by calling `SweepService.RunSweep` with a service credential, exactly
-as before; see the Postman collection for the request. Finding notifications
-(the "doorbell" emails) are still sent by a timer inside core-api and move to
-the engine in the same change, as one workflow per notification with quiet
-hours held rather than dropped.
+as before; see the Postman collection for the request.
 
 The worker that runs these is the `workers` container, the same binary as the
 integrations gateway, polling the `core` task queue. It registers its

@@ -23,7 +23,6 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/billing"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
-	"github.com/Entear-OU/kindlast/apps/core-api/internal/dispatch"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
 	modelchoicedomain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/gateway"
@@ -326,10 +325,9 @@ func run(logger *slog.Logger) error {
 			"policy", policy)
 	}
 
-	// The mail channel, built once and shared: DeliveryService sends on it
-	// when the Temporal worker asks, and the doorbell loop below sends on it
-	// on its own timer until that loop moves too. Nil without an SMTP
-	// address, which is a supported state rather than a broken one; see
+	// The mail channel, on which DeliveryService sends invitation mail and
+	// finding notifications when the Temporal worker asks. Nil without an
+	// SMTP address, which is a supported state rather than a broken one; see
 	// mailChannel.
 	mail := mailChannel(logger, cfg)
 
@@ -400,7 +398,10 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	startDoorbells(ctx, logger, cfg, outbox, mail)
+	if outbox != nil && mail != nil && cfg.AppBaseURL == "" {
+		logger.Warn("KINDLAST_APP_BASE_URL is not set, " +
+			"so finding notifications will queue and not be delivered: every one carries a link into the console")
+	}
 
 	httpServer := newHTTPServer(cfg.ListenAddr, handler)
 
@@ -436,6 +437,11 @@ func run(logger *slog.Logger) error {
 // every time, and a `failed_precondition` naming it again on every delivery the
 // Temporal worker attempts, so the workflow history says so too.
 //
+// Finding notifications (ENT-209) leave through the same channel and the same
+// service, and need one more thing: KINDLAST_APP_BASE_URL, for the link into
+// the console that every notification carries. Same treatment: a warning at
+// boot, a `failed_precondition` on each attempt, the rows wait.
+//
 // InviteMember still refuses without KINDLAST_APP_BASE_URL, and that asymmetry
 // is deliberate: an undelivered message is recoverable, an unbuildable link is
 // not.
@@ -452,44 +458,6 @@ func mailChannel(logger *slog.Logger, cfg *config.Config) delivery.Channel {
 		return nil
 	}
 	return channel
-}
-
-// startDoorbells runs the doorbell loop in the background, if this deployment
-// can deliver mail (ENT-209).
-//
-// The transactional outbox used to be drained by a second loop here, and is not
-// any more: a Temporal Schedule relays each pending row into its own workflow
-// and the worker calls DeliveryService, so the timer, the retry policy and the
-// record of attempts are the engine's (ENT-256, part three). This loop is the
-// one still ticking in-process, and it goes the same way in the change after
-// this one, as one workflow per notification with quiet hours held rather than
-// dropped.
-//
-// Skipped without a base URL, because every notification carries a link into
-// `/o/{slug}/` and an email whose only actionable content is broken is worse
-// than one that has not been sent.
-func startDoorbells(ctx context.Context, logger *slog.Logger, cfg *config.Config,
-	outbox *postgres.AgentStore, mail delivery.Channel,
-) {
-	if outbox == nil {
-		logger.Warn("no doorbell dispatcher: KINDLAST_AGENT_DATABASE_URL is not set, " +
-			"so finding notifications will queue and not be delivered")
-		return
-	}
-	if mail == nil {
-		// Already said at boot by mailChannel, for the transactional side;
-		// said again here because the two symptoms are different and somebody
-		// grepping for "notification" should find it.
-		logger.Warn("no doorbell dispatcher: no mail channel, " +
-			"so finding notifications will queue and not be delivered")
-		return
-	}
-	if cfg.AppBaseURL == "" {
-		logger.Warn("no doorbell dispatcher: KINDLAST_APP_BASE_URL is not set, " +
-			"so finding notifications will queue and not be delivered")
-		return
-	}
-	go dispatch.NewDoorbell(outbox, mail, logger, cfg.AppBaseURL, 0, 0).Run(ctx)
 }
 
 // newHTTPServer builds the listener, serving HTTP/1.1 and unencrypted HTTP/2 on
