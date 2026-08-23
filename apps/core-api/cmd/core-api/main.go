@@ -38,6 +38,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/narrative"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
+	watcherservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/watcher"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1/platformv1connect"
@@ -352,7 +353,9 @@ func run(logger *slog.Logger) error {
 		Outbox: outboxDependency(outbox),
 		// The Executor (ENT-271): the producer lists, the application
 		// executes as the approver. Same typed-nil guard as the rest.
-		ExecutorJobs:   executorJobsDependency(outbox),
+		ExecutorJobs: executorJobsDependency(outbox),
+		// The agentic Watcher's surface (ENT-258), on the producer pool.
+		Watcher:        watcherDependency(outbox),
 		Executions:     store,
 		Mail:           mail,
 		BillingEnabled: cfg.BillingEnabled,
@@ -599,6 +602,14 @@ func outboxDependency(store *postgres.AgentStore) deliveryservice.Outbox {
 
 // The same typed-nil guard, for the Executor's listing half (ENT-271).
 func executorJobsDependency(store *postgres.AgentStore) executorservice.Jobs {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+// The same typed-nil guard, for the Watcher's surface (ENT-258).
+func watcherDependency(store *postgres.AgentStore) watcherservice.Producer {
 	if store == nil {
 		return nil
 	}

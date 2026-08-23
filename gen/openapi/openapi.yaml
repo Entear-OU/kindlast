@@ -2714,6 +2714,40 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/signals:
+        post:
+            tags:
+                - WatcherService
+            description: |-
+                Raises one signal: something worth looking at, with what was seen and why
+                 it might matter.
+
+                 Idempotent on `(profile, dedup_key)` while a signal is open, which is the
+                 same key the deterministic detectors use and the same reason: a sweep that
+                 runs every day must not produce a new row every day for a condition that
+                 has not changed. A dismissed signal frees its key, so the next run raises
+                 it afresh, which is deliberate: somebody dismissing a signal is saying
+                 "not now", not "never tell me again".
+            operationId: WatcherService_RaiseSignal
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RaiseSignalRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RaiseSignalResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/snoozes:expire:
         post:
             tags:
@@ -2919,6 +2953,36 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/RunAnalystResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/watcher:context:
+        post:
+            tags:
+                - WatcherService
+            description: |-
+                Everything one Watcher run reasons over, for one organisation.
+
+                 No `Kindlast-Org-Id` header: the organisation is in the message, like
+                 every other RPC on this surface, and it is believed because
+                 `internal:ingest` never reaches a browser.
+            operationId: WatcherService_WatcherContext
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/WatcherContextRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WatcherContextResponse'
                 default:
                     description: Default error response
                     content:
@@ -3565,6 +3629,17 @@ components:
             properties:
                 integration:
                     $ref: '#/components/schemas/Integration'
+        ConnectionTool:
+            type: object
+            properties:
+                name:
+                    type: string
+                description:
+                    type: string
+                writeCapable:
+                    type: boolean
+                granted:
+                    type: boolean
         CorpusObligation:
             type: object
             properties:
@@ -5754,6 +5829,22 @@ components:
                         Which human said it. Onboarding is a person talking, and if two members of
                          one organisation both take part, each turn records who it was.
             description: One turn, as it is stored.
+        OpenSignal:
+            type: object
+            properties:
+                signalId:
+                    type: string
+                kind:
+                    type: string
+                dedupKey:
+                    type: string
+                title:
+                    type: string
+                severity:
+                    type: string
+                updatedAt:
+                    type: string
+                    format: date-time
         Paragraph:
             type: object
             properties:
@@ -5941,67 +6032,22 @@ components:
             type: object
             properties:
                 key:
-                    enum:
-                        - PROFILE_FACT_KEY_UNSPECIFIED
-                        - PROFILE_FACT_KEY_INDUSTRY
-                        - PROFILE_FACT_KEY_EU_JURISDICTIONS
-                        - PROFILE_FACT_KEY_DATA_CATEGORIES
-                        - PROFILE_FACT_KEY_DATA_SUBJECTS
-                        - PROFILE_FACT_KEY_AI_SYSTEMS
-                        - PROFILE_FACT_KEY_HAS_DPO
-                        - PROFILE_FACT_KEY_HAS_ROPA
-                        - PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU
-                        - PROFILE_FACT_KEY_TRANSFER_DESTINATIONS
-                        - PROFILE_FACT_KEY_STAFF_COUNT
-                        - PROFILE_FACT_KEY_HIGH_RISK_PROCESSING
-                        - PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM
-                        - PROFILE_FACT_KEY_LARGE_SCALE_MONITORING
-                        - PROFILE_FACT_KEY_LAWFUL_BASES
-                        - PROFILE_FACT_KEY_VENDOR_LIST
                     type: string
-                    format: enum
-                value:
-                    $ref: '#/components/schemas/FactValue'
+                valueJson:
+                    type: string
+                    description: |-
+                        The value as stored, JSON-encoded. A fact is `{"value": ...}` shaped
+                         rather than a string, because "four employees" and "unsure" are different
+                         kinds of answer and flattening them here would lose that.
                 source:
                     type: string
                     description: |-
-                        Where it came from: onboarding, an integration, a human, an agent, an
-                         import. Shown against each value rather than against the profile as a
-                         whole, because a profile where one field came from a connected tool and
-                         another from a guess in a form is the normal case.
-                evidenceId:
-                    type: string
-                    description: |-
-                        The observation behind it, when there was one. Empty for a fact a human
-                         simply stated, which is most of onboarding.
+                        `onboarding`, `correction` or `observation`: where the belief came from.
+                         An agent reasoning about a fact should be able to tell what a human said
+                         from what a machine saw.
                 validFrom:
                     type: string
-                    description: |-
-                        When we started believing it, and when we stopped. `valid_to` empty means
-                         this is what we believe now.
-                validTo:
-                    type: string
-                recordedBy:
-                    type: string
-                    description: |-
-                        Which human recorded it, when a human did. Records who acted; never used
-                         to decide what may be read.
-                note:
-                    type: string
-                    description: |-
-                        Why it was recorded, in the words of whoever recorded it.
-
-                         `CorrectFactRequest.note` has always accepted this and the column has
-                         always stored it, but no read returned it, so the sentence a person was
-                         asked for could not be read back by anybody without a database client.
-                         That is the wrong half of the contract to implement: the note is the only
-                         part of a correction that says WHY, and "we appointed a DPO in June" is
-                         exactly what makes a changed profile legible a year later, which is the
-                         reason CorrectFactRequest asks for it in the first place.
-
-                         Empty for most facts, and that is ordinary rather than missing: onboarding
-                         answers carry none, and the note is optional on a correction too.
-            description: One fact as it was believed over one interval.
+                    format: date-time
         Question:
             type: object
             properties:
@@ -6052,6 +6098,53 @@ components:
                     type: string
                     description: A sentence under the question, when one helps. Never a legal term.
             description: One question, as the person is asked it.
+        RaiseSignalRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                kind:
+                    type: string
+                    description: |-
+                        `deadline`, `profile_gap`, `dsar` or `regulatory_update`, matching the
+                         check constraint on `watcher_findings.kind`. A kind outside it is refused
+                         here rather than at the database, so the caller gets `invalid_argument`
+                         and the list of kinds rather than a constraint name.
+                dedupKey:
+                    type: string
+                    description: |-
+                        What makes this signal the same signal tomorrow. Required: without it a
+                         daily sweep produces a row a day for one unchanged condition.
+                title:
+                    type: string
+                detail:
+                    type: string
+                severity:
+                    type: string
+                    description: '`low`, `medium`, `high` or `critical`.'
+                obligationSlug:
+                    type: string
+                    description: |-
+                        The obligation this is about, when it is about one. An unknown slug is
+                         refused: a signal citing an obligation that does not exist is the same
+                         fabrication the citation validator refuses in a narrative, arriving by
+                         another door.
+                metadataJson:
+                    type: string
+                    description: |-
+                        What was seen, JSON-encoded, for the person reading the signal and for
+                         the Analyst that turns it into a finding.
+        RaiseSignalResponse:
+            type: object
+            properties:
+                signalId:
+                    type: string
+                raised:
+                    type: boolean
+                    description: |-
+                        False when this updated a signal that was already open rather than
+                         raising a new one, which is the ordinary case for a condition that has
+                         not gone away.
         Recital:
             type: object
             properties:
@@ -6811,6 +6904,73 @@ components:
                  existed a console could list an organisation's members and not work out which
                  row was the person reading the page, which is why an owner could not leave an
                  organisation the API was perfectly willing to let them leave.
+        WatchedConnection:
+            type: object
+            properties:
+                connectionId:
+                    type: string
+                kind:
+                    type: string
+                displayName:
+                    type: string
+                status:
+                    type: string
+                revoked:
+                    type: boolean
+                tools:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ConnectionTool'
+                    description: |-
+                        The tools this connection offers, and whether this organisation has
+                         granted each. A tool that is not granted is listed and not callable: the
+                         agent should be able to say "I could see more if you connected X" without
+                         being able to reach it.
+        WatcherContextRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+        WatcherContextResponse:
+            type: object
+            properties:
+                hasProfile:
+                    type: boolean
+                    description: |-
+                        False when the organisation has no compliance profile, which is every
+                         organisation that has not finished onboarding. There is nothing to watch
+                         and no profile to hang a signal on, so a run stops here rather than
+                         reasoning about an empty context.
+                facts:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ProfileFact'
+                    description: |-
+                        What the organisation is currently believed to be (ENT-228): the open
+                         facts, newest values only. History is a different question and this is
+                         not the surface for it.
+                connections:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/WatchedConnection'
+                    description: |-
+                        What it has connected, and what Kindlast may do there. Revoked
+                         connections are included and marked, because "we used to be able to read
+                         this" is part of deciding what has changed since the last look.
+                openSignals:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OpenSignal'
+                    description: |-
+                        The signals already open for this organisation. The agent is told what it
+                         has already said so that a run can decide something has changed rather
+                         than repeating itself, and so a reviewer can see it was told.
+                lastSweptAt:
+                    type: string
+                    description: |-
+                        When the deterministic sweep last ran for this organisation, or unset if
+                         it never has.
+                    format: date-time
 tags:
     - name: AuditService
       description: |-
@@ -7629,3 +7789,39 @@ tags:
          Analyst is the next step in the workflow, not a second schedule five minutes
          later hoping the first has finished. RunSweep with detect_only false still
          does both in one transaction, for an operator who wants one call.
+    - name: WatcherService
+      description: |-
+        What an agentic Watcher reads, and the one thing it may write (ENT-258).
+
+         # WHY THIS EXISTS AT ALL
+
+         The Watcher today is three plpgsql detectors over the compliance profile and
+         the DSAR table (00002, 00023). It cannot see anything a customer has
+         connected, and it decides nothing: it applies fixed rules. The agent version
+         decides what to look at, which means it needs two things this surface did
+         not have: a way to learn what an organisation has connected and is believed
+         to be, and a way to say "look at this" that is not a way to say "this is a
+         finding".
+
+         # INPUTS ARE FETCHED BY THE CALLER, WHICH IS §26.2 AND IS LOAD BEARING
+
+         WatcherContext returns everything one run reasons over, assembled by
+         core-api in one read. The agent does not go looking: it holds no database
+         handle, no tenancy GUC, and no way to decide which organisation's facts it
+         is entitled to. That is the same rule DraftNarrative follows for
+         obligations, and it is what keeps a run a pure function of its inputs and
+         therefore replayable as a Temporal activity.
+
+         It is also why this is not "let the machine call ListIntegrations": that RPC
+         is `integrations:read`, a human scope on the console surface, and issuing
+         human scopes to service principals is the separation ENT-207 built being
+         undone for convenience.
+
+         # THE WATCHER WRITES SIGNALS AND NOTHING ELSE
+
+         RaiseSignal writes a `watcher_findings` row, which is a claim that something
+         is worth looking at. It is NOT a finding: the Analyst still turns a signal
+         into a finding under the citation validator, and a human still decides. That
+         separation is the product's central claim, so the surface enforces it by not
+         having the other RPC: there is no way to write a finding here, on purpose,
+         and a Watcher that wanted to would have to be given a different service.

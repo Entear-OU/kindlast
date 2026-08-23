@@ -781,6 +781,46 @@
           }
         },
         {
+          "name": "Watcher context (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.WatcherService/WatcherContext",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.WatcherService", "WatcherContext"]
+            },
+            "description": "Everything one agentic Watcher run reasons over, for one organisation: the open profile facts (ENT-228), the connections it has and which of their tools are granted (ENT-231), the signals already open, and when the deterministic sweep last ran. **Served as of ENT-258.** Required scope: `internal:ingest`. No `Kindlast-Org-Id` header: the organisation is in the message like everything else on this surface.\\n\\n**Inputs are fetched by the caller, and that is load-bearing.** The agent holds no database handle, no tenancy GUC and no way to decide whose facts it is entitled to, so core-api assembles the context in one read and hands it over, exactly as it hands `DraftNarrative` the one obligation a narrative may cite. It is also why this is not \"let the machine call ListIntegrations\": that RPC is `integrations:read`, a human scope on the console surface, and issuing human scopes to service principals undoes the separation ENT-207 built.\\n\\n**No endpoint URL crosses.** The agent decides what to look at, not where to dial; a fetch goes through the gateway, which holds the egress allow-list and re-checks the policy it is sent. `hasProfile: false` means the organisation has not finished onboarding: there is nothing to watch and nowhere to hang a signal."
+          }
+        },
+        {
+          "name": "Raise signal (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"kind\": \"profile_gap\",\n  \"dedupKey\": \"gap:obligation:gdpr-art-30-ropa\",\n  \"title\": \"No record of processing activities\",\n  \"detail\": \"Nothing in the profile or the connected systems shows one.\",\n  \"severity\": \"critical\",\n  \"obligationSlug\": \"gdpr-art-30-ropa\",\n  \"metadataJson\": \"{\\\"missing\\\": [\\\"ropa\\\"]}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.WatcherService/RaiseSignal",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.WatcherService", "RaiseSignal"]
+            },
+            "description": "Raises one signal: something worth looking at, with what was seen and why it might matter. **Served as of ENT-258.** Required scope: `internal:ingest`.\\n\\n**A signal is not a finding, and this surface has no way to write one.** The Analyst turns a signal into a finding under the citation validator, and a human still decides. That separation is the product's central claim, so it is enforced by the absence of the other RPC rather than by a rule somebody has to remember.\\n\\nIdempotent on `(profile, dedupKey)` while a signal is open, through the same `emit_watcher_finding` the deterministic detectors use: a daily sweep must not raise a row a day for one unchanged condition, and `raised: false` says the signal was already open and has been updated in place. A dismissed signal frees its key, so the next run raises it afresh, which is deliberate: dismissing is \"not now\", not \"never again\".\\n\\nValidated before it reaches the database: `kind` must be one of `deadline`, `profile_gap`, `dsar`, `regulatory_update`; `severity` one of `low`, `medium`, `high`, `critical`; `dedupKey` and `title` are required; `metadataJson` must be JSON; and an `obligationSlug` the corpus does not have is refused, because a signal citing an invented obligation is the fabrication the citation validator refuses in a narrative arriving by another door."
+          }
+        },
+        {
           "name": "List pending executor jobs (internal)",
           "request": {
             "method": "POST",

@@ -12,6 +12,30 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
+### Added
+
+- **The machine surface an agentic Watcher needs: what it may read, and the
+  one thing it may write** (ENT-258, first of three). The Watcher today is
+  three fixed detectors over the compliance profile and the DSAR table; it
+  cannot see anything a customer has connected, and it decides nothing. The
+  agent version will, and this is the seam it needs: a new internal
+  `WatcherService` with `WatcherContext` (the organisation's open profile
+  facts, its connections and which of their tools are granted, the signals
+  already open, and when the sweep last ran, assembled by core-api in one
+  read) and `RaiseSignal`.
+
+  Two properties are worth an operator's attention. **A signal is not a
+  finding, and this surface cannot write one**: the Analyst still turns a
+  signal into a finding under the citation validator and a human still
+  decides, so the separation is enforced by the absence of the RPC rather
+  than by a rule. And **no endpoint URL reaches the agent**: it decides what
+  to look at, not where to dial, and a fetch still goes through the gateway
+  with its egress allow-list.
+
+  No new grant and no migration: the producer role could already read profile
+  facts, and read connections and their tools without credentials, and write
+  signals. Nothing calls these yet; the skill that will is the next change.
+
 ### Changed
 
 - **Approving a finding creates its record a moment later, through the

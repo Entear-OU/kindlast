@@ -1,0 +1,174 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "kindlast/options/v1/scope.proto";
+
+// What an agentic Watcher reads, and the one thing it may write (ENT-258).
+//
+// # WHY THIS EXISTS AT ALL
+//
+// The Watcher today is three plpgsql detectors over the compliance profile and
+// the DSAR table (00002, 00023). It cannot see anything a customer has
+// connected, and it decides nothing: it applies fixed rules. The agent version
+// decides what to look at, which means it needs two things this surface did
+// not have: a way to learn what an organisation has connected and is believed
+// to be, and a way to say "look at this" that is not a way to say "this is a
+// finding".
+//
+// # INPUTS ARE FETCHED BY THE CALLER, WHICH IS §26.2 AND IS LOAD BEARING
+//
+// WatcherContext returns everything one run reasons over, assembled by
+// core-api in one read. The agent does not go looking: it holds no database
+// handle, no tenancy GUC, and no way to decide which organisation's facts it
+// is entitled to. That is the same rule DraftNarrative follows for
+// obligations, and it is what keeps a run a pure function of its inputs and
+// therefore replayable as a Temporal activity.
+//
+// It is also why this is not "let the machine call ListIntegrations": that RPC
+// is `integrations:read`, a human scope on the console surface, and issuing
+// human scopes to service principals is the separation ENT-207 built being
+// undone for convenience.
+//
+// # THE WATCHER WRITES SIGNALS AND NOTHING ELSE
+//
+// RaiseSignal writes a `watcher_findings` row, which is a claim that something
+// is worth looking at. It is NOT a finding: the Analyst still turns a signal
+// into a finding under the citation validator, and a human still decides. That
+// separation is the product's central claim, so the surface enforces it by not
+// having the other RPC: there is no way to write a finding here, on purpose,
+// and a Watcher that wanted to would have to be given a different service.
+service WatcherService {
+  // Everything one Watcher run reasons over, for one organisation.
+  //
+  // No `Kindlast-Org-Id` header: the organisation is in the message, like
+  // every other RPC on this surface, and it is believed because
+  // `internal:ingest` never reaches a browser.
+  rpc WatcherContext(WatcherContextRequest) returns (WatcherContextResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/watcher:context"
+      body: "*"
+    };
+  }
+
+  // Raises one signal: something worth looking at, with what was seen and why
+  // it might matter.
+  //
+  // Idempotent on `(profile, dedup_key)` while a signal is open, which is the
+  // same key the deterministic detectors use and the same reason: a sweep that
+  // runs every day must not produce a new row every day for a condition that
+  // has not changed. A dismissed signal frees its key, so the next run raises
+  // it afresh, which is deliberate: somebody dismissing a signal is saying
+  // "not now", not "never tell me again".
+  rpc RaiseSignal(RaiseSignalRequest) returns (RaiseSignalResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/signals"
+      body: "*"
+    };
+  }
+}
+
+message WatcherContextRequest {
+  string org_id = 1;
+}
+
+message WatcherContextResponse {
+  // False when the organisation has no compliance profile, which is every
+  // organisation that has not finished onboarding. There is nothing to watch
+  // and no profile to hang a signal on, so a run stops here rather than
+  // reasoning about an empty context.
+  bool has_profile = 1;
+  // What the organisation is currently believed to be (ENT-228): the open
+  // facts, newest values only. History is a different question and this is
+  // not the surface for it.
+  repeated ProfileFact facts = 2;
+  // What it has connected, and what Kindlast may do there. Revoked
+  // connections are included and marked, because "we used to be able to read
+  // this" is part of deciding what has changed since the last look.
+  repeated WatchedConnection connections = 3;
+  // The signals already open for this organisation. The agent is told what it
+  // has already said so that a run can decide something has changed rather
+  // than repeating itself, and so a reviewer can see it was told.
+  repeated OpenSignal open_signals = 4;
+  // When the deterministic sweep last ran for this organisation, or unset if
+  // it never has.
+  google.protobuf.Timestamp last_swept_at = 5;
+}
+
+message ProfileFact {
+  string key = 1;
+  // The value as stored, JSON-encoded. A fact is `{"value": ...}` shaped
+  // rather than a string, because "four employees" and "unsure" are different
+  // kinds of answer and flattening them here would lose that.
+  string value_json = 2;
+  // `onboarding`, `correction` or `observation`: where the belief came from.
+  // An agent reasoning about a fact should be able to tell what a human said
+  // from what a machine saw.
+  string source = 3;
+  google.protobuf.Timestamp valid_from = 4;
+}
+
+message WatchedConnection {
+  string connection_id = 1;
+  string kind = 2;
+  string display_name = 3;
+  string status = 4;
+  bool revoked = 5;
+  // The tools this connection offers, and whether this organisation has
+  // granted each. A tool that is not granted is listed and not callable: the
+  // agent should be able to say "I could see more if you connected X" without
+  // being able to reach it.
+  repeated ConnectionTool tools = 6;
+}
+
+message ConnectionTool {
+  string name = 1;
+  string description = 2;
+  bool write_capable = 3;
+  bool granted = 4;
+}
+
+message OpenSignal {
+  string signal_id = 1;
+  string kind = 2;
+  string dedup_key = 3;
+  string title = 4;
+  string severity = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message RaiseSignalRequest {
+  string org_id = 1;
+  // `deadline`, `profile_gap`, `dsar` or `regulatory_update`, matching the
+  // check constraint on `watcher_findings.kind`. A kind outside it is refused
+  // here rather than at the database, so the caller gets `invalid_argument`
+  // and the list of kinds rather than a constraint name.
+  string kind = 2;
+  // What makes this signal the same signal tomorrow. Required: without it a
+  // daily sweep produces a row a day for one unchanged condition.
+  string dedup_key = 3;
+  string title = 4;
+  string detail = 5;
+  // `low`, `medium`, `high` or `critical`.
+  string severity = 6;
+  // The obligation this is about, when it is about one. An unknown slug is
+  // refused: a signal citing an obligation that does not exist is the same
+  // fabrication the citation validator refuses in a narrative, arriving by
+  // another door.
+  string obligation_slug = 7;
+  // What was seen, JSON-encoded, for the person reading the signal and for
+  // the Analyst that turns it into a finding.
+  string metadata_json = 8;
+}
+
+message RaiseSignalResponse {
+  string signal_id = 1;
+  // False when this updated a signal that was already open rather than
+  // raising a new one, which is the ordinary case for a condition that has
+  // not gone away.
+  bool raised = 2;
+}

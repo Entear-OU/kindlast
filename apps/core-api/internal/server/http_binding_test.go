@@ -516,6 +516,16 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.ExecutorService.ExecuteJob": {
 			Method: "POST", Path: "/internal/v1/executor-jobs:execute",
 		},
+		// The Watcher's own surface (ENT-258): what it reads, and the one
+		// thing it writes. `/signals` is a collection because raising one is
+		// creating a signal; the context is a custom action because it is a
+		// read assembled for one caller rather than a resource.
+		"kindlast.platform.v1.WatcherService.WatcherContext": {
+			Method: "POST", Path: "/internal/v1/watcher:context",
+		},
+		"kindlast.platform.v1.WatcherService.RaiseSignal": {
+			Method: "POST", Path: "/internal/v1/signals",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

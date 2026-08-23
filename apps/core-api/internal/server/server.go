@@ -29,6 +29,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/records"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
 	sweepservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/sweep"
+	watcherservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/watcher"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1/platformv1connect"
 )
@@ -80,6 +81,11 @@ type Dependencies struct {
 	// which goes with having no agent pool.
 	ExecutorJobs executorservice.Jobs
 	Executions   executorservice.Executions
+
+	// Watcher is what an agentic Watcher reads and writes (ENT-258), on the
+	// producer pool. Registered with Producer, because they are the same pool
+	// and the same supported absence.
+	Watcher watcherservice.Producer
 	// Mail is the channel DeliveryService sends on. Nil is the supported state
 	// before KINDLAST_SMTP_ADDR is set: the rows queue, the list and the
 	// reclaim still answer, and a delivery is refused with a message naming
@@ -377,6 +383,14 @@ func New(deps Dependencies) (http.Handler, error) {
 	// what is pending across every organisation, and the application creates
 	// the record as the approver named on the job row. Registered when both
 	// exist, which is every deployment with an agent pool.
+	// What an agentic Watcher reads and writes (ENT-258). Registered with the
+	// producer pool, like the sweep: a deployment with no agent pool serves
+	// neither, which is the same supported configuration.
+	if deps.Producer != nil {
+		mux.Handle(platformv1connect.NewWatcherServiceHandler(
+			watcherservice.New(deps.Watcher), internal))
+	}
+
 	if deps.ExecutorJobs != nil && deps.Executions != nil {
 		mux.Handle(platformv1connect.NewExecutorServiceHandler(
 			executorservice.New(deps.ExecutorJobs, deps.Executions), internal))
