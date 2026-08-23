@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,11 @@ import (
 // same GUC would be two places to get it wrong.
 type AgentStore struct {
 	pool *pgxpool.Pool
+	// logger carries the one thing a sweep has to be able to say out loud:
+	// that it skipped a signal citing an obligation the corpus does not have.
+	// The plpgsql said it with `raise log`, which goes to the Postgres log,
+	// where nobody operating this product is looking.
+	logger *slog.Logger
 }
 
 // NewAgent opens the producer pool.
@@ -41,7 +47,19 @@ func NewAgent(ctx context.Context, dsn string) (*AgentStore, error) {
 		pool.Close()
 		return nil, fmt.Errorf("postgres: pinging as the agent: %w", err)
 	}
-	return &AgentStore{pool: pool}, nil
+	return &AgentStore{pool: pool, logger: slog.Default()}, nil
+}
+
+// WithLogger returns the store logging to the given logger.
+//
+// Separate from NewAgent so the DSN stays the only thing a caller must supply,
+// and so a test can capture what a sweep decided to skip.
+func (a *AgentStore) WithLogger(logger *slog.Logger) *AgentStore {
+	if logger == nil {
+		return a
+	}
+	a.logger = logger
+	return a
 }
 
 func (a *AgentStore) Close() { a.pool.Close() }
@@ -81,17 +99,18 @@ func (a *AgentStore) RunSweep(ctx context.Context, orgID string, detectOnly bool
 
 	var result Sweep
 
-	// run_watcher() sweeps every profile the caller can see, which under the
-	// agent's policies is exactly the organisation the GUC names. The function
-	// needs no org parameter for the same reason the act functions need no
-	// actor parameter: the session already says.
-	if err := tx.QueryRow(ctx, `select public.run_watcher()`).Scan(&result.Signals); err != nil {
-		return Sweep{}, fmt.Errorf("postgres: running the watcher: %w", err)
+	// The detectors and the Analyst are Go as of ENT-259; see sweep.go. They
+	// need no organisation parameter for the same reason the plpgsql did not:
+	// the session already says, and the agent's policies are what make that
+	// true rather than a predicate anybody has to remember.
+	result.Signals, err = runWatcher(ctx, tx, a.logger)
+	if err != nil {
+		return Sweep{}, err
 	}
 
 	if !detectOnly {
-		if err := tx.QueryRow(ctx, `select public.run_analyst()`).Scan(&result.Findings); err != nil {
-			return Sweep{}, fmt.Errorf("postgres: running the analyst: %w", err)
+		if result.Findings, err = runAnalyst(ctx, tx, a.logger); err != nil {
+			return Sweep{}, err
 		}
 	}
 
