@@ -61,6 +61,11 @@ func migratorPool(t *testing.T) *pgxpool.Pool {
 // interrupted run would otherwise leave a personal organisation behind and
 // make every later run fail on an assertion about counts rather than the thing
 // it was testing.
+//
+// "Everything" now includes the audit rows their acts wrote, which it did not
+// have to until accepting an invitation started writing one (ENT-268). A
+// cleanup that covers a subset of what the test creates is the same defect as
+// no cleanup at all, only slower to show up.
 func cleanup(t *testing.T, subjects ...string) {
 	t.Helper()
 
@@ -72,6 +77,18 @@ func cleanup(t *testing.T, subjects ...string) {
 			t.Fatalf("deriving the user id: %v", err)
 		}
 		for _, statement := range []string{
+			// Audit rows first, because three of the tests below accept an
+			// invitation and COMMIT, and accepting one writes an audit row
+			// (ENT-268). Without this they accumulate in the shared fixture
+			// organisation on every run, which is the "leaked 42 fixture rows"
+			// failure this file's neighbours already warn about, and it is the
+			// leak that took `audit_test.go` red when the row was first written.
+			//
+			// `audit_log` forbids UPDATE by trigger and says nothing about
+			// DELETE, so the migrator can take a fixture row back out. The
+			// application role holds no delete grant on it, so the append-only
+			// property the product depends on is untouched by this.
+			`delete from audit_log where user_id = $1`,
 			`delete from memberships where org_id in (select id from organisations where personal_owner_id = $1)`,
 			`delete from organisations where personal_owner_id = $1`,
 			`delete from memberships where user_id = $1`,

@@ -32,6 +32,18 @@ func migratorDSNForChain() string {
 
 // forget removes a test subject's rows, as the migrator, so a run starts and
 // ends from nothing.
+//
+// The audit rows go too, which they did not have to until accepting an
+// invitation started writing one (ENT-268). Several tests here redeem an
+// invitation into the shared fixture organisation through the real handler,
+// which commits, and a helper that removes the membership but leaves the audit
+// row is a helper that does not do what its name says. `provision_test.go`'s
+// `cleanup` is this function's twin in the store package and carries the same
+// statement for the same reason.
+//
+// `audit_log` forbids UPDATE by trigger and says nothing about DELETE, so the
+// migrator can take a fixture row back out. The application role holds no
+// delete grant on it, so the append-only property is untouched.
 func forget(t *testing.T, issuer, claim string) {
 	t.Helper()
 
@@ -43,6 +55,7 @@ func forget(t *testing.T, issuer, claim string) {
 	pool := chainMigratorPool(t)
 
 	for _, statement := range []string{
+		`delete from audit_log where user_id = $1`,
 		`delete from memberships where org_id in (select id from organisations where personal_owner_id = $1)`,
 		`delete from organisations where personal_owner_id = $1`,
 		`delete from memberships where user_id = $1`,

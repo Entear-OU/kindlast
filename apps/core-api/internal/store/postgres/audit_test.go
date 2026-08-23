@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/audit"
@@ -72,11 +73,83 @@ func nullableJSON(s string) any {
 
 var auditBase = time.Date(2026, time.August, 1, 12, 0, 0, 0, time.UTC)
 
+// auditOrg gives one test an organisation of its own to write audit rows in.
+//
+// # WHY THESE TESTS CANNOT SHARE alphaOrg
+//
+// Every test in this file asserts "given exactly these rows, the read path does
+// X": the cursor visits six rows once each, the export returns all seventy, the
+// action-type list holds each value once. All of that is a statement about the
+// whole of one organisation's audit log, so it is only true while this test is
+// the only thing that has written to it.
+//
+// That used to hold by accident rather than by design. The rows each test seeds
+// live in a transaction it rolls back, so tests could not see each other's, and
+// nothing else in the package committed an audit row into `alphaOrg`. Both
+// halves were load-bearing and only the first was written down.
+//
+// ENT-268 removed the second half. Accepting an invitation now writes an audit
+// row, and `provision_test.go` has three tests that accept an invitation into
+// `alphaOrg` and COMMIT, because what they are testing is behaviour across
+// transactions. One committed row, and four tests here counted one too many.
+//
+// Bumping those four numbers would have been the wrong fix twice over: it would
+// encode however many acceptances the package happens to commit today, and it
+// would re-break the next time somebody audits a new action. The five tests
+// that still passed were passing by luck, because they filter by action type or
+// date range and `accept_invitation` did not match. So the fix is to give these
+// tests the exclusive log they were always assuming, rather than to teach them
+// which neighbours to expect.
+//
+// The organisation is created and dropped as the migrator, outside the tenant
+// transaction, because `BeginTenant` verifies membership before the transaction
+// is usable. Ada stays the actor: her having no `user_identities` row is the
+// subject of one of the tests below, and only the tenancy scope moves.
+func auditOrg(t *testing.T) string {
+	t.Helper()
+
+	id := uuid.NewString()
+	pool := migratorPool(t)
+	ctx := context.Background()
+
+	name := "Audit Read Path " + id[:8]
+	if _, err := pool.Exec(ctx, `
+		insert into organisations (id, name, slug) values ($1, $2, org_slug($2))
+	`, id, name); err != nil {
+		t.Fatalf("creating the audit fixture organisation: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		insert into memberships (org_id, user_id, role) values ($1, $2, 'owner')
+	`, id, adaUser); err != nil {
+		t.Fatalf("seeding the audit fixture membership: %v", err)
+	}
+
+	t.Cleanup(func() {
+		// audit_log first: it forbids UPDATE by trigger and says nothing about
+		// DELETE, so the migrator can take fixture rows back out. Rows only
+		// reach it here if a test committed, which none currently do, and
+		// clearing it anyway is what stops this fixture becoming the next
+		// accidental assumption.
+		for _, statement := range []string{
+			`delete from audit_log where org_id = $1`,
+			`delete from memberships where org_id = $1`,
+			`delete from organisations where id = $1`,
+		} {
+			if _, err := pool.Exec(context.Background(), statement, id); err != nil {
+				t.Fatalf("cleaning up the audit fixture: %v", err)
+			}
+		}
+	})
+
+	return id
+}
+
 func TestTheAuditLogPagesNewestFirstAndTheCursorVisitsEveryRowOnce(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
@@ -88,7 +161,7 @@ func TestTheAuditLogPagesNewestFirstAndTheCursorVisitsEveryRowOnce(t *testing.T)
 	// `id` as a tie-break the planner picks their relative order, and a keyset
 	// cursor can then skip a row or return one forever.
 	shared := auditBase.Add(time.Hour)
-	seedAuditRows(t, tenant.Tx(), ctx, alphaOrg, adaUser, "owner", []auditFixture{
+	seedAuditRows(t, tenant.Tx(), ctx, org, adaUser, "owner", []auditFixture{
 		{action: "approve_finding", target: "findings", at: shared},
 		{action: "create_ropa", target: "processing_activities", at: shared},
 		{action: "approve_finding", target: "findings", at: shared},
@@ -138,15 +211,16 @@ func TestTheAuditLogPagesNewestFirstAndTheCursorVisitsEveryRowOnce(t *testing.T)
 func TestTheUpperBoundIsExclusiveSoConsecutiveRangesDoNotOverlap(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
 	defer tenant.Rollback(ctx)
 
 	boundary := auditBase.Add(time.Hour)
-	seedAuditRows(t, tenant.Tx(), ctx, alphaOrg, adaUser, "owner", []auditFixture{
+	seedAuditRows(t, tenant.Tx(), ctx, org, adaUser, "owner", []auditFixture{
 		{action: "reject_finding", target: "findings", at: auditBase},
 		{action: "approve_finding", target: "findings", at: boundary},
 		{action: "snooze_finding", target: "findings", at: boundary.Add(time.Hour)},
@@ -184,14 +258,15 @@ func TestTheUpperBoundIsExclusiveSoConsecutiveRangesDoNotOverlap(t *testing.T) {
 func TestFreeTextSearchesForWhatWasTypedRatherThanAsAPattern(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
 	defer tenant.Rollback(ctx)
 
-	seedAuditRows(t, tenant.Tx(), ctx, alphaOrg, adaUser, "owner", []auditFixture{
+	seedAuditRows(t, tenant.Tx(), ctx, org, adaUser, "owner", []auditFixture{
 		{action: "approve_finding", target: "findings", at: auditBase},
 		{action: "create_ropa", target: "processing_activities", at: auditBase},
 	})
@@ -230,8 +305,9 @@ func TestFreeTextSearchesForWhatWasTypedRatherThanAsAPattern(t *testing.T) {
 func TestFreeTextDoesNotSearchThePayloads(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
@@ -241,7 +317,7 @@ func TestFreeTextDoesNotSearchThePayloads(t *testing.T) {
 	// DSAR includes a data subject's name. Searching across them would make the
 	// audit log a search engine over the personal data it exists to account for,
 	// which is the wrong direction for a GDPR product to point its own tooling.
-	seedAuditRows(t, tenant.Tx(), ctx, alphaOrg, adaUser, "owner", []auditFixture{
+	seedAuditRows(t, tenant.Tx(), ctx, org, adaUser, "owner", []auditFixture{
 		{
 			action: "log_dsar", target: "dsars", at: auditBase,
 			after: `{"subject_name":"Wilhelmina Nightingale"}`,
@@ -270,14 +346,15 @@ func TestFreeTextDoesNotSearchThePayloads(t *testing.T) {
 func TestTheActionTypeFilterTakesSeveralValues(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
 	defer tenant.Rollback(ctx)
 
-	seedAuditRows(t, tenant.Tx(), ctx, alphaOrg, adaUser, "owner", []auditFixture{
+	seedAuditRows(t, tenant.Tx(), ctx, org, adaUser, "owner", []auditFixture{
 		{action: "approve_finding", target: "findings", at: auditBase},
 		{action: "reject_finding", target: "findings", at: auditBase},
 		{action: "snooze_finding", target: "findings", at: auditBase},
@@ -306,14 +383,15 @@ func TestTheActionTypeFilterTakesSeveralValues(t *testing.T) {
 func TestAnEntryKeepsItsActorEvenWithNoIdentityRecord(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
 	defer tenant.Rollback(ctx)
 
-	seedAuditRows(t, tenant.Tx(), ctx, alphaOrg, adaUser, "owner", []auditFixture{
+	seedAuditRows(t, tenant.Tx(), ctx, org, adaUser, "owner", []auditFixture{
 		{action: "approve_finding", target: "findings", at: auditBase},
 	})
 
@@ -344,8 +422,9 @@ func TestAnEntryKeepsItsActorEvenWithNoIdentityRecord(t *testing.T) {
 func TestTheExportIsNotPagedAndReportsWhetherItWasCut(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
@@ -363,7 +442,7 @@ func TestTheExportIsNotPagedAndReportsWhetherItWasCut(t *testing.T) {
 			at:     auditBase.Add(time.Duration(i) * time.Minute),
 		})
 	}
-	seedAuditRows(t, tenant.Tx(), ctx, alphaOrg, adaUser, "owner", rows)
+	seedAuditRows(t, tenant.Tx(), ctx, org, adaUser, "owner", rows)
 
 	entries, truncated, err := tenant.AuditEntriesForExport(ctx, audit.Filter{})
 	if err != nil {
@@ -382,14 +461,15 @@ func TestTheExportIsNotPagedAndReportsWhetherItWasCut(t *testing.T) {
 func TestTheActionTypeListOffersOnlyValuesThatExist(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
 	defer tenant.Rollback(ctx)
 
-	seedAuditRows(t, tenant.Tx(), ctx, alphaOrg, adaUser, "owner", []auditFixture{
+	seedAuditRows(t, tenant.Tx(), ctx, org, adaUser, "owner", []auditFixture{
 		{action: "approve_finding", target: "findings", at: auditBase},
 		{action: "approve_finding", target: "findings", at: auditBase},
 		{action: "create_ropa", target: "processing_activities", at: auditBase},
@@ -418,8 +498,9 @@ func TestTheActionTypeListOffersOnlyValuesThatExist(t *testing.T) {
 func TestAPageTokenFromTheFeedIsRefusedRatherThanMisread(t *testing.T) {
 	store := testStore(t)
 	ctx := t.Context()
+	org := auditOrg(t)
 
-	tenant, err := store.BeginTenant(ctx, adaUser, alphaOrg)
+	tenant, err := store.BeginTenant(ctx, adaUser, org)
 	if err != nil {
 		t.Fatalf("Ada's transaction: %v", err)
 	}
