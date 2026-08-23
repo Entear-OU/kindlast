@@ -180,6 +180,7 @@ export default async function FindingPage({
           slug={slug}
           findingId={finding.findingId}
           status={finding.status}
+          actionType={finding.actionType}
           actions={{ approve, reject, snooze }}
         />
       </div>
