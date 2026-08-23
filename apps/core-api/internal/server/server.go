@@ -388,7 +388,7 @@ func New(deps Dependencies) (http.Handler, error) {
 	// neither, which is the same supported configuration.
 	if deps.Producer != nil {
 		mux.Handle(platformv1connect.NewWatcherServiceHandler(
-			watcherservice.New(deps.Watcher), internal))
+			watcherservice.New(deps.Watcher, watcherRouterOrNil(deps.ModelRouter)), internal))
 	}
 
 	if deps.ExecutorJobs != nil && deps.Executions != nil {
@@ -615,6 +615,18 @@ func New(deps Dependencies) (http.Handler, error) {
 // routerOrNil keeps a nil *Resolver out of a non-nil interface: the same
 // typed-nil trap main guards every optional dependency against.
 func routerOrNil(r *modelroute.Resolver) narrativeservice.Router {
+	if r == nil {
+		return nil
+	}
+	return r
+}
+
+// watcherRouterOrNil is routerOrNil for the Watcher's context surface, and it
+// exists for the same reason: a nil `*modelroute.Resolver` assigned to an
+// interface is not a nil interface, so a service checking `models == nil`
+// would call a method on a nil pointer. One helper per interface rather than
+// generics, because the trap is easier to see written out than parameterised.
+func watcherRouterOrNil(r *modelroute.Resolver) watcherservice.ModelRoute {
 	if r == nil {
 		return nil
 	}

@@ -20,6 +20,9 @@ class IntelligenceService(Protocol):
     async def draft_narrative(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def watch(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class IntelligenceServiceASGIApplication(ConnectASGIApplication[IntelligenceService]):
     def __init__(self, service: IntelligenceService | AsyncGenerator[IntelligenceService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -35,6 +38,16 @@ class IntelligenceServiceASGIApplication(ConnectASGIApplication[IntelligenceServ
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.draft_narrative,
+                ),
+                "/kindlast.platform.v1.IntelligenceService/Watch": Endpoint.unary(
+                    method=MethodInfo(
+                        name="Watch",
+                        service_name="kindlast.platform.v1.IntelligenceService",
+                        input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.watch,
                 ),
             },
             interceptors=interceptors,
@@ -69,9 +82,31 @@ class IntelligenceServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def watch(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="Watch",
+                service_name="kindlast.platform.v1.IntelligenceService",
+                input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest,
+                output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class IntelligenceServiceSync(Protocol):
     def draft_narrative(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def watch(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -88,6 +123,16 @@ class IntelligenceServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.draft_narrative,
+                ),
+                "/kindlast.platform.v1.IntelligenceService/Watch": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="Watch",
+                        service_name="kindlast.platform.v1.IntelligenceService",
+                        input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.watch,
                 ),
             },
             interceptors=interceptors,
@@ -116,6 +161,26 @@ class IntelligenceServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.IntelligenceService",
                 input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeRequest,
                 output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def watch(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="Watch",
+                service_name="kindlast.platform.v1.IntelligenceService",
+                input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest,
+                output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

@@ -36,6 +36,33 @@ what they have to do about it, which no commit subject knows.
   facts, and read connections and their tools without credentials, and write
   signals. Nothing calls these yet; the skill that will is the next change.
 
+- **The Watcher becomes an agent, and it is off unless you turn it on**
+  (ENT-258, second of three). A skill that decides: given one organisation's
+  facts, its connections and what has already been raised, it chooses what is
+  worth telling somebody about and raises it, one step at a time, with the
+  result of each raise feeding the next decision. It is the first skill with a
+  tool, and its allow-list holds exactly one: `RaiseSignal`. There is no tool
+  that writes a finding anywhere on the surface, so the separation between
+  "worth looking at" and "cites the law, and a human decides" is held by the
+  absence of the call rather than by a rule in a prompt.
+
+  **`KINDLAST_WATCHER_AGENT=1` on the workers process turns it on, and nothing
+  else changes if you do not.** The three deterministic detectors are what runs
+  today and they stay: ENT-258 makes them the baseline the agent is compared
+  against, and that comparison is the next change and the one that moves this
+  default. A deployment with the flag off runs exactly the sweep it ran before,
+  and pays nothing: not an activity, not a call.
+
+  Two things worth knowing if you do turn it on. A watch is several model calls
+  rather than one, so it is slower than a narrative draft and its activity
+  timeout is longer; on a local model, expect a sweep to take minutes per
+  organisation. And a signal it raises becomes a finding in the same sweep,
+  because the step runs between the detectors and the Analyst.
+
+  No migration and no new grant. The Python service gains one call it may make,
+  through an RPC that validates the vocabulary, requires a deduplication key
+  and resolves the citation before anything is written.
+
 ### Changed
 
 - **Approving a finding creates its record a moment later, through the

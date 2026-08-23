@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -145,18 +147,38 @@ type SweepResult struct {
 	RanAt    time.Time
 	// Narration is the third step, after the findings exist (part five).
 	Narration NarrationResult
+	// Watch is what the agentic Watcher did, when an operator has turned it
+	// on (ENT-258). Zero-valued and `Ran: false` otherwise, which is every
+	// deployment today.
+	Watch WatchResult
 }
 
 // sweepOrganisation runs the Watcher, then the Analyst, for one organisation:
 // the chain itself, shared by the triggered and the daily workflows.
 func sweepOrganisation(ctx workflow.Context, orgID string) (SweepResult, error) {
-	ctx = sweepOptions(ctx)
+	sweepCtx := sweepOptions(ctx)
 	var watched SweepResult
-	if err := workflow.ExecuteActivity(ctx, RunWatcherActivityName, orgID).Get(ctx, &watched); err != nil {
+	if err := workflow.ExecuteActivity(sweepCtx, RunWatcherActivityName, orgID).Get(ctx, &watched); err != nil {
 		return SweepResult{}, err
 	}
+
+	// THE AGENT BETWEEN THE TWO, WHEN IT IS ON (ENT-258).
+	//
+	// After the detectors so it is shown what they already raised, which is
+	// most of what stops it repeating them. Before the Analyst so a signal it
+	// raises becomes a finding in this sweep rather than tomorrow's.
+	//
+	// Read from the workflow's own configuration rather than an env lookup
+	// here: a workflow that read the environment would decide differently on
+	// replay after an operator changed it, which is the determinism rule
+	// Temporal enforces by refusing to replay.
+	var agentic WatchResult
+	if agenticWatcherEnabled(ctx) {
+		agentic = watchOrganisation(ctx, orgID)
+	}
+
 	var analysed SweepResult
-	if err := workflow.ExecuteActivity(ctx, RunAnalystActivityName, orgID).Get(ctx, &analysed); err != nil {
+	if err := workflow.ExecuteActivity(sweepCtx, RunAnalystActivityName, orgID).Get(ctx, &analysed); err != nil {
 		return SweepResult{}, err
 	}
 	return SweepResult{
@@ -164,7 +186,41 @@ func sweepOrganisation(ctx workflow.Context, orgID string) (SweepResult, error) 
 		Signals:  watched.Signals,
 		Findings: analysed.Findings,
 		RanAt:    analysed.RanAt,
+		Watch:    agentic,
 	}, nil
+}
+
+// agenticWatcherEnabled reports whether this deployment runs the agentic
+// Watcher as part of a sweep.
+//
+// # WHY A SIDE EFFECT AND NOT os.Getenv
+//
+// A workflow must produce the same decisions when it is replayed, and an
+// environment read is not a decision Temporal recorded: an operator who turns
+// the flag on between a run and its replay would make the replay take a
+// different path, and the SDK fails the workflow with a non-determinism error
+// rather than silently diverging. `workflow.SideEffect` records the value in
+// the history the first time and hands back the recorded one ever after, which
+// is exactly the property wanted here.
+func agenticWatcherEnabled(ctx workflow.Context) bool {
+	var enabled bool
+	if err := workflow.SideEffect(ctx, func(workflow.Context) any {
+		return truthy(os.Getenv("KINDLAST_WATCHER_AGENT"))
+	}).Get(&enabled); err != nil {
+		return false
+	}
+	return enabled
+}
+
+// truthy is the workers module's reading of a boolean environment variable,
+// matching internal/config so an operator does not have to learn two.
+func truthy(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 // TriggeredSweepWorkflow sweeps one organisation because somebody asked

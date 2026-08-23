@@ -113,16 +113,33 @@ export const AGENTS: readonly Agent[] = [
     name: 'The Watcher',
     does: 'Reads your profile against the obligations that apply to you.',
     status: 'partly-working',
-    // `SweepService.RunSweep` is the only thing that starts it. The pg_cron
-    // schedules went with Supabase in ENT-200 and the schedules return with
-    // Temporal at build-order step 8.
-    runs: 'When a sweep is triggered for your organisation. Nothing triggers one on a schedule yet.',
+    runs: 'When a sweep is triggered for your organisation, and once a day for every organisation.',
     effects:
       'Writes evidence and signals. It never changes a record and never sends anything.',
-    // ENT-231 gives it the integrations gateway, which is the point at which
-    // deciding what to look at becomes a decision rather than a fixed query.
+    // STILL `partly-working`, AND THE SKILL BELOW IS WHY THAT IS NOT A
+    // CONTRADICTION (ENT-258, PR 2).
+    //
+    // The skill exists, and a deployment that sets KINDLAST_WATCHER_AGENT runs
+    // it. What has not happened is the comparison: nobody has yet shown that
+    // the agent finds at least what the three fixed detectors find, and until
+    // somebody has, saying "Working" here would be the console making a claim
+    // ahead of the evidence. That comparison is the next change and it is what
+    // moves this to `working`.
     remaining:
-      'It follows fixed rules today rather than a skill, so it has no tool list and leaves no run record you can read.',
+      'The skill exists and is off by default. It becomes the Watcher for everyone once it has been shown to find at least what the fixed rules find.',
+    skill: {
+      module: 'watcher',
+      name: 'watcher.sweep',
+      version: '1.0.0',
+      // ONE TOOL, AND THE PAGE SHOWS IT FOR THE REASON THE LIST EXISTS.
+      //
+      // A reader looking at "what can this thing do to my data" gets the whole
+      // answer: it can raise a signal, and there is nothing here that writes a
+      // finding, changes a record or sends anything. That is the separation
+      // the product rests on, and showing the list is how a customer checks it
+      // rather than taking our word for it.
+      tools: ['raise_signal'],
+    },
   },
   {
     slug: 'analyst',

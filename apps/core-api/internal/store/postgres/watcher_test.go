@@ -298,3 +298,69 @@ func TestASignalCitingARealObligationKeepsTheCitation(t *testing.T) {
 		t.Fatalf("stored %q, want %q", stored, slug)
 	}
 }
+
+// THE OBLIGATIONS A RUN IS OFFERED ARE THE ONES THE SWEEP WOULD RAISE AGAINST
+// (ENT-258, PR 2).
+//
+// The agent may cite only what it was shown, so what it is shown decides what
+// it can say. Two properties are worth asserting rather than assuming.
+//
+// It is not the whole corpus. An organisation is offered the obligations whose
+// applicability conditions hold for its own profile, so a signal citing
+// something that does not apply to this organisation is impossible before any
+// model is involved.
+//
+// And it is the SAME set the deterministic detectors work from, because both
+// call `watcher_obligation_applies`. Two evaluators of "does this obligation
+// bind this organisation" in one product is the arrangement ENT-246 was filed
+// about, and an agent disagreeing with the sweep running beside it would be
+// unexplainable to anybody reading the feed.
+func TestTheObligationsOfferedAreTheOnesThatApplyToThisOrganisation(t *testing.T) {
+	agent := agentStore(t)
+	org, profile := seedWatcherOrg(t)
+
+	context, err := agent.WatcherContextFor(t.Context(), org.String())
+	if err != nil {
+		t.Fatalf("assembling the context: %v", err)
+	}
+	if len(context.Obligations) == 0 {
+		t.Fatal("no obligations offered, so this run could cite nothing at all")
+	}
+
+	// Every slug offered is one the corpus holds and one the shared evaluator
+	// agrees applies to this profile. Asked of the database rather than
+	// recomputed here, because a second implementation of the test is a second
+	// thing that can be wrong in the same direction as the code.
+	pool := migratorPool(t)
+	for _, offered := range context.Obligations {
+		var applies bool
+		if err := pool.QueryRow(t.Context(), `
+			select public.watcher_obligation_applies(o.applies_when, p)
+			  from obligations o, compliance_profiles p
+			 where o.slug = $1 and p.id = $2::uuid
+		`, offered.Slug, profile).Scan(&applies); err != nil {
+			t.Fatalf("checking %q: %v", offered.Slug, err)
+		}
+		if !applies {
+			t.Errorf("%q was offered and does not apply to this organisation", offered.Slug)
+		}
+		if offered.Title == "" || offered.Summary == "" {
+			t.Errorf("%q was offered with nothing for a model to read", offered.Slug)
+		}
+	}
+
+	// And nothing that applies was withheld: an obligation the sweep will
+	// raise a finding against, that the agent was never shown, is one it
+	// cannot mention and would be refused for citing.
+	var applicable int
+	if err := pool.QueryRow(t.Context(), `
+		select count(*)
+		  from obligations o, compliance_profiles p
+		 where p.id = $1::uuid and public.watcher_obligation_applies(o.applies_when, p)
+	`, profile).Scan(&applicable); err != nil {
+		t.Fatalf("counting what applies: %v", err)
+	}
+	if len(context.Obligations) != applicable {
+		t.Fatalf("offered %d obligations and %d apply", len(context.Obligations), applicable)
+	}
+}

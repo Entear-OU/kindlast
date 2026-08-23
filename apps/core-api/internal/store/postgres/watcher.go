@@ -39,6 +39,16 @@ type WatcherContext struct {
 	Connections []WatchedConnection
 	OpenSignals []OpenSignal
 	LastSweptAt *time.Time
+	// Obligations is what a signal from this context may cite, and the only
+	// thing it may cite. See WatchedObligation.
+	Obligations []WatchedObligation
+}
+
+// WatchedObligation is one obligation the organisation may be cited against.
+type WatchedObligation struct {
+	Slug    string
+	Title   string
+	Summary string
 }
 
 // WatchedFact is one open belief about the organisation.
@@ -128,7 +138,59 @@ func (a *AgentStore) WatcherContextFor(ctx context.Context, orgID string) (Watch
 	if context.OpenSignals, err = openSignals(ctx, tx, context.ProfileID); err != nil {
 		return WatcherContext{}, err
 	}
+	if context.Obligations, err = watchedObligations(ctx, tx, context.ProfileID); err != nil {
+		return WatcherContext{}, err
+	}
 	return context, nil
+}
+
+// watchedObligations reads what this organisation may be cited against.
+//
+// # THE SAME EVALUATOR THE DETERMINISTIC DETECTORS USE, DELIBERATELY
+//
+// `watcher_obligation_applies` is 00023's function, and calling it here rather
+// than reimplementing the test is the whole point. Two evaluators of "does this
+// obligation bind this organisation" in one product is the arrangement ENT-246
+// was filed about, and an agent offered a differently computed set would
+// disagree with the sweep running beside it in ways nobody could explain.
+//
+// When ENT-225 moves that function into Go, this query loses its function call
+// and gains a caller-side filter over the same declaration. It should keep
+// returning the same set, and the test above it is what says so.
+//
+// # WHY THE PROFILE ROW AND NOT THE ORGANISATION
+//
+// The function takes a `compliance_profiles` row because applicability is
+// evaluated against what the organisation SAID, which is the profile. Passing
+// the newest profile is what `run_watcher()` does, so an organisation that
+// onboarded twice is offered obligations against the same answers it is swept
+// against.
+//
+// The corpus is not tenant data: `obligations` has no `org_id` and no RLS
+// predicate to satisfy, which is why this needs no organisation in its
+// predicate while every other read in this file does.
+func watchedObligations(ctx context.Context, tx pgx.Tx, profileID string) ([]WatchedObligation, error) {
+	rows, err := tx.Query(ctx, `
+		select o.slug, o.title, o.summary
+		  from obligations o, compliance_profiles p
+		 where p.id = $1::uuid
+		   and public.watcher_obligation_applies(o.applies_when, p)
+		 order by o.slug
+	`, profileID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: reading the obligations to offer: %w", err)
+	}
+	defer rows.Close()
+
+	var offered []WatchedObligation
+	for rows.Next() {
+		var o WatchedObligation
+		if err := rows.Scan(&o.Slug, &o.Title, &o.Summary); err != nil {
+			return nil, fmt.Errorf("postgres: scanning an offered obligation: %w", err)
+		}
+		offered = append(offered, o)
+	}
+	return offered, rows.Err()
 }
 
 // watchedFacts reads what the organisation is currently believed to be.

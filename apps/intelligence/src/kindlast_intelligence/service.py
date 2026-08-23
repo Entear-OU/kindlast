@@ -29,7 +29,7 @@ from typing import Callable
 from connectrpc.errors import ConnectError
 from connectrpc.code import Code
 from connectrpc.request import RequestContext
-from kindlast.platform.v1 import intelligence_pb2
+from kindlast.platform.v1 import intelligence_pb2, watcher_pb2
 
 from .auth.errors import ScopeMissing, VerificationError
 from .auth.verifier import Verifier
@@ -38,6 +38,7 @@ from .harness.budget import Budget
 from .harness.citations import CitationValidator, OfferedObligations
 from .harness.model import Completer
 from .harness.run import Outcome, draft_narrative
+from .harness.watch import watch
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,15 @@ _OUTCOMES = {
     Outcome.SUCCEEDED: intelligence_pb2.DRAFT_OUTCOME_SUCCEEDED,
     Outcome.REFUSED: intelligence_pb2.DRAFT_OUTCOME_REFUSED,
     Outcome.FAILED: intelligence_pb2.DRAFT_OUTCOME_FAILED,
+}
+
+# The same three outcomes on the watch surface. Two maps rather than one shared
+# enum because they are two proto enums, and mapping each explicitly is what
+# stops a value being added to one and silently defaulting on the other.
+_WATCH_OUTCOMES = {
+    Outcome.SUCCEEDED: intelligence_pb2.WATCH_OUTCOME_SUCCEEDED,
+    Outcome.REFUSED: intelligence_pb2.WATCH_OUTCOME_REFUSED,
+    Outcome.FAILED: intelligence_pb2.WATCH_OUTCOME_FAILED,
 }
 
 
@@ -170,6 +180,95 @@ class IntelligenceService:
                     slug=r["slug"], reason=r["reason"]
                 )
                 for r in run.rejected_citations
+            ],
+            agent_run_id=agent_run_id,
+        )
+
+    def watch(
+        self,
+        request: intelligence_pb2.WatchRequest,
+        ctx: RequestContext,
+    ) -> intelligence_pb2.WatchResponse:
+        """The RPC: authorise, then watch. The Temporal activity calls
+        `run_watch` directly, for the reason `draft_narrative` gives."""
+        self._authorise(ctx)
+        return self.run_watch(request)
+
+    def run_watch(
+        self, request: intelligence_pb2.WatchRequest
+    ) -> intelligence_pb2.WatchResponse:
+        """One watch: the step loop, the allow-list, the citation check against
+        what this run was offered, and the run record.
+
+        # A CONTEXT WITH NO PROFILE IS REFUSED, NOT ATTEMPTED
+
+        `has_profile` false means an organisation part way through onboarding:
+        there is nothing to watch and nowhere to hang a signal. Running the
+        model against an empty context would produce either nothing, which
+        costs a model call to learn, or something invented, which is worse. The
+        useful answer to "why did the Watcher say nothing" is that there was
+        nothing to look at.
+        """
+        if not request.org_id:
+            raise ConnectError(Code.INVALID_ARGUMENT, "org_id is required")
+        if not request.HasField("context"):
+            raise ConnectError(Code.INVALID_ARGUMENT, "context is required")
+        if not request.context.has_profile:
+            raise ConnectError(
+                Code.INVALID_ARGUMENT,
+                "this organisation has no compliance profile, so there is "
+                "nothing to watch and nowhere to hang a signal",
+            )
+
+        context = _watch_context(request.context)
+        model, model_name, model_version, provider = self._model_for(
+            request.org_id, request.model_endpoint
+        )
+
+        run, raised = watch(
+            context=context,
+            model=model,
+            # THE TOOL IS BOUND TO THIS ORGANISATION HERE, WHERE THE ID CAME
+            # FROM. The skill names a tool and its arguments; it never names
+            # the tenant, and there is no argument it could pass that would
+            # change which one is written to.
+            write_signal=lambda signal: self._core_api.raise_signal(
+                request.org_id, signal
+            ),
+            validator=CitationValidator(OfferedObligations(context["obligations"])),
+            model_name=model_name,
+            model_version=model_version,
+            provider=provider,
+            budget=self._budget_template.renew() if self._budget_template else None,
+        )
+
+        # Recorded before the response is built, and a failure here is fatal,
+        # for the reason `draft` gives at length. It is sharper here: this run
+        # has already written signals, so a caller told they exist with no
+        # provenance behind them is exactly the unprovenanced record this
+        # service exists not to produce.
+        try:
+            agent_run_id = self._core_api.record_run(request.org_id, run)
+        except CoreAPIError as exc:
+            logger.error("recording the watch run failed: %s", exc)
+            raise ConnectError(
+                Code.INTERNAL,
+                "the run completed but could not be recorded, so it is being "
+                "reported as failed rather than returned unprovenanced",
+            ) from exc
+
+        return intelligence_pb2.WatchResponse(
+            outcome=_WATCH_OUTCOMES[run.outcome],
+            outcome_detail=run.outcome_detail,
+            signals=[
+                intelligence_pb2.RaisedSignal(
+                    signal_id=s.signal_id,
+                    dedup_key=s.dedup_key,
+                    title=s.title,
+                    severity=s.severity,
+                    raised=s.raised,
+                )
+                for s in raised
             ],
             agent_run_id=agent_run_id,
         )
@@ -379,4 +478,63 @@ def config_from_env() -> dict[str, str]:
         # no model: every completion goes through core-api's
         # CompletionService, and the deployment's own model URL is core-api's
         # setting. test_no_third_party_credential.py asserts the absence.
+    }
+
+
+def _watch_context(context: watcher_pb2.WatcherContextResponse) -> dict:
+    """The proto context as the skill reads it.
+
+    Converted once, here, so the skill and its tests deal in plain data. A skill
+    that imported a generated module would need `gen/python` on the path to be
+    testable, which is the trap `harness/model.py` already fell into once: the
+    evals gate runs without it and a module-level import of a generated type
+    took the whole gate down with a ModuleNotFoundError.
+    """
+    return {
+        "last_swept_at": (
+            context.last_swept_at.ToDatetime().isoformat()
+            if context.HasField("last_swept_at")
+            else ""
+        ),
+        "facts": [
+            {
+                "key": f.key,
+                "value_json": f.value_json,
+                "source": f.source,
+            }
+            for f in context.facts
+        ],
+        "connections": [
+            {
+                "connection_id": c.connection_id,
+                "kind": c.kind,
+                "display_name": c.display_name,
+                "status": c.status,
+                "revoked": c.revoked,
+                "tools": [
+                    {
+                        "name": t.name,
+                        "description": t.description,
+                        "write_capable": t.write_capable,
+                        "granted": t.granted,
+                    }
+                    for t in c.tools
+                ],
+            }
+            for c in context.connections
+        ],
+        "open_signals": [
+            {
+                "signal_id": s.signal_id,
+                "kind": s.kind,
+                "dedup_key": s.dedup_key,
+                "title": s.title,
+                "severity": s.severity,
+            }
+            for s in context.open_signals
+        ],
+        "obligations": [
+            {"slug": o.slug, "title": o.title, "summary": o.summary}
+            for o in context.obligations
+        ],
     }

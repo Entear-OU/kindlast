@@ -38,7 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from connectrpc.code import Code
 from connectrpc.errors import ConnectError
-from kindlast.platform.v1 import intelligence_pb2
+from kindlast.platform.v1 import intelligence_pb2, watcher_pb2
 from temporalio import activity
 from temporalio.client import Client
 from temporalio.exceptions import ApplicationError
@@ -53,6 +53,7 @@ logger = logging.getLogger("kindlast.intelligence.worker")
 # agree, which the end-to-end run is what proves.
 TASK_QUEUE = "intelligence"
 ACTIVITY_NAME = "DraftNarrative"
+WATCH_ACTIVITY_NAME = "Watch"
 
 
 def make_activity(service: IntelligenceService):
@@ -76,6 +77,24 @@ def make_activity(service: IntelligenceService):
             raise ApplicationError(str(exc), type=exc.code.name) from exc
 
     return draft_narrative
+
+
+def make_watch_activity(service: IntelligenceService):
+    """The Watcher activity, closed over the service that watches."""
+
+    @activity.defn(name=WATCH_ACTIVITY_NAME)
+    def watch(request: intelligence_pb2.WatchRequest) -> intelligence_pb2.WatchResponse:
+        try:
+            return service.run_watch(request)
+        except ConnectError as exc:
+            if exc.code == Code.INVALID_ARGUMENT:
+                # A malformed request, or an organisation with no profile.
+                # Neither changes by waiting: retrying produces the same
+                # refusal, so the workflow records it and moves on.
+                raise ApplicationError(str(exc), type="bad-request", non_retryable=True) from exc
+            raise ApplicationError(str(exc), type=exc.code.name) from exc
+
+    return watch
 
 
 async def run_worker(
@@ -102,7 +121,7 @@ async def run_worker(
     worker = Worker(
         client,
         task_queue=TASK_QUEUE,
-        activities=[make_activity(service)],
+        activities=[make_activity(service), make_watch_activity(service)],
         activity_executor=ThreadPoolExecutor(max_workers=concurrency),
         max_concurrent_activities=concurrency,
     )

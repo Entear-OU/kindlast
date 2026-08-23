@@ -89,7 +89,65 @@ type WatcherContextResponse struct {
 	OpenSignals []*OpenSignal `protobuf:"bytes,4,rep,name=open_signals,json=openSignals,proto3" json:"open_signals,omitempty"`
 	// When the deterministic sweep last ran for this organisation, or unset if
 	// it never has.
-	LastSweptAt   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_swept_at,json=lastSweptAt,proto3" json:"last_swept_at,omitempty"`
+	LastSweptAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_swept_at,json=lastSweptAt,proto3" json:"last_swept_at,omitempty"`
+	// The obligations this organisation may be cited against, and the ONLY ones
+	// a signal from this context may cite (ENT-258, PR 2).
+	//
+	// # OFFERED, NOT LOOKED UP, FOR THE REASON THE ANALYST'S ARE
+	//
+	// `intelligence.proto` argues it at length and it holds identically here: a
+	// citation is checked against what the run was SHOWN rather than against the
+	// corpus, because a slug that genuinely exists and was never offered is
+	// still a fabrication. The model produced it from somewhere other than its
+	// context, which is exactly the failure the check exists to catch, and
+	// asking the corpus "does this exist" would wave it through.
+	//
+	// # AND EVALUATED ONCE, BY THE EVALUATOR THAT ALREADY EXISTS
+	//
+	// Which obligations apply is `watcher_obligation_applies` over the
+	// organisation's profile: the same function the deterministic detectors
+	// use. Offering the agent a differently computed set would put two
+	// evaluators of one question in one product, which is the arrangement
+	// ENT-246 was filed about.
+	Obligations []*CitableObligation `protobuf:"bytes,6,rep,name=obligations,proto3" json:"obligations,omitempty"`
+	// Which model would serve a run over this context, and whether there is one
+	// (ENT-258, PR 2).
+	//
+	// # THE LOAD STEP RESOLVES IT, FOR THE REASON THE NARRATE PATH DOES
+	//
+	// `NextFindingToNarrate` returns a draft request with the endpoint already
+	// resolved, because deciding which model serves an organisation means
+	// reading that organisation's own rows and opening a sealed credential, and
+	// core-api is the only process that may do either. The same is true here, so
+	// the same shape: the context a run is given includes what will serve it.
+	//
+	// Names only. Where the call goes and what authenticates it stay core-api's,
+	// and every completion is asked for through CompletionService.
+	//
+	// `intelligence_available` is false for a deployment that runs no
+	// Intelligence at all, which is a supported configuration: nothing is
+	// attempted and nothing is wrong. A deployment that runs it and whose
+	// organisation has chosen a provider that cannot be honoured is a different
+	// case and is `failed_precondition`, because that one somebody has to fix.
+	IntelligenceAvailable bool `protobuf:"varint,7,opt,name=intelligence_available,json=intelligenceAvailable,proto3" json:"intelligence_available,omitempty"`
+	// The provider and model that would serve a run, by name.
+	//
+	// TWO SCALARS RATHER THAN THE `ModelEndpoint` MESSAGE, and the reason is
+	// structural rather than stylistic. That message lives in
+	// `intelligence.proto`, which imports THIS file for `WatcherContextResponse`,
+	// so naming it here would be an import cycle protobuf will not compile.
+	//
+	// Moving it to a shared file was tried and rejected: `buf breaking` is right
+	// that a message leaving a file changes the generated Python import path for
+	// anybody consuming this contract, and `docs/versioning.md` makes the proto
+	// surface public. A three-field message is not worth breaking it for.
+	//
+	// Nothing is lost. `ModelEndpoint`'s only live fields are these two; its
+	// `base_url` and `api_key` were deprecated when completions moved behind
+	// CompletionService, and a request setting either is refused. The caller
+	// builds the message from these when it hands a run over.
+	ModelProvider string `protobuf:"bytes,8,opt,name=model_provider,json=modelProvider,proto3" json:"model_provider,omitempty"`
+	ModelName     string `protobuf:"bytes,9,opt,name=model_name,json=modelName,proto3" json:"model_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -157,6 +215,34 @@ func (x *WatcherContextResponse) GetLastSweptAt() *timestamppb.Timestamp {
 		return x.LastSweptAt
 	}
 	return nil
+}
+
+func (x *WatcherContextResponse) GetObligations() []*CitableObligation {
+	if x != nil {
+		return x.Obligations
+	}
+	return nil
+}
+
+func (x *WatcherContextResponse) GetIntelligenceAvailable() bool {
+	if x != nil {
+		return x.IntelligenceAvailable
+	}
+	return false
+}
+
+func (x *WatcherContextResponse) GetModelProvider() string {
+	if x != nil {
+		return x.ModelProvider
+	}
+	return ""
+}
+
+func (x *WatcherContextResponse) GetModelName() string {
+	if x != nil {
+		return x.ModelName
+	}
+	return ""
 }
 
 type ProfileFact struct {
@@ -641,20 +727,104 @@ func (x *RaiseSignalResponse) GetRaised() bool {
 	return false
 }
 
+// CitableObligation is one obligation a signal from this context may cite.
+//
+// # WHY THIS IS NOT `ObligationContext`, WHICH IS ALMOST THE SAME SHAPE
+//
+// Not only to avoid the import cycle, though it does. The two carry different
+// claims, and the difference is the fourth field.
+//
+// `ObligationContext` has `applies_because`: why the Watcher raised this, in
+// plain words, so the Analyst does not have to invent grounds it was never
+// given (ENT-248). Handing the same field to the WATCHER would be incoherent,
+// because the Watcher is the thing that decides the grounds. A message that
+// carries a field its recipient is supposed to produce is a message inviting
+// it to agree with itself.
+//
+// So: the same three fields a model needs to cite something, and deliberately
+// not the fourth.
+type CitableObligation struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Slug  string                 `protobuf:"bytes,1,opt,name=slug,proto3" json:"slug,omitempty"`
+	Title string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	// The statement of the law, which a person wrote. Never the Official Journal
+	// wording: the corpus stores none, and a citation resolves to the publisher
+	// rather than to our copy.
+	Summary       string `protobuf:"bytes,3,opt,name=summary,proto3" json:"summary,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CitableObligation) Reset() {
+	*x = CitableObligation{}
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CitableObligation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CitableObligation) ProtoMessage() {}
+
+func (x *CitableObligation) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CitableObligation.ProtoReflect.Descriptor instead.
+func (*CitableObligation) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *CitableObligation) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *CitableObligation) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *CitableObligation) GetSummary() string {
+	if x != nil {
+		return x.Summary
+	}
+	return ""
+}
+
 var File_kindlast_platform_v1_watcher_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_watcher_proto_rawDesc = "" +
 	"\n" +
 	"\"kindlast/platform/v1/watcher.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\".\n" +
 	"\x15WatcherContextRequest\x12\x15\n" +
-	"\x06org_id\x18\x01 \x01(\tR\x05orgId\"\xc2\x02\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\"\x8a\x04\n" +
 	"\x16WatcherContextResponse\x12\x1f\n" +
 	"\vhas_profile\x18\x01 \x01(\bR\n" +
 	"hasProfile\x127\n" +
 	"\x05facts\x18\x02 \x03(\v2!.kindlast.platform.v1.ProfileFactR\x05facts\x12I\n" +
 	"\vconnections\x18\x03 \x03(\v2'.kindlast.platform.v1.WatchedConnectionR\vconnections\x12C\n" +
 	"\fopen_signals\x18\x04 \x03(\v2 .kindlast.platform.v1.OpenSignalR\vopenSignals\x12>\n" +
-	"\rlast_swept_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vlastSweptAt\"\x91\x01\n" +
+	"\rlast_swept_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vlastSweptAt\x12I\n" +
+	"\vobligations\x18\x06 \x03(\v2'.kindlast.platform.v1.CitableObligationR\vobligations\x125\n" +
+	"\x16intelligence_available\x18\a \x01(\bR\x15intelligenceAvailable\x12%\n" +
+	"\x0emodel_provider\x18\b \x01(\tR\rmodelProvider\x12\x1d\n" +
+	"\n" +
+	"model_name\x18\t \x01(\tR\tmodelName\"\x91\x01\n" +
 	"\vProfileFact\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1d\n" +
 	"\n" +
@@ -694,7 +864,11 @@ const file_kindlast_platform_v1_watcher_proto_rawDesc = "" +
 	"\rmetadata_json\x18\b \x01(\tR\fmetadataJson\"J\n" +
 	"\x13RaiseSignalResponse\x12\x1b\n" +
 	"\tsignal_id\x18\x01 \x01(\tR\bsignalId\x12\x16\n" +
-	"\x06raised\x18\x02 \x01(\bR\x06raised2\xd3\x02\n" +
+	"\x06raised\x18\x02 \x01(\bR\x06raised\"W\n" +
+	"\x11CitableObligation\x12\x12\n" +
+	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
+	"\asummary\x18\x03 \x01(\tR\asummary2\xd3\x02\n" +
 	"\x0eWatcherService\x12\xa7\x01\n" +
 	"\x0eWatcherContext\x12+.kindlast.platform.v1.WatcherContextRequest\x1a,.kindlast.platform.v1.WatcherContextResponse\":\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/internal/v1/watcher:context\x12\x96\x01\n" +
 	"\vRaiseSignal\x12(.kindlast.platform.v1.RaiseSignalRequest\x1a).kindlast.platform.v1.RaiseSignalResponse\"2\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/internal/v1/signalsB\xe0\x01\n" +
@@ -712,7 +886,7 @@ func file_kindlast_platform_v1_watcher_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_watcher_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_watcher_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_kindlast_platform_v1_watcher_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_kindlast_platform_v1_watcher_proto_goTypes = []any{
 	(*WatcherContextRequest)(nil),  // 0: kindlast.platform.v1.WatcherContextRequest
 	(*WatcherContextResponse)(nil), // 1: kindlast.platform.v1.WatcherContextResponse
@@ -722,25 +896,27 @@ var file_kindlast_platform_v1_watcher_proto_goTypes = []any{
 	(*OpenSignal)(nil),             // 5: kindlast.platform.v1.OpenSignal
 	(*RaiseSignalRequest)(nil),     // 6: kindlast.platform.v1.RaiseSignalRequest
 	(*RaiseSignalResponse)(nil),    // 7: kindlast.platform.v1.RaiseSignalResponse
-	(*timestamppb.Timestamp)(nil),  // 8: google.protobuf.Timestamp
+	(*CitableObligation)(nil),      // 8: kindlast.platform.v1.CitableObligation
+	(*timestamppb.Timestamp)(nil),  // 9: google.protobuf.Timestamp
 }
 var file_kindlast_platform_v1_watcher_proto_depIdxs = []int32{
-	2, // 0: kindlast.platform.v1.WatcherContextResponse.facts:type_name -> kindlast.platform.v1.ProfileFact
-	3, // 1: kindlast.platform.v1.WatcherContextResponse.connections:type_name -> kindlast.platform.v1.WatchedConnection
-	5, // 2: kindlast.platform.v1.WatcherContextResponse.open_signals:type_name -> kindlast.platform.v1.OpenSignal
-	8, // 3: kindlast.platform.v1.WatcherContextResponse.last_swept_at:type_name -> google.protobuf.Timestamp
-	8, // 4: kindlast.platform.v1.ProfileFact.valid_from:type_name -> google.protobuf.Timestamp
-	4, // 5: kindlast.platform.v1.WatchedConnection.tools:type_name -> kindlast.platform.v1.ConnectionTool
-	8, // 6: kindlast.platform.v1.OpenSignal.updated_at:type_name -> google.protobuf.Timestamp
-	0, // 7: kindlast.platform.v1.WatcherService.WatcherContext:input_type -> kindlast.platform.v1.WatcherContextRequest
-	6, // 8: kindlast.platform.v1.WatcherService.RaiseSignal:input_type -> kindlast.platform.v1.RaiseSignalRequest
-	1, // 9: kindlast.platform.v1.WatcherService.WatcherContext:output_type -> kindlast.platform.v1.WatcherContextResponse
-	7, // 10: kindlast.platform.v1.WatcherService.RaiseSignal:output_type -> kindlast.platform.v1.RaiseSignalResponse
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	2,  // 0: kindlast.platform.v1.WatcherContextResponse.facts:type_name -> kindlast.platform.v1.ProfileFact
+	3,  // 1: kindlast.platform.v1.WatcherContextResponse.connections:type_name -> kindlast.platform.v1.WatchedConnection
+	5,  // 2: kindlast.platform.v1.WatcherContextResponse.open_signals:type_name -> kindlast.platform.v1.OpenSignal
+	9,  // 3: kindlast.platform.v1.WatcherContextResponse.last_swept_at:type_name -> google.protobuf.Timestamp
+	8,  // 4: kindlast.platform.v1.WatcherContextResponse.obligations:type_name -> kindlast.platform.v1.CitableObligation
+	9,  // 5: kindlast.platform.v1.ProfileFact.valid_from:type_name -> google.protobuf.Timestamp
+	4,  // 6: kindlast.platform.v1.WatchedConnection.tools:type_name -> kindlast.platform.v1.ConnectionTool
+	9,  // 7: kindlast.platform.v1.OpenSignal.updated_at:type_name -> google.protobuf.Timestamp
+	0,  // 8: kindlast.platform.v1.WatcherService.WatcherContext:input_type -> kindlast.platform.v1.WatcherContextRequest
+	6,  // 9: kindlast.platform.v1.WatcherService.RaiseSignal:input_type -> kindlast.platform.v1.RaiseSignalRequest
+	1,  // 10: kindlast.platform.v1.WatcherService.WatcherContext:output_type -> kindlast.platform.v1.WatcherContextResponse
+	7,  // 11: kindlast.platform.v1.WatcherService.RaiseSignal:output_type -> kindlast.platform.v1.RaiseSignalResponse
+	10, // [10:12] is the sub-list for method output_type
+	8,  // [8:10] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_watcher_proto_init() }
@@ -754,7 +930,7 @@ func file_kindlast_platform_v1_watcher_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_watcher_proto_rawDesc), len(file_kindlast_platform_v1_watcher_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -77,6 +77,61 @@ func (DraftOutcome) EnumDescriptor() ([]byte, []int) {
 	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{0}
 }
 
+type WatchOutcome int32
+
+const (
+	WatchOutcome_WATCH_OUTCOME_UNSPECIFIED WatchOutcome = 0
+	WatchOutcome_WATCH_OUTCOME_SUCCEEDED   WatchOutcome = 1
+	// A guardrail stopped it: a budget spent, a tool outside the allow-list, a
+	// citation that did not resolve. Not a kind of failure.
+	WatchOutcome_WATCH_OUTCOME_REFUSED WatchOutcome = 2
+	// Something went wrong that was nobody's policy.
+	WatchOutcome_WATCH_OUTCOME_FAILED WatchOutcome = 3
+)
+
+// Enum value maps for WatchOutcome.
+var (
+	WatchOutcome_name = map[int32]string{
+		0: "WATCH_OUTCOME_UNSPECIFIED",
+		1: "WATCH_OUTCOME_SUCCEEDED",
+		2: "WATCH_OUTCOME_REFUSED",
+		3: "WATCH_OUTCOME_FAILED",
+	}
+	WatchOutcome_value = map[string]int32{
+		"WATCH_OUTCOME_UNSPECIFIED": 0,
+		"WATCH_OUTCOME_SUCCEEDED":   1,
+		"WATCH_OUTCOME_REFUSED":     2,
+		"WATCH_OUTCOME_FAILED":      3,
+	}
+)
+
+func (x WatchOutcome) Enum() *WatchOutcome {
+	p := new(WatchOutcome)
+	*p = x
+	return p
+}
+
+func (x WatchOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (WatchOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_kindlast_platform_v1_intelligence_proto_enumTypes[1].Descriptor()
+}
+
+func (WatchOutcome) Type() protoreflect.EnumType {
+	return &file_kindlast_platform_v1_intelligence_proto_enumTypes[1]
+}
+
+func (x WatchOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use WatchOutcome.Descriptor instead.
+func (WatchOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{1}
+}
+
 type DraftNarrativeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The organisation this run is for.
@@ -565,11 +620,249 @@ func (x *RejectedCitation) GetReason() string {
 	return ""
 }
 
+// WatchRequest is one organisation's whole context, as core-api assembled it.
+//
+// Caller-assembled for the reason §26.2 gives and DraftNarrativeRequest
+// repeats: fetching the context is not a decision, so it happens in Go where
+// the tenancy GUCs and the producer role already are, and the run stays a pure
+// function of its inputs. What the model DECIDES is what to do with it.
+type WatchRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The organisation this run is for. Carried in the message because this
+	// caller holds no session; used to record the run and to name the
+	// organisation on every signal raised, never to decide what may be read.
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// The context, exactly as `WatcherService.WatcherContext` returned it.
+	//
+	// The whole response rather than its fields copied across, so there is one
+	// definition of what a watch sees. A second copy would drift the first time
+	// a field is added to one and not the other, and the thing that would go
+	// wrong is a model quietly reasoning without something core-api thought it
+	// had been given.
+	Context *WatcherContextResponse `protobuf:"bytes,2,opt,name=context,proto3" json:"context,omitempty"`
+	// Which model this run is recorded against (ENT-236, §26.6): names only,
+	// for the run record. Absent means the deployment's own model. Identical in
+	// meaning and in what it must never carry to DraftNarrativeRequest's field
+	// of the same name.
+	ModelEndpoint *ModelEndpoint `protobuf:"bytes,3,opt,name=model_endpoint,json=modelEndpoint,proto3" json:"model_endpoint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchRequest) Reset() {
+	*x = WatchRequest{}
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchRequest) ProtoMessage() {}
+
+func (x *WatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchRequest.ProtoReflect.Descriptor instead.
+func (*WatchRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *WatchRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *WatchRequest) GetContext() *WatcherContextResponse {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *WatchRequest) GetModelEndpoint() *ModelEndpoint {
+	if x != nil {
+		return x.ModelEndpoint
+	}
+	return nil
+}
+
+type WatchResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Outcome WatchOutcome           `protobuf:"varint,1,opt,name=outcome,proto3,enum=kindlast.platform.v1.WatchOutcome" json:"outcome,omitempty"`
+	// Why, when the outcome was not success. For a human to read.
+	OutcomeDetail string `protobuf:"bytes,2,opt,name=outcome_detail,json=outcomeDetail,proto3" json:"outcome_detail,omitempty"`
+	// What the run raised, in the order it raised them.
+	//
+	// INCLUDING THE ONES THAT WERE DEDUPLICATED, which is the half a caller
+	// most wants. A run that raised nothing new because everything it noticed
+	// was already open is a run that worked, and a response listing only the
+	// new rows would be indistinguishable from one where the model noticed
+	// nothing at all.
+	Signals []*RaisedSignal `protobuf:"bytes,3,rep,name=signals,proto3" json:"signals,omitempty"`
+	// The `agent_runs` row this produced. Always set on a 200, for the reason
+	// DraftNarrativeResponse gives: a caller handed results and a blank
+	// provenance field is a caller that stores unprovenanced results.
+	AgentRunId    string `protobuf:"bytes,4,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchResponse) Reset() {
+	*x = WatchResponse{}
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchResponse) ProtoMessage() {}
+
+func (x *WatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchResponse.ProtoReflect.Descriptor instead.
+func (*WatchResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *WatchResponse) GetOutcome() WatchOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return WatchOutcome_WATCH_OUTCOME_UNSPECIFIED
+}
+
+func (x *WatchResponse) GetOutcomeDetail() string {
+	if x != nil {
+		return x.OutcomeDetail
+	}
+	return ""
+}
+
+func (x *WatchResponse) GetSignals() []*RaisedSignal {
+	if x != nil {
+		return x.Signals
+	}
+	return nil
+}
+
+func (x *WatchResponse) GetAgentRunId() string {
+	if x != nil {
+		return x.AgentRunId
+	}
+	return ""
+}
+
+// RaisedSignal is one signal this run put through RaiseSignal.
+type RaisedSignal struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	SignalId string                 `protobuf:"bytes,1,opt,name=signal_id,json=signalId,proto3" json:"signal_id,omitempty"`
+	DedupKey string                 `protobuf:"bytes,2,opt,name=dedup_key,json=dedupKey,proto3" json:"dedup_key,omitempty"`
+	Title    string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Severity string                 `protobuf:"bytes,4,opt,name=severity,proto3" json:"severity,omitempty"`
+	// False when the signal already existed and this run touched it rather than
+	// created it. See WatchResponse.signals for why both are reported.
+	Raised        bool `protobuf:"varint,5,opt,name=raised,proto3" json:"raised,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RaisedSignal) Reset() {
+	*x = RaisedSignal{}
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RaisedSignal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RaisedSignal) ProtoMessage() {}
+
+func (x *RaisedSignal) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RaisedSignal.ProtoReflect.Descriptor instead.
+func (*RaisedSignal) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RaisedSignal) GetSignalId() string {
+	if x != nil {
+		return x.SignalId
+	}
+	return ""
+}
+
+func (x *RaisedSignal) GetDedupKey() string {
+	if x != nil {
+		return x.DedupKey
+	}
+	return ""
+}
+
+func (x *RaisedSignal) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *RaisedSignal) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
+}
+
+func (x *RaisedSignal) GetRaised() bool {
+	if x != nil {
+		return x.Raised
+	}
+	return false
+}
+
 var File_kindlast_platform_v1_intelligence_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\n" +
-	"'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xad\x02\n" +
+	"'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\x1a\"kindlast/platform/v1/watcher.proto\"\xad\x02\n" +
 	"\x15DraftNarrativeRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x16\n" +
 	"\x06signal\x18\x02 \x01(\tR\x06signal\x12I\n" +
@@ -599,14 +892,36 @@ const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"agentRunId\">\n" +
 	"\x10RejectedCitation\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason*\x7f\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xb9\x01\n" +
+	"\fWatchRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12F\n" +
+	"\acontext\x18\x02 \x01(\v2,.kindlast.platform.v1.WatcherContextResponseR\acontext\x12J\n" +
+	"\x0emodel_endpoint\x18\x03 \x01(\v2#.kindlast.platform.v1.ModelEndpointR\rmodelEndpoint\"\xd4\x01\n" +
+	"\rWatchResponse\x12<\n" +
+	"\aoutcome\x18\x01 \x01(\x0e2\".kindlast.platform.v1.WatchOutcomeR\aoutcome\x12%\n" +
+	"\x0eoutcome_detail\x18\x02 \x01(\tR\routcomeDetail\x12<\n" +
+	"\asignals\x18\x03 \x03(\v2\".kindlast.platform.v1.RaisedSignalR\asignals\x12 \n" +
+	"\fagent_run_id\x18\x04 \x01(\tR\n" +
+	"agentRunId\"\x92\x01\n" +
+	"\fRaisedSignal\x12\x1b\n" +
+	"\tsignal_id\x18\x01 \x01(\tR\bsignalId\x12\x1b\n" +
+	"\tdedup_key\x18\x02 \x01(\tR\bdedupKey\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x1a\n" +
+	"\bseverity\x18\x04 \x01(\tR\bseverity\x12\x16\n" +
+	"\x06raised\x18\x05 \x01(\bR\x06raised*\x7f\n" +
 	"\fDraftOutcome\x12\x1d\n" +
 	"\x19DRAFT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17DRAFT_OUTCOME_SUCCEEDED\x10\x01\x12\x19\n" +
 	"\x15DRAFT_OUTCOME_REFUSED\x10\x02\x12\x18\n" +
-	"\x14DRAFT_OUTCOME_FAILED\x10\x032\xc6\x01\n" +
+	"\x14DRAFT_OUTCOME_FAILED\x10\x03*\x7f\n" +
+	"\fWatchOutcome\x12\x1d\n" +
+	"\x19WATCH_OUTCOME_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17WATCH_OUTCOME_SUCCEEDED\x10\x01\x12\x19\n" +
+	"\x15WATCH_OUTCOME_REFUSED\x10\x02\x12\x18\n" +
+	"\x14WATCH_OUTCOME_FAILED\x10\x032\xd8\x02\n" +
 	"\x13IntelligenceService\x12\xae\x01\n" +
-	"\x0eDraftNarrative\x12+.kindlast.platform.v1.DraftNarrativeRequest\x1a,.kindlast.platform.v1.DraftNarrativeResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/internal/v1/narratives:draftB\xe5\x01\n" +
+	"\x0eDraftNarrative\x12+.kindlast.platform.v1.DraftNarrativeRequest\x1a,.kindlast.platform.v1.DraftNarrativeResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/internal/v1/narratives:draft\x12\x8f\x01\n" +
+	"\x05Watch\x12\".kindlast.platform.v1.WatchRequest\x1a#.kindlast.platform.v1.WatchResponse\"=\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/internal/v1/sweeps:watchB\xe5\x01\n" +
 	"\x18com.kindlast.platform.v1B\x11IntelligenceProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
 var (
@@ -621,28 +936,39 @@ func file_kindlast_platform_v1_intelligence_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_intelligence_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_intelligence_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kindlast_platform_v1_intelligence_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_kindlast_platform_v1_intelligence_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_kindlast_platform_v1_intelligence_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_kindlast_platform_v1_intelligence_proto_goTypes = []any{
 	(DraftOutcome)(0),              // 0: kindlast.platform.v1.DraftOutcome
-	(*DraftNarrativeRequest)(nil),  // 1: kindlast.platform.v1.DraftNarrativeRequest
-	(*ModelEndpoint)(nil),          // 2: kindlast.platform.v1.ModelEndpoint
-	(*ObligationContext)(nil),      // 3: kindlast.platform.v1.ObligationContext
-	(*DraftNarrativeResponse)(nil), // 4: kindlast.platform.v1.DraftNarrativeResponse
-	(*RejectedCitation)(nil),       // 5: kindlast.platform.v1.RejectedCitation
+	(WatchOutcome)(0),              // 1: kindlast.platform.v1.WatchOutcome
+	(*DraftNarrativeRequest)(nil),  // 2: kindlast.platform.v1.DraftNarrativeRequest
+	(*ModelEndpoint)(nil),          // 3: kindlast.platform.v1.ModelEndpoint
+	(*ObligationContext)(nil),      // 4: kindlast.platform.v1.ObligationContext
+	(*DraftNarrativeResponse)(nil), // 5: kindlast.platform.v1.DraftNarrativeResponse
+	(*RejectedCitation)(nil),       // 6: kindlast.platform.v1.RejectedCitation
+	(*WatchRequest)(nil),           // 7: kindlast.platform.v1.WatchRequest
+	(*WatchResponse)(nil),          // 8: kindlast.platform.v1.WatchResponse
+	(*RaisedSignal)(nil),           // 9: kindlast.platform.v1.RaisedSignal
+	(*WatcherContextResponse)(nil), // 10: kindlast.platform.v1.WatcherContextResponse
 }
 var file_kindlast_platform_v1_intelligence_proto_depIdxs = []int32{
-	3, // 0: kindlast.platform.v1.DraftNarrativeRequest.obligations:type_name -> kindlast.platform.v1.ObligationContext
-	2, // 1: kindlast.platform.v1.DraftNarrativeRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
-	0, // 2: kindlast.platform.v1.DraftNarrativeResponse.outcome:type_name -> kindlast.platform.v1.DraftOutcome
-	5, // 3: kindlast.platform.v1.DraftNarrativeResponse.rejected_citations:type_name -> kindlast.platform.v1.RejectedCitation
-	1, // 4: kindlast.platform.v1.IntelligenceService.DraftNarrative:input_type -> kindlast.platform.v1.DraftNarrativeRequest
-	4, // 5: kindlast.platform.v1.IntelligenceService.DraftNarrative:output_type -> kindlast.platform.v1.DraftNarrativeResponse
-	5, // [5:6] is the sub-list for method output_type
-	4, // [4:5] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4,  // 0: kindlast.platform.v1.DraftNarrativeRequest.obligations:type_name -> kindlast.platform.v1.ObligationContext
+	3,  // 1: kindlast.platform.v1.DraftNarrativeRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
+	0,  // 2: kindlast.platform.v1.DraftNarrativeResponse.outcome:type_name -> kindlast.platform.v1.DraftOutcome
+	6,  // 3: kindlast.platform.v1.DraftNarrativeResponse.rejected_citations:type_name -> kindlast.platform.v1.RejectedCitation
+	10, // 4: kindlast.platform.v1.WatchRequest.context:type_name -> kindlast.platform.v1.WatcherContextResponse
+	3,  // 5: kindlast.platform.v1.WatchRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
+	1,  // 6: kindlast.platform.v1.WatchResponse.outcome:type_name -> kindlast.platform.v1.WatchOutcome
+	9,  // 7: kindlast.platform.v1.WatchResponse.signals:type_name -> kindlast.platform.v1.RaisedSignal
+	2,  // 8: kindlast.platform.v1.IntelligenceService.DraftNarrative:input_type -> kindlast.platform.v1.DraftNarrativeRequest
+	7,  // 9: kindlast.platform.v1.IntelligenceService.Watch:input_type -> kindlast.platform.v1.WatchRequest
+	5,  // 10: kindlast.platform.v1.IntelligenceService.DraftNarrative:output_type -> kindlast.platform.v1.DraftNarrativeResponse
+	8,  // 11: kindlast.platform.v1.IntelligenceService.Watch:output_type -> kindlast.platform.v1.WatchResponse
+	10, // [10:12] is the sub-list for method output_type
+	8,  // [8:10] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_intelligence_proto_init() }
@@ -650,13 +976,14 @@ func file_kindlast_platform_v1_intelligence_proto_init() {
 	if File_kindlast_platform_v1_intelligence_proto != nil {
 		return
 	}
+	file_kindlast_platform_v1_watcher_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_intelligence_proto_rawDesc), len(file_kindlast_platform_v1_intelligence_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   5,
+			NumEnums:      2,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

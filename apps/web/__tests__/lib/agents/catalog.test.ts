@@ -145,6 +145,21 @@ describe('what the console claims about skills (ENT-232)', () => {
     expect(analyst?.skill?.tools).toEqual(pythonTuple(source, 'ALLOWED_TOOLS'))
   })
 
+  it('repeats the Watcher skill exactly as the skill declares it', () => {
+    // The same guard as the Analyst's above, and it matters more here: this is
+    // the first skill with a tool, so the list on the page is what a customer
+    // reads to decide what the agent can do to their data. A page claiming a
+    // narrower list than the allow-list actually holds would be the worst kind
+    // of wrong, and this is what stops it.
+    const source = readFileSync(path.join(SKILLS_DIR, 'watcher.py'), 'utf8')
+    const watcher = agentBySlug('watcher')
+    expect(watcher?.skill).toBeDefined()
+
+    expect(watcher?.skill?.name).toBe(pythonString(source, 'NAME'))
+    expect(watcher?.skill?.version).toBe(pythonString(source, 'VERSION'))
+    expect(watcher?.skill?.tools).toEqual(pythonTuple(source, 'ALLOWED_TOOLS'))
+  })
+
   it('leaves the tool list absent for an agent with no skill', () => {
     // Absent rather than empty. An empty allow-list is a statement the Analyst
     // makes on purpose (it is given its inputs and then answers); showing the

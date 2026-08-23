@@ -1,6 +1,6 @@
 """The core-api client: this service's only way to reach anything (§1.6, §26.3).
 
-# ONE RPC, AND THE SHORTNESS IS THE POINT
+# TWO RPCs, AND THE SHORTNESS IS STILL THE POINT
 
 ENT-218 says an agent's tools are core-api RPCs and nothing else. No
 filesystem, no shell, no database handle, no third-party credential. That is
@@ -8,8 +8,23 @@ not a limitation to work around later; it is the reason a model is allowed near
 a compliance record at all, because everything it can reach is something
 core-api already checks.
 
-This wraps exactly one call, `RecordAgentRun`, and offers no way to make a
-second. Adding one means adding a method here, which means a reviewer sees it.
+This wraps two calls and offers no way to make a third. Adding one means adding
+a method here, which means a reviewer sees it, which is the mechanism rather
+than the number.
+
+`RecordAgentRun` writes the provenance of every run. `RaiseSignal` is the
+Watcher's one tool (ENT-258), and it is here rather than reached some other way
+for exactly the reason above: an agent's tools are core-api RPCs, so a tool has
+to be a method on this object, in front of a reviewer, and not an HTTP call
+assembled inside a skill.
+
+What `RaiseSignal` does NOT let this service do is worth stating, because the
+first question about giving an agent a write is what it can now reach. It
+cannot write a finding: no such RPC exists on any surface this holds. It cannot
+choose an organisation core-api did not name: the id comes from the request the
+engine handed this worker. And it cannot write outside the vocabulary, without
+a deduplication key, or citing an obligation that does not exist, because
+core-api validates all three and this client cannot ask it not to.
 
 # WHY THERE IS NO CORPUS READ HERE, WHICH THE FIRST DRAFT HAD
 
@@ -45,7 +60,12 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from kindlast.platform.v1 import ingest_connect, ingest_pb2
+from kindlast.platform.v1 import (
+    ingest_connect,
+    ingest_pb2,
+    watcher_connect,
+    watcher_pb2,
+)
 
 from .harness.run import AgentRun, Outcome
 
@@ -80,6 +100,7 @@ class CoreAPI:
         # before somebody checks an expiry.
         self._tokens = tokens
         self._ingest = ingest_connect.IngestServiceClientSync(base_url)
+        self._watcher = watcher_connect.WatcherServiceClientSync(base_url)
 
     def record_run(self, org_id: str, run: AgentRun) -> str:
         """Store the run, and treat a failure here as serious.
@@ -136,3 +157,38 @@ class CoreAPI:
             raise CoreAPIError(f"recording the agent run: {exc}") from exc
 
         return response.id
+
+    def raise_signal(self, org_id: str, signal: dict[str, object]) -> tuple[str, bool]:
+        """Raise one signal, and answer whether it was new.
+
+        The Watcher's one tool (ENT-258). Everything that decides whether this
+        is allowed happens on the far side: the vocabulary, the deduplication
+        key, the citation and the producer role's policies are core-api's, and
+        this client cannot ask it to skip any of them.
+
+        NO ORGANISATION HEADER, for the reason `record_run` gives: this caller
+        holds no session, and the organisation is the one core-api named when
+        it built the request this worker was handed.
+
+        Returns `(signal_id, raised)`. `raised` is false when the deduplication
+        key already existed, which is not a failure and is the answer the loop
+        most needs: it is how a run learns that a condition it noticed was
+        already known.
+        """
+        request = watcher_pb2.RaiseSignalRequest(
+            org_id=org_id,
+            kind=str(signal.get("kind") or ""),
+            dedup_key=str(signal.get("dedup_key") or ""),
+            title=str(signal.get("title") or ""),
+            detail=str(signal.get("detail") or ""),
+            severity=str(signal.get("severity") or ""),
+            obligation_slug=str(signal.get("obligation_slug") or ""),
+        )
+        try:
+            response = self._watcher.raise_signal(
+                request, headers={"Authorization": f"Bearer {self._tokens.get()}"}
+            )
+        except Exception as exc:
+            raise CoreAPIError(f"raising the signal: {exc}") from exc
+
+        return response.signal_id, response.raised
