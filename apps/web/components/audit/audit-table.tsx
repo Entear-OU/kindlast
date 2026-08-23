@@ -47,8 +47,17 @@ const ACTION_LABELS: Record<string, string> = {
   //
   // Worded as what the person did rather than as what the row is about, like
   // every label above: "Invited somebody", not "Invitation".
+  //
+  // `accept_invitation` is the fifth and arrived a change later (ENT-268),
+  // because the audit log's insert policy could not accept it from somebody who
+  // was not yet a member. It is the one the reader needs next to
+  // `invite_member`: an invitation with no arrival after it is ambiguous
+  // between one still sitting unread in a mailbox and a person who has been
+  // reading the record for a month. The actor here is the joiner rather than
+  // whoever let them in, so the sentence is theirs.
   rename_organisation: 'Renamed the organisation',
   invite_member: 'Invited somebody to join',
+  accept_invitation: 'Joined by invitation',
   change_member_role: "Changed somebody's role",
   remove_member: 'Removed somebody',
 }
