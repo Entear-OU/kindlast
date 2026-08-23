@@ -55,11 +55,16 @@ func (f *bootingFrontend) DescribeNamespace(
 	return &workflowservice.DescribeNamespaceResponse{}, nil
 }
 
-// serve starts the fake on a loopback port and returns its address.
-func serve(t *testing.T, f *bootingFrontend) string {
+// serve starts a fake frontend on a loopback port and returns its address.
+//
+// Takes the service rather than a concrete type so both fakes share it. The
+// listener comes from a `net.ListenConfig` because the repo's linters refuse
+// `net.Listen`, which takes no context and so cannot be cancelled.
+func serve(t *testing.T, f workflowservice.WorkflowServiceServer) string {
 	t.Helper()
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	listener, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listening: %v", err)
 	}
@@ -177,7 +182,7 @@ func TestConnectStopsOnAnErrorThatIsNotAMissingNamespace(t *testing.T) {
 	// And now one that refuses with something else entirely.
 	refusing := &refusingFrontend{}
 	started := time.Now()
-	_, err = Connect(ctx, Options{Addr: serve2(t, refusing), Namespace: "default", Logger: quiet()})
+	_, err = Connect(ctx, Options{Addr: serve(t, refusing), Namespace: "default", Logger: quiet()})
 	if err == nil {
 		t.Fatal("a refused question was treated as a namespace that will appear")
 	}
@@ -199,17 +204,4 @@ func (f *refusingFrontend) GetSystemInfo(
 	context.Context, *workflowservice.GetSystemInfoRequest,
 ) (*workflowservice.GetSystemInfoResponse, error) {
 	return &workflowservice.GetSystemInfoResponse{}, nil
-}
-
-func serve2(t *testing.T, f *refusingFrontend) string {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listening: %v", err)
-	}
-	server := grpc.NewServer(grpc.UnaryInterceptor(temporalErrors))
-	workflowservice.RegisterWorkflowServiceServer(server, f)
-	go func() { _ = server.Serve(listener) }()
-	t.Cleanup(server.Stop)
-	return listener.Addr().String()
 }
