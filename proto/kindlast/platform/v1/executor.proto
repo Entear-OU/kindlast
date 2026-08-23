@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// The Executor (ENT-271, ENT-225 phase 2): creating the record an approved
+// finding asked for.
+//
+// WHAT THIS REPLACES
+//
+// Three `after update of status` triggers on `findings` (00002), which created
+// a processing activity, a DSAR or an AI system inside the approving
+// transaction. §3 always said execution belongs behind the event boundary:
+// "ApproveFinding writes the finding, writes audit_log, and publishes
+// finding.approved. It does not synchronously create the ROPA entry, AI
+// system, or DSAR." With Temporal in the stack there is somewhere for it to
+// go, and §14.5's rule (a trigger that decides is a decision in plpgsql) says
+// it should.
+//
+// So: approving writes an `executor_jobs` row in the same transaction
+// (00036), a relay Schedule on `workers` starts one workflow per row, and the
+// workflow calls ExecuteJob.
+//
+// WHOSE AUTHORITY THE RECORD IS CREATED WITH, WHICH IS THE PART TO GET RIGHT
+//
+// The approver's. core-api opens an ordinary tenant transaction whose GUCs
+// name the organisation and the user read out of the job row, and creates the
+// record under the same policies the trigger ran under. The caller names a job
+// id and nothing else: a request cannot say whose authority to use, because a
+// caller that could would be able to create a customer's compliance record in
+// somebody else's name.
+//
+// The producer role is deliberately not used. It holds nothing on
+// `processing_activities` or `ai_systems` and only `select` on `dsars`, and
+// granting it writes would make the role that can invent a finding also able
+// to write the record that finding creates.
+service ExecutorService {
+  // Lists the approvals whose record has not been created yet: job id,
+  // organisation, finding and action, oldest first. The relay's question,
+  // asked every few seconds; no organisation header, because the list is
+  // every organisation's, and no payload, because the finding's proposed
+  // record stays in the database until the execution reads it.
+  rpc ListPendingJobs(ListPendingJobsRequest) returns (ListPendingJobsResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/executor-jobs:pending"
+      body: "*"
+    };
+  }
+
+  // Creates the record one approved finding asked for, and settles the job,
+  // in one transaction as the approver.
+  //
+  // Idempotent in the two ways that matter: the job row is claimed `for
+  // update` and re-read as pending, so two runs produce one execution; and
+  // the record is guarded on the finding, the same guard the trigger had, so
+  // an execution that created a record and failed to commit its settle finds
+  // that record on the retry rather than creating a second.
+  //
+  //   invalid_argument   the job id is not a uuid
+  //   unavailable        the execution failed and was recorded on the row;
+  //                      the job stays pending and is offered again
+  rpc ExecuteJob(ExecuteJobRequest) returns (ExecuteJobResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/executor-jobs:execute"
+      body: "*"
+    };
+  }
+}
+
+message ListPendingJobsRequest {
+  // At most this many. Zero means the server's default.
+  int32 limit = 1;
+}
+
+message ListPendingJobsResponse {
+  repeated ExecutorJob jobs = 1;
+}
+
+message ExecutorJob {
+  string job_id = 1;
+  string org_id = 2;
+  string finding_id = 3;
+  // `create_ropa`, `create_dsar` or `create_ai_system`.
+  string action_type = 4;
+}
+
+message ExecuteJobRequest {
+  string job_id = 1;
+}
+
+message ExecuteJobResponse {
+  // True when this call created the record and settled the job; false when
+  // there was nothing pending by that id, which a retry reads as done.
+  bool settled = 1;
+  // What exists for the finding now: the record this call created, or the one
+  // an earlier attempt did. Empty for a job that was already settled.
+  string record_id = 2;
+  string record_table = 3;
+}

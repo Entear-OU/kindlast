@@ -31,6 +31,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
+	executorservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/executor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	integrationsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/integrations"
 	modelchoiceservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelchoice"
@@ -348,7 +349,11 @@ func run(logger *slog.Logger) error {
 		Producer:      producer,
 		// The outbox's delivery half (ENT-256, part three), on the same agent
 		// pool as the producer and behind the same typed-nil guard.
-		Outbox:         outboxDependency(outbox),
+		Outbox: outboxDependency(outbox),
+		// The Executor (ENT-271): the producer lists, the application
+		// executes as the approver. Same typed-nil guard as the rest.
+		ExecutorJobs:   executorJobsDependency(outbox),
+		Executions:     store,
 		Mail:           mail,
 		BillingEnabled: cfg.BillingEnabled,
 		AppBaseURL:     cfg.AppBaseURL,
@@ -586,6 +591,14 @@ func corpusDependency(store *postgres.CorpusStore) ingest.Writer {
 // The same typed-nil guard, for the delivery half of the transactional outbox
 // (ENT-256, part three).
 func outboxDependency(store *postgres.AgentStore) deliveryservice.Outbox {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+// The same typed-nil guard, for the Executor's listing half (ENT-271).
+func executorJobsDependency(store *postgres.AgentStore) executorservice.Jobs {
 	if store == nil {
 		return nil
 	}

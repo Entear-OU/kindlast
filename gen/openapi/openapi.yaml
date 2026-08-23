@@ -2205,6 +2205,73 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/executor-jobs:execute:
+        post:
+            tags:
+                - ExecutorService
+            description: |-
+                Creates the record one approved finding asked for, and settles the job,
+                 in one transaction as the approver.
+
+                 Idempotent in the two ways that matter: the job row is claimed `for
+                 update` and re-read as pending, so two runs produce one execution; and
+                 the record is guarded on the finding, the same guard the trigger had, so
+                 an execution that created a record and failed to commit its settle finds
+                 that record on the retry rather than creating a second.
+
+                   invalid_argument   the job id is not a uuid
+                   unavailable        the execution failed and was recorded on the row;
+                                      the job stays pending and is offered again
+            operationId: ExecutorService_ExecuteJob
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ExecuteJobRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExecuteJobResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/executor-jobs:pending:
+        post:
+            tags:
+                - ExecutorService
+            description: |-
+                Lists the approvals whose record has not been created yet: job id,
+                 organisation, finding and action, oldest first. The relay's question,
+                 asked every few seconds; no organisation header, because the list is
+                 every organisation's, and no payload, because the finding's proposed
+                 record stays in the database until the execution reads it.
+            operationId: ExecutorService_ListPendingJobs
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ListPendingJobsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListPendingJobsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/findings:narrate:
         post:
             tags:
@@ -4130,6 +4197,38 @@ components:
                  The body is deliberately not typed the way a fact is. An observation from a
                  helpdesk and one from a cloud provider share nothing but their stamps, and a
                  schema pretending otherwise would be a schema per integration.
+        ExecuteJobRequest:
+            type: object
+            properties:
+                jobId:
+                    type: string
+        ExecuteJobResponse:
+            type: object
+            properties:
+                settled:
+                    type: boolean
+                    description: |-
+                        True when this call created the record and settled the job; false when
+                         there was nothing pending by that id, which a retry reads as done.
+                recordId:
+                    type: string
+                    description: |-
+                        What exists for the finding now: the record this call created, or the one
+                         an earlier attempt did. Empty for a job that was already settled.
+                recordTable:
+                    type: string
+        ExecutorJob:
+            type: object
+            properties:
+                jobId:
+                    type: string
+                orgId:
+                    type: string
+                findingId:
+                    type: string
+                actionType:
+                    type: string
+                    description: '`create_ropa`, `create_dsar` or `create_ai_system`.'
         ExpireSnoozesRequest:
             type: object
             properties: {}
@@ -5006,6 +5105,20 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/CorpusObligation'
+        ListPendingJobsRequest:
+            type: object
+            properties:
+                limit:
+                    type: integer
+                    description: At most this many. Zero means the server's default.
+                    format: int32
+        ListPendingJobsResponse:
+            type: object
+            properties:
+                jobs:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExecutorJob'
         ListProcessingActivitiesResponse:
             type: object
             properties:
@@ -6875,6 +6988,39 @@ tags:
          what the mail server answered each time, and a schedule whose last run is a
          line in `temporal schedule list`. A deployment whose mail is not leaving
          shows it in the UI rather than in a log nobody is reading.
+    - name: ExecutorService
+      description: |-
+        The Executor (ENT-271, ENT-225 phase 2): creating the record an approved
+         finding asked for.
+
+         WHAT THIS REPLACES
+
+         Three `after update of status` triggers on `findings` (00002), which created
+         a processing activity, a DSAR or an AI system inside the approving
+         transaction. §3 always said execution belongs behind the event boundary:
+         "ApproveFinding writes the finding, writes audit_log, and publishes
+         finding.approved. It does not synchronously create the ROPA entry, AI
+         system, or DSAR." With Temporal in the stack there is somewhere for it to
+         go, and §14.5's rule (a trigger that decides is a decision in plpgsql) says
+         it should.
+
+         So: approving writes an `executor_jobs` row in the same transaction
+         (00036), a relay Schedule on `workers` starts one workflow per row, and the
+         workflow calls ExecuteJob.
+
+         WHOSE AUTHORITY THE RECORD IS CREATED WITH, WHICH IS THE PART TO GET RIGHT
+
+         The approver's. core-api opens an ordinary tenant transaction whose GUCs
+         name the organisation and the user read out of the job row, and creates the
+         record under the same policies the trigger ran under. The caller names a job
+         id and nothing else: a request cannot say whose authority to use, because a
+         caller that could would be able to create a customer's compliance record in
+         somebody else's name.
+
+         The producer role is deliberately not used. It holds nothing on
+         `processing_activities` or `ai_systems` and only `select` on `dsars`, and
+         granting it writes would make the role that can invent a finding also able
+         to write the record that finding creates.
     - name: FindingsService
       description: |-
         Findings, the feed, and the dashboard (core-api-surface §3 and §5).

@@ -1,26 +1,32 @@
 /**
- * The Executor fires (ENT-165, inside ENT-203).
+ * What the obligation decides, and what the approval leaves behind (ENT-165,
+ * ENT-203, rewritten by ENT-271).
  *
  * `findings.action_type` was read by three triggers and written by nothing:
  * `analyst_convert_signal`'s INSERT column list omitted it, so every finding
  * got the column default `'review'` and none of the three executor triggers
- * could ever fire. Approving a finding changed a status and did nothing else,
- * while the billing page sold "One-tap Executor actions".
+ * could ever fire. 00007 puts the action on the obligation, where the
+ * knowledge is: what approving should *do* is a property of the regulatory
+ * requirement, not of whichever sweep happened to notice it.
  *
- * 00007 puts the action on the obligation, where the knowledge is: what
- * approving should *do* is a property of the regulatory requirement, not of
- * whichever sweep happened to notice it.
+ * WHAT THIS FILE STOPPED TESTING, AND WHERE IT WENT (ENT-271)
  *
- * The test worth reading is "returns the id of the record it created". That is
- * the first time `approve_finding`'s return value has ever been non-null, and
- * it closes the loop 00006 opened: the decision row and the creation row are
- * separate, and the lookup has to find the second while ignoring the first.
+ * The three executor triggers are gone (00036). Approving no longer creates
+ * the record inside the transaction; it writes an `executor_jobs` row, and a
+ * Temporal workflow creates the record a moment later, as the approver. So
+ * the assertions about the record and its audit row moved to Go, where the
+ * code that creates them now lives:
+ * `apps/core-api/internal/store/postgres/executor_test.go`, against this same
+ * database.
+ *
+ * What is still the database's, and therefore still here: the obligation
+ * decides the action type, an approval of a record-creating finding leaves a
+ * job for the Executor, an approval of a `review` finding leaves none, and a
+ * rejection leaves neither a job nor a record.
  *
  * Proven able to fail: dropping `action_type` from 00007's INSERT column list
- * (i.e. restoring the ENT-165 bug) turns the five `an obligation that creates a
- * record` tests red and leaves the `review` ones green, which is the right
- * shape. Reverting 00006's `target_table <> 'findings'` filter turns only
- * "returns the id of the record it created" red.
+ * (i.e. restoring the ENT-165 bug) turns the action-type tests red and leaves
+ * the `review` ones green, which is the right shape.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { randomUUID } from 'node:crypto'
@@ -46,6 +52,16 @@ const reachable = await isStackReachable()
  * tested. Only the thing pulling the trigger moved, and driving them with the
  * real UPDATE is closer to production than calling a wrapper was.
  */
+/** The executor job the approval enqueues (00036), as the Go store writes it. */
+const ENQUEUE_JOB = `
+  insert into executor_jobs (org_id, finding_id, action_type, approved_by)
+  select f.org_id, f.id, f.action_type, current_setting('app.current_user_id')::uuid
+    from findings f
+   where f.id = $1
+     and f.action_type in ('create_ropa', 'create_dsar', 'create_ai_system')
+  on conflict (finding_id) do nothing
+`
+
 const APPROVE = `
   update findings
      set status = 'approved',
@@ -80,6 +96,11 @@ async function approve(finding: string) {
   const r = await app.query(APPROVE, [finding])
   if (r.rowCount === 0) return // already approved: Go writes nothing either
   await app.query(RECORD_DECISION, [finding, 'approve_finding'])
+  // And the job, for the three action types that create a record (ENT-271).
+  // The Go store does exactly this, in the same transaction; this helper
+  // exists to mirror it, so a test here is a test of what the database does
+  // with what core-api writes.
+  await app.query(ENQUEUE_JOB, [finding])
 }
 
 /** Reject, and record the decision, exactly as core-api does. */
@@ -218,133 +239,87 @@ describe.skipIf(!reachable)(
 )
 
 describe.skipIf(!reachable)('an obligation that creates a record', () => {
-  it('creates the processing activity on approval', async () => {
+  it('leaves a job for the Executor and no record of its own', async () => {
     const finding = await convertSignal(ropaSlug)
     await setTenant(app, org, ada)
 
     await approve(finding)
 
-    const r = await migrator.query(
-      `select id, org_id, created_by, name from processing_activities where finding_id = $1`,
+    // THE CHANGE ENT-271 MADE, ASSERTED HERE RATHER THAN INFERRED. The
+    // trigger used to have inserted the processing activity inside the
+    // transaction that approved. Now the approval leaves a job, and the
+    // record arrives when the workflow runs.
+    const job = await migrator.query(
+      `select org_id, action_type, approved_by, status
+         from executor_jobs where finding_id = $1`,
       [finding],
     )
-    expect(r.rows).toHaveLength(1)
-    expect(r.rows[0].org_id).toBe(org)
-    // The approver is recorded as the author, not the Analyst that raised it.
-    expect(r.rows[0].created_by).toBe(ada)
-  })
-
-  // The one that closes 00006's loop. Before 00007 no trigger fired, so no row
-  // carried a target_id, so this was null on every call.
-  it('returns the id of the record it created', async () => {
-    const finding = await convertSignal(ropaSlug)
-    await setTenant(app, org, ada)
-
-    await approve(finding)
-
-    // What `approve_finding` used to return, read the way the Go store now
-    // reads it (ENT-225): the audit row the Executor trigger wrote, found by
-    // excluding rows whose target is the finding itself.
-    //
-    // Not by recency. Both audit rows are written in the same transaction and
-    // `occurred_at` defaults to `now()`, the transaction timestamp, so they
-    // carry an identical value and ordering by it decides nothing. The filter
-    // is what makes this unambiguous.
-    const r = await app.query(
-      `select target_id from audit_log
-        where finding_id = $1 and target_id is not null and target_table <> 'findings'`,
-      [finding],
-    )
-    expect(r.rows).toHaveLength(1)
-    expect(r.rows[0].target_id).not.toBeNull()
+    expect(job.rows).toHaveLength(1)
+    expect(job.rows[0].action_type).toBe('create_ropa')
+    expect(job.rows[0].status).toBe('pending')
+    expect(job.rows[0].org_id).toBe(org)
+    // The approver, because the record will be created by their decision and
+    // the execution runs as them.
+    expect(job.rows[0].approved_by).toBe(ada)
 
     const pa = await migrator.query(
-      `select id from processing_activities where finding_id = $1`,
-      [finding],
-    )
-    expect(r.rows[0].target_id).toBe(pa.rows[0].id)
-  })
-
-  // Two rows is the correct reading of two facts, not a duplicate: a human
-  // decided, and a record was created. 00006's header says so and this pins it.
-  //
-  // Asserted as a set rather than a sequence, deliberately. In practice the
-  // creation row lands first, because an AFTER UPDATE ... FOR EACH ROW trigger
-  // completes before control returns to the function body, and 00006 relies on
-  // exactly that to read the executor's target_id before writing its own row.
-  // But that is trigger timing inside one transaction, not a promise this
-  // schema makes, and a test asserting the order would fail the day someone
-  // adds a BEFORE trigger without anything actually being wrong.
-  //
-  // The same rule applies to anything reading these rows: select the decision
-  // by action_type, never by recency.
-  it('writes two audit rows: the decision and the creation', async () => {
-    const finding = await convertSignal(ropaSlug)
-    await setTenant(app, org, ada)
-
-    await approve(finding)
-
-    const actions = await auditActions(finding)
-    expect(actions).toHaveLength(2)
-    expect(actions).toContain('approve_finding')
-    expect(actions).toContain('create_ropa')
-  })
-
-  it('does not create a second record when approved again', async () => {
-    const finding = await convertSignal(ropaSlug)
-    await setTenant(app, org, ada)
-
-    await approve(finding)
-    await approve(finding)
-
-    const r = await migrator.query(
       `select count(*)::int as n from processing_activities where finding_id = $1`,
       [finding],
     )
-    expect(r.rows[0].n).toBe(1)
-    expect(await auditActions(finding)).toHaveLength(2)
+    expect(pa.rows[0].n).toBe(0)
+
+    // And the decision is in the audit log, alone: the creation row is
+    // written by the execution, later.
+    expect(await auditActions(finding)).toEqual(['approve_finding'])
   })
 
-  it('creates nothing when the finding is rejected instead', async () => {
+  it('leaves one job however many times it is approved', async () => {
     const finding = await convertSignal(ropaSlug)
     await setTenant(app, org, ada)
 
-    await reject(finding, 'Not us')
+    await approve(finding)
+    await approve(finding)
 
-    const r = await migrator.query(
-      `select count(*)::int as n from processing_activities where finding_id = $1`,
+    const job = await migrator.query(
+      `select count(*)::int as n from executor_jobs where finding_id = $1`,
       [finding],
     )
-    expect(r.rows[0].n).toBe(0)
-    expect(await auditActions(finding)).toEqual(['reject_finding'])
+    expect(job.rows[0].n).toBe(1)
+  })
+
+  it('leaves nothing at all when the finding is rejected instead', async () => {
+    const finding = await convertSignal(ropaSlug)
+    await setTenant(app, org, ada)
+
+    await reject(finding, 'we do not do this')
+
+    const r = await migrator.query(
+      `select (select count(*)::int from executor_jobs where finding_id = $1) as jobs,
+              (select count(*)::int from processing_activities where finding_id = $1) as records`,
+      [finding],
+    )
+    expect(r.rows[0].jobs).toBe(0)
+    expect(r.rows[0].records).toBe(0)
   })
 })
 
 describe.skipIf(!reachable)(
   'an unclassified obligation still creates nothing',
   () => {
-    it('approving a review finding writes the decision and no record', async () => {
+    it('approving a review finding writes the decision and no job', async () => {
       const finding = await convertSignal(reviewSlug)
       await setTenant(app, org, ada)
 
       await approve(finding)
 
-      // No creation row, and correctly so: a `review` obligation has no record
-      // to navigate to. This is what the Go store reads to decide there is
-      // nothing to send the person to.
-      const created = await migrator.query(
-        `select target_id from audit_log
-          where finding_id = $1 and target_id is not null and target_table <> 'findings'`,
-        [finding],
-      )
-      expect(created.rows).toHaveLength(0)
       expect(await auditActions(finding)).toEqual(['approve_finding'])
-
-      const pa = await migrator.query(
-        `select count(*)::int as n from processing_activities where finding_id = $1`,
+      const r = await migrator.query(
+        `select (select count(*)::int from executor_jobs where finding_id = $1) as jobs,
+                (select count(*)::int from processing_activities where finding_id = $1) as records`,
         [finding],
       )
-      expect(pa.rows[0].n).toBe(0)
+      expect(r.rows[0].jobs).toBe(0)
+      expect(r.rows[0].records).toBe(0)
     })
   },
 )

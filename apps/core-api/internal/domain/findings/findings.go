@@ -1,6 +1,9 @@
 package findings
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // Finding is one row of the feed, as the store reads it.
 //
@@ -120,4 +123,136 @@ type Dashboard struct {
 	Headline string
 	Counts   SeverityCounts
 	Pipeline Pipeline
+}
+
+// The Executor (ENT-271, ENT-225 phase 2).
+//
+// Approving a finding whose action type is one of these creates a compliance
+// record: a processing activity, a DSAR, or an AI system. Until ENT-271 three
+// database triggers did it inside the approving transaction; now the approval
+// writes a job and a workflow executes it, which is what §3 always specified.
+
+// The action types that create a record when a finding is approved. A finding
+// whose action type is anything else (today: `review`) is approved and
+// creates nothing, which is the ordinary case.
+const (
+	ActionCreateROPA     = "create_ropa"
+	ActionCreateDSAR     = "create_dsar"
+	ActionCreateAISystem = "create_ai_system"
+)
+
+// Executes reports whether approving a finding with this action type creates
+// a record, and therefore whether the approval enqueues an executor job.
+func Executes(actionType string) bool {
+	switch actionType {
+	case ActionCreateROPA, ActionCreateDSAR, ActionCreateAISystem:
+		return true
+	default:
+		return false
+	}
+}
+
+// RiskHigh is the classification an AI Act record carries when the system is
+// High-Risk, and the one an approval may not create unreviewed.
+const RiskHigh = "high"
+
+// ErrReviewRequired is the refusal for approving a High-Risk AI system
+// classification without a reviewed approval (§3, surfaced as
+// `failed_precondition`).
+//
+// # WHY THIS IS CHECKED BEFORE THE APPROVAL AND NOT DURING THE EXECUTION
+//
+// It used to be a `raise check_violation` inside the executor trigger, which
+// aborted the approving transaction: nothing was written and the caller was
+// told, if obscurely. With execution moved behind the event boundary
+// (ENT-271) that shape is not available and its asynchronous equivalent is
+// much worse: the finding would be approved, the audit row would say a person
+// approved it, the job would fail somewhere else, and the person would be
+// looking at an approved finding with no record and no reason. So the gate
+// runs at approval, before anything is written, and a refused approval leaves
+// the finding exactly as it was.
+var ErrReviewRequired = errors.New(
+	"a High-Risk AI system classification requires a reviewed approval")
+
+// RequiresReview reports whether this approval must be refused: a finding
+// that would create an AI system classified High-Risk, approved by somebody
+// who did not tick the review.
+//
+// The classification comes from the finding's own proposed payload, which is
+// what the record would be created with, so this asks about the record that
+// would exist rather than about the finding's severity.
+func RequiresReview(actionType, riskClassification string, reviewed bool) bool {
+	return actionType == ActionCreateAISystem &&
+		riskClassification == RiskHigh &&
+		!reviewed
+}
+
+// The DSAR receipt rule (ENT-224, moved to Go by ENT-271).
+//
+// A DSAR's statutory deadline runs from receipt of the request (Article
+// 12(3)), so the executor takes `received_at` from the finding's payload and
+// refuses to guess it. 00010 wrote the argument out and it is unchanged: a
+// request whose receipt date is unknown has an unknowable deadline, and
+// defaulting to now() does not represent that, it asserts a specific deadline
+// that is optimistic by however long the request sat unlogged. A compliance
+// product that under-reports urgency is worse than one that says nothing.
+//
+// # WHY THE REFUSAL MOVED WITH THE EXECUTION
+//
+// 00010 accepted a real cost for that strictness: "Refusing aborts the
+// approval... the human sees an error rather than a created record. That is
+// the correct outcome." The refusal was a `raise exception` inside the
+// trigger, so it did abort the approval.
+//
+// With execution behind the event boundary that is no longer true, and
+// refusing at execution time would be strictly worse than defaulting: the
+// finding would be approved, the audit row would name the approver, and the
+// DSAR would never appear, with the reason in a job row nobody is reading. So
+// the check moves to the approval, where a refusal still leaves nothing
+// behind and the person still sees the error.
+var (
+	// ErrReceiptRequired is a DSAR approval whose payload carries no receipt
+	// date.
+	ErrReceiptRequired = errors.New(
+		"this request has no received_at in its payload, and the Article 12(3) " +
+			"deadline runs from receipt: it cannot be guessed")
+	// ErrReceiptMalformed is one whose receipt date is not a timestamp.
+	ErrReceiptMalformed = errors.New(
+		"this request carries a received_at that is not a timestamp, and the " +
+			"Article 12(3) deadline runs from receipt")
+	// ErrReceiptInFuture is one that claims to have arrived later than now.
+	ErrReceiptInFuture = errors.New(
+		"this request carries a received_at in the future")
+)
+
+// Receipt is what the payload says about when a request arrived, as the
+// database read it: `Present` is whether the key was there at all, `Valid`
+// whether it parsed as a timestamp, and `At` the value when it did.
+//
+// Parsed by Postgres rather than in Go, deliberately: the trigger this
+// replaces used `::timestamptz`, and a second parser with slightly different
+// ideas about what a timestamp is would refuse dates the old path accepted, or
+// accept dates it refused, for no reason anybody chose.
+type Receipt struct {
+	Present bool
+	Valid   bool
+	At      time.Time
+}
+
+// CheckReceipt validates the receipt date a DSAR approval would use, and is a
+// no-op for every other action type.
+func CheckReceipt(actionType string, receipt Receipt, now time.Time) error {
+	if actionType != ActionCreateDSAR {
+		return nil
+	}
+	if !receipt.Present {
+		return ErrReceiptRequired
+	}
+	if !receipt.Valid {
+		return ErrReceiptMalformed
+	}
+	if receipt.At.After(now) {
+		return ErrReceiptInFuture
+	}
+	return nil
 }

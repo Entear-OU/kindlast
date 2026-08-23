@@ -592,7 +592,7 @@
               "host": ["{{api_base_url}}"],
               "path": ["kindlast.core.v1.FindingsService", "ApproveFinding"]
             },
-            "description": "The act path. Required scope: `findings:act`, which is deliberately **not** `findings:read`: rendering the console and approving on a human's behalf are separately dangerous, and a display-only integration should not be one credential leak away from the second.\n\n**Implemented as of ENT-203**, database half included (`00006_act_path_audit.sql`, which is what makes the audit row exist at all). Reachable by a signed-in human as of ENT-221; see List findings for why this collection's client-credentials token still is not the way to call it.\n\n**Plan gating.** With `KINDLAST_BILLING_ENABLED` set, an organisation not on an active `pro` subscription gets `resource_exhausted` here rather than `permission_denied`: the two mean different things to the person reading the console, and only one of them has a button under it. Unset, which is the self-hosted default, the act path is ungated (\u00a718.1).\n\n**There is no actor field, and there will not be one.** The approving human is read from the session GUC the tenancy interceptor set, so a caller cannot name someone else as the approver. `approve_finding` lost its acting-user parameter in the ENT-192 rewrite for exactly this reason.\n\n**Idempotent.** Approving an already-approved finding returns `applied: false`, writes nothing and writes no second audit row. The usual cause is a double submit or a retry, neither of which is a problem worth showing a customer.\n\n`applied: false` also covers a finding that is unknown or belongs to another organisation. All three answer alike on purpose — telling them apart is what probing for a tenancy leak looks like.\n\n**`createdRecordId` is populated as of ENT-203, and which findings populate it is a data question rather than a code one.** 00007 gave obligations an `action_type` and made `analyst_convert_signal` copy it onto the finding; 00009 classified the three obligations where approving means something other than \"a human read it\". So approving a `gdpr-art-30-ropa` finding returns a `processing_activities` id, an Annex III or Article 26 finding returns an `ai_systems` id, and the other twelve obligations stay `review` and create nothing — which is the right outcome for an obligation whose remedy is not a row. Verified end to end through the console, not inferred from the migrations.\n\n**No obligation maps to `create_dsar`, and 00009 asserts that rather than leaving it to chance:** a data-subject request arrives from a person, so an obligation that manufactured one would be inventing the requester.\n\n`createdRecordId` is empty on a repeat approval even though the record exists, because nothing was created by that call. This field reports what this request did; `RecordsService` answers what is on file.\n\n`reviewed` records whether a human actually read the supporting text rather than approving from the feed card. \"Approved\" and \"approved having read the regulation\" are different claims and the audit trail can tell them apart."
+            "description": "The act path. Required scope: `findings:act`, which is deliberately **not** `findings:read`: rendering the console and approving on a human's behalf are separately dangerous, and a display-only integration should not be one credential leak away from the second.\n\n**Implemented as of ENT-203**, database half included (`00006_act_path_audit.sql`, which is what makes the audit row exist at all). Reachable by a signed-in human as of ENT-221; see List findings for why this collection's client-credentials token still is not the way to call it.\n\n**Plan gating.** With `KINDLAST_BILLING_ENABLED` set, an organisation not on an active `pro` subscription gets `resource_exhausted` here rather than `permission_denied`: the two mean different things to the person reading the console, and only one of them has a button under it. Unset, which is the self-hosted default, the act path is ungated (\u00a718.1).\n\n**There is no actor field, and there will not be one.** The approving human is read from the session GUC the tenancy interceptor set, so a caller cannot name someone else as the approver. `approve_finding` lost its acting-user parameter in the ENT-192 rewrite for exactly this reason.\n\n**The record it creates arrives a moment later (ENT-271).** Approving writes the finding, its audit row and an executor job in one transaction, and the `relay-executor-jobs` Temporal Schedule creates the processing activity, DSAR or AI system within seconds, as the approver. So `createdRecordId` and `createdRecordTable` are **empty on a fresh approval** and carry the record on a repeat call, once it exists. Until ENT-271 three database triggers created it inside this transaction. And one refusal changed shape: approving a finding that would create a High-Risk AI system without `reviewed` is now `failed_precondition` with the reason, refused before anything is written, where it used to be a `check_violation` raised inside the trigger and surfaced as an internal error.\n\n**Idempotent.** Approving an already-approved finding returns `applied: false`, writes nothing and writes no second audit row. The usual cause is a double submit or a retry, neither of which is a problem worth showing a customer.\n\n`applied: false` also covers a finding that is unknown or belongs to another organisation. All three answer alike on purpose — telling them apart is what probing for a tenancy leak looks like.\n\n**`createdRecordId` is populated as of ENT-203, and which findings populate it is a data question rather than a code one.** 00007 gave obligations an `action_type` and made `analyst_convert_signal` copy it onto the finding; 00009 classified the three obligations where approving means something other than \"a human read it\". So approving a `gdpr-art-30-ropa` finding returns a `processing_activities` id, an Annex III or Article 26 finding returns an `ai_systems` id, and the other twelve obligations stay `review` and create nothing — which is the right outcome for an obligation whose remedy is not a row. Verified end to end through the console, not inferred from the migrations.\n\n**No obligation maps to `create_dsar`, and 00009 asserts that rather than leaving it to chance:** a data-subject request arrives from a person, so an obligation that manufactured one would be inventing the requester.\n\n`createdRecordId` is empty on a repeat approval even though the record exists, because nothing was created by that call. This field reports what this request did; `RecordsService` answers what is on file.\n\n`reviewed` records whether a human actually read the supporting text rather than approving from the feed card. \"Approved\" and \"approved having read the regulation\" are different claims and the audit trail can tell them apart."
           }
         },
         {
@@ -778,6 +778,46 @@
               "path": ["kindlast.platform.v1.SweepService", "ListSweepTargets"]
             },
             "description": "Lists every organisation a scheduled sweep should visit: the ones with a compliance profile, by id alone. **Served as of ENT-256 (part four).** Required scope: `internal:ingest`.\n\n**This is \"sweep everyone\", written deliberately.** Run sweep refuses to sweep more than one organisation because the blast radius is every customer at once; this RPC exists so that the loop is the `sweep-every-organisation` workflow, one organisation per activity pair, visible and pausable in the Temporal UI, rather than a parameter somebody can pass by accident. The producer role cannot enumerate tenants, so the answer comes from `sweep_targets()`, the ninth SECURITY DEFINER function (migration 00035), which returns ids and nothing else."
+          }
+        },
+        {
+          "name": "List pending executor jobs (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.ExecutorService/ListPendingJobs",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.ExecutorService", "ListPendingJobs"]
+            },
+            "description": "Lists the approvals whose record has not been created yet: job id, organisation, finding and action, oldest first. **Served as of ENT-271.** Required scope: `internal:ingest`. No `Kindlast-Org-Id`: the list is every organisation's.\n\nApproving a finding writes the finding, its audit row and an `executor_jobs` row in one transaction (migration 00036); the `relay-executor-jobs` Temporal Schedule asks this every fifteen seconds and starts one `execute/{job id}` workflow per row. No payload crosses here: the finding's proposed record stays in the database until the execution reads it."
+          }
+        },
+        {
+          "name": "Execute job (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"{{executor_job_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.ExecutorService/ExecuteJob",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.ExecutorService", "ExecuteJob"]
+            },
+            "description": "Creates the record one approved finding asked for (a processing activity, a DSAR or an AI system) and settles the job, in one transaction. **Served as of ENT-271.** Required scope: `internal:ingest`.\n\n**Whose authority the record is created with is the part to read.** The approver's: core-api opens a tenant transaction whose organisation and user come from the job row, and creates the record under the same policies the database trigger this replaces ran under. The request names a job id and nothing else, because a caller that could name the approver could create a customer's compliance record in somebody else's name. The producer role is deliberately not used: it holds nothing on `processing_activities` or `ai_systems`, and granting it writes would make the role that can invent a finding also able to write the record that finding creates.\n\nIdempotent twice over: the job is claimed `for update` and re-read as pending, and the record is guarded on the finding, so a retry after a timeout finds the record rather than creating a second. `unavailable` means the execution failed, the attempt is recorded on the row, and the job is offered again."
           }
         },
         {

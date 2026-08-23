@@ -506,6 +506,7 @@ does nothing but fail.
 | `relay-transactional-outbox` | Every 15 seconds (`KINDLAST_OUTBOX_RELAY_INTERVAL`) | Asks core-api what is waiting to leave and starts one workflow per row: `deliver-message/{row id}` for an invitation email, `deliver-notification/{row id}` for a finding notification. Each has a retry policy that backs off (ten seconds, doubling, capped at ten minutes) and no attempt limit: every attempt and what the mail server answered is in that workflow's history. A message that is not leaving is a running workflow in the UI with a reason. |
 | `reclaim-transactional-outbox` | Hourly at forty past (`KINDLAST_OUTBOX_RECLAIM_SCHEDULE`) | Clears the recipient's address and the rendered body out of delivered messages after seven days, and gives up on undelivered ones whose invitation can no longer be accepted. The rendered body of an invitation carries the raw token, so this is a credential-lifetime pass before it is a data-minimisation one. A message that can still be delivered is never touched. |
 | `relay-sweep-triggers` | Every 15 seconds (`KINDLAST_SWEEP_RELAY_INTERVAL`) | Asks core-api which sweeps somebody asked for and nothing has run (today: an onboarding somebody just confirmed writes a `sweep_triggers` row in the same transaction as the profile) and starts one `TriggeredSweepWorkflow` per row, named `sweep/{trigger id}`. So a fresh organisation sees findings within seconds of confirming, without anybody calling `RunSweep`. |
+| `relay-executor-jobs` | Every 15 seconds (`KINDLAST_EXECUTOR_RELAY_INTERVAL`) | Creates the record every approved finding asked for: a processing activity, a DSAR or an AI system. Approving writes the finding, its audit row and a job in one transaction; this starts one `execute/{job id}` workflow per job, which creates the record **as the person who approved it**, with the same audit entry. Until this change three database triggers did it inside the approving transaction. A record therefore appears a second or two after the approval rather than in the same instant, which is what the design always specified. |
 | `sweep-every-organisation` | Daily at 06:00 UTC (`KINDLAST_SWEEP_SCHEDULE`) | Lists every organisation with a compliance profile and runs the Watcher and then the Analyst over each, four at a time, as two activities per organisation with their own retries. One organisation's failure is recorded in the run's result and does not stop the rest. This is what pg_cron's `watcher-daily` and `analyst-daily` were; the Analyst is now the next step in the same workflow rather than a second job five minutes later. Then, one organisation at a time, it drafts the narrative for findings that have none (see below). |
 
 Mail itself is sent by core-api, not by the worker: the worker asks core-api
@@ -552,6 +553,13 @@ Python worker starts with the container and needs `KINDLAST_TEMPORAL_ADDR`
 (the bundled stack sets it); with it empty the container serves the RPC half
 alone and says so at boot.
 
+**An approval whose record has not appeared** is a job in `executor_jobs` with
+`status = 'pending'`, an attempt count and the last error, and a workflow in
+the UI named `execute/{job id}` with the same reason in its history. The
+execution retries with backoff and no attempt limit, because a person approved
+a finding and a record is owed; a `workers` container that is down means
+records wait rather than being lost.
+
 `SweepService.RunSweep` still exists for an operator who wants to sweep one
 organisation now, with a service credential; see the Postman collection. It is
 no longer how anything gets swept in the ordinary course of things. To sweep
@@ -581,6 +589,7 @@ Its settings:
 | `KINDLAST_OUTBOX_RECLAIM_SCHEDULE` | `40 * * * *` | Five-field cron, UTC, for clearing addresses and bodies out of delivered and abandoned messages. |
 | `KINDLAST_SWEEP_RELAY_INTERVAL` | `15s` | How often the relay looks for sweeps somebody asked for. A Go duration. |
 | `KINDLAST_SWEEP_SCHEDULE` | `0 6 * * *` | Five-field cron, UTC, for sweeping every organisation with a profile. |
+| `KINDLAST_EXECUTOR_RELAY_INTERVAL` | `15s` | How often the relay looks for approvals whose record has not been created yet. A Go duration. |
 | `KINDLAST_CORE_API_URL` | `http://edge:80` | Where the activities call. Through the edge, the same door Intelligence uses. |
 | `KINDLAST_OIDC_*`, `KINDLAST_INTERNAL_CLIENT_FILE` | as core-api | The worker mints a token to call core-api, with the same service credential Intelligence presents. The bundled stack mounts the seed's files; an operator pointing at their own IdP sets these the way they did for core-api. |
 

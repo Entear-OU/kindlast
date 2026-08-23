@@ -144,6 +144,23 @@ func (s *Service) ApproveFinding(
 	}
 
 	acted, err := store.ApproveFinding(ctx, req.Msg.GetFindingId(), req.Msg.GetReviewed())
+	if errors.Is(err, domain.ErrReceiptRequired) ||
+		errors.Is(err, domain.ErrReceiptMalformed) ||
+		errors.Is(err, domain.ErrReceiptInFuture) {
+		// The Article 12(3) clock runs from receipt and cannot be guessed
+		// (ENT-224). `failed_precondition` for the same reason a reviewed
+		// approval is: the caller is allowed to do this, and something about
+		// the finding stops it.
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	if errors.Is(err, domain.ErrReviewRequired) {
+		// §3's refusal vocabulary: `failed_precondition` for a reviewed
+		// approval. It used to reach here as whatever the generic mapping
+		// made of a `check_violation` raised inside the executor trigger,
+		// which is to say a 500 for a rule working exactly as intended
+		// (ENT-271).
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

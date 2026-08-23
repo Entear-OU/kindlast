@@ -106,6 +106,9 @@ func Services() []protoreflect.ServiceDescriptor {
 		// `internal:intelligence`, with the organisation's key opened here in
 		// Go and nowhere else.
 		platformv1.File_kindlast_platform_v1_completion_proto,
+		// ExecutorService (ENT-271). Creating the record an approved finding
+		// asked for, on `internal:ingest`, as the approver named on the job.
+		platformv1.File_kindlast_platform_v1_executor_proto,
 	}
 
 	var services []protoreflect.ServiceDescriptor

@@ -17,6 +17,7 @@ import (
 	corpusservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/corpus"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
+	executorservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/executor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
@@ -72,6 +73,13 @@ type Dependencies struct {
 	// the service is not served, which goes with Producer: no agent pool, no
 	// internal surface.
 	Outbox deliveryservice.Outbox
+
+	// ExecutorJobs lists approvals whose record has not been created, on the
+	// producer pool; Executions creates it, on the application pool as the
+	// approver (ENT-271). Nil for either means ExecutorService is not served,
+	// which goes with having no agent pool.
+	ExecutorJobs executorservice.Jobs
+	Executions   executorservice.Executions
 	// Mail is the channel DeliveryService sends on. Nil is the supported state
 	// before KINDLAST_SMTP_ADDR is set: the rows queue, the list and the
 	// reclaim still answer, and a delivery is refused with a message naming
@@ -363,6 +371,15 @@ func New(deps Dependencies) (http.Handler, error) {
 	if deps.Outbox != nil {
 		mux.Handle(platformv1connect.NewDeliveryServiceHandler(
 			deliveryservice.New(deps.Outbox, deps.Mail, deps.AppBaseURL), internal))
+	}
+
+	// The Executor (ENT-271). Two halves on two pools: the producer lists
+	// what is pending across every organisation, and the application creates
+	// the record as the approver named on the job row. Registered when both
+	// exist, which is every deployment with an agent pool.
+	if deps.ExecutorJobs != nil && deps.Executions != nil {
+		mux.Handle(platformv1connect.NewExecutorServiceHandler(
+			executorservice.New(deps.ExecutorJobs, deps.Executions), internal))
 	}
 
 	// Writing the corpus (ENT-207). On the same shorter chain, for the same

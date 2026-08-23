@@ -1079,6 +1079,11 @@ services:
       # ran; the Analyst no longer needs its own 06:05.
       KINDLAST_SWEEP_RELAY_INTERVAL: ${KINDLAST_SWEEP_RELAY_INTERVAL:-15s}
       KINDLAST_SWEEP_SCHEDULE: ${KINDLAST_SWEEP_SCHEDULE:-0 6 * * *}
+      # How often the relay looks for approvals whose record has not been
+      # created yet (ENT-271). Somebody clicked approve and is looking for
+      # what they approved, so this is the tightest of the three relays'
+      # reasons and takes the same interval.
+      KINDLAST_EXECUTOR_RELAY_INTERVAL: ${KINDLAST_EXECUTOR_RELAY_INTERVAL:-15s}
 
       # Where the activities call: through the edge, the same door Intelligence
       # uses, so there is no development-only shortcut. The edge routes

@@ -585,7 +585,8 @@ jobs:
             relay-transactional-outbox:RelayOutboxWorkflow \
             reclaim-transactional-outbox:ReclaimOutboxWorkflow \
             relay-sweep-triggers:RelaySweepTriggersWorkflow \
-            sweep-every-organisation:DailySweepWorkflow; do
+            sweep-every-organisation:DailySweepWorkflow \
+            relay-executor-jobs:RelayExecutorJobsWorkflow; do
             id=${pair%%:*}; workflow=${pair##*:}
             docker compose -f deploy/compose.yaml exec -T temporal \
               temporal schedule describe --schedule-id "$id" --address temporal:7233 \

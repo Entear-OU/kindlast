@@ -1,23 +1,36 @@
 /**
- * A DSAR's statutory clock runs from receipt (ENT-224).
+ * The statutory clock runs from receipt (ENT-224), and where that rule now
+ * lives (ENT-271).
  *
- * `executor_create_dsar_on_approval` used to hardcode `received_at = now()`,
- * so a request that arrived a week ago and was approved today got a deadline a
- * week later than the real one.
+ * A DSAR's Article 12(3) deadline runs from receipt of the request, not from
+ * the day somebody approved the finding that logs it. 00010 made the executor
+ * trigger take `received_at` from the payload and refuse to guess it, with the
+ * argument written out at length: a request whose receipt date is unknown has
+ * an unknowable deadline, and now() asserts a specific deadline that is
+ * optimistic by however long the request sat unlogged.
  *
- * The direction is what makes it worth a suite. The product would have told a
- * customer they were comfortably on time when they were nearly due, or already
- * late. Under-reporting urgency is the failure a compliance product cannot
- * afford, because the customer stops checking for themselves.
+ * WHAT MOVED (ENT-271)
  *
- * The backdated test is the one ENT-224 asks for by name: it fails against the
- * pre-00010 trigger, which is what makes the rest of this suite worth trusting.
+ * The trigger is gone. Approving a finding now enqueues an executor job and a
+ * Temporal workflow creates the DSAR a moment later, so the refusal could no
+ * longer abort the approving transaction, and a refusal that arrived after the
+ * approval would be strictly worse than the default it replaced: the finding
+ * would be approved, the audit row would name the approver, and the DSAR would
+ * never appear. So the rule moved to the approval, in Go:
+ * `findings.CheckReceipt`, refused with `failed_precondition` before anything
+ * is written. Its tests are
+ * `apps/core-api/internal/domain/findings/posture_test.go` (the rule) and
+ * `apps/core-api/internal/store/postgres/executor_test.go` (the refusal
+ * leaving the finding pending, and the clock running from the payload's date,
+ * against this same database).
  *
- * Refusal is the decision 00010 made on the question ENT-224 left open. A
- * missing receipt date is refused rather than defaulted, because an unknown
- * receipt date means an unknowable deadline and `now()` asserts an optimistic
- * one. Three tests pin that, and they are the ones to change if the decision is
- * ever reversed.
+ * WHAT IS STILL THE DATABASE'S, AND THEREFORE STILL HERE
+ *
+ * The column and its shape: a DSAR carries `received_at` and
+ * `response_due_at`, and the schema does not care where they came from. The
+ * one test below writes a DSAR the way the executor does and asserts the
+ * thirty days are counted from the receipt it was given, which is the
+ * invariant the clock rests on whoever computes it.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { randomUUID } from 'node:crypto'
@@ -145,10 +158,10 @@ afterAll(async () => {
 })
 
 describe.skipIf(!reachable)('the deadline runs from receipt', () => {
-  // The test ENT-224 asks for by name. It fails against the pre-00010 trigger,
-  // which hardcoded received_at = now() and would have put the deadline 30 days
-  // from approval rather than 30 days from a receipt eight days earlier.
-  it('honours a backdated receipt', async () => {
+  // The property ENT-224 asks for by name, asserted against the schema: a
+  // request that arrived eight days ago is due 22 days from now, not 30.
+  // Whoever computes the dates, a DSAR that says otherwise is wrong.
+  it('is thirty days after the receipt, not after the approval', async () => {
     const received = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
     const finding = await seedDsarFinding({
       requester: 'A. Subject',
@@ -156,8 +169,21 @@ describe.skipIf(!reachable)('the deadline runs from receipt', () => {
       received_at: received.toISOString(),
     })
 
+    // Written as the Executor writes it: the application role, as the
+    // approver, taking both dates from the payload.
     await setTenant(app, org, ada)
-    await app.query(APPROVE, [finding])
+    await app.query(
+      `insert into dsars (org_id, created_by, finding_id, subject_name,
+                          request_type, status, received_at, response_due_at)
+       select f.org_id, current_setting('app.current_user_id')::uuid, f.id,
+              f.metadata -> 'payload' ->> 'requester',
+              f.metadata -> 'payload' ->> 'request_type',
+              'open',
+              (f.metadata -> 'payload' ->> 'received_at')::timestamptz,
+              (f.metadata -> 'payload' ->> 'received_at')::timestamptz + interval '30 days'
+         from findings f where f.id = $1`,
+      [finding],
+    )
 
     const r = await migrator.query(
       `select received_at, response_due_at from dsars where finding_id = $1`,
@@ -168,92 +194,13 @@ describe.skipIf(!reachable)('the deadline runs from receipt', () => {
     const storedReceived = new Date(r.rows[0].received_at).getTime()
     const due = new Date(r.rows[0].response_due_at).getTime()
 
-    // The receipt survived rather than being replaced by now().
     expect(Math.abs(storedReceived - received.getTime())).toBeLessThan(1000)
-
-    // And the deadline is 30 days after THAT, so it has already partly run.
     expect(Math.abs(due - (received.getTime() + 30 * 86400_000))).toBeLessThan(
       1000,
     )
-
     // Stated the other way round, because this is the property that matters:
-    // the deadline is sooner than 30 days from now.
+    // the deadline is sooner than 30 days from now, so the request is already
+    // partly through its window.
     expect(due).toBeLessThan(Date.now() + 30 * 86400_000)
-  })
-
-  it('leaves 30 days when the request arrived just now', async () => {
-    const received = new Date()
-    const finding = await seedDsarFinding({
-      requester: 'B. Subject',
-      received_at: received.toISOString(),
-    })
-
-    await setTenant(app, org, ada)
-    await app.query(APPROVE, [finding])
-
-    const r = await migrator.query(
-      `select response_due_at from dsars where finding_id = $1`,
-      [finding],
-    )
-    const due = new Date(r.rows[0].response_due_at).getTime()
-    expect(Math.abs(due - (received.getTime() + 30 * 86400_000))).toBeLessThan(
-      2000,
-    )
-  })
-})
-
-describe.skipIf(!reachable)('and an unknown receipt date is refused', () => {
-  // 00010's decision on the question ENT-224 left open. An unknown receipt date
-  // means an unknowable deadline, and now() would assert an optimistic one.
-  it('refuses a payload with no received_at', async () => {
-    const finding = await seedDsarFinding({ requester: 'C. Subject' })
-    await setTenant(app, org, ada)
-
-    await expect(app.query(APPROVE, [finding])).rejects.toThrow(
-      /no received_at/i,
-    )
-  })
-
-  it('refuses a received_at that is not a timestamp', async () => {
-    const finding = await seedDsarFinding({ received_at: 'last Tuesday' })
-    await setTenant(app, org, ada)
-
-    await expect(app.query(APPROVE, [finding])).rejects.toThrow(
-      /not a timestamp/i,
-    )
-  })
-
-  it('refuses a receipt date in the future', async () => {
-    // Data entry gone wrong, and it moves the deadline outwards, which is the
-    // direction that hides a breach.
-    const finding = await seedDsarFinding({
-      received_at: new Date(Date.now() + 86400_000).toISOString(),
-    })
-    await setTenant(app, org, ada)
-
-    await expect(app.query(APPROVE, [finding])).rejects.toThrow(
-      /in the future/i,
-    )
-  })
-
-  // The refusal is a refusal, not a partial write: the approval is aborted
-  // whole, so there is no approved finding with no DSAR behind it.
-  it('leaves the finding unapproved when it refuses', async () => {
-    const finding = await seedDsarFinding({ requester: 'D. Subject' })
-    await setTenant(app, org, ada)
-
-    await expect(app.query(APPROVE, [finding])).rejects.toThrow()
-
-    const r = await migrator.query(
-      `select status from findings where id = $1`,
-      [finding],
-    )
-    expect(r.rows[0].status).toBe('pending')
-
-    const audit = await migrator.query(
-      `select count(*)::int as n from audit_log where finding_id = $1`,
-      [finding],
-    )
-    expect(audit.rows[0].n).toBe(0)
   })
 })

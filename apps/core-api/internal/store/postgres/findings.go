@@ -302,6 +302,29 @@ func (t *Tenant) ApproveFinding(ctx context.Context, findingID string, reviewed 
 		return findings.Acted{}, err
 	}
 
+	// What approving this finding would create, and whether it may (ENT-271).
+	//
+	// Read before the write, and refused before the write, because the gate
+	// this replaces was a `raise check_violation` inside the executor trigger
+	// and aborted the whole transaction. With execution moved behind the
+	// event boundary there is nothing to abort later: an approval that is
+	// going to be refused has to be refused now, or the person is left with
+	// an approved finding, an audit row naming them, and no record.
+	plan, err := t.executionPlan(ctx, id)
+	if err != nil {
+		return findings.Acted{}, err
+	}
+	if findings.RequiresReview(plan.ActionType, plan.RiskClassification, reviewed) {
+		return findings.Acted{}, findings.ErrReviewRequired
+	}
+	// And the DSAR receipt (ENT-224's rule, moved here with the execution):
+	// a deadline that runs from receipt cannot be started from a date nobody
+	// knows, and refusing at execution time would leave the finding approved
+	// with no record and the reason in a job row.
+	if err := findings.CheckReceipt(plan.ActionType, plan.Receipt, plan.Now); err != nil {
+		return findings.Acted{}, err
+	}
+
 	// `status <> 'approved'` and the read above are two guards, and measuring
 	// which one the tests exercise was worth doing.
 	//
@@ -354,7 +377,83 @@ func (t *Tenant) ApproveFinding(ctx context.Context, findingID string, reviewed 
 	}); err != nil {
 		return findings.Acted{}, err
 	}
+
+	// The execution, enqueued rather than performed (ENT-271, migration
+	// 00036). In this transaction, so a job cannot name an approval that has
+	// not committed; and after the audit row, so the order in the log reads
+	// as it happened.
+	//
+	// `acted.CreatedRecordID` is therefore empty here, where the trigger used
+	// to have filled it: the record exists a second or two later. Measured
+	// before changing it: nothing in the console renders that field.
+	if findings.Executes(plan.ActionType) {
+		if err := t.enqueueExecutorJob(ctx, id, plan.ActionType); err != nil {
+			return findings.Acted{}, err
+		}
+	}
 	return acted, nil
+}
+
+// executionPlan is what approving a finding would create: the action type,
+// and the risk classification its proposed payload carries.
+//
+// Both come from the finding itself. The payload is the Analyst's proposal
+// and nothing in core-api updates `findings.metadata` after it is written, so
+// this is the same value the execution will read when it runs.
+type executionPlan struct {
+	ActionType         string
+	RiskClassification string
+	// Receipt is what the payload says about when a DSAR arrived, parsed by
+	// Postgres so the answer is the one the trigger's `::timestamptz` gave.
+	Receipt findings.Receipt
+	// Now is the database's clock, not this process's, because "in the
+	// future" is a comparison and the two clocks are not the same one.
+	Now time.Time
+}
+
+func (t *Tenant) executionPlan(ctx context.Context, id uuid.UUID) (executionPlan, error) {
+	var plan executionPlan
+	var receivedAt *time.Time
+	err := t.tx.QueryRow(ctx, `
+		select action_type,
+		       coalesce(metadata -> 'payload' ->> 'risk_classification', ''),
+		       coalesce(metadata -> 'payload' ->> 'received_at', '') <> '',
+		       pg_input_is_valid(coalesce(metadata -> 'payload' ->> 'received_at', ''), 'timestamptz'),
+		       case when pg_input_is_valid(coalesce(metadata -> 'payload' ->> 'received_at', ''), 'timestamptz')
+		            then (metadata -> 'payload' ->> 'received_at')::timestamptz end,
+		       now()
+		  from findings
+		 where id = $1
+	`, id).Scan(&plan.ActionType, &plan.RiskClassification,
+		&plan.Receipt.Present, &plan.Receipt.Valid, &receivedAt, &plan.Now)
+	if receivedAt != nil {
+		plan.Receipt.At = *receivedAt
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return executionPlan{}, nil
+	}
+	if err != nil {
+		return executionPlan{}, fmt.Errorf("postgres: reading what an approval would create: %w", err)
+	}
+	return plan, nil
+}
+
+// enqueueExecutorJob writes the row the Executor workflow runs from (00036).
+//
+// `on conflict do nothing` on the one-job-per-finding constraint: approving
+// twice is already idempotent upstream, and a second row would mean a second
+// record for one decision, which is the failure the trigger's `exists` guard
+// existed to prevent and which the store's own guard still prevents at
+// execution.
+func (t *Tenant) enqueueExecutorJob(ctx context.Context, findingID uuid.UUID, actionType string) error {
+	if _, err := t.tx.Exec(ctx, `
+		insert into executor_jobs (org_id, finding_id, action_type, approved_by)
+		values ($1, $2, $3, $4)
+		on conflict (finding_id) do nothing
+	`, t.orgID, findingID, actionType, t.userID); err != nil {
+		return fmt.Errorf("postgres: enqueuing an executor job: %w", err)
+	}
+	return nil
 }
 
 // findingSnapshot reads a finding as JSON, for the `before` half of an audit

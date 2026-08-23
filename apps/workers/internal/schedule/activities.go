@@ -24,6 +24,9 @@ type Activities struct {
 	// Narratives is NarrativeService: findings, explained, as the third step
 	// of a sweep (part five).
 	Narratives Narrator
+	// Executions is ExecutorService: creating the record an approved finding
+	// asked for (ENT-271), which used to be a database trigger.
+	Executions Executor
 	// Mail is DeliveryService: the transactional outbox's delivery half
 	// (part three).
 	Mail Deliverer

@@ -507,6 +507,15 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.NarrativeService.RecordNarrative": {
 			Method: "POST", Path: "/internal/v1/findings:record-narrative",
 		},
+		// The Executor (ENT-271): what the workflow calls to create the
+		// record an approved finding asked for. Cross-organisation like the
+		// rest of this surface; the organisation comes from the job row.
+		"kindlast.platform.v1.ExecutorService.ListPendingJobs": {
+			Method: "POST", Path: "/internal/v1/executor-jobs:pending",
+		},
+		"kindlast.platform.v1.ExecutorService.ExecuteJob": {
+			Method: "POST", Path: "/internal/v1/executor-jobs:execute",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

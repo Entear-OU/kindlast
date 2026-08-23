@@ -12,6 +12,33 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
+### Changed
+
+- **Approving a finding creates its record a moment later, through the
+  Executor workflow, instead of inside the approving transaction** (ENT-271,
+  ENT-225 phase 2). Three database triggers used to insert the processing
+  activity, DSAR or AI system while the approval was still being written.
+  Approving now writes the finding, its audit row and one `executor_jobs` row
+  in that transaction (migration 00036), a relay starts one
+  `execute/{job id}` workflow per job within fifteen seconds, and the record
+  is created **as the person who approved it**, with the same columns and the
+  same audit entry the trigger wrote. This is what the design always
+  specified: execution belongs behind the event boundary.
+
+  What an operator sees: a record appears in Records a second or two after the
+  approval rather than in the same instant; an approval whose record has not
+  appeared is a pending row in `executor_jobs` with its attempt count and last
+  error, and a workflow in the Temporal UI with the reason in its history. The
+  execution retries with backoff and no attempt limit, because a person
+  approved a finding and a record is owed.
+
+  **One refusal changes shape, for the better.** Approving a finding that
+  would create a High-Risk AI system without ticking the review used to fail
+  inside the trigger with a `check_violation`, which reached the caller as an
+  internal error. It is now refused before anything is written, with
+  `failed_precondition` and the reason, and the finding stays pending so the
+  same person can review and approve again.
+
 ### Added
 
 - **Findings are narrated on both task queues: Go loads, Python drafts, Go

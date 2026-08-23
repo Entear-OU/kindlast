@@ -33,6 +33,9 @@ type Options struct {
 	// SweepSchedule is a five-field cron expression, evaluated in UTC, for
 	// sweeping every organisation.
 	SweepSchedule string
+	// ExecutorRelayInterval is how often the relay looks for approvals whose
+	// record has not been created yet.
+	ExecutorRelayInterval time.Duration
 	// Activities is the dependency set the activities close over.
 	Activities *Activities
 	Logger     *slog.Logger
@@ -102,6 +105,8 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 	w.RegisterWorkflow(RelaySweepTriggersWorkflow)
 	w.RegisterWorkflow(TriggeredSweepWorkflow)
 	w.RegisterWorkflow(DailySweepWorkflow)
+	w.RegisterWorkflow(RelayExecutorJobsWorkflow)
+	w.RegisterWorkflow(ExecuteApprovalWorkflow)
 	w.RegisterActivityWithOptions(opts.Activities.ExpireSnoozes,
 		activityOptions(ExpireSnoozesActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.ListUndelivered,
@@ -134,6 +139,12 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		activityOptions(NextFindingToNarrateActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.RecordNarrative,
 		activityOptions(RecordNarrativeActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.ListExecutorJobs,
+		activityOptions(ListExecutorJobsActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.StartExecutions,
+		activityOptions(StartExecutionsActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.ExecuteJob,
+		activityOptions(ExecuteJobActivityName))
 	// DraftNarrative is deliberately NOT registered here: it runs on the
 	// `intelligence` task queue, served by the Python worker (§16.4).
 
@@ -155,7 +166,8 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		"outbox_relay", opts.OutboxRelayInterval.String(),
 		"outbox_reclaim", opts.OutboxReclaimSchedule,
 		"sweep_relay", opts.SweepRelayInterval.String(),
-		"sweep", opts.SweepSchedule)
+		"sweep", opts.SweepSchedule,
+		"executor_relay", opts.ExecutorRelayInterval.String())
 	return &Worker{client: c, worker: w}, nil
 }
 
@@ -266,6 +278,22 @@ func schedules(opts Options) []scheduleDefinition {
 			Memo: map[string]any{
 				"owner": "workers (ENT-256)",
 				"what":  "starts a sweep for every organisation that asked for one (confirmed onboarding)",
+			},
+		},
+		{
+			ID: ExecutorRelayScheduleID,
+			// The same interval shape as the outbox and sweep relays, and
+			// the tightest of the three reasons: somebody clicked approve
+			// and is looking at Records for what they approved.
+			Spec: client.ScheduleSpec{
+				Intervals: []client.ScheduleIntervalSpec{{Every: opts.ExecutorRelayInterval}},
+			},
+			Workflow:         RelayExecutorJobsWorkflow,
+			ExecutionTimeout: 5 * time.Minute,
+			CatchupWindow:    time.Minute,
+			Memo: map[string]any{
+				"owner": "workers (ENT-271)",
+				"what":  "creates the record every approved finding asked for",
 			},
 		},
 		{
