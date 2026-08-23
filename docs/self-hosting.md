@@ -44,8 +44,9 @@ docker compose -f deploy/compose.yaml up -d
 
 That gives you Postgres with the tenancy role split applied, migrations run by
 a job container that must exit zero, Zitadel serving OIDC discovery, Redis, the
-resource server, the integrations gateway, Temporal, a Caddy edge, and
-**Kindlast itself at http://localhost:8000**. Tear it down with `down -v`.
+resource server, the integrations gateway, Temporal, the regulatory corpus
+loaded into the database, a Caddy edge, and **Kindlast itself at
+http://localhost:8000**. Tear it down with `down -v`.
 
 The console is a production Next build in its own container (ENT-241), so a
 host running this needs Docker and nothing else: no Bun, no Node, no checkout
@@ -69,6 +70,47 @@ separation before anything else, and run `bun run test:db` to check you did:
 it asserts the properties over `pg_class` rather than trusting configuration.
 
 Schema changes flow through goose migrations in `db/migrations/`.
+
+### The regulatory corpus
+
+**It loads on `up`, and there is nothing to run** (ENT-266). The corpus is
+committed to this repository as JSON under `data/corpus/`: the GDPR and the AI
+Act as article and recital summaries, a bibliography of EDPB guidelines, a
+register of enforcement decisions, and the obligations derived from them. A
+`corpus-load` job container reads that directory, ingests it through the
+resource server and exits, the same way `migrate` applies the schema and exits.
+
+That is not a convenience. Kindlast's claim is that a person can check a
+finding against the law, and until this job existed a clean install came up
+with an empty `regulatory_documents`: the Regulation page said no regulation
+had been loaded, and every obligation said the text behind its citation was not
+in this deployment. The data was on disk the whole time.
+
+The job **reads the JSON on disk and reaches nothing outside your own stack**,
+so it works on an air-gapped install. It is idempotent, because every write
+behind the ingest is an upsert on a natural key, so a second `up` reloads
+whatever changed and leaves everything else alone.
+
+**Updating it later is a `git pull` and one command.** The law changes,
+guidelines are superseded and enforcement decisions accumulate, so the corpus
+in your deployment is a point-in-time snapshot of the corpus in the release you
+installed:
+
+```bash
+git pull                                                   # or fetch a newer release
+docker compose -f deploy/compose.yaml up -d --build corpus-load
+```
+
+Fetching a newer corpus is the first of the two things
+["Air-gapped operation"](#air-gapped-operation) below permits to leave the
+deployment, and it stays an operator's decision: nothing here polls for an
+update, and the load itself needs no route out because it reads the checkout.
+
+An operator who curates their own additions, or who wants to see what a load
+would do before it does it, should read
+[`docs/regulation-packs.md`](./regulation-packs.md): the loader takes a
+`-dry-run` that validates every pack, reports every citation that does not
+resolve, and writes nothing.
 
 ## Environment variables
 
@@ -330,7 +372,10 @@ Exactly two things are ever permitted to leave, and both are inbound fetches an
 operator configured rather than ambient traffic:
 
 1. **Keeping the regulatory corpus current.** The law changes and a deployment
-   that cannot learn that is worse than one that can.
+   that cannot learn that is worse than one that can. This is about updates
+   only: the FIRST load has the data on disk and runs on `up` with no route
+   out, and `bun run test:airgap` waits for that job and fails if it could not
+   finish. See ["The regulatory corpus"](#the-regulatory-corpus) above.
 2. **The organisation's own data, arriving over MCP**, through the workers
    gateway and its allow-list.
 

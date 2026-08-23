@@ -143,21 +143,31 @@ cleanup() {
 }
 trap cleanup EXIT
 
-wait_for_seed() {
+# Waits for one of the stack's job containers to exit, and insists it exited
+# zero.
+#
+# Two of them matter here. `seed` is the one this script has always waited for.
+# `corpus-load` joined it in ENT-266, and for this script's purpose it is the
+# more interesting of the two: it is the job that reads `data/corpus/` and
+# calls core-api, so it is where a corpus that could only load with a route out
+# would show up. Without this wait, a corpus load that failed under the air gap
+# would leave the edge answering and this script reporting a pass.
+wait_for_job() {
+  job="$1"
   for _ in $(seq 1 120); do
-    status="$(docker inspect "${PROJECT}-seed" --format '{{.State.Status}}' 2>/dev/null || echo missing)"
+    status="$(docker inspect "${PROJECT}-${job}" --format '{{.State.Status}}' 2>/dev/null || echo missing)"
     if [ "$status" = "exited" ]; then
-      code="$(docker inspect "${PROJECT}-seed" --format '{{.State.ExitCode}}')"
+      code="$(docker inspect "${PROJECT}-${job}" --format '{{.State.ExitCode}}')"
       if [ "$code" != "0" ]; then
-        echo "seed exited ${code}" >&2
-        compose logs seed >&2 || true
+        echo "${job} exited ${code}" >&2
+        compose logs "$job" >&2 || true
         return 1
       fi
       return 0
     fi
     sleep 2
   done
-  echo "seed did not finish in time" >&2
+  echo "${job} did not finish in time" >&2
   return 1
 }
 
@@ -196,7 +206,8 @@ compose up -d >/dev/null || {
   echo "the stack did not come up before the air-gap was even applied" >&2
   exit 1
 }
-wait_for_seed || exit 1
+wait_for_job seed || exit 1
+wait_for_job corpus-load || exit 1
 wait_for_edge || {
   compose logs --tail 50 edge web >&2 || true
   exit 1
@@ -223,7 +234,12 @@ compose_airgap up -d >/dev/null || {
   echo "the stack did not come up with egress blocked, which is the finding" >&2
   exit 1
 }
-wait_for_seed || exit 1
+wait_for_job seed || exit 1
+# The corpus, loaded with no route out. `docs/self-hosting.md` counts keeping
+# the corpus current as one of exactly two things permitted to leave an air
+# gap, and that is a statement about updates: the first load has the data on
+# disk, so it has to succeed here.
+wait_for_job corpus-load || exit 1
 wait_for_edge || {
   compose_airgap logs --tail 50 edge web auth >&2 || true
   echo "the stack came up with egress blocked but never served, which is the finding" >&2

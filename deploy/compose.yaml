@@ -72,6 +72,11 @@
 #                      reaches it through `edge`. This is the service that
 #                      makes `up -d` give somebody the product rather than
 #                      everything the product needs.
+#   corpus-load        Job. Ingests data/corpus/ through core-api's
+#                      IngestService so a fresh stack has the regulation
+#                      behind its citations, and exits (ENT-266). Idempotent.
+#                      Reads the JSON on a bind mount and dials nothing but
+#                      `auth` and `core-api`: the first load needs no internet.
 #   edge               Caddy. The stack's front door: a health endpoint,
 #                      core-api's Connect surface, the billing webhook, and
 #                      everything else to `web`.
@@ -641,6 +646,70 @@ services:
       interval: 3s
       timeout: 5s
       retries: 20
+
+  # THE LAW ITSELF, LOADED ON `up` LIKE EVERYTHING ELSE A FRESH STACK NEEDS
+  # (ENT-266).
+  #
+  # A job, not a service: it ingests `data/corpus/` through core-api's
+  # IngestService and exits. Idempotent, because every write behind that RPC is
+  # an upsert on a natural key, so a second `up` costs one pass and changes
+  # nothing.
+  #
+  # WHY IT IS HERE AND NOT IN A RUNBOOK. The product's claim is that a person
+  # can check a finding against the law. Before this job a clean checkout came
+  # up with `regulatory_documents` and `regulatory_articles` empty, so the
+  # Regulation page said no regulation had been loaded and every obligation
+  # said the text behind its citation was not in this deployment. The corpus
+  # was in the checkout the whole time and nothing ever loaded it. Every other
+  # thing this stack needs on a first boot arrives on `up`, and the law is not
+  # the one to make an operator remember.
+  #
+  # NO EGRESS. It reads the JSON on the bind mount and talks to two addresses
+  # on this network, `auth` and `core-api`. `docs/self-hosting.md` counts
+  # keeping the corpus CURRENT as one of the two things permitted to leave an
+  # air gap, and that is about updates: the first load has the data on disk.
+  # `bun run test:airgap` waits for this job, so a corpus that could only load
+  # with a route out would fail there.
+  #
+  # IT DIALS core-api DIRECTLY, unlike `workers` and `intelligence`, which go
+  # through the edge so there is no development-only shortcut. The edge waits
+  # for `web` to be healthy, and the law arriving in the database has nothing
+  # to do with whether the console has finished starting: coupling them would
+  # mean a failed console build leaves a deployment with no regulation in it.
+  corpus-load:
+    container_name: ${COMPOSE_PROJECT_NAME:-kindlast}-corpus-load
+    build:
+      context: ..
+      dockerfile: apps/core-api/Dockerfile
+      # A second runtime stage in core-api's Dockerfile, so both binaries come
+      # out of one build and one module cache. Named, because the default
+      # target is the resource server.
+      target: corpus-load
+    restart: "no"
+    depends_on:
+      core-api:
+        condition: service_healthy
+    environment:
+      # Reached on this network. core-api publishes no port and needs none.
+      KINDLAST_CORE_API_URL: http://core-api:8080
+
+      # The same issuer split, host header, audience file and client file that
+      # core-api, Intelligence and the Temporal worker read. One service
+      # principal for every internal caller, rather than one to grant, rotate
+      # and forget per binary. It needs `internal:ingest`, which the seed
+      # grants to core-api-client and never to the browser client.
+      KINDLAST_OIDC_ISSUER: http://localhost:${KINDLAST_AUTH_PORT:-8300}
+      KINDLAST_OIDC_DISCOVERY_URL: http://auth:8080/.well-known/openid-configuration
+      KINDLAST_OIDC_HOST_HEADER: "localhost:${KINDLAST_AUTH_PORT:-8300}"
+      KINDLAST_OIDC_AUDIENCE_FILE: /machinekey/core-api-audience.txt
+      KINDLAST_INTERNAL_CLIENT_FILE: /machinekey/core-api-client.json
+    volumes:
+      - zitadel-machinekey:/machinekey:ro
+      # The corpus, read-only and from the checkout rather than baked into the
+      # image. A curator editing a summary re-runs this job; they do not
+      # rebuild a Go binary to change a sentence of English.
+      - ../data/corpus:/data/corpus:ro
+    command: ["-dir", "/data/corpus"]
 
   # Mail, captured rather than sent (ENT-197).
   #
