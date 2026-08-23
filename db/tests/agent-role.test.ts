@@ -290,3 +290,172 @@ describe.skipIf(!reachable)('and the application still cannot produce', () => {
     }
   })
 })
+
+describe.skipIf(!reachable)('and every table it reads names its tenant', () => {
+  // ENT-272. Eight producer policies were `using (true)`, so a query with no
+  // `org_id` predicate read every tenant's rows. That is not a hypothetical:
+  // it is how `WatcherContextFor` shipped with another organisation's
+  // connections and profile facts in the Watcher's context (ENT-258, PR #242),
+  // caught by a test in core-api rather than by anything in the schema.
+  //
+  // The tests below are the schema's own version of that test, and they are
+  // the reason the migration is worth having: the core-api one proves ONE
+  // caller writes a correct query, and these prove the NEXT caller cannot
+  // write an incorrect one.
+  //
+  // Proven able to fail: run this file against the schema at 00036 and all
+  // nine go red, each reporting 1 row where it expects 0. That is the whole
+  // point of the migration, so it is worth doing before believing them.
+
+  // One row per table, in orgB, seeded as the migrator so no policy is in the
+  // way of the fixture itself.
+  let evidenceB: string
+  let integrationB: string
+
+  beforeAll(async () => {
+    if (!reachable) return
+
+    integrationB = randomUUID()
+    await migrator.query(
+      `insert into integrations (id, org_id, kind, display_name, endpoint_url, status)
+       values ($1, $2, 'mcp', 'B connection', 'https://b.example/mcp', 'active')`,
+      [integrationB, orgB],
+    )
+    await migrator.query(
+      `insert into integration_tools (org_id, integration_id, name, write_capable)
+       values ($1, $2, 'b_tool', false)`,
+      [orgB, integrationB],
+    )
+
+    evidenceB = randomUUID()
+    await migrator.query(
+      `insert into org_evidence (id, org_id, source, observed_at, kind)
+       values ($1, $2, 'integration', now(), 'b_observation')`,
+      [evidenceB, orgB],
+    )
+    await migrator.query(
+      `insert into integration_fetches (org_id, integration_id, tool, outcome, evidence_id)
+       values ($1, $2, 'b_tool', 'succeeded', $3)`,
+      [orgB, integrationB, evidenceB],
+    )
+
+    const auditB = randomUUID()
+    await migrator.query(
+      `insert into audit_log (id, org_id, user_id, approving_user_id, action_type, target_table)
+       values ($1, $2, $3, $3, 'b_action', 'org_evidence')`,
+      [auditB, orgB, ada],
+    )
+    await migrator.query(
+      `insert into audit_evidence (org_id, audit_id, evidence_id) values ($1, $2, $3)`,
+      [orgB, auditB, evidenceB],
+    )
+
+    await migrator.query(
+      `insert into org_profile_facts (org_id, key, value, source)
+       values ($1, 'has_dpo', '"no"'::jsonb, 'onboarding')`,
+      [orgB],
+    )
+    await migrator.query(
+      `insert into org_model_config (org_id, provider, base_url, model, status)
+       values ($1, 'anthropic', 'https://api.anthropic.com', 'claude-opus-5', 'active')`,
+      [orgB],
+    )
+    await migrator.query(
+      `insert into agent_runs (org_id, skill, skill_version, model, model_version,
+                               outcome, started_at, finished_at)
+       values ($1, 'watcher.sweep', '1.0.0', 'test', '0', 'succeeded', now(), now())`,
+      [orgB],
+    )
+  })
+
+  // `count(*)` rather than a column list, so the assertion is about the policy
+  // and not about which columns 00025's column-level grant on `integrations`
+  // happens to include.
+  const invisible = [
+    [
+      'org_profile_facts',
+      `select count(*)::int as n from org_profile_facts where org_id = $1`,
+    ],
+    [
+      'integrations',
+      `select count(*)::int as n from integrations where org_id = $1`,
+    ],
+    [
+      'integration_tools',
+      `select count(*)::int as n from integration_tools where org_id = $1`,
+    ],
+    [
+      'integration_fetches',
+      `select count(*)::int as n from integration_fetches where org_id = $1`,
+    ],
+    [
+      'audit_evidence',
+      `select count(*)::int as n from audit_evidence where org_id = $1`,
+    ],
+    [
+      'org_evidence',
+      `select count(*)::int as n from org_evidence where org_id = $1`,
+    ],
+    [
+      'org_model_config',
+      `select count(*)::int as n from org_model_config where org_id = $1`,
+    ],
+    [
+      'agent_runs',
+      `select count(*)::int as n from agent_runs where org_id = $1`,
+    ],
+  ] as const
+
+  it.each(invisible)(
+    'cannot read another organisation\u2019s %s',
+    async (_table, sql) => {
+      await pointAt(orgA)
+      const r = await agent.query(sql, [orgB])
+      expect(r.rows[0].n).toBe(0)
+    },
+  )
+
+  // The fixtures above are real rows, so a policy that returned nothing for
+  // everybody would pass every test above while being just as broken. This is
+  // what stops that reading as a pass.
+  it('reads them all when it is pointed at the organisation that owns them', async () => {
+    await pointAt(orgB)
+    for (const [table, sql] of invisible) {
+      const r = await agent.query(sql, [orgB])
+      expect(
+        r.rows[0].n,
+        `${table} should be visible to its own organisation`,
+      ).toBe(1)
+    }
+  })
+
+  // THE OTHER HALF, AND THE ONE A PREDICATE CANNOT GIVE YOU.
+  //
+  // Every test above writes `where org_id = $1`, which is what a careful
+  // caller does. This one writes no predicate at all, which is what the
+  // careless caller does and what `WatcherContextFor` actually did. Under the
+  // open policies it returns every tenant's rows; under org equality it
+  // returns only the tenant the session names.
+  it('reads only its own rows even when the query forgets to say so', async () => {
+    await pointAt(orgA)
+    const r = await agent.query(
+      `select count(*)::int as n from org_profile_facts where org_id <> $1`,
+      [orgA],
+    )
+    expect(r.rows[0].n).toBe(0)
+  })
+
+  // A middleware bug that sets no organisation at all. The one-argument
+  // `current_setting` makes this a 42704 rather than an empty result, which is
+  // the louder of the two safe answers and the one 00029 argues for.
+  it('cannot read anything at all when no organisation is set', async () => {
+    const bare = await connect(AGENT_URL)
+    try {
+      await expect(
+        bare.query(`select count(*) from org_profile_facts`),
+      ).rejects.toThrow(/unrecognized configuration parameter/i)
+    } finally {
+      await bare.end()
+    }
+  })
+})

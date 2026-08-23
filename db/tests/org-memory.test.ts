@@ -395,18 +395,59 @@ describe.skipIf(!reachable)('evidence records what we observed', () => {
 })
 
 describe.skipIf(!reachable)('the agent reads and does not decide', () => {
-  it('reads across organisations without a membership', async () => {
+  it('reads without a membership, but only inside one organisation', async () => {
     const key = `agentread_${randomUUID().slice(0, 8)}`
     await record(orgA, key, 'visible')
+    // As the migrator, because `record` writes on the app pool and that
+    // session is pointed at orgA. The fixture is the point, not the path.
+    await migrator.query(
+      `insert into org_profile_facts (org_id, key, value, source)
+       values ($1, $2, '"not for orgA"'::jsonb, 'human')`,
+      [orgB, key],
+    )
 
-    // Unconditional by policy, matching agent_runs: the agent runs for
-    // organisations nobody is signed in to, so it has no tenancy GUCs to be
-    // checked against.
-    const r = await agent.query(
+    // WHAT THIS USED TO ASSERT, AND WHY IT CHANGED (ENT-272).
+    //
+    // It read the same key with no organisation set at all and expected one
+    // row, because `org_profile_facts_agent` was `using (true)`: the agent
+    // runs for organisations nobody is signed in to, so the argument went, it
+    // has no tenancy GUCs to be checked against.
+    //
+    // Half of that is still true and is the half worth testing. There is no
+    // member, and there is no `app.current_user_id`, and the agent still
+    // reads: that is what separates it from `kindlast_app`, whose policies
+    // want a membership row that a sweep does not have.
+    //
+    // The other half stopped being true. Every producer path that reaches this
+    // table knows whose facts it wants, and 00037 makes it say so.
+    // A connection of its own, rather than the shared `agent` client. Two
+    // tests further down assert what the producer does with NO organisation
+    // set, and `set_config(..., false)` is session scoped, so pointing the
+    // shared client here would quietly decide their starting state.
+    const pointed = await connect(AGENT_URL)
+    let n: number
+    try {
+      await pointed.query(
+        "select set_config('app.current_org_id', $1, false)",
+        [orgA],
+      )
+      const r = await pointed.query(
+        `select count(*)::int as n from org_profile_facts where key = $1`,
+        [key],
+      )
+      n = r.rows[0].n
+    } finally {
+      await pointed.end()
+    }
+    expect(n).toBe(1)
+
+    // The orgB row exists and carries the same key, so the count above is the
+    // policy choosing rather than there being only one row to find.
+    const seeded = await migrator.query(
       `select count(*)::int as n from org_profile_facts where key = $1`,
       [key],
     )
-    expect(r.rows[0].n).toBe(1)
+    expect(seeded.rows[0].n).toBe(2)
   })
 
   it('cannot record a fact', async () => {

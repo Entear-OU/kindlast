@@ -446,13 +446,23 @@ func TestTheTwoHighRiskQuestionsAreAnsweredSeparately(t *testing.T) {
 //
 // The organisation is a random uuid with no facts: the answer is false either
 // way, and what is under test is that asking is permitted at all.
+//
+// It is named twice, as the session's organisation and as the function's
+// argument, and since 00037 (ENT-272) that is not a duplication. The function
+// is SECURITY INVOKER, so its select runs as the producer under the producer's
+// policy on `org_profile_facts`, which is now org equality rather than
+// `using (true)`. Production does exactly this: `RunSweep` sets the GUC to the
+// organisation it is sweeping and the detectors then pass that same org down.
+// A test that only passed the argument would be testing a call production
+// never makes.
 func TestTheProducerRoleMayReadTheFactsApplicabilityDependsOn(t *testing.T) {
 	store := agentStore(t)
+	org := uuid.New()
 
 	var affirmed bool
-	if err := store.pool.QueryRow(t.Context(),
+	if err := agentTxFor(t, store, org).QueryRow(t.Context(),
 		`select public.watcher_fact_affirms($1, $2)`,
-		uuid.New(), memory.KeyHighRiskProcessing).Scan(&affirmed); err != nil {
+		org, memory.KeyHighRiskProcessing).Scan(&affirmed); err != nil {
 		t.Fatalf("the producer cannot read org_profile_facts, so every sweep would fail "+
 			"rather than every obligation applying: %v", err)
 	}

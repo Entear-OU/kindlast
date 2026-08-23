@@ -297,12 +297,35 @@ func (a *AgentStore) ActiveModelChoiceForOrg(ctx context.Context, orgID string) 
 		return Choice{}, Sealed{}, fmt.Errorf("%w: %q is not a uuid", ErrBadOrganisation, orgID)
 	}
 
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return Choice{}, Sealed{}, fmt.Errorf("postgres: beginning the model choice read: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// THE ORGANISATION IS SET, AND UNTIL ENT-272 ONLY THE PREDICATE SAID IT.
+	//
+	// This method used to run on a bare `pool.QueryRow` and carry the comment
+	// that the org predicate below "is the tenancy rather than a duplicate of
+	// it", because `org_model_config_agent` was `using (true)`. That was an
+	// accurate description of a bad arrangement: one `where` clause, written
+	// by hand, was the whole of the boundary, and deleting it by accident
+	// would have handed the caller every organisation's model endpoint and
+	// sealed credential.
+	//
+	// 00037 made the policy org equality. The predicate and the policy now say
+	// the same thing, which is the point rather than the redundancy: the query
+	// says which tenant it means, and the database is what enforces it.
+	if err := setLocal(ctx, tx, "app.current_org_id", org.String()); err != nil {
+		return Choice{}, Sealed{}, err
+	}
+
 	var (
 		choice     Choice
 		ciphertext []byte
 		keyID      string
 	)
-	err = a.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		select id::text, provider, base_url, model,
 		       credential_ciphertext, coalesce(credential_key_id, '')
 		  from public.org_model_config
@@ -316,9 +339,8 @@ func (a *AgentStore) ActiveModelChoiceForOrg(ctx context.Context, orgID string) 
 		return Choice{}, Sealed{}, fmt.Errorf("postgres: resolving the model choice: %w", err)
 	}
 
-	// An org predicate IS written here, unlike everywhere else in this file,
-	// and the difference is the pool. The agent's policy is unconditional
-	// because it has no tenancy GUCs to be checked against (00008), so the
-	// predicate is the tenancy rather than a duplicate of it.
+	if err := tx.Commit(ctx); err != nil {
+		return Choice{}, Sealed{}, fmt.Errorf("postgres: committing the model choice read: %w", err)
+	}
 	return choice, Sealed{Ciphertext: ciphertext, KeyID: keyID}, nil
 }

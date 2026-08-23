@@ -676,6 +676,40 @@ what they have to do about it, which no commit subject knows.
   fails at boot with a message naming the issuer, which is the case worth
   refusing to start for.
 
+### Security
+
+- **The producer role's reads now name the organisation they are for**
+  (ENT-272). `kindlast_agent` is the role the Watcher, the Analyst and the
+  evidence ingest path run as. Eight of its policies were `using (true)`:
+  `org_profile_facts`, `integrations`, `integration_tools`,
+  `integration_fetches`, `audit_evidence`, `org_evidence`, `org_model_config`
+  and `agent_runs`. A query on any of them that did not write an `org_id`
+  predicate by hand read every organisation's rows.
+
+  That was a deliberate decision when it was made, and it is written down in
+  the migrations: the agent runs for organisations nobody is signed in to, so
+  it had no tenancy setting to be checked against. It has one now. Every
+  producer path that touches these tables knows whose data it is asking for,
+  and two of them (recording an agent run, resolving an organisation's model
+  endpoint) have been changed to say so rather than relying on a hand-written
+  `where` clause.
+
+  The reason to care is not that an attacker could reach these tables. It is
+  that a bug pointing the producer at the wrong organisation, or at none, now
+  touches no rows instead of every tenant's. That is not hypothetical: the
+  first code to read them on this role shipped with another organisation's
+  connections and profile facts in the Watcher's context, and a test caught it
+  rather than the schema.
+
+  **For self-hosters:** no action, and no data changes. If you have written
+  your own code against the `kindlast_agent` role, a read of these eight
+  tables must now set `app.current_org_id` first, and will raise
+  `unrecognized configuration parameter` rather than returning rows if it does
+  not. Policies on the corpus tables and on the cross-tenant relays
+  (`transactional_outbox`, `sweep_triggers`, `executor_jobs`,
+  `capability_tokens`, the notification dispatch pair) are unchanged, because
+  those legitimately list across every tenant.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,

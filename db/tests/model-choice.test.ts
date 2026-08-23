@@ -253,6 +253,14 @@ describe.skipIf(!reachable)('the producer role reads what a run needs', () => {
       `agentread-${randomUUID().slice(0, 8)}`,
     )
 
+    // 00037 (ENT-272) made `org_model_config_agent` org equality, so the
+    // producer says whose endpoint it is resolving before it reads one. It
+    // always knew: `ActiveModelChoiceForOrg` takes an org id and wrote it into
+    // a `where` clause, and the clause was the only thing scoping the read.
+    await agent.query(`select set_config('app.current_org_id', $1, false)`, [
+      orgA,
+    ])
+
     const r = await agent.query(
       `select provider, base_url, model, credential_ciphertext, credential_key_id
          from org_model_config where id = $1`,
