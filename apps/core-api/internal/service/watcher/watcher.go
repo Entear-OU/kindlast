@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
 )
@@ -28,6 +29,13 @@ import (
 type Producer interface {
 	WatcherContextFor(ctx context.Context, orgID string) (postgres.WatcherContext, error)
 	RaiseSignal(ctx context.Context, orgID string, signal postgres.Signal) (string, bool, error)
+}
+
+// ModelRoute resolves which model serves one organisation, declared here for
+// the same reason (§21.6). Nil for a deployment that runs no Intelligence,
+// which is what `intelligence_available: false` reports.
+type ModelRoute interface {
+	Resolve(ctx context.Context, orgID string) (modelroute.Route, error)
 }
 
 // The vocabulary the schema permits, checked here so a caller gets
@@ -45,9 +53,15 @@ var (
 // Service implements platformv1connect.WatcherServiceHandler.
 type Service struct {
 	producer Producer
+	models   ModelRoute
 }
 
-func New(producer Producer) *Service { return &Service{producer: producer} }
+// New builds the service. `models` may be nil: a deployment that runs no
+// Intelligence has no route to resolve, and a context assembled for it reports
+// `intelligence_available: false` rather than failing.
+func New(producer Producer, models ModelRoute) *Service {
+	return &Service{producer: producer, models: models}
+}
 
 // WatcherContext assembles everything one run reasons over.
 func (s *Service) WatcherContext(
@@ -100,6 +114,14 @@ func (s *Service) WatcherContext(
 			})
 		}
 		res.Connections = append(res.Connections, connection)
+	}
+	for _, o := range context.Obligations {
+		res.Obligations = append(res.Obligations, &platformv1.CitableObligation{
+			Slug: o.Slug, Title: o.Title, Summary: o.Summary,
+		})
+	}
+	if err := s.route(ctx, orgID, res); err != nil {
+		return nil, err
 	}
 	for _, sig := range context.OpenSignals {
 		res.OpenSignals = append(res.OpenSignals, &platformv1.OpenSignal{
@@ -155,6 +177,33 @@ func (s *Service) RaiseSignal(
 	return connect.NewResponse(&platformv1.RaiseSignalResponse{
 		SignalId: id, Raised: raised,
 	}), nil
+}
+
+// route fills in which model would serve a run over this context.
+//
+// A provider the organisation chose and core-api cannot honour is
+// `failed_precondition` rather than a silent fall back to the deployment's own
+// model. `AGENTS.md` has no fallback rule for a reason that is sharper here
+// than for narration: falling back would send this organisation's compliance
+// context to a model it did not choose, and would record a provider that did
+// not serve it.
+func (s *Service) route(
+	ctx context.Context, orgID string, res *platformv1.WatcherContextResponse,
+) error {
+	if s.models == nil {
+		// No Intelligence in this deployment. Not an error, and not a reason
+		// to withhold the context: a caller is told so and does not schedule
+		// a run.
+		return nil
+	}
+	route, err := s.models.Resolve(ctx, orgID)
+	if err != nil {
+		return connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	res.IntelligenceAvailable = true
+	res.ModelProvider = route.Provider
+	res.ModelName = route.Model
+	return nil
 }
 
 // Bounds on what one signal may carry. Generous, and present so that a model

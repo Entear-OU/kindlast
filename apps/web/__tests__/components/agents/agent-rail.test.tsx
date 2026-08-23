@@ -53,11 +53,18 @@ describe('the agent rail (ENT-232)', () => {
   it('gives each agent its own status rather than one claim for all four', () => {
     render(<AgentRail orgSlug="acme-ltd" />)
 
-    // The Analyst is a skill on the harness. The Messenger and the Hands do
-    // not exist. Saying the same thing about both is the failure this replaced.
-    expect(screen.getAllByText(STATUS_LABEL['working'])).toHaveLength(1)
+    // The Watcher and the Analyst are skills on the harness; the Messenger and
+    // the Hands do not exist. Saying the same thing about all four is the
+    // failure this replaced, so the counts are asserted rather than the labels
+    // merely being present.
+    expect(screen.getAllByText(STATUS_LABEL['working'])).toHaveLength(2)
     expect(screen.getAllByText(STATUS_LABEL['not-built'])).toHaveLength(2)
-    expect(screen.getAllByText(STATUS_LABEL['partly-working'])).toHaveLength(1)
+    // `queryAllByText`, because nothing is partly working since ENT-258 and
+    // `getAllByText` throws on none. The state is still rendered for the next
+    // agent that gets half built.
+    expect(screen.queryAllByText(STATUS_LABEL['partly-working'])).toHaveLength(
+      0,
+    )
   })
 
   it('no longer claims that nothing is scheduled', () => {

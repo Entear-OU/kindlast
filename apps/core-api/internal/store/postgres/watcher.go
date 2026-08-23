@@ -39,6 +39,16 @@ type WatcherContext struct {
 	Connections []WatchedConnection
 	OpenSignals []OpenSignal
 	LastSweptAt *time.Time
+	// Obligations is what a signal from this context may cite, and the only
+	// thing it may cite. See WatchedObligation.
+	Obligations []WatchedObligation
+}
+
+// WatchedObligation is one obligation the organisation may be cited against.
+type WatchedObligation struct {
+	Slug    string
+	Title   string
+	Summary string
 }
 
 // WatchedFact is one open belief about the organisation.
@@ -128,7 +138,59 @@ func (a *AgentStore) WatcherContextFor(ctx context.Context, orgID string) (Watch
 	if context.OpenSignals, err = openSignals(ctx, tx, context.ProfileID); err != nil {
 		return WatcherContext{}, err
 	}
+	if context.Obligations, err = watchedObligations(ctx, tx, context.ProfileID); err != nil {
+		return WatcherContext{}, err
+	}
 	return context, nil
+}
+
+// watchedObligations reads what this organisation may be cited against.
+//
+// # THE SAME EVALUATOR THE DETERMINISTIC DETECTORS USE, DELIBERATELY
+//
+// `watcher_obligation_applies` is 00023's function, and calling it here rather
+// than reimplementing the test is the whole point. Two evaluators of "does this
+// obligation bind this organisation" in one product is the arrangement ENT-246
+// was filed about, and an agent offered a differently computed set would
+// disagree with the sweep running beside it in ways nobody could explain.
+//
+// When ENT-225 moves that function into Go, this query loses its function call
+// and gains a caller-side filter over the same declaration. It should keep
+// returning the same set, and the test above it is what says so.
+//
+// # WHY THE PROFILE ROW AND NOT THE ORGANISATION
+//
+// The function takes a `compliance_profiles` row because applicability is
+// evaluated against what the organisation SAID, which is the profile. Passing
+// the newest profile is what `run_watcher()` does, so an organisation that
+// onboarded twice is offered obligations against the same answers it is swept
+// against.
+//
+// The corpus is not tenant data: `obligations` has no `org_id` and no RLS
+// predicate to satisfy, which is why this needs no organisation in its
+// predicate while every other read in this file does.
+func watchedObligations(ctx context.Context, tx pgx.Tx, profileID string) ([]WatchedObligation, error) {
+	rows, err := tx.Query(ctx, `
+		select o.slug, o.title, o.summary
+		  from obligations o, compliance_profiles p
+		 where p.id = $1::uuid
+		   and public.watcher_obligation_applies(o.applies_when, p)
+		 order by o.slug
+	`, profileID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: reading the obligations to offer: %w", err)
+	}
+	defer rows.Close()
+
+	var offered []WatchedObligation
+	for rows.Next() {
+		var o WatchedObligation
+		if err := rows.Scan(&o.Slug, &o.Title, &o.Summary); err != nil {
+			return nil, fmt.Errorf("postgres: scanning an offered obligation: %w", err)
+		}
+		offered = append(offered, o)
+	}
+	return offered, rows.Err()
 }
 
 // watchedFacts reads what the organisation is currently believed to be.
@@ -292,6 +354,15 @@ type Signal struct {
 // corpus does not have.
 var ErrUnknownObligation = errors.New("postgres: no such obligation")
 
+// AgentDedupPrefix namespaces every deduplication key an agent writes, so one
+// can never land on a row a deterministic detector owns. See RaiseSignal for
+// what happened before it existed.
+//
+// Exported because the test that proves the property has to know the shape of
+// the key it is looking for, and a test that hard-codes "agent:" beside a
+// constant is a test that passes after somebody changes the constant.
+const AgentDedupPrefix = "agent:"
+
 // RaiseSignal writes one signal through the same function the deterministic
 // detectors use.
 //
@@ -313,6 +384,34 @@ var ErrUnknownObligation = errors.New("postgres: no such obligation")
 // or no finding at all, days later, with nobody able to say why. Checked here,
 // the run is refused while the model that produced it is still on the other
 // end of the call.
+//
+// # AND THE DEDUPLICATION KEY IS NAMESPACED, WHICH IS NOT TIDINESS (ENT-258)
+//
+// `emit_watcher_finding` upserts on `(profile_id, dedup_key)`, so whoever
+// writes a key OWNS the row it lands on. The deterministic detectors use keys
+// of their own shape, `gap:obligation:{slug}` and the rest, and a watch is
+// shown every open signal with its key, because a run that is not told what is
+// already open repeats it.
+//
+// Those two facts together were a hole, and it was found by
+// `scripts/watcher-comparison.py` the first time that gate ran: a model that
+// echoes back a key it was shown does not raise a duplicate, it OVERWRITES the
+// detector's row. The observed case rewrote "Profile gap: Records of
+// Processing Activities" and dropped its severity from high to medium, which
+// is a deterministic finding silently restated by a 4B and exactly the failure
+// this product cannot have.
+//
+// Prefixing closes it structurally rather than by a check that has to be
+// remembered. An agent-raised key cannot collide with a detector's, whatever
+// the model emits, including a model deliberately trying to. Deduplication
+// among agent-raised signals is unaffected, because they are all prefixed the
+// same way, and the prefix is visible in the context a later run reads, which
+// tells it which signals were its own.
+//
+// The alternative was a `source` column and a policy refusing cross-source
+// updates. It is the better long-term shape and it is a migration, a backfill
+// and a new predicate on the hot path, for a property one prefix already
+// gives.
 func (a *AgentStore) RaiseSignal(ctx context.Context, orgID string, signal Signal) (id string, raised bool, err error) {
 	org, err := uuid.Parse(orgID)
 	if err != nil {
@@ -354,13 +453,18 @@ func (a *AgentStore) RaiseSignal(ctx context.Context, orgID string, signal Signa
 		}
 	}
 
+	// Namespaced before anything reads or writes it, so every lookup below and
+	// the upsert itself see the same key. See the header for what happened
+	// without this.
+	dedupKey := AgentDedupPrefix + signal.DedupKey
+
 	// Was it already open? Read before the write, for the same reason the act
 	// path reads a status before acting: afterwards the answer is always yes.
 	var existing string
 	err = tx.QueryRow(ctx, `
 		select id::text from watcher_findings
 		 where profile_id = $1::uuid and dedup_key = $2 and status = 'open'
-	`, profileID, signal.DedupKey).Scan(&existing)
+	`, profileID, dedupKey).Scan(&existing)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", false, fmt.Errorf("postgres: looking for an open signal: %w", err)
 	}
@@ -373,7 +477,7 @@ func (a *AgentStore) RaiseSignal(ctx context.Context, orgID string, signal Signa
 	var signalID string
 	if err := tx.QueryRow(ctx, `
 		select emit_watcher_finding($1::uuid, $2, $3, $4, $5, $6, $7, $8::jsonb)::text
-	`, profileID, signal.Kind, signal.DedupKey, signal.Title,
+	`, profileID, signal.Kind, dedupKey, signal.Title,
 		nullIfEmpty(signal.Detail), signal.Severity,
 		nullIfEmpty(signal.ObligationSlug), metadata).Scan(&signalID); err != nil {
 		return "", false, fmt.Errorf("postgres: raising a signal: %w", err)

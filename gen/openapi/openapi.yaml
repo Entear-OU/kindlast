@@ -2959,6 +2959,66 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/sweeps:watch:
+        post:
+            tags:
+                - IntelligenceService
+            description: |-
+                Watch one organisation: decide what in its context is worth raising, and
+                 raise it (ENT-258, PR 2).
+
+                 # THE FIRST SKILL THAT DECIDES, AND THE FIRST WITH A TOOL
+
+                 The Analyst is given everything and answers. This one is given a context
+                 and chooses: which of the conditions in front of it is worth a signal,
+                 which is a repeat of something already open, and when to stop. That choice
+                 is made across several model calls with a tool between them, which is what
+                 `harness/tools.py`'s dispatch seam was built for and, until now, only a
+                 test skill exercised.
+
+                 # WHY THIS ONE WRITES AND THE ANALYST DOES NOT
+
+                 Narration is "Go loads, Python drafts, Go persists" because a draft is one
+                 value: the caller can take it and write it. A watch is not. The model
+                 decides DURING the run whether to raise, and how a raise turned out
+                 changes what it does next, so the write has to be a tool inside the loop
+                 rather than a return value after it.
+
+                 What keeps that safe is not the language boundary. It is that the tool is
+                 `WatcherService.RaiseSignal`, on `internal:ingest`, which validates the
+                 vocabulary, requires a deduplication key, resolves the citation and writes
+                 through the producer role's own policies. This service gains no authority
+                 it did not have; it gains one call it may make.
+
+                 # AND IT STILL CANNOT WRITE A FINDING
+
+                 There is no RPC for it anywhere on this surface. A signal is a thing worth
+                 looking at; a finding cites regulation and goes to a human. The skill's
+                 allow-list holds one tool, and a model asking for anything else is refused
+                 rather than retried, recorded as refused, and the run ends.
+
+                 Like DraftNarrative, a refusal is a 200 with `outcome: REFUSED`. See that
+                 RPC's comment for why.
+            operationId: IntelligenceService_Watch
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/WatchRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WatchResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/watcher:context:
         post:
             tags:
@@ -3445,6 +3505,36 @@ components:
                     description: '`system`, `user` or `assistant`.'
                 content:
                     type: string
+        CitableObligation:
+            type: object
+            properties:
+                slug:
+                    type: string
+                title:
+                    type: string
+                summary:
+                    type: string
+                    description: |-
+                        The statement of the law, which a person wrote. Never the Official Journal
+                         wording: the corpus stores none, and a citation resolves to the publisher
+                         rather than to our copy.
+            description: |-
+                CitableObligation is one obligation a signal from this context may cite.
+
+                 # WHY THIS IS NOT `ObligationContext`, WHICH IS ALMOST THE SAME SHAPE
+
+                 Not only to avoid the import cycle, though it does. The two carry different
+                 claims, and the difference is the fourth field.
+
+                 `ObligationContext` has `applies_because`: why the Watcher raised this, in
+                 plain words, so the Analyst does not have to invent grounds it was never
+                 given (ENT-248). Handing the same field to the WATCHER would be incoherent,
+                 because the Watcher is the thing that decides the grounds. A message that
+                 carries a field its recipient is supposed to produce is a message inviting
+                 it to agree with itself.
+
+                 So: the same three fields a model needs to cite something, and deliberately
+                 not the fourth.
         Citation:
             type: object
             properties:
@@ -6145,6 +6235,23 @@ components:
                         False when this updated a signal that was already open rather than
                          raising a new one, which is the ordinary case for a condition that has
                          not gone away.
+        RaisedSignal:
+            type: object
+            properties:
+                signalId:
+                    type: string
+                dedupKey:
+                    type: string
+                title:
+                    type: string
+                severity:
+                    type: string
+                raised:
+                    type: boolean
+                    description: |-
+                        False when the signal already existed and this run touched it rather than
+                         created it. See WatchResponse.signals for why both are reported.
+            description: RaisedSignal is one signal this run put through RaiseSignal.
         Recital:
             type: object
             properties:
@@ -6904,6 +7011,73 @@ components:
                  existed a console could list an organisation's members and not work out which
                  row was the person reading the page, which is why an owner could not leave an
                  organisation the API was perfectly willing to let them leave.
+        WatchRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                    description: |-
+                        The organisation this run is for. Carried in the message because this
+                         caller holds no session; used to record the run and to name the
+                         organisation on every signal raised, never to decide what may be read.
+                context:
+                    allOf:
+                        - $ref: '#/components/schemas/WatcherContextResponse'
+                    description: |-
+                        The context, exactly as `WatcherService.WatcherContext` returned it.
+
+                         The whole response rather than its fields copied across, so there is one
+                         definition of what a watch sees. A second copy would drift the first time
+                         a field is added to one and not the other, and the thing that would go
+                         wrong is a model quietly reasoning without something core-api thought it
+                         had been given.
+                modelEndpoint:
+                    allOf:
+                        - $ref: '#/components/schemas/ModelEndpoint'
+                    description: |-
+                        Which model this run is recorded against (ENT-236, §26.6): names only,
+                         for the run record. Absent means the deployment's own model. Identical in
+                         meaning and in what it must never carry to DraftNarrativeRequest's field
+                         of the same name.
+            description: |-
+                WatchRequest is one organisation's whole context, as core-api assembled it.
+
+                 Caller-assembled for the reason §26.2 gives and DraftNarrativeRequest
+                 repeats: fetching the context is not a decision, so it happens in Go where
+                 the tenancy GUCs and the producer role already are, and the run stays a pure
+                 function of its inputs. What the model DECIDES is what to do with it.
+        WatchResponse:
+            type: object
+            properties:
+                outcome:
+                    enum:
+                        - WATCH_OUTCOME_UNSPECIFIED
+                        - WATCH_OUTCOME_SUCCEEDED
+                        - WATCH_OUTCOME_REFUSED
+                        - WATCH_OUTCOME_FAILED
+                    type: string
+                    format: enum
+                outcomeDetail:
+                    type: string
+                    description: Why, when the outcome was not success. For a human to read.
+                signals:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/RaisedSignal'
+                    description: |-
+                        What the run raised, in the order it raised them.
+
+                         INCLUDING THE ONES THAT WERE DEDUPLICATED, which is the half a caller
+                         most wants. A run that raised nothing new because everything it noticed
+                         was already open is a run that worked, and a response listing only the
+                         new rows would be indistinguishable from one where the model noticed
+                         nothing at all.
+                agentRunId:
+                    type: string
+                    description: |-
+                        The `agent_runs` row this produced. Always set on a 200, for the reason
+                         DraftNarrativeResponse gives: a caller handed results and a blank
+                         provenance field is a caller that stores unprovenanced results.
         WatchedConnection:
             type: object
             properties:
@@ -6971,6 +7145,73 @@ components:
                         When the deterministic sweep last ran for this organisation, or unset if
                          it never has.
                     format: date-time
+                obligations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CitableObligation'
+                    description: |-
+                        The obligations this organisation may be cited against, and the ONLY ones
+                         a signal from this context may cite (ENT-258, PR 2).
+
+                         # OFFERED, NOT LOOKED UP, FOR THE REASON THE ANALYST'S ARE
+
+                         `intelligence.proto` argues it at length and it holds identically here: a
+                         citation is checked against what the run was SHOWN rather than against the
+                         corpus, because a slug that genuinely exists and was never offered is
+                         still a fabrication. The model produced it from somewhere other than its
+                         context, which is exactly the failure the check exists to catch, and
+                         asking the corpus "does this exist" would wave it through.
+
+                         # AND EVALUATED ONCE, BY THE EVALUATOR THAT ALREADY EXISTS
+
+                         Which obligations apply is `watcher_obligation_applies` over the
+                         organisation's profile: the same function the deterministic detectors
+                         use. Offering the agent a differently computed set would put two
+                         evaluators of one question in one product, which is the arrangement
+                         ENT-246 was filed about.
+                intelligenceAvailable:
+                    type: boolean
+                    description: |-
+                        Which model would serve a run over this context, and whether there is one
+                         (ENT-258, PR 2).
+
+                         # THE LOAD STEP RESOLVES IT, FOR THE REASON THE NARRATE PATH DOES
+
+                         `NextFindingToNarrate` returns a draft request with the endpoint already
+                         resolved, because deciding which model serves an organisation means
+                         reading that organisation's own rows and opening a sealed credential, and
+                         core-api is the only process that may do either. The same is true here, so
+                         the same shape: the context a run is given includes what will serve it.
+
+                         Names only. Where the call goes and what authenticates it stay core-api's,
+                         and every completion is asked for through CompletionService.
+
+                         `intelligence_available` is false for a deployment that runs no
+                         Intelligence at all, which is a supported configuration: nothing is
+                         attempted and nothing is wrong. A deployment that runs it and whose
+                         organisation has chosen a provider that cannot be honoured is a different
+                         case and is `failed_precondition`, because that one somebody has to fix.
+                modelProvider:
+                    type: string
+                    description: |-
+                        The provider and model that would serve a run, by name.
+
+                         TWO SCALARS RATHER THAN THE `ModelEndpoint` MESSAGE, and the reason is
+                         structural rather than stylistic. That message lives in
+                         `intelligence.proto`, which imports THIS file for `WatcherContextResponse`,
+                         so naming it here would be an import cycle protobuf will not compile.
+
+                         Moving it to a shared file was tried and rejected: `buf breaking` is right
+                         that a message leaving a file changes the generated Python import path for
+                         anybody consuming this contract, and `docs/versioning.md` makes the proto
+                         surface public. A three-field message is not worth breaking it for.
+
+                         Nothing is lost. `ModelEndpoint`'s only live fields are these two; its
+                         `base_url` and `api_key` were deprecated when completions moved behind
+                         CompletionService, and a request setting either is refused. The caller
+                         builds the message from these when it hands a run over.
+                modelName:
+                    type: string
 tags:
     - name: AuditService
       description: |-

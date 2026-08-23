@@ -79,12 +79,24 @@ describe('the agent catalogue (ENT-232)', () => {
   // The honesty assertion, and the reason this file exists. ENT-161 happened
   // because a dashboard said everything was fine about work nothing had done.
   // Exactly one of the four is a working skill today; two are not built at all.
-  it('claims one working agent, not four', () => {
-    const working = AGENTS.filter((a) => a.status === 'working')
-    expect(working.map((a) => a.slug)).toEqual(['analyst'])
+  it('claims two working agents, not four', () => {
+    // The Watcher joined the Analyst in ENT-258, and the count is asserted
+    // rather than the absence of a count for the reason this test was written
+    // for: the page used to make one claim about all four, and the failure
+    // that hides is a placeholder reading like a feature. A third agent
+    // becoming "working" should have to change this line and say why in the
+    // commit that does.
+    expect(
+      AGENTS.filter((a) => a.status === 'working').map((a) => a.slug),
+    ).toEqual(['watcher', 'analyst'])
     expect(
       AGENTS.filter((a) => a.status === 'not-built').map((a) => a.slug),
     ).toEqual(['messenger', 'hands'])
+    // Nothing is partly working now. The state still exists and is still
+    // rendered, because it is the honest answer for the next agent that gets
+    // half built, and an unused state is cheaper than the pressure to call
+    // something finished for want of a label.
+    expect(AGENTS.filter((a) => a.status === 'partly-working')).toHaveLength(0)
   })
 
   it('says what remains for every agent that is not finished', () => {
@@ -143,6 +155,21 @@ describe('what the console claims about skills (ENT-232)', () => {
     expect(analyst?.skill?.name).toBe(pythonString(source, 'NAME'))
     expect(analyst?.skill?.version).toBe(pythonString(source, 'VERSION'))
     expect(analyst?.skill?.tools).toEqual(pythonTuple(source, 'ALLOWED_TOOLS'))
+  })
+
+  it('repeats the Watcher skill exactly as the skill declares it', () => {
+    // The same guard as the Analyst's above, and it matters more here: this is
+    // the first skill with a tool, so the list on the page is what a customer
+    // reads to decide what the agent can do to their data. A page claiming a
+    // narrower list than the allow-list actually holds would be the worst kind
+    // of wrong, and this is what stops it.
+    const source = readFileSync(path.join(SKILLS_DIR, 'watcher.py'), 'utf8')
+    const watcher = agentBySlug('watcher')
+    expect(watcher?.skill).toBeDefined()
+
+    expect(watcher?.skill?.name).toBe(pythonString(source, 'NAME'))
+    expect(watcher?.skill?.version).toBe(pythonString(source, 'VERSION'))
+    expect(watcher?.skill?.tools).toEqual(pythonTuple(source, 'ALLOWED_TOOLS'))
   })
 
   it('leaves the tool list absent for an agent with no skill', () => {

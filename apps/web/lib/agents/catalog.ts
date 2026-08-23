@@ -111,18 +111,45 @@ export const AGENTS: readonly Agent[] = [
   {
     slug: 'watcher',
     name: 'The Watcher',
-    does: 'Reads your profile against the obligations that apply to you.',
-    status: 'partly-working',
-    // `SweepService.RunSweep` is the only thing that starts it. The pg_cron
-    // schedules went with Supabase in ENT-200 and the schedules return with
-    // Temporal at build-order step 8.
-    runs: 'When a sweep is triggered for your organisation. Nothing triggers one on a schedule yet.',
+    does: 'Looks at your profile, what you have connected, and what has changed, and raises what is worth your attention.',
+    status: 'working',
+    runs: 'When a sweep is triggered for your organisation, and once a day for every organisation.',
     effects:
-      'Writes evidence and signals. It never changes a record and never sends anything.',
-    // ENT-231 gives it the integrations gateway, which is the point at which
-    // deciding what to look at becomes a decision rather than a fixed query.
+      'Raises signals, and that is the only thing it can write. It cannot write a finding, change a record or send anything.',
+    // `working` AS OF ENT-258 PR 3, AND WHAT CHANGED (ENT-232 asks the status
+    // to say so).
+    //
+    // Two things run now where one ran before. The three fixed detectors are
+    // unchanged and still run first; the agent runs after them, is shown what
+    // they raised, and adds what no fixed rule was written to look for.
+    //
+    // The evidence for saying "Working" rather than "Working, in part" is
+    // `scripts/watcher-comparison.py`, which runs in CI against a real model on
+    // a real stack every time this repository is changed. It does not assert
+    // that the agent covers the detectors, because it is told not to repeat
+    // them; it asserts that their signals survive it untouched, that nothing it
+    // writes is outside the vocabulary or cites an obligation it was not
+    // offered, and that no finding is written.
+    //
+    // WHAT IS STILL MISSING IS THE READ PATH, WHICH IS THE ANALYST'S PROBLEM
+    // TOO. Every run leaves an `agent_runs` record and the console cannot yet
+    // show you one, so `remaining` says that rather than claiming nothing is
+    // left.
     remaining:
-      'It follows fixed rules today rather than a skill, so it has no tool list and leaves no run record you can read.',
+      'The console cannot yet show you the runs it has made, so you can see what it raised but not how it decided.',
+    skill: {
+      module: 'watcher',
+      name: 'watcher.sweep',
+      version: '1.0.0',
+      // ONE TOOL, AND THE PAGE SHOWS IT FOR THE REASON THE LIST EXISTS.
+      //
+      // A reader looking at "what can this thing do to my data" gets the whole
+      // answer: it can raise a signal, and there is nothing here that writes a
+      // finding, changes a record or sends anything. That is the separation
+      // the product rests on, and showing the list is how a customer checks it
+      // rather than taking our word for it.
+      tools: ['raise_signal'],
+    },
   },
   {
     slug: 'analyst',

@@ -97,6 +97,66 @@ message WatcherContextResponse {
   // When the deterministic sweep last ran for this organisation, or unset if
   // it never has.
   google.protobuf.Timestamp last_swept_at = 5;
+
+  // The obligations this organisation may be cited against, and the ONLY ones
+  // a signal from this context may cite (ENT-258, PR 2).
+  //
+  // # OFFERED, NOT LOOKED UP, FOR THE REASON THE ANALYST'S ARE
+  //
+  // `intelligence.proto` argues it at length and it holds identically here: a
+  // citation is checked against what the run was SHOWN rather than against the
+  // corpus, because a slug that genuinely exists and was never offered is
+  // still a fabrication. The model produced it from somewhere other than its
+  // context, which is exactly the failure the check exists to catch, and
+  // asking the corpus "does this exist" would wave it through.
+  //
+  // # AND EVALUATED ONCE, BY THE EVALUATOR THAT ALREADY EXISTS
+  //
+  // Which obligations apply is `watcher_obligation_applies` over the
+  // organisation's profile: the same function the deterministic detectors
+  // use. Offering the agent a differently computed set would put two
+  // evaluators of one question in one product, which is the arrangement
+  // ENT-246 was filed about.
+  repeated CitableObligation obligations = 6;
+
+  // Which model would serve a run over this context, and whether there is one
+  // (ENT-258, PR 2).
+  //
+  // # THE LOAD STEP RESOLVES IT, FOR THE REASON THE NARRATE PATH DOES
+  //
+  // `NextFindingToNarrate` returns a draft request with the endpoint already
+  // resolved, because deciding which model serves an organisation means
+  // reading that organisation's own rows and opening a sealed credential, and
+  // core-api is the only process that may do either. The same is true here, so
+  // the same shape: the context a run is given includes what will serve it.
+  //
+  // Names only. Where the call goes and what authenticates it stay core-api's,
+  // and every completion is asked for through CompletionService.
+  //
+  // `intelligence_available` is false for a deployment that runs no
+  // Intelligence at all, which is a supported configuration: nothing is
+  // attempted and nothing is wrong. A deployment that runs it and whose
+  // organisation has chosen a provider that cannot be honoured is a different
+  // case and is `failed_precondition`, because that one somebody has to fix.
+  bool intelligence_available = 7;
+  // The provider and model that would serve a run, by name.
+  //
+  // TWO SCALARS RATHER THAN THE `ModelEndpoint` MESSAGE, and the reason is
+  // structural rather than stylistic. That message lives in
+  // `intelligence.proto`, which imports THIS file for `WatcherContextResponse`,
+  // so naming it here would be an import cycle protobuf will not compile.
+  //
+  // Moving it to a shared file was tried and rejected: `buf breaking` is right
+  // that a message leaving a file changes the generated Python import path for
+  // anybody consuming this contract, and `docs/versioning.md` makes the proto
+  // surface public. A three-field message is not worth breaking it for.
+  //
+  // Nothing is lost. `ModelEndpoint`'s only live fields are these two; its
+  // `base_url` and `api_key` were deprecated when completions moved behind
+  // CompletionService, and a request setting either is refused. The caller
+  // builds the message from these when it hands a run over.
+  string model_provider = 8;
+  string model_name = 9;
 }
 
 message ProfileFact {
@@ -171,4 +231,30 @@ message RaiseSignalResponse {
   // raising a new one, which is the ordinary case for a condition that has
   // not gone away.
   bool raised = 2;
+}
+
+
+// CitableObligation is one obligation a signal from this context may cite.
+//
+// # WHY THIS IS NOT `ObligationContext`, WHICH IS ALMOST THE SAME SHAPE
+//
+// Not only to avoid the import cycle, though it does. The two carry different
+// claims, and the difference is the fourth field.
+//
+// `ObligationContext` has `applies_because`: why the Watcher raised this, in
+// plain words, so the Analyst does not have to invent grounds it was never
+// given (ENT-248). Handing the same field to the WATCHER would be incoherent,
+// because the Watcher is the thing that decides the grounds. A message that
+// carries a field its recipient is supposed to produce is a message inviting
+// it to agree with itself.
+//
+// So: the same three fields a model needs to cite something, and deliberately
+// not the fourth.
+message CitableObligation {
+  string slug = 1;
+  string title = 2;
+  // The statement of the law, which a person wrote. Never the Official Journal
+  // wording: the corpus stores none, and a citation resolves to the publisher
+  // rather than to our copy.
+  string summary = 3;
 }

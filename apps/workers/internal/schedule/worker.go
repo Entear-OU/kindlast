@@ -145,8 +145,10 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		activityOptions(StartExecutionsActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.ExecuteJob,
 		activityOptions(ExecuteJobActivityName))
-	// DraftNarrative is deliberately NOT registered here: it runs on the
-	// `intelligence` task queue, served by the Python worker (§16.4).
+	w.RegisterActivityWithOptions(opts.Activities.LoadWatchContext,
+		activityOptions(LoadWatchContextActivityName))
+	// DraftNarrative and Watch are deliberately NOT registered here: both run
+	// on the `intelligence` task queue, served by the Python worker (§16.4).
 
 	if err := w.Start(); err != nil {
 		return nil, fmt.Errorf("schedule: starting the worker: %w", err)

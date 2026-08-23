@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -86,6 +87,16 @@ class ToolCall(BaseModel):
     # read, and pasting a full corpus row into every run would make the useful
     # part unfindable.
     result_summary: str = ""
+    # Set when the harness refused the call: an unlisted tool, or one the skill
+    # was allowed and the caller never wired (ENT-258).
+    #
+    # In the record because a refused call is a fact about the run. A history
+    # showing only the calls that succeeded would describe a better-behaved run
+    # than the one that happened, and "it asked for something it was not
+    # allowed" is what somebody reading "how this was produced" most wants to
+    # see. `tools.py` has carried this flag since it was written; until the
+    # Watcher there was no skill with a tool to lose it on.
+    refused: bool = False
 
 
 class AgentRun(BaseModel):
@@ -171,7 +182,12 @@ class AgentRun(BaseModel):
     def tool_calls_json(self) -> str:
         return json.dumps(
             [
-                {"tool": c.tool, "args": c.arguments, "result": c.result_summary}
+                {
+                    "tool": c.tool,
+                    "args": c.arguments,
+                    "result": c.result_summary,
+                    "refused": c.refused,
+                }
                 for c in self.tool_calls
             ]
         )
@@ -218,7 +234,7 @@ def draft_narrative(
     Admission is first for a reason that is not tidiness. A run dispatched after
     a long wait is one whose asker has probably given up, and running it anyway
     means holding a slot that belongs to somebody still waiting. Refusing before
-    `_call_model` is what makes that true rather than merely recorded, and
+    `call_model` is what makes that true rather than merely recorded, and
     `test_a_run_that_waited_too_long_refuses_before_calling_the_model` asserts
     the model was never called.
     """
@@ -240,7 +256,7 @@ def draft_narrative(
         budget.check_clock()
 
         messages = analyst.build_messages(signal, obligations)
-        completion = _call_model(model, messages, budget, run)
+        completion = call_model(model, messages, budget, run, schema=analyst.output_schema())
         parsed = _parse(completion)
 
         result = validator.validate(
@@ -268,7 +284,7 @@ def draft_narrative(
                 f"{len(result.rejected)} citation(s) did not resolve: "
                 + ", ".join(r.citation.slug for r in result.rejected)
             )
-            return _finish(run)
+            return finish_run(run)
 
         # THE CRITICS AFTER THE CITATIONS, BECAUSE A FABRICATED CITATION
         # OUTRANKS EVERYTHING THEY CATCH (ENT-163, ENT-248).
@@ -294,30 +310,50 @@ def draft_narrative(
             run.refused_by = breach.critic
             run.refused_patterns = sorted({b.pattern for b in breach.breaches})
             run.rejected_text = parsed.why_it_applies_to_you
-            return _finish(run)
+            return finish_run(run)
 
         run.narrative = parsed.why_it_applies_to_you
         run.outcome = Outcome.SUCCEEDED
-        return _finish(run)
+        return finish_run(run)
 
     except BudgetExhausted as exc:
         # The guardrail worked. Refusal, not failure.
         run.outcome = Outcome.REFUSED
         run.outcome_detail = str(exc)
-        return _finish(run)
+        return finish_run(run)
 
     except (ModelError, ValidationError, ValueError) as exc:
         # Something went wrong that was nobody's policy: the endpoint was
         # unreachable, or answered something that is not the contract.
         run.outcome = Outcome.FAILED
         run.outcome_detail = str(exc)
-        return _finish(run)
+        return finish_run(run)
 
 
-def _call_model(
-    model: Completer, messages: list[dict[str, str]], budget: Budget, run: AgentRun
+def call_model(
+    model: Completer,
+    messages: list[dict[str, str]],
+    budget: Budget,
+    run: AgentRun,
+    *,
+    schema: dict[str, Any],
 ) -> Completion:
-    completion = model.complete(messages, schema=analyst.output_schema())
+    """One model call, charged and recorded, for whichever skill is asking.
+
+    # THE GRAMMAR IS A PARAMETER BECAUSE THIS IS SHARED AND SKILLS ARE NOT
+
+    It used to name `analyst.output_schema()` here, which was true while the
+    Analyst was the only caller and became a bug the moment it was not. The
+    Watcher answers in steps, so a watch run was constraining the model to a
+    narrative and then failing to parse the narrative it got back: every run
+    ended FAILED, and no unit test could see it, because the fakes ignored the
+    schema they were handed.
+
+    Passing it in rather than passing the skill keeps this function's knowledge
+    at what it actually needs. It charges a budget and updates a run record; it
+    has no business knowing what a skill is.
+    """
+    completion = model.complete(messages, schema=schema)
 
     # Charged after the call, because the cost is not knowable before it. This
     # raises BudgetExhausted when the run has now spent too much, which stops
@@ -364,6 +400,6 @@ def _parse(completion: Completion) -> Narrative:
     return Narrative.model_validate_json(completion.content)
 
 
-def _finish(run: AgentRun) -> AgentRun:
+def finish_run(run: AgentRun) -> AgentRun:
     run.finished_at = datetime.now(timezone.utc)
     return run

@@ -79,7 +79,7 @@ func buildWatcherChain(t *testing.T, a *authServer) (platformv1connect.WatcherSe
 	)
 	producer := &recordingWatcher{}
 	mux := http.NewServeMux()
-	mux.Handle(platformv1connect.NewWatcherServiceHandler(watcherservice.New(producer), chain))
+	mux.Handle(platformv1connect.NewWatcherServiceHandler(watcherservice.New(producer, nil), chain))
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return platformv1connect.NewWatcherServiceClient(server.Client(), server.URL), producer

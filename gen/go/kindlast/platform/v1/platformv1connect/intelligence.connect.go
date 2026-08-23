@@ -36,6 +36,9 @@ const (
 	// IntelligenceServiceDraftNarrativeProcedure is the fully-qualified name of the
 	// IntelligenceService's DraftNarrative RPC.
 	IntelligenceServiceDraftNarrativeProcedure = "/kindlast.platform.v1.IntelligenceService/DraftNarrative"
+	// IntelligenceServiceWatchProcedure is the fully-qualified name of the IntelligenceService's Watch
+	// RPC.
+	IntelligenceServiceWatchProcedure = "/kindlast.platform.v1.IntelligenceService/Watch"
 )
 
 // IntelligenceServiceClient is a client for the kindlast.platform.v1.IntelligenceService service.
@@ -61,6 +64,42 @@ type IntelligenceServiceClient interface {
 	// worse than nothing, and handing a caller prose plus a note is how that
 	// prose ends up in front of a customer.
 	DraftNarrative(context.Context, *connect.Request[v1.DraftNarrativeRequest]) (*connect.Response[v1.DraftNarrativeResponse], error)
+	// Watch one organisation: decide what in its context is worth raising, and
+	// raise it (ENT-258, PR 2).
+	//
+	// # THE FIRST SKILL THAT DECIDES, AND THE FIRST WITH A TOOL
+	//
+	// The Analyst is given everything and answers. This one is given a context
+	// and chooses: which of the conditions in front of it is worth a signal,
+	// which is a repeat of something already open, and when to stop. That choice
+	// is made across several model calls with a tool between them, which is what
+	// `harness/tools.py`'s dispatch seam was built for and, until now, only a
+	// test skill exercised.
+	//
+	// # WHY THIS ONE WRITES AND THE ANALYST DOES NOT
+	//
+	// Narration is "Go loads, Python drafts, Go persists" because a draft is one
+	// value: the caller can take it and write it. A watch is not. The model
+	// decides DURING the run whether to raise, and how a raise turned out
+	// changes what it does next, so the write has to be a tool inside the loop
+	// rather than a return value after it.
+	//
+	// What keeps that safe is not the language boundary. It is that the tool is
+	// `WatcherService.RaiseSignal`, on `internal:ingest`, which validates the
+	// vocabulary, requires a deduplication key, resolves the citation and writes
+	// through the producer role's own policies. This service gains no authority
+	// it did not have; it gains one call it may make.
+	//
+	// # AND IT STILL CANNOT WRITE A FINDING
+	//
+	// There is no RPC for it anywhere on this surface. A signal is a thing worth
+	// looking at; a finding cites regulation and goes to a human. The skill's
+	// allow-list holds one tool, and a model asking for anything else is refused
+	// rather than retried, recorded as refused, and the run ends.
+	//
+	// Like DraftNarrative, a refusal is a 200 with `outcome: REFUSED`. See that
+	// RPC's comment for why.
+	Watch(context.Context, *connect.Request[v1.WatchRequest]) (*connect.Response[v1.WatchResponse], error)
 }
 
 // NewIntelligenceServiceClient constructs a client for the kindlast.platform.v1.IntelligenceService
@@ -80,17 +119,29 @@ func NewIntelligenceServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(intelligenceServiceMethods.ByName("DraftNarrative")),
 			connect.WithClientOptions(opts...),
 		),
+		watch: connect.NewClient[v1.WatchRequest, v1.WatchResponse](
+			httpClient,
+			baseURL+IntelligenceServiceWatchProcedure,
+			connect.WithSchema(intelligenceServiceMethods.ByName("Watch")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // intelligenceServiceClient implements IntelligenceServiceClient.
 type intelligenceServiceClient struct {
 	draftNarrative *connect.Client[v1.DraftNarrativeRequest, v1.DraftNarrativeResponse]
+	watch          *connect.Client[v1.WatchRequest, v1.WatchResponse]
 }
 
 // DraftNarrative calls kindlast.platform.v1.IntelligenceService.DraftNarrative.
 func (c *intelligenceServiceClient) DraftNarrative(ctx context.Context, req *connect.Request[v1.DraftNarrativeRequest]) (*connect.Response[v1.DraftNarrativeResponse], error) {
 	return c.draftNarrative.CallUnary(ctx, req)
+}
+
+// Watch calls kindlast.platform.v1.IntelligenceService.Watch.
+func (c *intelligenceServiceClient) Watch(ctx context.Context, req *connect.Request[v1.WatchRequest]) (*connect.Response[v1.WatchResponse], error) {
+	return c.watch.CallUnary(ctx, req)
 }
 
 // IntelligenceServiceHandler is an implementation of the kindlast.platform.v1.IntelligenceService
@@ -117,6 +168,42 @@ type IntelligenceServiceHandler interface {
 	// worse than nothing, and handing a caller prose plus a note is how that
 	// prose ends up in front of a customer.
 	DraftNarrative(context.Context, *connect.Request[v1.DraftNarrativeRequest]) (*connect.Response[v1.DraftNarrativeResponse], error)
+	// Watch one organisation: decide what in its context is worth raising, and
+	// raise it (ENT-258, PR 2).
+	//
+	// # THE FIRST SKILL THAT DECIDES, AND THE FIRST WITH A TOOL
+	//
+	// The Analyst is given everything and answers. This one is given a context
+	// and chooses: which of the conditions in front of it is worth a signal,
+	// which is a repeat of something already open, and when to stop. That choice
+	// is made across several model calls with a tool between them, which is what
+	// `harness/tools.py`'s dispatch seam was built for and, until now, only a
+	// test skill exercised.
+	//
+	// # WHY THIS ONE WRITES AND THE ANALYST DOES NOT
+	//
+	// Narration is "Go loads, Python drafts, Go persists" because a draft is one
+	// value: the caller can take it and write it. A watch is not. The model
+	// decides DURING the run whether to raise, and how a raise turned out
+	// changes what it does next, so the write has to be a tool inside the loop
+	// rather than a return value after it.
+	//
+	// What keeps that safe is not the language boundary. It is that the tool is
+	// `WatcherService.RaiseSignal`, on `internal:ingest`, which validates the
+	// vocabulary, requires a deduplication key, resolves the citation and writes
+	// through the producer role's own policies. This service gains no authority
+	// it did not have; it gains one call it may make.
+	//
+	// # AND IT STILL CANNOT WRITE A FINDING
+	//
+	// There is no RPC for it anywhere on this surface. A signal is a thing worth
+	// looking at; a finding cites regulation and goes to a human. The skill's
+	// allow-list holds one tool, and a model asking for anything else is refused
+	// rather than retried, recorded as refused, and the run ends.
+	//
+	// Like DraftNarrative, a refusal is a 200 with `outcome: REFUSED`. See that
+	// RPC's comment for why.
+	Watch(context.Context, *connect.Request[v1.WatchRequest]) (*connect.Response[v1.WatchResponse], error)
 }
 
 // NewIntelligenceServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -132,10 +219,18 @@ func NewIntelligenceServiceHandler(svc IntelligenceServiceHandler, opts ...conne
 		connect.WithSchema(intelligenceServiceMethods.ByName("DraftNarrative")),
 		connect.WithHandlerOptions(opts...),
 	)
+	intelligenceServiceWatchHandler := connect.NewUnaryHandler(
+		IntelligenceServiceWatchProcedure,
+		svc.Watch,
+		connect.WithSchema(intelligenceServiceMethods.ByName("Watch")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.IntelligenceService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IntelligenceServiceDraftNarrativeProcedure:
 			intelligenceServiceDraftNarrativeHandler.ServeHTTP(w, r)
+		case IntelligenceServiceWatchProcedure:
+			intelligenceServiceWatchHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -147,4 +242,8 @@ type UnimplementedIntelligenceServiceHandler struct{}
 
 func (UnimplementedIntelligenceServiceHandler) DraftNarrative(context.Context, *connect.Request[v1.DraftNarrativeRequest]) (*connect.Response[v1.DraftNarrativeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IntelligenceService.DraftNarrative is not implemented"))
+}
+
+func (UnimplementedIntelligenceServiceHandler) Watch(context.Context, *connect.Request[v1.WatchRequest]) (*connect.Response[v1.WatchResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IntelligenceService.Watch is not implemented"))
 }

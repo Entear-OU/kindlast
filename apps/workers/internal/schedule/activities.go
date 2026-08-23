@@ -24,6 +24,10 @@ type Activities struct {
 	// Narratives is NarrativeService: findings, explained, as the third step
 	// of a sweep (part five).
 	Narratives Narrator
+	// Watchers is WatcherService: what the agentic Watcher reads, and the
+	// model that will serve it (ENT-258). Nil-safe by the step being off
+	// unless an operator turns it on.
+	Watchers Watcher
 	// Executions is ExecutorService: creating the record an approved finding
 	// asked for (ENT-271), which used to be a database trigger.
 	Executions Executor

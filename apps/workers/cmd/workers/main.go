@@ -274,6 +274,11 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 		&http.Client{Timeout: 10 * time.Minute, Transport: &oidc.Bearer{Source: tokens}},
 		t.CoreAPIURL)
 	executions := platformv1connect.NewExecutorServiceClient(httpClient, t.CoreAPIURL)
+	// What the agentic Watcher reads (ENT-258). Built unconditionally, like
+	// every other client here: whether the step runs is the workflow's
+	// decision and not this wiring's, so a deployment that turns the flag on
+	// does not also need a restart to get a client.
+	watchers := platformv1connect.NewWatcherServiceClient(httpClient, t.CoreAPIURL)
 
 	opts := schedule.Options{
 		Addr:                  t.Addr,
@@ -288,6 +293,7 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 		Activities: &schedule.Activities{
 			CoreAPI: coreAPI, Sweeps: coreAPI, Mail: mail,
 			Narratives: narratives, Executions: executions,
+			Watchers: watchers,
 		},
 		Logger: logger,
 	}
