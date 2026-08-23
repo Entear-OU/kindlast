@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createHash, randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
@@ -144,7 +145,19 @@ export async function createVerifiedUser(label: string): Promise<FixtureUser> {
  * superuser bypasses RLS, which is precisely wrong for the application and
  * exactly right for a test that wants the unfiltered truth.
  */
-export async function countOrganisations(): Promise<number> {
+async function psql(
+  sql: string,
+  vars: Record<string, string> = {},
+): Promise<string> {
+  // psql's `--set` plus `:'name'` interpolates as a quoted literal, which is
+  // the same reason application code uses bind parameters: a fixture that
+  // pasted a value into the statement would be one apostrophe away from
+  // rewriting the query.
+  const settings = Object.entries(vars).flatMap(([name, value]) => [
+    '--set',
+    `${name}=${value}`,
+  ])
+
   const { stdout } = await run('docker', [
     'compose',
     '-f',
@@ -159,15 +172,92 @@ export async function countOrganisations(): Promise<number> {
     'postgres',
     '-d',
     'kindlast',
+    '-v',
+    'ON_ERROR_STOP=1',
+    ...settings,
     '-tAc',
-    'select count(*) from organisations',
+    sql,
   ])
 
-  const count = Number(stdout.trim())
+  return stdout.trim()
+}
+
+export async function countOrganisations(): Promise<number> {
+  const count = Number(await psql('select count(*) from organisations'))
   if (!Number.isInteger(count)) {
-    throw new Error(`could not read an organisation count, got: ${stdout}`)
+    throw new Error('could not read an organisation count')
   }
   return count
+}
+
+/**
+ * The same hash core-api stores, and it has to stay the same.
+ *
+ * `postgres.HashInvitationToken` is `hex(sha256(token))`. A fixture that
+ * drifted from it would mint invitations nothing could ever redeem, and the
+ * test asserting a refusal would pass for the wrong reason.
+ */
+function hashInvitationToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+/**
+ * An invitation into an organisation, addressed to whoever you say.
+ *
+ * Written straight to the table rather than driven through the console,
+ * because the console's invite form ends at an email and the token only exists
+ * in that message. Scraping Mailpit would make the test depend on Zitadel's
+ * notifier and on delivery timing, neither of which is the code under test,
+ * and the row is the whole of what redemption reads.
+ *
+ * As the superuser, like `countOrganisations` and for the same reason: every
+ * table forces row level security, so a fixture holding no session GUCs writes
+ * nothing at all through the application role.
+ */
+export async function mintInvitation(
+  orgSlug: string,
+  email: string,
+): Promise<string> {
+  const token = randomBytes(32).toString('base64url')
+
+  const id = await psql(
+    `insert into invitations (org_id, email, role, token_hash, expires_at)
+     select id, :'email', 'member', :'hash', now() + interval '7 days'
+     from organisations where slug = :'slug'
+     returning id`,
+    { email, hash: hashInvitationToken(token), slug: orgSlug },
+  )
+
+  if (!id) {
+    throw new Error(`no organisation with the slug ${orgSlug} to invite into`)
+  }
+  return token
+}
+
+/**
+ * Whether an invitation is still there to be used.
+ *
+ * Three answers rather than a boolean, so that a token which never reached the
+ * table cannot be reported as one that survived a refusal. That is the failure
+ * an assertion about "unused" is most likely to hide.
+ */
+export async function invitationState(
+  token: string,
+): Promise<'missing' | 'used' | 'unused'> {
+  const state = await psql(
+    `select case
+       when count(*) = 0 then 'missing'
+       when count(*) filter (where accepted_at is not null) > 0 then 'used'
+       else 'unused'
+     end
+     from invitations where token_hash = :'hash'`,
+    { hash: hashInvitationToken(token) },
+  )
+
+  if (state !== 'missing' && state !== 'used' && state !== 'unused') {
+    throw new Error(`could not read the invitation's state, got: ${state}`)
+  }
+  return state
 }
 
 export async function deleteUser(id: string): Promise<void> {

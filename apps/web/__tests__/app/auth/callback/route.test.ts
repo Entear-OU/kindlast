@@ -57,7 +57,10 @@ describe('GET /auth/callback', () => {
     consumeState.mockResolvedValue(null)
     createSession.mockResolvedValue('a-new-session-id')
     getCurrentUser.mockResolvedValue({ memberships: [] })
-    acceptInvitation.mockResolvedValue(true)
+    acceptInvitation.mockResolvedValue({
+      orgId: 'invited-org',
+      orgSlug: 'invited-org',
+    })
   })
 
   it('sends someone who declined at the identity provider back, saying so', async () => {
@@ -200,7 +203,10 @@ describe('GET /auth/callback, provisioning', () => {
     vi.clearAllMocks()
     createSession.mockResolvedValue('a-new-session-id')
     getCurrentUser.mockResolvedValue({ memberships: [] })
-    acceptInvitation.mockResolvedValue(true)
+    acceptInvitation.mockResolvedValue({
+      orgId: 'invited-org',
+      orgSlug: 'invited-org',
+    })
     exchangeCode.mockResolvedValue({
       accessToken: accessTokenFor('subject-1'),
       refreshToken: 'r',
@@ -243,7 +249,7 @@ describe('GET /auth/callback, provisioning', () => {
     const order: string[] = []
     acceptInvitation.mockImplementation(async () => {
       order.push('accept')
-      return true
+      return { orgId: 'invited-org', orgSlug: 'invited-org' }
     })
     getCurrentUser.mockImplementation(async () => {
       order.push('me')
@@ -280,5 +286,61 @@ describe('GET /auth/callback, provisioning', () => {
     expect(response.cookies.get('kindlast_session')?.value).toBe(
       'a-new-session-id',
     )
+  })
+
+  // ENT-267. The signed-in branch of /invite/{token} has always flagged this;
+  // the signed-out branch, which is the one an invited stranger takes, said
+  // nothing at all. A new person whose token failed here is signed in, holds a
+  // personal organisation they never asked for, and has no way to tell that
+  // the invitation is the reason they cannot see the company that invited
+  // them. That was the shape of the PR #230 symptom, fixed at its cause and
+  // still silent if it ever recurs.
+  it('says so when the invitation could not be redeemed', async () => {
+    consumeState.mockResolvedValue({
+      verifier: 'v',
+      invitationToken: 'invite-token',
+      createdAt: Date.now(),
+    })
+    acceptInvitation.mockResolvedValue(null)
+
+    const { GET } = await import('@/app/auth/callback/route')
+    const response = await GET(callbackRequest('?code=abc&state=ours'))
+
+    expect(response.headers.get('location')).toContain(
+      '/workspace?error=invitation',
+    )
+    // Signed in regardless. The token exchange succeeded, so refusing the
+    // session over a failed invitation would lock somebody out of an account
+    // they legitimately hold.
+    expect(response.cookies.get('kindlast_session')?.value).toBe(
+      'a-new-session-id',
+    )
+  })
+
+  it('says nothing when the invitation was redeemed', async () => {
+    consumeState.mockResolvedValue({
+      verifier: 'v',
+      invitationToken: 'invite-token',
+      createdAt: Date.now(),
+    })
+
+    const { GET } = await import('@/app/auth/callback/route')
+    const response = await GET(callbackRequest('?code=abc&state=ours'))
+
+    expect(response.headers.get('location')).not.toContain('error=invitation')
+  })
+
+  // A sign-in carrying no invitation cannot fail one. Without this, the
+  // absence of a token and a token that failed would look the same to the
+  // redirect, and every ordinary sign-in would arrive apologising for an
+  // invitation nobody followed.
+  it('says nothing when there was no invitation', async () => {
+    consumeState.mockResolvedValue({ verifier: 'v', createdAt: Date.now() })
+
+    const { GET } = await import('@/app/auth/callback/route')
+    const response = await GET(callbackRequest('?code=abc&state=ours'))
+
+    expect(acceptInvitation).not.toHaveBeenCalled()
+    expect(response.headers.get('location')).not.toContain('error=invitation')
   })
 })

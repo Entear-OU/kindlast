@@ -493,6 +493,32 @@ what they have to do about it, which no commit subject knows.
 
 ### Fixed
 
+- **An invitation that could not be used said nothing at all** (ENT-267).
+  Following an invitation link that failed dropped the person into an
+  organisation of their own with no message: `/invite/{token}` set
+  `/workspace?error=invitation` and nothing anywhere read the parameter. That
+  used to be a rare path, reached only by an expired or already redeemed
+  token. It stopped being rare when an invitation started being refused for
+  anybody except the address it names, which is exactly what happens when the
+  person who sent it opens their own link to see what the recipient will see:
+  they landed in their own workspace and reasonably concluded the product was
+  broken.
+
+  `/workspace` now stops on that parameter instead of resolving onward, says
+  the invitation could not be used with the account currently signed in, names
+  that account, and offers the organisation it would otherwise have redirected
+  to as a link. A sign-in that carried an invitation which failed at the
+  callback arrives at the same page rather than silently.
+
+  It deliberately does not say why, and that is a property rather than a
+  wording choice: expired, already redeemed, never real and addressed to
+  somebody else are one answer from core-api, so that holding a session cannot
+  be used to discover which invitations exist. The message keeps that
+  distinction unavailable, and a test asserts the absence of the words that
+  would give it away. Nothing to do on upgrade, and no invitation behaves
+  differently: a refused invitation was, and still is, left unused for its
+  actual recipient.
+
 - **Three actions read as column names in the log.** `create_ropa_manual`,
   `create_dsar_manual` and `update_ropa` were written by the backend and absent
   from the console's label table, so an auditor saw the raw value. They now read

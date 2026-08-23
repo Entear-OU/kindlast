@@ -4,6 +4,8 @@ import {
   createVerifiedUser,
   deleteUser,
   FIXTURE_PASSWORD,
+  invitationState,
+  mintInvitation,
   type FixtureUser,
 } from './fixtures/identity'
 import { onOrigin } from './fixtures/origin'
@@ -173,6 +175,72 @@ test.describe('the signup journey', () => {
     // organisation, the address bar would say so.
     await expect(page).toHaveURL(/\/o\/an-organisation-that-is-not-mine$/)
     await expect(page.getByTestId('active-org')).toHaveCount(0)
+  })
+
+  /**
+   * An invitation that cannot be used says so (ENT-267).
+   *
+   * The refusal itself is PR #227's and is not in doubt: an invitation names
+   * an address, and anybody else holding the token is refused so that its
+   * actual recipient can still use it. What was in doubt is whether the person
+   * refused ever finds out. `/invite/{token}` redirected them to
+   * `/workspace?error=invitation`, `/workspace` read no parameters, and they
+   * arrived in an organisation of their own having been told nothing at all.
+   *
+   * Reachable by accident more often than by malice: an inviter opening their
+   * own link to see what the recipient will see is exactly this path, and the
+   * silence reads as a broken product.
+   *
+   * Both halves are asserted here, because either alone would be a wrong
+   * outcome that looks right. A message with the invitation consumed would
+   * mean the real recipient can never join; the invitation intact with no
+   * message is the bug this closes.
+   */
+  test('an invitation addressed to somebody else explains itself, and is not spent', async ({
+    page,
+  }) => {
+    await page.goto('/sign-in')
+    await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    await signIn(page, user)
+    await page.waitForURL(onOrigin('/o/[a-z0-9-]+$'), { timeout: 30_000 })
+
+    // Into the caller's own organisation, deliberately. Membership is not what
+    // is being refused here, the address is, and minting it somewhere they
+    // already belong keeps that the only variable.
+    const slug = new URL(page.url()).pathname.split('/')[2]
+    const token = await mintInvitation(
+      slug,
+      `someone-else-${Date.now()}@kindlast.test`,
+    )
+
+    await page.goto(`/invite/${token}`)
+
+    await expect(page).toHaveURL(onOrigin('/workspace\\?error=invitation'), {
+      timeout: 30_000,
+    })
+
+    const message = page.getByTestId('invitation-failed')
+    await expect(message).toBeVisible()
+    // The account it was tried with, which is the one thing that lets somebody
+    // work out what to do next.
+    await expect(message).toContainText(user.email)
+
+    // And nothing else. core-api answers expired, already redeemed, never real
+    // and addressed to somebody else identically so that a session cannot be
+    // used to discover which invitations exist, and a page that named the
+    // cause would hand that distinction straight back.
+    for (const oracle of [
+      /expired/i,
+      /already/i,
+      /revoked/i,
+      /does not exist/i,
+      /not found/i,
+      /invalid/i,
+    ]) {
+      await expect(message).not.toContainText(oracle)
+    }
+
+    expect(await invitationState(token)).toBe('unused')
   })
 
   // Sign-out, driven rather than asserted about.
