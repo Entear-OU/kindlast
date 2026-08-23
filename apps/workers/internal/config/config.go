@@ -121,6 +121,19 @@ type Temporal struct {
 	// minute on the producer pool.
 	OutboxReclaimSchedule string
 
+	// SweepRelayInterval is how often the relay looks for sweeps somebody
+	// asked for, which today means an onboarding somebody just confirmed
+	// (ENT-256, part four). Fifteen seconds, like the outbox relay, because
+	// the person is looking at an empty feed.
+	SweepRelayInterval time.Duration
+
+	// SweepSchedule is the cron expression for sweeping every organisation
+	// with a profile: the Watcher and then the Analyst, one organisation at a
+	// time. Daily at 06:00 UTC by default, which is what pg_cron's
+	// `watcher-daily` ran; the Analyst no longer needs its own 06:05 because
+	// it is the next step in the same workflow.
+	SweepSchedule string
+
 	// CoreAPIURL is where the activities call. Through the edge on the bundled
 	// stack, the same door Intelligence uses, so there is no
 	// development-only shortcut.
@@ -158,6 +171,8 @@ func Load() (*Config, error) {
 			SnoozeExpirySchedule:  valueOr("KINDLAST_SNOOZE_EXPIRY_SCHEDULE", "10 * * * *"),
 			OutboxRelayInterval:   durationOr("KINDLAST_OUTBOX_RELAY_INTERVAL", 15*time.Second),
 			OutboxReclaimSchedule: valueOr("KINDLAST_OUTBOX_RECLAIM_SCHEDULE", "40 * * * *"),
+			SweepRelayInterval:    durationOr("KINDLAST_SWEEP_RELAY_INTERVAL", 15*time.Second),
+			SweepSchedule:         valueOr("KINDLAST_SWEEP_SCHEDULE", "0 6 * * *"),
 			CoreAPIURL:            strings.TrimSpace(os.Getenv("KINDLAST_CORE_API_URL")),
 			OIDCIssuer:            strings.TrimSpace(os.Getenv("KINDLAST_OIDC_ISSUER")),
 			OIDCDiscoveryURL:      strings.TrimSpace(os.Getenv("KINDLAST_OIDC_DISCOVERY_URL")),

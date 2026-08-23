@@ -14,6 +14,46 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **The Watcher and the Analyst run on a schedule again, and confirming
+  onboarding triggers the organisation's first sweep on its own** (ENT-256,
+  part four of five; closes the gap ENT-212 left). Since the Supabase schema
+  went, nothing ran a sweep unless somebody called `SweepService.RunSweep`
+  with a service credential: a member could finish the interview, confirm,
+  and land on a dashboard that had no findings and no way to get any. Two
+  things change that.
+
+  Confirming writes a row to a new `sweep_triggers` table, in the same
+  transaction as the confirmed facts (migration 00035), and the `workers`
+  relay starts one `sweep/{trigger id}` Temporal workflow per row within
+  fifteen seconds: the Watcher, then the Analyst, then the row marked done.
+  The two-step shape is not incidental: `ConfirmProfile` and the sweep run on
+  separate connection pools under separate roles (00008), and a synchronous
+  call from the first to the second would have raced the transaction that has
+  to commit before the facts it wrote are visible to any other connection,
+  silently sweeping an empty profile. Writing a durable marker inside the same
+  transaction and relaying it afterwards, the same shape `transactional_outbox`
+  already uses for invitation mail, closes that race by construction rather
+  than by timing.
+
+  And a daily Schedule, `sweep-every-organisation` (06:00 UTC,
+  `KINDLAST_SWEEP_SCHEDULE`), lists every organisation with a compliance
+  profile and runs the Watcher and then the Analyst over each, four at a
+  time, one organisation's failure never stopping the rest; the run's result
+  in the Temporal UI says how many were visited and which failed. This is
+  what pg_cron's `watcher-daily` and `analyst-daily` were, with the Analyst
+  now the next step in the same workflow rather than a second job five
+  minutes later. The list comes from `sweep_targets()`, the ninth
+  `SECURITY DEFINER` function (agent-only, ids only), because the producer
+  role deliberately cannot enumerate tenants; `db/README.md` carries the
+  argument.
+
+  Four RPCs join `SweepService` on the internal surface (`RunAnalyst`,
+  `ListSweepTriggers`, `SettleSweepTrigger`, `ListSweepTargets`), all on
+  `internal:ingest`; `RunSweep` stays for an operator who wants one
+  organisation swept now. `docs/self-hosting.md` no longer lists a scheduler
+  as a requirement or opens with the silent-nothing failure mode: the
+  schedules are inside the stack.
+
 - **Invitation email now leaves through Temporal, one workflow per message**
   (ENT-256, part three of five). The ticker inside core-api that drained the
   transactional outbox every ten seconds is gone. In its place, a

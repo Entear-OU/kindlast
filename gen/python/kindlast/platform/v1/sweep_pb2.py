@@ -27,7 +27,7 @@ from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n kindlast/platform/v1/sweep.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"2\n\x0fRunSweepRequest\x12\x1f\n\x0b\x64\x65tect_only\x18\x01 \x01(\x08R\ndetectOnly\"{\n\x10RunSweepResponse\x12\x18\n\x07signals\x18\x01 \x01(\x05R\x07signals\x12\x1a\n\x08\x66indings\x18\x02 \x01(\x05R\x08\x66indings\x12\x31\n\x06ran_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt\"\x16\n\x14\x45xpireSnoozesRequest\"h\n\x15\x45xpireSnoozesResponse\x12\x1c\n\treemerged\x18\x01 \x01(\x05R\treemerged\x12\x31\n\x06ran_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt2\xc2\x02\n\x0cSweepService\x12\x8b\x01\n\x08RunSweep\x12%.kindlast.platform.v1.RunSweepRequest\x1a&.kindlast.platform.v1.RunSweepResponse\"0\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x17\"\x12/internal/v1/sweep:\x01*\x12\xa3\x01\n\rExpireSnoozes\x12*.kindlast.platform.v1.ExpireSnoozesRequest\x1a+.kindlast.platform.v1.ExpireSnoozesResponse\"9\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02 \"\x1b/internal/v1/snoozes:expire:\x01*B\xde\x01\n\x18\x63om.kindlast.platform.v1B\nSweepProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n kindlast/platform/v1/sweep.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\x13\n\x11RunAnalystRequest\"c\n\x12RunAnalystResponse\x12\x1a\n\x08\x66indings\x18\x01 \x01(\x05R\x08\x66indings\x12\x31\n\x06ran_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt\"0\n\x18ListSweepTriggersRequest\x12\x14\n\x05limit\x18\x01 \x01(\x05R\x05limit\"[\n\x19ListSweepTriggersResponse\x12>\n\x08triggers\x18\x01 \x03(\x0b\x32\".kindlast.platform.v1.SweepTriggerR\x08triggers\"\\\n\x0cSweepTrigger\x12\x1d\n\ntrigger_id\x18\x01 \x01(\tR\ttriggerId\x12\x15\n\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x16\n\x06reason\x18\x03 \x01(\tR\x06reason\"\xed\x01\n\x19SettleSweepTriggerRequest\x12\x1d\n\ntrigger_id\x18\x01 \x01(\tR\ttriggerId\x12Q\n\x07outcome\x18\x02 \x01(\x0e\x32\x37.kindlast.platform.v1.SettleSweepTriggerRequest.OutcomeR\x07outcome\x12\x14\n\x05\x65rror\x18\x03 \x01(\tR\x05\x65rror\"H\n\x07Outcome\x12\x17\n\x13OUTCOME_UNSPECIFIED\x10\x00\x12\x10\n\x0cOUTCOME_DONE\x10\x01\x12\x12\n\x0eOUTCOME_FAILED\x10\x02\"6\n\x1aSettleSweepTriggerResponse\x12\x18\n\x07settled\x18\x01 \x01(\x08R\x07settled\"\x19\n\x17ListSweepTargetsRequest\"3\n\x18ListSweepTargetsResponse\x12\x17\n\x07org_ids\x18\x01 \x03(\tR\x06orgIds\"2\n\x0fRunSweepRequest\x12\x1f\n\x0b\x64\x65tect_only\x18\x01 \x01(\x08R\ndetectOnly\"{\n\x10RunSweepResponse\x12\x18\n\x07signals\x18\x01 \x01(\x05R\x07signals\x12\x1a\n\x08\x66indings\x18\x02 \x01(\x05R\x08\x66indings\x12\x31\n\x06ran_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt\"\x16\n\x14\x45xpireSnoozesRequest\"h\n\x15\x45xpireSnoozesResponse\x12\x1c\n\treemerged\x18\x01 \x01(\x05R\treemerged\x12\x31\n\x06ran_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt2\x87\x08\n\x0cSweepService\x12\x8b\x01\n\x08RunSweep\x12%.kindlast.platform.v1.RunSweepRequest\x1a&.kindlast.platform.v1.RunSweepResponse\"0\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x17\"\x12/internal/v1/sweep:\x01*\x12\xa3\x01\n\rExpireSnoozes\x12*.kindlast.platform.v1.ExpireSnoozesRequest\x1a+.kindlast.platform.v1.ExpireSnoozesResponse\"9\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02 \"\x1b/internal/v1/snoozes:expire:\x01*\x12\x99\x01\n\nRunAnalyst\x12\'.kindlast.platform.v1.RunAnalystRequest\x1a(.kindlast.platform.v1.RunAnalystResponse\"8\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x1f\"\x1a/internal/v1/sweep:analyse:\x01*\x12\xb7\x01\n\x11ListSweepTriggers\x12..kindlast.platform.v1.ListSweepTriggersRequest\x1a/.kindlast.platform.v1.ListSweepTriggersResponse\"A\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02(\"#/internal/v1/sweep-triggers:pending:\x01*\x12\xb9\x01\n\x12SettleSweepTrigger\x12/.kindlast.platform.v1.SettleSweepTriggerRequest\x1a\x30.kindlast.platform.v1.SettleSweepTriggerResponse\"@\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\'\"\"/internal/v1/sweep-triggers:settle:\x01*\x12\xb0\x01\n\x10ListSweepTargets\x12-.kindlast.platform.v1.ListSweepTargetsRequest\x1a..kindlast.platform.v1.ListSweepTargetsResponse\"=\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02$\"\x1f/internal/v1/sweep-targets:list:\x01*B\xde\x01\n\x18\x63om.kindlast.platform.v1B\nSweepProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,14 +39,42 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SWEEPSERVICE'].methods_by_name['RunSweep']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002\027\"\022/internal/v1/sweep:\001*'
   _globals['_SWEEPSERVICE'].methods_by_name['ExpireSnoozes']._loaded_options = None
   _globals['_SWEEPSERVICE'].methods_by_name['ExpireSnoozes']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002 \"\033/internal/v1/snoozes:expire:\001*'
-  _globals['_RUNSWEEPREQUEST']._serialized_start=154
-  _globals['_RUNSWEEPREQUEST']._serialized_end=204
-  _globals['_RUNSWEEPRESPONSE']._serialized_start=206
-  _globals['_RUNSWEEPRESPONSE']._serialized_end=329
-  _globals['_EXPIRESNOOZESREQUEST']._serialized_start=331
-  _globals['_EXPIRESNOOZESREQUEST']._serialized_end=353
-  _globals['_EXPIRESNOOZESRESPONSE']._serialized_start=355
-  _globals['_EXPIRESNOOZESRESPONSE']._serialized_end=459
-  _globals['_SWEEPSERVICE']._serialized_start=462
-  _globals['_SWEEPSERVICE']._serialized_end=784
+  _globals['_SWEEPSERVICE'].methods_by_name['RunAnalyst']._loaded_options = None
+  _globals['_SWEEPSERVICE'].methods_by_name['RunAnalyst']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002\037\"\032/internal/v1/sweep:analyse:\001*'
+  _globals['_SWEEPSERVICE'].methods_by_name['ListSweepTriggers']._loaded_options = None
+  _globals['_SWEEPSERVICE'].methods_by_name['ListSweepTriggers']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002(\"#/internal/v1/sweep-triggers:pending:\001*'
+  _globals['_SWEEPSERVICE'].methods_by_name['SettleSweepTrigger']._loaded_options = None
+  _globals['_SWEEPSERVICE'].methods_by_name['SettleSweepTrigger']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002\'\"\"/internal/v1/sweep-triggers:settle:\001*'
+  _globals['_SWEEPSERVICE'].methods_by_name['ListSweepTargets']._loaded_options = None
+  _globals['_SWEEPSERVICE'].methods_by_name['ListSweepTargets']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002$\"\037/internal/v1/sweep-targets:list:\001*'
+  _globals['_RUNANALYSTREQUEST']._serialized_start=154
+  _globals['_RUNANALYSTREQUEST']._serialized_end=173
+  _globals['_RUNANALYSTRESPONSE']._serialized_start=175
+  _globals['_RUNANALYSTRESPONSE']._serialized_end=274
+  _globals['_LISTSWEEPTRIGGERSREQUEST']._serialized_start=276
+  _globals['_LISTSWEEPTRIGGERSREQUEST']._serialized_end=324
+  _globals['_LISTSWEEPTRIGGERSRESPONSE']._serialized_start=326
+  _globals['_LISTSWEEPTRIGGERSRESPONSE']._serialized_end=417
+  _globals['_SWEEPTRIGGER']._serialized_start=419
+  _globals['_SWEEPTRIGGER']._serialized_end=511
+  _globals['_SETTLESWEEPTRIGGERREQUEST']._serialized_start=514
+  _globals['_SETTLESWEEPTRIGGERREQUEST']._serialized_end=751
+  _globals['_SETTLESWEEPTRIGGERREQUEST_OUTCOME']._serialized_start=679
+  _globals['_SETTLESWEEPTRIGGERREQUEST_OUTCOME']._serialized_end=751
+  _globals['_SETTLESWEEPTRIGGERRESPONSE']._serialized_start=753
+  _globals['_SETTLESWEEPTRIGGERRESPONSE']._serialized_end=807
+  _globals['_LISTSWEEPTARGETSREQUEST']._serialized_start=809
+  _globals['_LISTSWEEPTARGETSREQUEST']._serialized_end=834
+  _globals['_LISTSWEEPTARGETSRESPONSE']._serialized_start=836
+  _globals['_LISTSWEEPTARGETSRESPONSE']._serialized_end=887
+  _globals['_RUNSWEEPREQUEST']._serialized_start=889
+  _globals['_RUNSWEEPREQUEST']._serialized_end=939
+  _globals['_RUNSWEEPRESPONSE']._serialized_start=941
+  _globals['_RUNSWEEPRESPONSE']._serialized_end=1064
+  _globals['_EXPIRESNOOZESREQUEST']._serialized_start=1066
+  _globals['_EXPIRESNOOZESREQUEST']._serialized_end=1088
+  _globals['_EXPIRESNOOZESRESPONSE']._serialized_start=1090
+  _globals['_EXPIRESNOOZESRESPONSE']._serialized_end=1194
+  _globals['_SWEEPSERVICE']._serialized_start=1197
+  _globals['_SWEEPSERVICE']._serialized_end=2228
 # @@protoc_insertion_point(module_scope)

@@ -23,6 +23,18 @@ class SweepService(Protocol):
     async def expire_snoozes(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def run_analyst(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def list_sweep_triggers(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def settle_sweep_trigger(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def list_sweep_targets(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class SweepServiceASGIApplication(ConnectASGIApplication[SweepService]):
     def __init__(self, service: SweepService | AsyncGenerator[SweepService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -48,6 +60,46 @@ class SweepServiceASGIApplication(ConnectASGIApplication[SweepService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.expire_snoozes,
+                ),
+                "/kindlast.platform.v1.SweepService/RunAnalyst": Endpoint.unary(
+                    method=MethodInfo(
+                        name="RunAnalyst",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.run_analyst,
+                ),
+                "/kindlast.platform.v1.SweepService/ListSweepTriggers": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ListSweepTriggers",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.list_sweep_triggers,
+                ),
+                "/kindlast.platform.v1.SweepService/SettleSweepTrigger": Endpoint.unary(
+                    method=MethodInfo(
+                        name="SettleSweepTrigger",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.settle_sweep_trigger,
+                ),
+                "/kindlast.platform.v1.SweepService/ListSweepTargets": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ListSweepTargets",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.list_sweep_targets,
                 ),
             },
             interceptors=interceptors,
@@ -102,11 +154,99 @@ class SweepServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def run_analyst(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RunAnalyst",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def list_sweep_triggers(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListSweepTriggers",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def settle_sweep_trigger(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="SettleSweepTrigger",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def list_sweep_targets(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListSweepTargets",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class SweepServiceSync(Protocol):
     def run_sweep(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunSweepRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunSweepResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def expire_snoozes(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def run_analyst(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def list_sweep_triggers(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def settle_sweep_trigger(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def list_sweep_targets(self, request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -133,6 +273,46 @@ class SweepServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.expire_snoozes,
+                ),
+                "/kindlast.platform.v1.SweepService/RunAnalyst": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="RunAnalyst",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.run_analyst,
+                ),
+                "/kindlast.platform.v1.SweepService/ListSweepTriggers": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ListSweepTriggers",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.list_sweep_triggers,
+                ),
+                "/kindlast.platform.v1.SweepService/SettleSweepTrigger": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="SettleSweepTrigger",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.settle_sweep_trigger,
+                ),
+                "/kindlast.platform.v1.SweepService/ListSweepTargets": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ListSweepTargets",
+                        service_name="kindlast.platform.v1.SweepService",
+                        input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.list_sweep_targets,
                 ),
             },
             interceptors=interceptors,
@@ -181,6 +361,86 @@ class SweepServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.SweepService",
                 input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesRequest,
                 output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ExpireSnoozesResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def run_analyst(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RunAnalyst",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.RunAnalystResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def list_sweep_triggers(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListSweepTriggers",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTriggersResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def settle_sweep_trigger(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="SettleSweepTrigger",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.SettleSweepTriggerResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def list_sweep_targets(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListSweepTargets",
+                service_name="kindlast.platform.v1.SweepService",
+                input=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsRequest,
+                output=kindlast_dot_platform_dot_v1_dot_sweep__pb2.ListSweepTargetsResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

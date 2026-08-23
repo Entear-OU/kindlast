@@ -13,6 +13,7 @@ import (
 	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
 	onboardingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/onboarding"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/session"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/store/postgres"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	"github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1/corev1connect"
 )
@@ -404,5 +405,94 @@ func TestATokenWithoutTheOnboardingScopeIsRefused(t *testing.T) {
 	if _, err := onboarding.GetOnboardingSession(t.Context(),
 		withHeaders(connect.NewRequest(&corev1.GetOnboardingSessionRequest{}), me.headers)); err == nil {
 		t.Fatal("a token with no onboarding scope read the interview's state")
+	}
+}
+
+// TestConfirmingOnboardingThroughTheRealChainLeavesASweepForTheWorker is the
+// seam AGENTS.md asks to be driven once end to end rather than trusted from
+// unit coverage of each half (00035, ENT-256 part four).
+//
+// The postgres package already proves ConfirmOnboarding writes the trigger row
+// and the agent pool lists, runs and settles it, each against a real
+// transaction. Neither of those calls goes through `ConfirmProfile`, the
+// tenancy interceptor, or the scope gate, and ENT-245 is the standing reminder
+// of what that gap can hide: a service correctly implemented and unreachable
+// in production, with every narrower test green. So this one calls the RPC the
+// console actually calls, through the real registry and the real interceptor
+// chain, and only then reaches for the agent pool to prove the row it left
+// behind is the row the worker's relay would list, and can be run and settled
+// the way the workflow does it.
+func TestConfirmingOnboardingThroughTheRealChainLeavesASweepForTheWorker(t *testing.T) {
+	auth := newAuthServer(t)
+	sessions, onboardingClient, _ := buildOnboardingChain(t, auth)
+	agentPool := requireAgentPool(t)
+
+	me := onboarder(t, auth, sessions, "sweep-trigger")
+
+	state, err := onboardingClient.StartOnboarding(t.Context(),
+		withHeaders(connect.NewRequest(&corev1.StartOnboardingRequest{}), me.headers))
+	if err != nil {
+		t.Fatalf("starting onboarding: %v", err)
+	}
+	next := state.Msg.GetState()
+	for next.GetNextQuestion() != nil {
+		key := next.GetNextQuestion().GetKey()
+		text, known := answerText[key]
+		if !known {
+			t.Fatalf("the interview asked about %v and this test has no answer for it", key)
+		}
+		answered, err := onboardingClient.AnswerQuestion(t.Context(),
+			withHeaders(connect.NewRequest(&corev1.AnswerQuestionRequest{
+				Key: key, Answer: text,
+			}), me.headers))
+		if err != nil {
+			t.Fatalf("answering %v: %v", key, err)
+		}
+		next = answered.Msg.GetState()
+	}
+
+	confirmed, err := onboardingClient.ConfirmProfile(t.Context(),
+		withHeaders(connect.NewRequest(&corev1.ConfirmProfileRequest{}), me.headers))
+	if err != nil {
+		t.Fatalf("confirming through the real chain: %v", err)
+	}
+	if confirmed.Msg.GetProfileId() == "" {
+		t.Fatal("confirming through the real chain produced no profile")
+	}
+
+	// What the relay asks, on the agent pool, across the same connection
+	// boundary the worker crosses.
+	triggers, err := agentPool.PendingSweepTriggers(t.Context(), 1000)
+	if err != nil {
+		t.Fatalf("listing sweep triggers: %v", err)
+	}
+	var mine *postgres.SweepTrigger
+	for i := range triggers {
+		if triggers[i].OrgID == me.orgID {
+			mine = &triggers[i]
+		}
+	}
+	if mine == nil {
+		t.Fatalf("the sweep triggered by confirming %s's onboarding was not listed for the worker", me.orgID)
+	}
+
+	// What the workflow does with it.
+	if _, err := agentPool.RunSweep(t.Context(), mine.OrgID, true); err != nil {
+		t.Fatalf("the watcher: %v", err)
+	}
+	if _, err := agentPool.RunAnalyst(t.Context(), mine.OrgID); err != nil {
+		t.Fatalf("the analyst: %v", err)
+	}
+	if settled, err := agentPool.SettleSweepTrigger(t.Context(), mine.ID, nil); err != nil || !settled {
+		t.Fatalf("settling: settled=%v err=%v", settled, err)
+	}
+
+	var status string
+	if err := seeder(t).QueryRow(t.Context(),
+		`select status from sweep_triggers where id = $1::uuid`, mine.ID).Scan(&status); err != nil {
+		t.Fatalf("reading the sweep trigger: %v", err)
+	}
+	if status != "done" {
+		t.Fatalf("status = %q after the workflow's steps, want done", status)
 	}
 }

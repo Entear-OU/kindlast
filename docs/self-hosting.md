@@ -3,21 +3,25 @@
 Kindlast is AGPL-3.0 licensed and you are free to run your own instance. This
 document covers what that actually takes.
 
-Read the failure mode section first. It is the one thing that will bite you.
+Read the failure mode section first. It is the one thing that used to bite,
+and the paragraph is kept so you know what to check.
 
-## The failure mode that matters
+## The failure mode that used to matter
 
-**Kindlast's background agents run on scheduled HTTP calls, not on an in-process
-timer.** On Vercel these are declared in `vercel.json` and the platform calls
-them. Anywhere else, nothing calls them.
+Until ENT-256, Kindlast's background agents ran on scheduled HTTP calls: on
+Vercel the platform made them, and anywhere else nothing did. A deployment
+without a scheduler looked completely healthy (sign up, onboard, browse) and
+silently did nothing: the Analyst never ran, no findings were ever created, no
+notification was ever sent.
 
-If you deploy without setting up scheduling, the app looks completely healthy.
-You can sign up, complete onboarding, and browse the console. No error appears
-anywhere. But the Analyst never runs, no findings are ever created, and no
-notification is ever sent. The product silently does nothing, which is a worse
-outcome than crashing.
-
-Set up scheduling. It is described below.
+**That failure mode is gone. The schedules are inside the stack.** The
+`workers` container registers every schedule with Temporal when it boots, and
+Temporal runs them wherever the stack runs, including air-gapped. There is no
+cron to set up on the host and no endpoint to call on a timer. What remains
+worth checking after an upgrade is that `workers` is running with
+`KINDLAST_TEMPORAL_ADDR` set: a gateway-only `workers` says at boot that
+nothing will run on a schedule, and `temporal schedule list` (below) shows
+five schedules when all is well.
 
 ## Requirements
 
@@ -27,7 +31,6 @@ Set up scheduling. It is described below.
 | Node.js | 22.13 or later, since Next.js runs on it |
 | Docker | For the bundled stack, which includes the console itself. On a host that only runs Kindlast, this is the only requirement in this table |
 | Postgres | 17 with pgvector, supplied by the stack |
-| Scheduler | Anything that can make an authenticated HTTP GET on a cron schedule |
 
 ## The stack
 
@@ -498,6 +501,8 @@ does nothing but fail.
 | `expire-snoozed-findings` | Hourly at ten past (`KINDLAST_SNOOZE_EXPIRY_SCHEDULE`) | Brings back every finding whose deferral has run out, in every organisation, so "defer for seven days" means seven days rather than until somebody remembers. One pass, idempotent, run as the producer role. |
 | `relay-transactional-outbox` | Every 15 seconds (`KINDLAST_OUTBOX_RELAY_INTERVAL`) | Asks core-api what is waiting to leave and starts one workflow per row: `deliver-message/{row id}` for an invitation email, `deliver-notification/{row id}` for a finding notification. Each has a retry policy that backs off (ten seconds, doubling, capped at ten minutes) and no attempt limit: every attempt and what the mail server answered is in that workflow's history. A message that is not leaving is a running workflow in the UI with a reason. |
 | `reclaim-transactional-outbox` | Hourly at forty past (`KINDLAST_OUTBOX_RECLAIM_SCHEDULE`) | Clears the recipient's address and the rendered body out of delivered messages after seven days, and gives up on undelivered ones whose invitation can no longer be accepted. The rendered body of an invitation carries the raw token, so this is a credential-lifetime pass before it is a data-minimisation one. A message that can still be delivered is never touched. |
+| `relay-sweep-triggers` | Every 15 seconds (`KINDLAST_SWEEP_RELAY_INTERVAL`) | Asks core-api which sweeps somebody asked for and nothing has run (today: an onboarding somebody just confirmed writes a `sweep_triggers` row in the same transaction as the profile) and starts one `TriggeredSweepWorkflow` per row, named `sweep/{trigger id}`. So a fresh organisation sees findings within seconds of confirming, without anybody calling `RunSweep`. |
+| `sweep-every-organisation` | Daily at 06:00 UTC (`KINDLAST_SWEEP_SCHEDULE`) | Lists every organisation with a compliance profile and runs the Watcher and then the Analyst over each, four at a time, as two activities per organisation with their own retries. One organisation's failure is recorded in the run's result and does not stop the rest. This is what pg_cron's `watcher-daily` and `analyst-daily` were; the Analyst is now the next step in the same workflow rather than a second job five minutes later. |
 
 Mail itself is sent by core-api, not by the worker: the worker asks core-api
 to deliver a message by id, and core-api, which holds the SMTP channel, claims
@@ -519,10 +524,18 @@ So a `deliver-notification/...` workflow showing as running overnight is a
 person asleep, and its history says who was told, who is being held, and
 until when. Nobody's address appears in it.
 
-The rest arrives in the change that follows: the Watcher and Analyst chain,
-replacing the hand trigger that exists today. Until it lands, a sweep is still
-started by calling `SweepService.RunSweep` with a service credential, exactly
-as before; see the Postman collection for the request.
+`SweepService.RunSweep` still exists for an operator who wants to sweep one
+organisation now, with a service credential; see the Postman collection. It is
+no longer how anything gets swept in the ordinary course of things. To sweep
+the whole estate now rather than at 06:00, which is how to check an upgrade:
+
+```bash
+docker compose -f deploy/compose.yaml exec temporal \
+  temporal schedule trigger --schedule-id sweep-every-organisation --address temporal:7233
+```
+
+The run's result in the UI says how many organisations were visited, how
+many signals and findings came of it, and which organisations (by id) failed.
 
 The worker that runs these is the `workers` container, the same binary as the
 integrations gateway, polling the `core` task queue. It registers its
@@ -538,6 +551,8 @@ Its settings:
 | `KINDLAST_SNOOZE_EXPIRY_SCHEDULE` | `10 * * * *` | Five-field cron, UTC, for bringing deferred findings back. |
 | `KINDLAST_OUTBOX_RELAY_INTERVAL` | `15s` | How often the relay looks for invitation mail waiting to leave. A Go duration. |
 | `KINDLAST_OUTBOX_RECLAIM_SCHEDULE` | `40 * * * *` | Five-field cron, UTC, for clearing addresses and bodies out of delivered and abandoned messages. |
+| `KINDLAST_SWEEP_RELAY_INTERVAL` | `15s` | How often the relay looks for sweeps somebody asked for. A Go duration. |
+| `KINDLAST_SWEEP_SCHEDULE` | `0 6 * * *` | Five-field cron, UTC, for sweeping every organisation with a profile. |
 | `KINDLAST_CORE_API_URL` | `http://edge:80` | Where the activities call. Through the edge, the same door Intelligence uses. |
 | `KINDLAST_OIDC_*`, `KINDLAST_INTERNAL_CLIENT_FILE` | as core-api | The worker mints a token to call core-api, with the same service credential Intelligence presents. The bundled stack mounts the seed's files; an operator pointing at their own IdP sets these the way they did for core-api. |
 

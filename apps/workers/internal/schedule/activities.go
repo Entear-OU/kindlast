@@ -16,6 +16,11 @@ import (
 type Activities struct {
 	// CoreAPI is SweepService: the snooze expiry pass (part two).
 	CoreAPI Expirer
+	// Sweeps is SweepService again, as the sweep workflows see it (part
+	// four): the Watcher, the Analyst, the triggers and the targets. The same
+	// generated client satisfies both; two names because two features
+	// declared what they need separately, which is the §21.6 habit.
+	Sweeps Sweeper
 	// Mail is DeliveryService: the transactional outbox's delivery half
 	// (part three).
 	Mail Deliverer

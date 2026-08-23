@@ -450,6 +450,23 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.SweepService.ExpireSnoozes": {
 			Method: "POST", Path: "/internal/v1/snoozes:expire",
 		},
+		// ENT-256, part four. The sweep as two steps (the Analyst alone is
+		// the second), and the two lists the schedules ask for: triggers
+		// somebody enqueued, and every organisation with a profile. All
+		// cross-organisation or header-named as RunSweep is; none takes an
+		// {org_id} in the path.
+		"kindlast.platform.v1.SweepService.RunAnalyst": {
+			Method: "POST", Path: "/internal/v1/sweep:analyse",
+		},
+		"kindlast.platform.v1.SweepService.ListSweepTriggers": {
+			Method: "POST", Path: "/internal/v1/sweep-triggers:pending",
+		},
+		"kindlast.platform.v1.SweepService.SettleSweepTrigger": {
+			Method: "POST", Path: "/internal/v1/sweep-triggers:settle",
+		},
+		"kindlast.platform.v1.SweepService.ListSweepTargets": {
+			Method: "POST", Path: "/internal/v1/sweep-targets:list",
+		},
 		// ENT-256, part three. The outbox's delivery half, three custom
 		// actions over the messages, all cross-organisation by design and all
 		// on the internal prefix: what is pending, deliver this one, reclaim

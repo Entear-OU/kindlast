@@ -1050,6 +1050,13 @@ services:
       # cleared (ENT-242). Hourly at forty past, offset from the snooze expiry
       # so the two passes do not share a minute on the producer pool.
       KINDLAST_OUTBOX_RECLAIM_SCHEDULE: ${KINDLAST_OUTBOX_RECLAIM_SCHEDULE:-40 * * * *}
+      # How often the relay looks for sweeps somebody asked for, which today
+      # means an onboarding somebody just confirmed (ENT-256, part four), and
+      # when the Watcher and then the Analyst run over every organisation
+      # with a profile. Daily at 06:00 UTC is what pg_cron's watcher-daily
+      # ran; the Analyst no longer needs its own 06:05.
+      KINDLAST_SWEEP_RELAY_INTERVAL: ${KINDLAST_SWEEP_RELAY_INTERVAL:-15s}
+      KINDLAST_SWEEP_SCHEDULE: ${KINDLAST_SWEEP_SCHEDULE:-0 6 * * *}
 
       # Where the activities call: through the edge, the same door Intelligence
       # uses, so there is no development-only shortcut. The edge routes

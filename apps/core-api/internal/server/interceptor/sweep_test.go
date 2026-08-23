@@ -33,11 +33,39 @@ type recordingProducer struct {
 	lastOrg    string
 	detectOnly bool
 	expiries   int
+
+	analyses     []string
+	settled      []string
+	settleErrors []string
 }
 
 func (r *recordingProducer) ExpireSnoozes(context.Context) (postgres.Expiry, error) {
 	r.expiries++
 	return postgres.Expiry{Reemerged: 4, RanAt: time.Unix(0, 0).UTC()}, nil
+}
+
+// The part-four surface. The recorder answers one pending trigger for
+// `alphaOrg`, analyses whatever organisation it is given, and remembers what
+// it was told to settle.
+func (r *recordingProducer) RunAnalyst(_ context.Context, orgID string) (postgres.Analysis, error) {
+	r.analyses = append(r.analyses, orgID)
+	return postgres.Analysis{Findings: 2, RanAt: time.Unix(0, 0).UTC()}, nil
+}
+
+func (r *recordingProducer) PendingSweepTriggers(context.Context, int) ([]postgres.SweepTrigger, error) {
+	return []postgres.SweepTrigger{{ID: "55555555-5555-5555-5555-555555555555", OrgID: alphaOrg, Reason: "onboarding_confirmed"}}, nil
+}
+
+func (r *recordingProducer) SettleSweepTrigger(_ context.Context, id string, cause error) (bool, error) {
+	r.settled = append(r.settled, id)
+	if cause != nil {
+		r.settleErrors = append(r.settleErrors, cause.Error())
+	}
+	return true, nil
+}
+
+func (r *recordingProducer) SweepTargets(context.Context) ([]string, error) {
+	return []string{alphaOrg, betaOrg}, nil
 }
 
 func (r *recordingProducer) RunSweep(_ context.Context, orgID string, detectOnly bool) (postgres.Sweep, error) {
@@ -209,5 +237,102 @@ func TestAServiceTokenCanExpireSnoozesWithNoOrganisation(t *testing.T) {
 	}
 	if res.Msg.GetReemerged() != 4 {
 		t.Errorf("count did not survive the round trip: %+v", res.Msg)
+	}
+}
+
+// The part-four surface (ENT-256): the Analyst alone, the two lists the
+// schedules ask for, and the settle. Same gate as the sweep, and the
+// organisation-header rule applies to the one that names an organisation.
+func TestNoPartFourSweepRPCIsReachableWithAHumanToken(t *testing.T) {
+	a := newAuthServer(t)
+	client, producer := buildSweepChain(t, a)
+	human := sweepHeaders(t, a,
+		"openid profile email findings:read findings:act dashboard:read org:read org:manage",
+		alphaOrg)
+
+	if _, err := client.RunAnalyst(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.RunAnalystRequest{}), human)); codeOf(t, err) != connect.CodePermissionDenied {
+		t.Fatalf("analyst: got %v, want permission_denied", codeOf(t, err))
+	}
+	if _, err := client.ListSweepTriggers(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.ListSweepTriggersRequest{}), human)); codeOf(t, err) != connect.CodePermissionDenied {
+		t.Fatalf("list triggers: got %v, want permission_denied", codeOf(t, err))
+	}
+	if _, err := client.SettleSweepTrigger(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.SettleSweepTriggerRequest{
+			TriggerId: "55555555-5555-5555-5555-555555555555",
+			Outcome:   platformv1.SettleSweepTriggerRequest_OUTCOME_DONE}), human)); codeOf(t, err) != connect.CodePermissionDenied {
+		t.Fatalf("settle: got %v, want permission_denied", codeOf(t, err))
+	}
+	if _, err := client.ListSweepTargets(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.ListSweepTargetsRequest{}), human)); codeOf(t, err) != connect.CodePermissionDenied {
+		t.Fatalf("list targets: got %v, want permission_denied", codeOf(t, err))
+	}
+	if len(producer.analyses)+len(producer.settled) != 0 {
+		t.Fatalf("a human token reached the producer: %+v", producer)
+	}
+}
+
+func TestAServiceTokenDrivesTheSweepWorkflowsVerbs(t *testing.T) {
+	a := newAuthServer(t)
+	client, producer := buildSweepChain(t, a)
+	service := sweepHeaders(t, a, "internal:ingest", "")
+
+	targets, err := client.ListSweepTargets(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.ListSweepTargetsRequest{}), service))
+	if err != nil {
+		t.Fatalf("listing targets: %v", err)
+	}
+	if got := targets.Msg.GetOrgIds(); len(got) != 2 {
+		t.Fatalf("targets = %v, want the recorder's two", got)
+	}
+
+	listed, err := client.ListSweepTriggers(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.ListSweepTriggersRequest{}), service))
+	if err != nil {
+		t.Fatalf("listing triggers: %v", err)
+	}
+	if got := listed.Msg.GetTriggers(); len(got) != 1 || got[0].GetOrgId() != alphaOrg || got[0].GetReason() != "onboarding_confirmed" {
+		t.Fatalf("triggers = %v, want the one pending trigger for alpha", got)
+	}
+	trigger := listed.Msg.GetTriggers()[0]
+
+	// The Analyst names its organisation in the header like the Watcher.
+	_, err = client.RunAnalyst(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.RunAnalystRequest{}), service))
+	if got := codeOf(t, err); got != connect.CodeInvalidArgument {
+		t.Fatalf("analyst with no organisation: got %v, want invalid_argument", got)
+	}
+	analysed, err := client.RunAnalyst(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.RunAnalystRequest{}),
+		sweepHeaders(t, a, "internal:ingest", trigger.GetOrgId())))
+	if err != nil {
+		t.Fatalf("analysing: %v", err)
+	}
+	if analysed.Msg.GetFindings() != 2 || len(producer.analyses) != 1 || producer.analyses[0] != alphaOrg {
+		t.Fatalf("analysis = %+v for %v, want 2 findings for alpha", analysed.Msg, producer.analyses)
+	}
+
+	// A failed attempt needs its reason; done does not.
+	_, err = client.SettleSweepTrigger(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.SettleSweepTriggerRequest{
+			TriggerId: trigger.GetTriggerId(), Outcome: platformv1.SettleSweepTriggerRequest_OUTCOME_FAILED}), service))
+	if got := codeOf(t, err); got != connect.CodeInvalidArgument {
+		t.Fatalf("failed without a reason: got %v, want invalid_argument", got)
+	}
+	if _, err := client.SettleSweepTrigger(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.SettleSweepTriggerRequest{
+			TriggerId: trigger.GetTriggerId(), Outcome: platformv1.SettleSweepTriggerRequest_OUTCOME_FAILED,
+			Error: "the watcher fell over"}), service)); err != nil {
+		t.Fatalf("recording a failed attempt: %v", err)
+	}
+	settled, err := client.SettleSweepTrigger(t.Context(), withHeaders(
+		connect.NewRequest(&platformv1.SettleSweepTriggerRequest{
+			TriggerId: trigger.GetTriggerId(), Outcome: platformv1.SettleSweepTriggerRequest_OUTCOME_DONE}), service))
+	if err != nil || !settled.Msg.GetSettled() {
+		t.Fatalf("settling done: err=%v settled=%v", err, settled.Msg.GetSettled())
+	}
+	if len(producer.settled) != 2 || len(producer.settleErrors) != 1 || producer.settleErrors[0] != "the watcher fell over" {
+		t.Fatalf("settled %v with errors %v; want two settles, one with the cause", producer.settled, producer.settleErrors)
 	}
 }

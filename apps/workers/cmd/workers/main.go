@@ -153,7 +153,7 @@ func run(logger *slog.Logger) error {
 		// schedule", which should be a log line rather than a mystery.
 		logger.Warn("no temporal worker: KINDLAST_TEMPORAL_ADDR is not set, " +
 			"so nothing in this deployment runs on a schedule " +
-			"(snoozed findings will not come back, and invitation mail will not leave)")
+			"(no sweeps, snoozed findings will not come back, and no mail will leave)")
 	}
 
 	handler, err := server.New(server.Dependencies{
@@ -274,7 +274,9 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 		SnoozeExpirySchedule:  t.SnoozeExpirySchedule,
 		OutboxRelayInterval:   t.OutboxRelayInterval,
 		OutboxReclaimSchedule: t.OutboxReclaimSchedule,
-		Activities:            &schedule.Activities{CoreAPI: coreAPI, Mail: mail},
+		SweepRelayInterval:    t.SweepRelayInterval,
+		SweepSchedule:         t.SweepSchedule,
+		Activities:            &schedule.Activities{CoreAPI: coreAPI, Sweeps: coreAPI, Mail: mail},
 		Logger:                logger,
 	}
 	c, err := schedule.Connect(ctx, opts)

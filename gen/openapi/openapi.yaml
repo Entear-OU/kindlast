@@ -2627,6 +2627,132 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/sweep-targets:list:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Lists every organisation a scheduled sweep should visit: the ones with a
+                 compliance profile, by id alone. The daily workflow's first activity.
+
+                 THIS IS "SWEEP EVERYONE", WRITTEN DELIBERATELY. RunSweep refuses to sweep
+                 more than one organisation because the blast radius is every customer at
+                 once; this RPC exists so that the loop is a workflow an operator can watch,
+                 pause and read the history of, one organisation per activity, rather than
+                 a parameter. The producer role cannot enumerate tenants, so the list comes
+                 from `sweep_targets()`, a SECURITY DEFINER function that answers this one
+                 question (00035).
+            operationId: SweepService_ListSweepTargets
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ListSweepTargetsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListSweepTargetsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/sweep-triggers:pending:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Lists the sweeps somebody asked for and nothing has run yet (00035):
+                 trigger id and organisation, oldest first. The relay's question, asked
+                 every few seconds; ids only, because the answer goes into a workflow
+                 history. No organisation header: the list is every organisation's.
+            operationId: SweepService_ListSweepTriggers
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ListSweepTriggersRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListSweepTriggersResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/sweep-triggers:settle:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Records what a triggered sweep did: done, or an attempt that failed with
+                 why. A failed attempt leaves the row pending, so the relay offers it
+                 again once the workflow that held it has closed; `done` is reserved for a
+                 sweep that actually ran. Idempotent on a settled row.
+            operationId: SweepService_SettleSweepTrigger
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SettleSweepTriggerRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SettleSweepTriggerResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/sweep:analyse:
+        post:
+            tags:
+                - SweepService
+            description: |-
+                Runs the Analyst alone for one organisation: turns the signals the
+                 Watcher raised and nobody has analysed yet into findings.
+
+                 The second activity of a sweep workflow, after RunSweep with detect_only.
+                 Same organisation header, same producer pool, same refusal without a
+                 header. Idempotent: the Analyst works over unprocessed signals, so a
+                 second call finds none and reports zero, which is what lets a workflow
+                 retry it on its own.
+            operationId: SweepService_RunAnalyst
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RunAnalystRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RunAnalystResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
 components:
     schemas:
         AcceptInvitationResponse:
@@ -4749,6 +4875,31 @@ components:
                     items:
                         $ref: '#/components/schemas/ProfileFact'
                     description: Only the open values. History is one RPC away and is a different question.
+        ListSweepTargetsRequest:
+            type: object
+            properties: {}
+        ListSweepTargetsResponse:
+            type: object
+            properties:
+                orgIds:
+                    type: array
+                    items:
+                        type: string
+                    description: Organisation ids, in a stable order.
+        ListSweepTriggersRequest:
+            type: object
+            properties:
+                limit:
+                    type: integer
+                    description: At most this many. Zero means the server's default.
+                    format: int32
+        ListSweepTriggersResponse:
+            type: object
+            properties:
+                triggers:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/SweepTrigger'
         ListToolsRequest:
             type: object
             properties:
@@ -5927,6 +6078,23 @@ components:
             properties:
                 integration:
                     $ref: '#/components/schemas/Integration'
+        RunAnalystRequest:
+            type: object
+            properties: {}
+        RunAnalystResponse:
+            type: object
+            properties:
+                findings:
+                    type: integer
+                    description: |-
+                        Findings the Analyst created or refreshed from the signals waiting for
+                         it. Zero is the ordinary answer for an organisation whose profile has not
+                         changed since its last sweep.
+                    format: int32
+                ranAt:
+                    type: string
+                    description: When this ran, from the database's clock inside the same transaction.
+                    format: date-time
         RunSweepRequest:
             type: object
             properties:
@@ -5982,6 +6150,26 @@ components:
                 settled:
                     type: boolean
                     description: True when this call settled the row; false when it was already settled.
+        SettleSweepTriggerRequest:
+            type: object
+            properties:
+                triggerId:
+                    type: string
+                outcome:
+                    enum:
+                        - OUTCOME_UNSPECIFIED
+                        - OUTCOME_DONE
+                        - OUTCOME_FAILED
+                    type: string
+                    format: enum
+                error:
+                    type: string
+        SettleSweepTriggerResponse:
+            type: object
+            properties:
+                settled:
+                    type: boolean
+                    description: True when this call changed the row; false when it was already done.
         SeverityCounts:
             type: object
             properties:
@@ -6066,6 +6254,16 @@ components:
                 sourceUrl:
                     type: string
             description: One quoted passage supporting a finding, from `finding_supporting_chunks`.
+        SweepTrigger:
+            type: object
+            properties:
+                triggerId:
+                    type: string
+                orgId:
+                    type: string
+                reason:
+                    type: string
+                    description: Why the row exists; `onboarding_confirmed` today.
         ToolPolicy:
             type: object
             properties:
@@ -7017,14 +7215,20 @@ tags:
          them apart makes "is this reachable by a person" a question answered by the
          import path.
 
-         WHY A SWEEP HAS TO BE TRIGGERED AT ALL
+         HOW A SWEEP GETS RUN, AS OF ENT-256 PART FOUR
 
-         Nothing runs the Watcher or the Analyst on a schedule. 00001 dropped the
-         three pg_cron jobs when the schema moved off Supabase, and the schedules
-         return with Temporal at build-order step 8. Between those two points a
-         perfectly correct feed shows an empty state forever, because nothing has ever
-         looked.
+         00001 dropped the three pg_cron jobs when the schema moved off Supabase,
+         and for a while nothing ran the Watcher or the Analyst unless somebody called
+         RunSweep with a service credential. That is over: Temporal Schedules on
+         `workers` call this surface, exactly as this comment always said they would,
+         and RunSweep survived as the activity rather than being replaced.
 
-         This is the seam that fills the gap: something outside can ask for a sweep
-         now. When Temporal lands it becomes the thing Temporal calls rather than
-         being replaced, so the schedule arrives as a caller rather than a rewrite.
+         Two things start a sweep now. Confirming onboarding writes a `sweep_triggers`
+         row in the same transaction as the profile (00035), a relay lists it within
+         seconds and starts one workflow for it; and a daily schedule lists every
+         organisation with a profile (ListSweepTargets) and sweeps each. Both
+         workflows run the Watcher (RunSweep with detect_only) and then the Analyst
+         (RunAnalyst) as two activities, because the design's point is that the
+         Analyst is the next step in the workflow, not a second schedule five minutes
+         later hoping the first has finished. RunSweep with detect_only false still
+         does both in one transaction, for an operator who wants one call.

@@ -38,6 +38,17 @@ const (
 	// SweepServiceExpireSnoozesProcedure is the fully-qualified name of the SweepService's
 	// ExpireSnoozes RPC.
 	SweepServiceExpireSnoozesProcedure = "/kindlast.platform.v1.SweepService/ExpireSnoozes"
+	// SweepServiceRunAnalystProcedure is the fully-qualified name of the SweepService's RunAnalyst RPC.
+	SweepServiceRunAnalystProcedure = "/kindlast.platform.v1.SweepService/RunAnalyst"
+	// SweepServiceListSweepTriggersProcedure is the fully-qualified name of the SweepService's
+	// ListSweepTriggers RPC.
+	SweepServiceListSweepTriggersProcedure = "/kindlast.platform.v1.SweepService/ListSweepTriggers"
+	// SweepServiceSettleSweepTriggerProcedure is the fully-qualified name of the SweepService's
+	// SettleSweepTrigger RPC.
+	SweepServiceSettleSweepTriggerProcedure = "/kindlast.platform.v1.SweepService/SettleSweepTrigger"
+	// SweepServiceListSweepTargetsProcedure is the fully-qualified name of the SweepService's
+	// ListSweepTargets RPC.
+	SweepServiceListSweepTargetsProcedure = "/kindlast.platform.v1.SweepService/ListSweepTargets"
 )
 
 // SweepServiceClient is a client for the kindlast.platform.v1.SweepService service.
@@ -79,6 +90,36 @@ type SweepServiceClient interface {
 	// hour finds nothing to do and reports zero, which is what lets Temporal
 	// retry it freely.
 	ExpireSnoozes(context.Context, *connect.Request[v1.ExpireSnoozesRequest]) (*connect.Response[v1.ExpireSnoozesResponse], error)
+	// Runs the Analyst alone for one organisation: turns the signals the
+	// Watcher raised and nobody has analysed yet into findings.
+	//
+	// The second activity of a sweep workflow, after RunSweep with detect_only.
+	// Same organisation header, same producer pool, same refusal without a
+	// header. Idempotent: the Analyst works over unprocessed signals, so a
+	// second call finds none and reports zero, which is what lets a workflow
+	// retry it on its own.
+	RunAnalyst(context.Context, *connect.Request[v1.RunAnalystRequest]) (*connect.Response[v1.RunAnalystResponse], error)
+	// Lists the sweeps somebody asked for and nothing has run yet (00035):
+	// trigger id and organisation, oldest first. The relay's question, asked
+	// every few seconds; ids only, because the answer goes into a workflow
+	// history. No organisation header: the list is every organisation's.
+	ListSweepTriggers(context.Context, *connect.Request[v1.ListSweepTriggersRequest]) (*connect.Response[v1.ListSweepTriggersResponse], error)
+	// Records what a triggered sweep did: done, or an attempt that failed with
+	// why. A failed attempt leaves the row pending, so the relay offers it
+	// again once the workflow that held it has closed; `done` is reserved for a
+	// sweep that actually ran. Idempotent on a settled row.
+	SettleSweepTrigger(context.Context, *connect.Request[v1.SettleSweepTriggerRequest]) (*connect.Response[v1.SettleSweepTriggerResponse], error)
+	// Lists every organisation a scheduled sweep should visit: the ones with a
+	// compliance profile, by id alone. The daily workflow's first activity.
+	//
+	// THIS IS "SWEEP EVERYONE", WRITTEN DELIBERATELY. RunSweep refuses to sweep
+	// more than one organisation because the blast radius is every customer at
+	// once; this RPC exists so that the loop is a workflow an operator can watch,
+	// pause and read the history of, one organisation per activity, rather than
+	// a parameter. The producer role cannot enumerate tenants, so the list comes
+	// from `sweep_targets()`, a SECURITY DEFINER function that answers this one
+	// question (00035).
+	ListSweepTargets(context.Context, *connect.Request[v1.ListSweepTargetsRequest]) (*connect.Response[v1.ListSweepTargetsResponse], error)
 }
 
 // NewSweepServiceClient constructs a client for the kindlast.platform.v1.SweepService service. By
@@ -104,13 +145,41 @@ func NewSweepServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(sweepServiceMethods.ByName("ExpireSnoozes")),
 			connect.WithClientOptions(opts...),
 		),
+		runAnalyst: connect.NewClient[v1.RunAnalystRequest, v1.RunAnalystResponse](
+			httpClient,
+			baseURL+SweepServiceRunAnalystProcedure,
+			connect.WithSchema(sweepServiceMethods.ByName("RunAnalyst")),
+			connect.WithClientOptions(opts...),
+		),
+		listSweepTriggers: connect.NewClient[v1.ListSweepTriggersRequest, v1.ListSweepTriggersResponse](
+			httpClient,
+			baseURL+SweepServiceListSweepTriggersProcedure,
+			connect.WithSchema(sweepServiceMethods.ByName("ListSweepTriggers")),
+			connect.WithClientOptions(opts...),
+		),
+		settleSweepTrigger: connect.NewClient[v1.SettleSweepTriggerRequest, v1.SettleSweepTriggerResponse](
+			httpClient,
+			baseURL+SweepServiceSettleSweepTriggerProcedure,
+			connect.WithSchema(sweepServiceMethods.ByName("SettleSweepTrigger")),
+			connect.WithClientOptions(opts...),
+		),
+		listSweepTargets: connect.NewClient[v1.ListSweepTargetsRequest, v1.ListSweepTargetsResponse](
+			httpClient,
+			baseURL+SweepServiceListSweepTargetsProcedure,
+			connect.WithSchema(sweepServiceMethods.ByName("ListSweepTargets")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // sweepServiceClient implements SweepServiceClient.
 type sweepServiceClient struct {
-	runSweep      *connect.Client[v1.RunSweepRequest, v1.RunSweepResponse]
-	expireSnoozes *connect.Client[v1.ExpireSnoozesRequest, v1.ExpireSnoozesResponse]
+	runSweep           *connect.Client[v1.RunSweepRequest, v1.RunSweepResponse]
+	expireSnoozes      *connect.Client[v1.ExpireSnoozesRequest, v1.ExpireSnoozesResponse]
+	runAnalyst         *connect.Client[v1.RunAnalystRequest, v1.RunAnalystResponse]
+	listSweepTriggers  *connect.Client[v1.ListSweepTriggersRequest, v1.ListSweepTriggersResponse]
+	settleSweepTrigger *connect.Client[v1.SettleSweepTriggerRequest, v1.SettleSweepTriggerResponse]
+	listSweepTargets   *connect.Client[v1.ListSweepTargetsRequest, v1.ListSweepTargetsResponse]
 }
 
 // RunSweep calls kindlast.platform.v1.SweepService.RunSweep.
@@ -121,6 +190,26 @@ func (c *sweepServiceClient) RunSweep(ctx context.Context, req *connect.Request[
 // ExpireSnoozes calls kindlast.platform.v1.SweepService.ExpireSnoozes.
 func (c *sweepServiceClient) ExpireSnoozes(ctx context.Context, req *connect.Request[v1.ExpireSnoozesRequest]) (*connect.Response[v1.ExpireSnoozesResponse], error) {
 	return c.expireSnoozes.CallUnary(ctx, req)
+}
+
+// RunAnalyst calls kindlast.platform.v1.SweepService.RunAnalyst.
+func (c *sweepServiceClient) RunAnalyst(ctx context.Context, req *connect.Request[v1.RunAnalystRequest]) (*connect.Response[v1.RunAnalystResponse], error) {
+	return c.runAnalyst.CallUnary(ctx, req)
+}
+
+// ListSweepTriggers calls kindlast.platform.v1.SweepService.ListSweepTriggers.
+func (c *sweepServiceClient) ListSweepTriggers(ctx context.Context, req *connect.Request[v1.ListSweepTriggersRequest]) (*connect.Response[v1.ListSweepTriggersResponse], error) {
+	return c.listSweepTriggers.CallUnary(ctx, req)
+}
+
+// SettleSweepTrigger calls kindlast.platform.v1.SweepService.SettleSweepTrigger.
+func (c *sweepServiceClient) SettleSweepTrigger(ctx context.Context, req *connect.Request[v1.SettleSweepTriggerRequest]) (*connect.Response[v1.SettleSweepTriggerResponse], error) {
+	return c.settleSweepTrigger.CallUnary(ctx, req)
+}
+
+// ListSweepTargets calls kindlast.platform.v1.SweepService.ListSweepTargets.
+func (c *sweepServiceClient) ListSweepTargets(ctx context.Context, req *connect.Request[v1.ListSweepTargetsRequest]) (*connect.Response[v1.ListSweepTargetsResponse], error) {
+	return c.listSweepTargets.CallUnary(ctx, req)
 }
 
 // SweepServiceHandler is an implementation of the kindlast.platform.v1.SweepService service.
@@ -162,6 +251,36 @@ type SweepServiceHandler interface {
 	// hour finds nothing to do and reports zero, which is what lets Temporal
 	// retry it freely.
 	ExpireSnoozes(context.Context, *connect.Request[v1.ExpireSnoozesRequest]) (*connect.Response[v1.ExpireSnoozesResponse], error)
+	// Runs the Analyst alone for one organisation: turns the signals the
+	// Watcher raised and nobody has analysed yet into findings.
+	//
+	// The second activity of a sweep workflow, after RunSweep with detect_only.
+	// Same organisation header, same producer pool, same refusal without a
+	// header. Idempotent: the Analyst works over unprocessed signals, so a
+	// second call finds none and reports zero, which is what lets a workflow
+	// retry it on its own.
+	RunAnalyst(context.Context, *connect.Request[v1.RunAnalystRequest]) (*connect.Response[v1.RunAnalystResponse], error)
+	// Lists the sweeps somebody asked for and nothing has run yet (00035):
+	// trigger id and organisation, oldest first. The relay's question, asked
+	// every few seconds; ids only, because the answer goes into a workflow
+	// history. No organisation header: the list is every organisation's.
+	ListSweepTriggers(context.Context, *connect.Request[v1.ListSweepTriggersRequest]) (*connect.Response[v1.ListSweepTriggersResponse], error)
+	// Records what a triggered sweep did: done, or an attempt that failed with
+	// why. A failed attempt leaves the row pending, so the relay offers it
+	// again once the workflow that held it has closed; `done` is reserved for a
+	// sweep that actually ran. Idempotent on a settled row.
+	SettleSweepTrigger(context.Context, *connect.Request[v1.SettleSweepTriggerRequest]) (*connect.Response[v1.SettleSweepTriggerResponse], error)
+	// Lists every organisation a scheduled sweep should visit: the ones with a
+	// compliance profile, by id alone. The daily workflow's first activity.
+	//
+	// THIS IS "SWEEP EVERYONE", WRITTEN DELIBERATELY. RunSweep refuses to sweep
+	// more than one organisation because the blast radius is every customer at
+	// once; this RPC exists so that the loop is a workflow an operator can watch,
+	// pause and read the history of, one organisation per activity, rather than
+	// a parameter. The producer role cannot enumerate tenants, so the list comes
+	// from `sweep_targets()`, a SECURITY DEFINER function that answers this one
+	// question (00035).
+	ListSweepTargets(context.Context, *connect.Request[v1.ListSweepTargetsRequest]) (*connect.Response[v1.ListSweepTargetsResponse], error)
 }
 
 // NewSweepServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -183,12 +302,44 @@ func NewSweepServiceHandler(svc SweepServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(sweepServiceMethods.ByName("ExpireSnoozes")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sweepServiceRunAnalystHandler := connect.NewUnaryHandler(
+		SweepServiceRunAnalystProcedure,
+		svc.RunAnalyst,
+		connect.WithSchema(sweepServiceMethods.ByName("RunAnalyst")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sweepServiceListSweepTriggersHandler := connect.NewUnaryHandler(
+		SweepServiceListSweepTriggersProcedure,
+		svc.ListSweepTriggers,
+		connect.WithSchema(sweepServiceMethods.ByName("ListSweepTriggers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sweepServiceSettleSweepTriggerHandler := connect.NewUnaryHandler(
+		SweepServiceSettleSweepTriggerProcedure,
+		svc.SettleSweepTrigger,
+		connect.WithSchema(sweepServiceMethods.ByName("SettleSweepTrigger")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sweepServiceListSweepTargetsHandler := connect.NewUnaryHandler(
+		SweepServiceListSweepTargetsProcedure,
+		svc.ListSweepTargets,
+		connect.WithSchema(sweepServiceMethods.ByName("ListSweepTargets")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.SweepService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SweepServiceRunSweepProcedure:
 			sweepServiceRunSweepHandler.ServeHTTP(w, r)
 		case SweepServiceExpireSnoozesProcedure:
 			sweepServiceExpireSnoozesHandler.ServeHTTP(w, r)
+		case SweepServiceRunAnalystProcedure:
+			sweepServiceRunAnalystHandler.ServeHTTP(w, r)
+		case SweepServiceListSweepTriggersProcedure:
+			sweepServiceListSweepTriggersHandler.ServeHTTP(w, r)
+		case SweepServiceSettleSweepTriggerProcedure:
+			sweepServiceSettleSweepTriggerHandler.ServeHTTP(w, r)
+		case SweepServiceListSweepTargetsProcedure:
+			sweepServiceListSweepTargetsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -204,4 +355,20 @@ func (UnimplementedSweepServiceHandler) RunSweep(context.Context, *connect.Reque
 
 func (UnimplementedSweepServiceHandler) ExpireSnoozes(context.Context, *connect.Request[v1.ExpireSnoozesRequest]) (*connect.Response[v1.ExpireSnoozesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.SweepService.ExpireSnoozes is not implemented"))
+}
+
+func (UnimplementedSweepServiceHandler) RunAnalyst(context.Context, *connect.Request[v1.RunAnalystRequest]) (*connect.Response[v1.RunAnalystResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.SweepService.RunAnalyst is not implemented"))
+}
+
+func (UnimplementedSweepServiceHandler) ListSweepTriggers(context.Context, *connect.Request[v1.ListSweepTriggersRequest]) (*connect.Response[v1.ListSweepTriggersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.SweepService.ListSweepTriggers is not implemented"))
+}
+
+func (UnimplementedSweepServiceHandler) SettleSweepTrigger(context.Context, *connect.Request[v1.SettleSweepTriggerRequest]) (*connect.Response[v1.SettleSweepTriggerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.SweepService.SettleSweepTrigger is not implemented"))
+}
+
+func (UnimplementedSweepServiceHandler) ListSweepTargets(context.Context, *connect.Request[v1.ListSweepTargetsRequest]) (*connect.Response[v1.ListSweepTargetsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.SweepService.ListSweepTargets is not implemented"))
 }

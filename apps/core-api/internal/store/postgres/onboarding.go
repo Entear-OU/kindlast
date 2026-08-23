@@ -254,6 +254,15 @@ func (t *Tenant) ConfirmOnboarding(
 		return "", fmt.Errorf("postgres: completing the onboarding session: %w", err)
 	}
 
+	// The trigger ENT-212 shipped without (00035): in the same transaction as
+	// the facts and the completed session, so the relay can never list this
+	// row before the profile it names is visible to any other connection. See
+	// the migration header for why that ordering has to be structural rather
+	// than "the worker waits a bit".
+	if err := t.EnqueueSweepTrigger(ctx, onboarding.ReasonOnboardingConfirmed); err != nil {
+		return "", err
+	}
+
 	return profileID, nil
 }
 

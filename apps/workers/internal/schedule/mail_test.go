@@ -363,8 +363,11 @@ func TestTheScheduleListIsTheDocumentedOne(t *testing.T) {
 		SnoozeExpirySchedule:  "10 * * * *",
 		OutboxRelayInterval:   15 * time.Second,
 		OutboxReclaimSchedule: "40 * * * *",
+		SweepRelayInterval:    15 * time.Second,
+		SweepSchedule:         "0 6 * * *",
 	})
-	want := []string{SnoozeExpiryScheduleID, OutboxRelayScheduleID, OutboxReclaimScheduleID}
+	want := []string{SnoozeExpiryScheduleID, OutboxRelayScheduleID, OutboxReclaimScheduleID,
+		SweepTriggerRelayScheduleID, DailySweepScheduleID}
 	if len(defs) != len(want) {
 		t.Fatalf("%d schedules, want %d", len(defs), len(want))
 	}

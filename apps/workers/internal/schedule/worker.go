@@ -27,6 +27,12 @@ type Options struct {
 	OutboxRelayInterval time.Duration
 	// OutboxReclaimSchedule is a five-field cron expression, evaluated in UTC.
 	OutboxReclaimSchedule string
+	// SweepRelayInterval is how often the relay looks for sweeps somebody
+	// asked for.
+	SweepRelayInterval time.Duration
+	// SweepSchedule is a five-field cron expression, evaluated in UTC, for
+	// sweeping every organisation.
+	SweepSchedule string
 	// Activities is the dependency set the activities close over.
 	Activities *Activities
 	Logger     *slog.Logger
@@ -93,6 +99,9 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 	w.RegisterWorkflow(DeliverMessageWorkflow)
 	w.RegisterWorkflow(ReclaimOutboxWorkflow)
 	w.RegisterWorkflow(DeliverNotificationWorkflow)
+	w.RegisterWorkflow(RelaySweepTriggersWorkflow)
+	w.RegisterWorkflow(TriggeredSweepWorkflow)
+	w.RegisterWorkflow(DailySweepWorkflow)
 	w.RegisterActivityWithOptions(opts.Activities.ExpireSnoozes,
 		activityOptions(ExpireSnoozesActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.ListUndelivered,
@@ -109,6 +118,18 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		activityOptions(NotifyRecipientsActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.SettleNotification,
 		activityOptions(SettleNotificationActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.ListSweepTriggers,
+		activityOptions(ListSweepTriggersActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.StartTriggeredSweeps,
+		activityOptions(StartTriggeredSweepsActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.RunWatcher,
+		activityOptions(RunWatcherActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.RunAnalyst,
+		activityOptions(RunAnalystActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.SettleSweepTrigger,
+		activityOptions(SettleSweepTriggerActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.ListSweepTargets,
+		activityOptions(ListSweepTargetsActivityName))
 
 	if err := w.Start(); err != nil {
 		return nil, fmt.Errorf("schedule: starting the worker: %w", err)
@@ -126,7 +147,9 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		"namespace", opts.Namespace,
 		"snooze_expiry", opts.SnoozeExpirySchedule,
 		"outbox_relay", opts.OutboxRelayInterval.String(),
-		"outbox_reclaim", opts.OutboxReclaimSchedule)
+		"outbox_reclaim", opts.OutboxReclaimSchedule,
+		"sweep_relay", opts.SweepRelayInterval.String(),
+		"sweep", opts.SweepSchedule)
 	return &Worker{client: c, worker: w}, nil
 }
 
@@ -221,6 +244,36 @@ func schedules(opts Options) []scheduleDefinition {
 			Memo: map[string]any{
 				"owner": "workers (ENT-256)",
 				"what":  "clears addresses and bodies out of delivered and abandoned messages",
+			},
+		},
+		{
+			ID: SweepTriggerRelayScheduleID,
+			// The same interval shape as the outbox relay, for the same
+			// reason: somebody just confirmed onboarding and is looking at an
+			// empty feed.
+			Spec: client.ScheduleSpec{
+				Intervals: []client.ScheduleIntervalSpec{{Every: opts.SweepRelayInterval}},
+			},
+			Workflow:         RelaySweepTriggersWorkflow,
+			ExecutionTimeout: 5 * time.Minute,
+			CatchupWindow:    time.Minute,
+			Memo: map[string]any{
+				"owner": "workers (ENT-256)",
+				"what":  "starts a sweep for every organisation that asked for one (confirmed onboarding)",
+			},
+		},
+		{
+			ID:       DailySweepScheduleID,
+			Spec:     client.ScheduleSpec{CronExpressions: []string{opts.SweepSchedule}},
+			Workflow: DailySweepWorkflow,
+			// The estate, four organisations at a time, seconds each: an hour
+			// is generous for thousands. Under a day, so the overlap policy
+			// never fires.
+			ExecutionTimeout: 12 * time.Hour,
+			CatchupWindow:    6 * time.Hour,
+			Memo: map[string]any{
+				"owner": "workers (ENT-256)",
+				"what":  "runs the Watcher and then the Analyst over every organisation with a profile",
 			},
 		},
 	}
