@@ -873,6 +873,29 @@ what they have to do about it, which no commit subject knows.
   `corpus.Citation`'s `Label` and `URL`, and its output is asserted against the
   plpgsql over the whole stored corpus.
 
+### Fixed
+
+- **A stack could come up with Temporal reporting healthy and its namespace
+  missing, which took `workers` down with it** (ENT-275). The healthcheck
+  asked `temporal operator cluster health`, which passes as soon as the server
+  answers. Registering the `default` namespace is a later step of the same
+  boot, so there was a window where compose declared Temporal ready, `workers`
+  started against it, and failed on a namespace that did not exist yet. The
+  error named `workers`, so the thing that had actually not finished was the
+  last place anybody looked.
+
+  Two changes, and either alone would have been enough on a fast machine,
+  which is the problem with fixing only one. The healthcheck now describes the
+  namespace, which needs the server to answer before it can describe anything
+  and so replaces the old check with a strictly stronger one. And `workers`
+  waits for the namespace rather than only for the dial: a dial succeeds
+  against a server that is up, so returning on it alone was always a guess.
+
+  **For self-hosters:** no action. A first `up` on a slow or busy machine is
+  the case this fixes, and if the namespace genuinely never arrives, Temporal
+  now stays unhealthy and says so instead of a worker exiting with an error
+  about schedules.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,
