@@ -118,7 +118,9 @@ def watch(
         messages = watcher.build_messages(context)
 
         while True:
-            completion = call_model(model, messages, budget, run)
+            completion = call_model(
+                model, messages, budget, run, schema=watcher.output_schema()
+            )
             if completion.finish_reason == "length":
                 raise ValueError(
                     "the model hit its token limit mid-step, so the decision is "

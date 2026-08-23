@@ -84,9 +84,17 @@ class ScriptedModel:
             r if isinstance(r, str) else json.dumps(r) for r in replies
         ]
         self.seen: list[list[dict[str, str]]] = []
+        # AND WHAT GRAMMAR IT WAS ASKED FOR, which is not fussiness (ENT-258).
+        # This fake used to drop `schema` on the floor, and while it did, every
+        # test here passed against a loop that was constraining the model to the
+        # ANALYST's schema. The scripted replies were valid `Step` objects, so
+        # nothing local could tell; it took the comparison run against a real
+        # endpoint to see the model answering in the wrong shape entirely.
+        self.schemas: list[dict[str, Any] | None] = []
 
     def complete(self, messages, schema=None, max_tokens=800, temperature=0.7):
         self.seen.append(list(messages))
+        self.schemas.append(schema)
         if not self._replies:
             raise AssertionError("the loop called the model more times than scripted")
         return Completion(
@@ -373,6 +381,59 @@ def test_every_skill_satisfies_the_protocol(skill):
     assert skill.NAME and skill.VERSION
     assert isinstance(skill.ALLOWED_TOOLS, tuple)
     assert skill.output_schema()["type"] == "object"
+
+
+def test_the_loop_asks_the_model_for_the_watchers_grammar_and_not_the_analysts():
+    """THE SEAM THAT WAS WRONG AND THAT NOTHING LOCAL COULD SEE (ENT-258).
+
+    `call_model` was shared between the two runners and named one skill inside
+    itself: every call, on either path, was constrained to the Analyst's
+    schema. On this path that is not a subtle mismatch. The Analyst answers
+    with a narrative and the Watcher answers with a step, so a real endpoint
+    given the wrong grammar produced `why_it_applies_to_you` and `citations`
+    where the loop wanted `action`, and every watch run ended FAILED.
+
+    It survived a full unit suite because the scripted model above ignored the
+    schema it was handed and replied with whatever the test wanted next. That
+    is the repo's own warning about a test that cannot fail, in the form of a
+    fake that cannot disagree: the loop and the endpoint had never met.
+
+    Asserting the schema is a proxy for asserting the shape, and it is the
+    right proxy, because the schema is generated FROM `Step` (see
+    `skill.output_schema`). If the two ever drift, the generator is what broke.
+    """
+    model = ScriptedModel({"action": "done", "reason": "nothing to raise"})
+    run(model)
+
+    assert model.schemas, "the loop never called the model"
+    for schema in model.schemas:
+        assert schema == watcher.output_schema()
+        assert schema != analyst.output_schema()
+
+
+def test_the_narrative_path_still_asks_for_the_analysts_grammar():
+    """The other half of the same fix, so tightening one path cannot loosen the
+    other. Both runners now name their own skill at the call, and this is what
+    notices if a later refactor gives them one default again."""
+    from kindlast_intelligence.harness.run import draft_narrative
+
+    model = ScriptedModel(
+        {
+            "why_it_applies_to_you": "Because this organisation processes personal data.",
+            "citations": ["gdpr-art-37-dpo-appointment"],
+            "confident": True,
+        }
+    )
+    draft_narrative(
+        signal="No data protection officer is recorded for this organisation.",
+        obligations=OBLIGATIONS,
+        model=model,
+        validator=CitationValidator(OfferedObligations(OBLIGATIONS)),
+        model_name="test",
+        model_version="0",
+    )
+
+    assert model.schemas == [analyst.output_schema()]
 
 
 def test_the_watcher_holds_exactly_one_tool_and_it_is_not_a_finding():

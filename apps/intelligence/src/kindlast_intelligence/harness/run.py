@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -255,7 +256,7 @@ def draft_narrative(
         budget.check_clock()
 
         messages = analyst.build_messages(signal, obligations)
-        completion = call_model(model, messages, budget, run)
+        completion = call_model(model, messages, budget, run, schema=analyst.output_schema())
         parsed = _parse(completion)
 
         result = validator.validate(
@@ -330,9 +331,29 @@ def draft_narrative(
 
 
 def call_model(
-    model: Completer, messages: list[dict[str, str]], budget: Budget, run: AgentRun
+    model: Completer,
+    messages: list[dict[str, str]],
+    budget: Budget,
+    run: AgentRun,
+    *,
+    schema: dict[str, Any],
 ) -> Completion:
-    completion = model.complete(messages, schema=analyst.output_schema())
+    """One model call, charged and recorded, for whichever skill is asking.
+
+    # THE GRAMMAR IS A PARAMETER BECAUSE THIS IS SHARED AND SKILLS ARE NOT
+
+    It used to name `analyst.output_schema()` here, which was true while the
+    Analyst was the only caller and became a bug the moment it was not. The
+    Watcher answers in steps, so a watch run was constraining the model to a
+    narrative and then failing to parse the narrative it got back: every run
+    ended FAILED, and no unit test could see it, because the fakes ignored the
+    schema they were handed.
+
+    Passing it in rather than passing the skill keeps this function's knowledge
+    at what it actually needs. It charges a budget and updates a run record; it
+    has no business knowing what a skill is.
+    """
+    completion = model.complete(messages, schema=schema)
 
     # Charged after the call, because the cost is not knowable before it. This
     # raises BudgetExhausted when the run has now spent too much, which stops
