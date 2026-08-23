@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 
 import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable'
@@ -7,6 +8,14 @@ import { listEvidence, listProfileFacts } from '@/lib/memory/client'
 import { correctFactAction } from './actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'What we know',
+}
 
 /**
  * What Kindlast knows about us (ENT-228, §26.5).

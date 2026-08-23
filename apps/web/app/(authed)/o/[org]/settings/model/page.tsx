@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 
 import { ModelForm } from '@/components/settings/model-form'
@@ -5,6 +6,14 @@ import { WorkspaceUnavailable } from '@/components/console/workspace-unavailable
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { modelSettingFor } from './actions'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'Model',
+}
 
 /**
  * Where this organisation's model runs (ENT-236, §26.6).

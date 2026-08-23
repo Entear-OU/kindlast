@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
@@ -9,6 +10,18 @@ import { addTrailEntry } from '../../actions'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { getDsar, listDsarTrail } from '@/lib/records/client'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ *
+ * Deliberately not the subject's name, which is what the heading shows.
+ * A title lands in the tab strip, the history and any bookmark, and the
+ * identity of a person who asked about their data belongs in none of them.
+ */
+export const metadata: Metadata = {
+  title: 'Data-subject request',
+}
 
 /**
  * One data-subject request, and the trail a response to it was built from

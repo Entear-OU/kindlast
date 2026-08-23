@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
@@ -12,6 +13,14 @@ import {
   confirmProfileAction,
   startOnboardingAction,
 } from './actions'
+
+/**
+ * The section this page is, for the tab strip (ENT-269). The organisation
+ * and the product name come from the template in `[org]/layout.tsx`.
+ */
+export const metadata: Metadata = {
+  title: 'Getting set up',
+}
 
 /**
  * Onboarding (ENT-212, §24 step 6).
