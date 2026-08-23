@@ -496,12 +496,23 @@ does nothing but fail.
 | Schedule id | When | What it does |
 |---|---|---|
 | `expire-snoozed-findings` | Hourly at ten past (`KINDLAST_SNOOZE_EXPIRY_SCHEDULE`) | Brings back every finding whose deferral has run out, in every organisation, so "defer for seven days" means seven days rather than until somebody remembers. One pass, idempotent, run as the producer role. |
+| `relay-transactional-outbox` | Every 15 seconds (`KINDLAST_OUTBOX_RELAY_INTERVAL`) | Asks core-api which invitation emails are waiting in its outbox and starts one `DeliverMessageWorkflow` per message. Each delivery is its own workflow, named `deliver-message/{row id}`, with a retry policy that backs off (ten seconds, doubling, capped at ten minutes) and no attempt limit: every attempt and what the mail server answered is in that workflow's history. A message that is not leaving is a running workflow in the UI with a reason. |
+| `reclaim-transactional-outbox` | Hourly at forty past (`KINDLAST_OUTBOX_RECLAIM_SCHEDULE`) | Clears the recipient's address and the rendered body out of delivered messages after seven days, and gives up on undelivered ones whose invitation can no longer be accepted. The rendered body of an invitation carries the raw token, so this is a credential-lifetime pass before it is a data-minimisation one. A message that can still be delivered is never touched. |
 
-The rest arrive in the changes that follow, in this order: notification
-dispatch, then the Watcher and Analyst chain, each replacing a polling loop or
-a hand trigger that exists today. Until the last of those lands, a sweep is
-still started by calling `SweepService.RunSweep` with a service credential,
-exactly as before; see the Postman collection for the request.
+Mail itself is sent by core-api, not by the worker: the worker asks core-api
+to deliver a message by id, and core-api, which holds the SMTP channel, claims
+the row, sends and records the outcome in one transaction. So a workflow
+history carries row ids and counts, never an address, a subject or a body.
+Without `KINDLAST_SMTP_ADDR` on core-api the deliveries retry with a reason
+naming that setting, and drain on their own once it is set.
+
+The rest arrives in the change that follows: the Watcher and Analyst chain,
+replacing the hand trigger that exists today. Until it lands, a sweep is still
+started by calling `SweepService.RunSweep` with a service credential, exactly
+as before; see the Postman collection for the request. Finding notifications
+(the "doorbell" emails) are still sent by a timer inside core-api and move to
+the engine in the same change, as one workflow per notification with quiet
+hours held rather than dropped.
 
 The worker that runs these is the `workers` container, the same binary as the
 integrations gateway, polling the `core` task queue. It registers its
@@ -515,6 +526,8 @@ Its settings:
 | `KINDLAST_TEMPORAL_NAMESPACE` | `default` | The namespace the schedules live in, which is the one auto-setup creates with the retention above. |
 | `KINDLAST_TEMPORAL_TASK_QUEUE` | `core` | The queue this worker polls. |
 | `KINDLAST_SNOOZE_EXPIRY_SCHEDULE` | `10 * * * *` | Five-field cron, UTC, for bringing deferred findings back. |
+| `KINDLAST_OUTBOX_RELAY_INTERVAL` | `15s` | How often the relay looks for invitation mail waiting to leave. A Go duration. |
+| `KINDLAST_OUTBOX_RECLAIM_SCHEDULE` | `40 * * * *` | Five-field cron, UTC, for clearing addresses and bodies out of delivered and abandoned messages. |
 | `KINDLAST_CORE_API_URL` | `http://edge:80` | Where the activities call. Through the edge, the same door Intelligence uses. |
 | `KINDLAST_OIDC_*`, `KINDLAST_INTERNAL_CLIENT_FILE` | as core-api | The worker mints a token to call core-api, with the same service credential Intelligence presents. The bundled stack mounts the seed's files; an operator pointing at their own IdP sets these the way they did for core-api. |
 
@@ -536,6 +549,13 @@ docker compose -f deploy/compose.yaml exec temporal \
 A deferred finding whose date has passed comes back to "needs a decision" in
 the feed within a few seconds, and the run's history in the UI says how many
 moved.
+
+To see an invitation email leave, invite somebody from the members page and
+watch `temporal workflow list`: a `deliver-message/...` workflow appears within
+the relay interval and completes when Mailpit (or your mail server) has
+accepted the message. If it does not complete, its history says what the mail
+server answered on each attempt, which is the question the old in-process
+dispatcher could only answer from a counter in a table.
 
 Or without the UI:
 

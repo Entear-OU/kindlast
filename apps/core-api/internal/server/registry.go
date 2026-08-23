@@ -80,6 +80,10 @@ func Services() []protoreflect.ServiceDescriptor {
 		// should be able to hide: these carry `internal:*`, which is the
 		// vocabulary that can act across organisations.
 		platformv1.File_kindlast_platform_v1_sweep_proto,
+		// DeliveryService (ENT-256, part three). The outbox's delivery half,
+		// called by the Temporal worker on `internal:ingest`: list what is
+		// pending, deliver one, reclaim what no longer needs keeping.
+		platformv1.File_kindlast_platform_v1_delivery_proto,
 		// IngestService (ENT-207). Writing the corpus, on `internal:ingest`.
 		// Listed here for the same reason as the sweep: the internal surface is
 		// the last place an undeclared scope should be able to hide, because it

@@ -152,7 +152,8 @@ func run(logger *slog.Logger) error {
 		// symptom of forgetting the worker is "nothing ever runs on a
 		// schedule", which should be a log line rather than a mystery.
 		logger.Warn("no temporal worker: KINDLAST_TEMPORAL_ADDR is not set, " +
-			"so nothing in this deployment runs on a schedule (snoozed findings will not come back)")
+			"so nothing in this deployment runs on a schedule " +
+			"(snoozed findings will not come back, and invitation mail will not leave)")
 	}
 
 	handler, err := server.New(server.Dependencies{
@@ -255,19 +256,26 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 		return nil, fmt.Errorf("building the worker's token source: %w", err)
 	}
 
-	coreAPI := platformv1connect.NewSweepServiceClient(
-		&http.Client{
-			Timeout:   2 * time.Minute,
-			Transport: &oidc.Bearer{Source: tokens},
-		}, t.CoreAPIURL)
+	// One HTTP client, one token source, two generated clients: the sweep
+	// surface for the snooze expiry and the delivery surface for the outbox.
+	// Both are the same service principal presenting the same credential to
+	// the same door.
+	httpClient := &http.Client{
+		Timeout:   2 * time.Minute,
+		Transport: &oidc.Bearer{Source: tokens},
+	}
+	coreAPI := platformv1connect.NewSweepServiceClient(httpClient, t.CoreAPIURL)
+	mail := platformv1connect.NewDeliveryServiceClient(httpClient, t.CoreAPIURL)
 
 	opts := schedule.Options{
-		Addr:                 t.Addr,
-		Namespace:            t.Namespace,
-		TaskQueue:            t.TaskQueue,
-		SnoozeExpirySchedule: t.SnoozeExpirySchedule,
-		Activities:           &schedule.Activities{CoreAPI: coreAPI},
-		Logger:               logger,
+		Addr:                  t.Addr,
+		Namespace:             t.Namespace,
+		TaskQueue:             t.TaskQueue,
+		SnoozeExpirySchedule:  t.SnoozeExpirySchedule,
+		OutboxRelayInterval:   t.OutboxRelayInterval,
+		OutboxReclaimSchedule: t.OutboxReclaimSchedule,
+		Activities:            &schedule.Activities{CoreAPI: coreAPI, Mail: mail},
+		Logger:                logger,
 	}
 	c, err := schedule.Connect(ctx, opts)
 	if err != nil {

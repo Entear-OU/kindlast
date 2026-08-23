@@ -9,6 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
@@ -16,6 +17,7 @@ import (
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
 	corpusservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/corpus"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
+	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
@@ -64,6 +66,17 @@ type Dependencies struct {
 	// on-demand trigger leaves KINDLAST_AGENT_DATABASE_URL unset, which is
 	// better than serving an endpoint that fails on every call.
 	Producer sweepservice.Producer
+
+	// Outbox is the transactional outbox on the same agent pool, served as
+	// DeliveryService to the Temporal worker (ENT-256, part three). Nil means
+	// the service is not served, which goes with Producer: no agent pool, no
+	// internal surface.
+	Outbox deliveryservice.Outbox
+	// Mail is the channel DeliveryService sends on. Nil is the supported state
+	// before KINDLAST_SMTP_ADDR is set: the rows queue, the list and the
+	// reclaim still answer, and a delivery is refused with a message naming
+	// the setting rather than the service being absent.
+	Mail delivery.Channel
 
 	// HumanClientID is the OAuth client whose tokens carry the human scope set
 	// (ENT-221). Empty leaves the scope interceptor reading granted scopes for
@@ -340,6 +353,18 @@ func New(deps Dependencies) (http.Handler, error) {
 	if deps.Producer != nil {
 		mux.Handle(platformv1connect.NewSweepServiceHandler(
 			sweepservice.New(deps.Producer), internal))
+	}
+
+	// Delivering mail (ENT-256, part three). On the same chain, because the
+	// caller is the same service principal: the Temporal worker, listing what
+	// is pending, delivering one row, reclaiming what no longer needs keeping.
+	// Registered with the outbox rather than with the channel, so a deployment
+	// with rows and no mail server answers "no channel configured" rather than
+	// 404, which is the difference between a setting to add and a route to
+	// debug.
+	if deps.Outbox != nil {
+		mux.Handle(platformv1connect.NewDeliveryServiceHandler(
+			deliveryservice.New(deps.Outbox, deps.Mail), internal))
 	}
 
 	// Writing the corpus (ENT-207). On the same shorter chain, for the same

@@ -2273,6 +2273,117 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/messages:deliver:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Delivers one message: claims the row, sends it on the configured channel,
+                 and records the outcome, all inside one transaction on the agent pool.
+
+                 THE ONE CALL TEMPORAL RETRIES, and the contract is written for that:
+
+                   - It is idempotent on the row. A message already sent, abandoned, or
+                     gone reports `OUTCOME_ALREADY_SETTLED` and succeeds, so an activity
+                     that timed out after the mail left is retried safely rather than
+                     sending twice. The row is locked `for update` without `skip locked`,
+                     so a retry that arrives while the first attempt is still mid-send
+                     waits for it and then sees the settled row.
+                   - A failed send is an error, after the attempt and the mail server's
+                     answer have been written to the row and committed. The error carries
+                     `unavailable`, which is the code the worker treats as "try again with
+                     backoff". Nothing here decides how many times: that is the retry
+                     policy on the workflow, where it is one declaration rather than a
+                     counter in a table.
+                   - No configured channel is `failed_precondition`, retried too, because
+                     it is the supported state a deployment is in before KINDLAST_SMTP_ADDR
+                     is set, and the row is exactly as deliverable tomorrow as today.
+            operationId: DeliveryService_DeliverMessage
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeliverMessageRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DeliverMessageResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/messages:pending:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Lists the messages waiting to be delivered, oldest first, by id only.
+
+                 The relay's question, asked every few seconds by a Schedule: what is
+                 pending? It returns ids and nothing else, because the answer goes into an
+                 activity result and from there into a workflow history. The body, the
+                 address and the token are read by DeliverMessage, inside core-api, and
+                 never leave it.
+            operationId: DeliveryService_ListUndelivered
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ListUndeliveredRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListUndeliveredResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/messages:reclaim:
+        post:
+            tags:
+                - DeliveryService
+            description: |-
+                Clears the personal data out of messages that no longer need it
+                 (ENT-242, migration 00030): redacts delivered bodies once their window
+                 has passed, and gives up on undelivered messages whose invitation can no
+                 longer be accepted.
+
+                 Hourly, from a Schedule. The window is a decision and lives in core-api
+                 (§14.5); the rule that a message which can still be delivered is never
+                 touched is an invariant and lives in the database, where no caller of
+                 this RPC can reach past it. Idempotent: a second pass finds nothing.
+            operationId: DeliveryService_ReclaimMessages
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReclaimMessagesRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReclaimMessagesResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/narratives:draft:
         post:
             tags:
@@ -3118,6 +3229,34 @@ components:
                     allOf:
                         - $ref: '#/components/schemas/ProcessingActivity'
                     description: The created record, so a client renders it without a second call.
+        DeliverMessageRequest:
+            type: object
+            properties:
+                messageId:
+                    type: string
+                    description: The row to deliver, from ListUndelivered.
+        DeliverMessageResponse:
+            type: object
+            properties:
+                outcome:
+                    enum:
+                        - OUTCOME_UNSPECIFIED
+                        - OUTCOME_DELIVERED
+                        - OUTCOME_ALREADY_SETTLED
+                    type: string
+                    format: enum
+                attempts:
+                    type: integer
+                    description: |-
+                        How many attempts the row now records, including this one when it sent.
+                         In the history so "it took four tries" is readable without the table.
+                    format: int32
+                sentAt:
+                    type: string
+                    description: |-
+                        When it left, from the database's clock inside the same transaction.
+                         Unset for OUTCOME_ALREADY_SETTLED.
+                    format: date-time
         DiscoverIntegrationRequest:
             type: object
             properties:
@@ -4514,6 +4653,26 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/GatewayTool'
+        ListUndeliveredRequest:
+            type: object
+            properties:
+                limit:
+                    type: integer
+                    description: |-
+                        At most this many ids. Zero means the server's default, which bounds one
+                         relay run rather than the backlog: what is not listed now is listed next
+                         tick.
+                    format: int32
+        ListUndeliveredResponse:
+            type: object
+            properties:
+                messageIds:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Row ids of pending messages, oldest first. Ids, not messages: see the
+                         service comment for why nothing else crosses here.
         LogDsarRequest:
             type: object
             properties:
@@ -5263,6 +5422,26 @@ components:
                     format: int32
                 summary:
                     type: string
+        ReclaimMessagesRequest:
+            type: object
+            properties: {}
+        ReclaimMessagesResponse:
+            type: object
+            properties:
+                redacted:
+                    type: integer
+                    description: Delivered messages whose body was cleared on this pass.
+                    format: int32
+                abandoned:
+                    type: integer
+                    description: |-
+                        Undelivered messages given up on, because the invitation they carry can no
+                         longer be accepted.
+                    format: int32
+                ranAt:
+                    type: string
+                    description: When the pass ran.
+                    format: date-time
         RecordAgentRunRequest:
             type: object
             properties:
@@ -5989,6 +6168,46 @@ tags:
          a formality.
     - name: DashboardService
       description: The dashboard's posture and the pipeline's honesty (§5).
+    - name: DeliveryService
+      description: |-
+        The delivery seam on the platform surface (ENT-256, part three): how a
+         message that core-api wrote leaves the process, now that the thing deciding
+         WHEN is Temporal rather than a ticker inside core-api.
+
+         WHY THE OUTBOX TABLE STAYS, WHEN THE DESIGN SAYS AN ACTIVITY IS THE OUTBOX
+
+         §16.2's end state reads "an activity with a retry policy is the outbox", and
+         for the retry half that is exactly what this delivers. The table stays for
+         the other half, which ENT-242 argued and nothing here weakens: the message is
+         written in the same transaction as the fact it announces, because an
+         invitation committed without its message is permanently undeliverable (the
+         raw token exists nowhere else) and a message committed without its invitation
+         names a link that redeems nothing. A workflow started after the commit can be
+         lost between the commit and the start; a row written inside the commit
+         cannot. So the row is the durable handoff, and a Schedule relays what is
+         sitting in it into one workflow per message.
+
+         WHY core-api SENDS THE MAIL, RATHER THAN HANDING THE BODY TO THE WORKER
+
+         `workers` holds no database credential by design (§21.4), so "an activity"
+         means "an RPC on this surface". It could have been an RPC that returns the
+         rendered message for the worker to send, and it deliberately is not: the
+         body of an invitation carries a bearer token in the clear (00030), and an
+         activity's inputs and results are written into a workflow history that is
+         kept for the namespace's retention and readable in the UI (§16.3). The
+         history gets a row id and a count. The address, the subject and the token
+         stay inside core-api, which already holds the SMTP channel, and the RPC
+         reports whether they left.
+
+         WHAT TEMPORAL ADDS, STATED SO THE EXTRA HOP IS SEEN TO BUY SOMETHING
+
+         The ticker this replaces retried every pending row every ten seconds forever,
+         with no backoff, no record of attempts beyond a counter, and nothing an
+         operator could look at except the table. Each message is now its own
+         workflow, with a retry policy that backs off, an attempt history that says
+         what the mail server answered each time, and a schedule whose last run is a
+         line in `temporal schedule list`. A deployment whose mail is not leaving
+         shows it in the UI rather than in a log nobody is reading.
     - name: FindingsService
       description: |-
         Findings, the feed, and the dashboard (core-api-surface §3 and §5).

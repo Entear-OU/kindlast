@@ -103,6 +103,24 @@ type Temporal struct {
 	// notices, and the pass is one cheap UPDATE.
 	SnoozeExpirySchedule string
 
+	// OutboxRelayInterval is how often the relay asks core-api what mail is
+	// pending and starts a delivery workflow for each row (ENT-256, part
+	// three). Fifteen seconds by default: an invitation is expected in the
+	// recipient's inbox within a minute or so, not within a second, and each
+	// tick is one indexed query against a partial index sized to the backlog,
+	// which on an idle deployment is empty. It is the one interval here rather
+	// than a cron, because a cron's finest grain is a minute.
+	OutboxRelayInterval time.Duration
+
+	// OutboxReclaimSchedule is the cron expression for clearing personal data
+	// out of delivered and abandoned messages (ENT-242). Hourly at forty past
+	// by default: every window the pass applies is measured in days, so more
+	// often buys an accuracy nobody can perceive, and daily would leave a
+	// spent token in the clear for most of a day after its invitation was
+	// accepted. Offset from the snooze expiry so the two passes do not share a
+	// minute on the producer pool.
+	OutboxReclaimSchedule string
+
 	// CoreAPIURL is where the activities call. Through the edge on the bundled
 	// stack, the same door Intelligence uses, so there is no
 	// development-only shortcut.
@@ -134,15 +152,17 @@ func Load() (*Config, error) {
 		RateLimitBurst:           intOr("KINDLAST_GATEWAY_RATE_BURST", 30),
 		RateLimitWindow:          durationOr("KINDLAST_GATEWAY_RATE_WINDOW", time.Minute),
 		Temporal: Temporal{
-			Addr:                 strings.TrimSpace(os.Getenv("KINDLAST_TEMPORAL_ADDR")),
-			Namespace:            valueOr("KINDLAST_TEMPORAL_NAMESPACE", "default"),
-			TaskQueue:            valueOr("KINDLAST_TEMPORAL_TASK_QUEUE", "core"),
-			SnoozeExpirySchedule: valueOr("KINDLAST_SNOOZE_EXPIRY_SCHEDULE", "10 * * * *"),
-			CoreAPIURL:           strings.TrimSpace(os.Getenv("KINDLAST_CORE_API_URL")),
-			OIDCIssuer:           strings.TrimSpace(os.Getenv("KINDLAST_OIDC_ISSUER")),
-			OIDCDiscoveryURL:     strings.TrimSpace(os.Getenv("KINDLAST_OIDC_DISCOVERY_URL")),
-			OIDCHostHeader:       strings.TrimSpace(os.Getenv("KINDLAST_OIDC_HOST_HEADER")),
-			OIDCAudience:         audience(),
+			Addr:                  strings.TrimSpace(os.Getenv("KINDLAST_TEMPORAL_ADDR")),
+			Namespace:             valueOr("KINDLAST_TEMPORAL_NAMESPACE", "default"),
+			TaskQueue:             valueOr("KINDLAST_TEMPORAL_TASK_QUEUE", "core"),
+			SnoozeExpirySchedule:  valueOr("KINDLAST_SNOOZE_EXPIRY_SCHEDULE", "10 * * * *"),
+			OutboxRelayInterval:   durationOr("KINDLAST_OUTBOX_RELAY_INTERVAL", 15*time.Second),
+			OutboxReclaimSchedule: valueOr("KINDLAST_OUTBOX_RECLAIM_SCHEDULE", "40 * * * *"),
+			CoreAPIURL:            strings.TrimSpace(os.Getenv("KINDLAST_CORE_API_URL")),
+			OIDCIssuer:            strings.TrimSpace(os.Getenv("KINDLAST_OIDC_ISSUER")),
+			OIDCDiscoveryURL:      strings.TrimSpace(os.Getenv("KINDLAST_OIDC_DISCOVERY_URL")),
+			OIDCHostHeader:        strings.TrimSpace(os.Getenv("KINDLAST_OIDC_HOST_HEADER")),
+			OIDCAudience:          audience(),
 		},
 	}
 	cfg.Temporal.ClientID, cfg.Temporal.ClientSecret = internalClient()

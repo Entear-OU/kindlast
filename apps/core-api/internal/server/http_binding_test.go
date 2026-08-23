@@ -450,6 +450,21 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.SweepService.ExpireSnoozes": {
 			Method: "POST", Path: "/internal/v1/snoozes:expire",
 		},
+		// ENT-256, part three. The outbox's delivery half, three custom
+		// actions over the messages, all cross-organisation by design and all
+		// on the internal prefix: what is pending, deliver this one, reclaim
+		// what no longer needs keeping. POST for the list too, because the
+		// convention on this surface is one verb and a body, and a GET with
+		// a query string would be the only one of its kind here.
+		"kindlast.platform.v1.DeliveryService.ListUndelivered": {
+			Method: "POST", Path: "/internal/v1/messages:pending",
+		},
+		"kindlast.platform.v1.DeliveryService.DeliverMessage": {
+			Method: "POST", Path: "/internal/v1/messages:deliver",
+		},
+		"kindlast.platform.v1.DeliveryService.ReclaimMessages": {
+			Method: "POST", Path: "/internal/v1/messages:reclaim",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

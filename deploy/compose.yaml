@@ -1041,6 +1041,15 @@ services:
       # same pass daily at 06:10 and a finding deferred "for seven days" came
       # back up to a day late. Five-field cron, UTC.
       KINDLAST_SNOOZE_EXPIRY_SCHEDULE: ${KINDLAST_SNOOZE_EXPIRY_SCHEDULE:-10 * * * *}
+      # How often the relay looks for invitation mail waiting in core-api's
+      # outbox and starts a delivery for each row (ENT-256, part three). An
+      # interval rather than a cron because mail a person is waiting for
+      # should leave in seconds; each tick is one indexed query.
+      KINDLAST_OUTBOX_RELAY_INTERVAL: ${KINDLAST_OUTBOX_RELAY_INTERVAL:-15s}
+      # When delivered and abandoned messages have their addresses and bodies
+      # cleared (ENT-242). Hourly at forty past, offset from the snooze expiry
+      # so the two passes do not share a minute on the producer pool.
+      KINDLAST_OUTBOX_RECLAIM_SCHEDULE: ${KINDLAST_OUTBOX_RECLAIM_SCHEDULE:-40 * * * *}
 
       # Where the activities call: through the edge, the same door Intelligence
       # uses, so there is no development-only shortcut. The edge routes

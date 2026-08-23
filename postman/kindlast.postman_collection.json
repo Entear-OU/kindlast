@@ -700,6 +700,66 @@
           }
         },
         {
+          "name": "List undelivered",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 50\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/ListUndelivered",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "ListUndelivered"]
+            },
+            "description": "Lists the invitation emails waiting in core-api's transactional outbox, oldest first, by row id only. **Served as of ENT-256 (part three).** Required scope: `internal:ingest`, the machine scope, so use the client-credentials token. No `Kindlast-Org-Id` header: the outbox is every organisation's, and the worker that calls this holds no tenant.\n\n**Ids and nothing else, on purpose.** This is the relay's question, asked every fifteen seconds by the `relay-transactional-outbox` Temporal Schedule, and its answer is written into a workflow history that is kept for the namespace's retention and readable in the UI. The address, the subject and the body (which for an invitation carries the raw bearer token in the clear, migration 00030) are read by Deliver message inside core-api and never cross that boundary.\n\n`limit` bounds one call (default 200, at most 1000); what is not listed now is listed on the next tick. You will not normally call this; it is here so an operator can see what is waiting, and because the collection documents every RPC on the internal surface."
+          }
+        },
+        {
+          "name": "Deliver message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageId\": \"{{message_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/DeliverMessage",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "DeliverMessage"]
+            },
+            "description": "Delivers one message from the transactional outbox: claims the row `for update`, sends it on core-api's configured SMTP channel, and records the outcome, in one transaction on the agent pool. **Served as of ENT-256 (part three).** Required scope: `internal:ingest`.\n\n**This is the activity behind every `deliver-message/{id}` workflow**, and the contract is written for being retried. A message already sent, abandoned by the reclaim, or gone answers `outcome: OUTCOME_ALREADY_SETTLED` and succeeds, so a retry after a timeout never sends twice. A refused send answers `unavailable` after the attempt and the mail server's reply have been written to the row; the worker's retry policy (ten seconds, doubling, capped at ten minutes, no attempt limit) decides when to try again. No configured channel answers `failed_precondition` naming `KINDLAST_SMTP_ADDR`, and is retried too, because the row is exactly as deliverable once the setting exists.\n\n`messageId` comes from List undelivered. A value that is not a uuid is `invalid_argument` and the worker does not retry it. Calling this by hand delivers a real message to the real recipient, so on a laptop stack check Mailpit at http://localhost:8025 afterwards rather than an inbox."
+          }
+        },
+        {
+          "name": "Reclaim messages",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.DeliveryService/ReclaimMessages",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.DeliveryService", "ReclaimMessages"]
+            },
+            "description": "Clears the personal data out of messages that no longer need it (ENT-242, migration 00030): redacts the recipient's address and the rendered body from delivered messages after seven days, and gives up on undelivered messages whose invitation can no longer be accepted, marking them `failed`. **Served as of ENT-256 (part three).** Required scope: `internal:ingest`.\n\nIt is the activity behind the `reclaim-transactional-outbox` Temporal Schedule, hourly at forty past. The window (seven days, `postgres.InvitationLifetime`) is a decision and lives in core-api; the rule that a message which can still be delivered is never touched is an invariant and lives in the database's definer function, where no caller of this RPC can reach past it. Idempotent: a second pass in the same hour reports zero for both counts.\n\nThe response carries `redacted`, `abandoned` and `ranAt`."
+          }
+        },
+        {
           "name": "Dashboard",
           "request": {
             "method": "POST",

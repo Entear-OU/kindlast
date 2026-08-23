@@ -31,6 +31,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	integrationsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/integrations"
 	modelchoiceservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelchoice"
@@ -325,6 +326,13 @@ func run(logger *slog.Logger) error {
 			"policy", policy)
 	}
 
+	// The mail channel, built once and shared: DeliveryService sends on it
+	// when the Temporal worker asks, and the doorbell loop below sends on it
+	// on its own timer until that loop moves too. Nil without an SMTP
+	// address, which is a supported state rather than a broken one; see
+	// mailChannel.
+	mail := mailChannel(logger, cfg)
+
 	handler, err := server.New(server.Dependencies{
 		Verifier: verifier,
 		DenyList: revocations,
@@ -337,8 +345,12 @@ func run(logger *slog.Logger) error {
 		Ready: func(ctx context.Context) error {
 			return store.Ping(ctx)
 		},
-		HumanClientID:  cfg.HumanClientID,
-		Producer:       producer,
+		HumanClientID: cfg.HumanClientID,
+		Producer:      producer,
+		// The outbox's delivery half (ENT-256, part three), on the same agent
+		// pool as the producer and behind the same typed-nil guard.
+		Outbox:         outboxDependency(outbox),
+		Mail:           mail,
 		BillingEnabled: cfg.BillingEnabled,
 		AppBaseURL:     cfg.AppBaseURL,
 		SMTPConfigured: cfg.SMTPAddr != "",
@@ -388,7 +400,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	startDispatcher(ctx, logger, cfg, outbox)
+	startDoorbells(ctx, logger, cfg, outbox, mail)
 
 	httpServer := newHTTPServer(cfg.ListenAddr, handler)
 
@@ -407,68 +419,77 @@ func run(logger *slog.Logger) error {
 	return nil
 }
 
-// startDispatcher runs the outbox drain in the background, if this deployment
-// is configured to deliver mail.
+// mailChannel builds the SMTP channel, or nothing.
 //
-// # WHY EVERY MISSING PIECE IS A WARNING AND NOT A STARTUP FAILURE
+// # WHY A MISSING MAIL SERVER IS A WARNING AND NOT A STARTUP FAILURE
 //
-// Three things have to be present before a message can leave: the agent pool,
-// an SMTP address, and a sender. Any of them absent means messages queue up as
-// `pending` and nothing is delivered, and that is a supported state rather than
-// a broken one. The outbox exists precisely so that the write and the delivery
-// are separable: rows are safe on disk, they are not lost, and configuring the
-// missing piece later drains the backlog.
+// Messages queue as `pending` and nothing is delivered, and that is a supported
+// state rather than a broken one. The outbox exists precisely so that the write
+// and the delivery are separable: rows are safe on disk, they are not lost, and
+// configuring the missing piece later drains the backlog. Refusing to start
+// would take a deployment that is serving every request correctly and stop it
+// over a channel it may not use.
 //
-// So refusing to start would be the wrong trade. It would take a deployment
-// that is serving every request correctly and stop it over a channel it may not
-// use. What is not acceptable is silence, because the symptom of a missing
-// dispatcher is an invitation that never arrives, which nobody reports for days
-// and which reads like a spam filter problem. Hence a warning naming the
-// setting, at boot, every time.
+// What is not acceptable is silence, because the symptom of a missing channel
+// is an invitation that never arrives, which nobody reports for days and which
+// reads like a spam filter problem. Hence a warning naming the setting, at boot,
+// every time, and a `failed_precondition` naming it again on every delivery the
+// Temporal worker attempts, so the workflow history says so too.
 //
 // InviteMember still refuses without KINDLAST_APP_BASE_URL, and that asymmetry
 // is deliberate: an undelivered message is recoverable, an unbuildable link is
 // not.
-func startDispatcher(ctx context.Context, logger *slog.Logger, cfg *config.Config, outbox *postgres.AgentStore) {
-	if outbox == nil {
-		logger.Warn("no outbox dispatcher: KINDLAST_AGENT_DATABASE_URL is not set, " +
-			"so transactional messages such as invitation emails will queue and not be delivered")
-		return
-	}
+func mailChannel(logger *slog.Logger, cfg *config.Config) delivery.Channel {
 	if cfg.SMTPAddr == "" {
-		logger.Warn("no outbox dispatcher: KINDLAST_SMTP_ADDR is not set, " +
+		logger.Warn("no mail channel: KINDLAST_SMTP_ADDR is not set, " +
 			"so transactional messages such as invitation emails will queue and not be delivered")
-		return
+		return nil
 	}
-
 	channel, err := delivery.NewSMTP(cfg.SMTPAddr, cfg.EmailFrom)
 	if err != nil {
-		logger.Error("no outbox dispatcher: the SMTP channel could not be built; "+
+		logger.Error("no mail channel: the SMTP channel could not be built; "+
 			"transactional messages will queue and not be delivered", "error", err)
+		return nil
+	}
+	return channel
+}
+
+// startDoorbells runs the doorbell loop in the background, if this deployment
+// can deliver mail (ENT-209).
+//
+// The transactional outbox used to be drained by a second loop here, and is not
+// any more: a Temporal Schedule relays each pending row into its own workflow
+// and the worker calls DeliveryService, so the timer, the retry policy and the
+// record of attempts are the engine's (ENT-256, part three). This loop is the
+// one still ticking in-process, and it goes the same way in the change after
+// this one, as one workflow per notification with quiet hours held rather than
+// dropped.
+//
+// Skipped without a base URL, because every notification carries a link into
+// `/o/{slug}/` and an email whose only actionable content is broken is worse
+// than one that has not been sent.
+func startDoorbells(ctx context.Context, logger *slog.Logger, cfg *config.Config,
+	outbox *postgres.AgentStore, mail delivery.Channel,
+) {
+	if outbox == nil {
+		logger.Warn("no doorbell dispatcher: KINDLAST_AGENT_DATABASE_URL is not set, " +
+			"so finding notifications will queue and not be delivered")
 		return
 	}
-
-	go dispatch.New(outbox, channel, logger, 0, 0).Run(ctx)
-
-	// The doorbell path (ENT-209), on the same channel and a separate loop.
-	//
-	// Two loops rather than one, because the two queues resolve their recipient
-	// at different times: a transactional message carries one decided at mint,
-	// a notification's is worked out now from memberships and preferences.
-	// Sharing the channel is what keeps this one delivery mechanism rather than
-	// two (§23.6); sharing the drain would have meant forcing a recipient into
-	// the notification row at enqueue, which is precisely what ENT-192's
-	// as-built note warns against.
-	//
-	// Skipped without a base URL, because every notification carries a link
-	// into `/o/{slug}/` and an email whose only actionable content is broken is
-	// worse than one that has not been sent.
+	if mail == nil {
+		// Already said at boot by mailChannel, for the transactional side;
+		// said again here because the two symptoms are different and somebody
+		// grepping for "notification" should find it.
+		logger.Warn("no doorbell dispatcher: no mail channel, " +
+			"so finding notifications will queue and not be delivered")
+		return
+	}
 	if cfg.AppBaseURL == "" {
 		logger.Warn("no doorbell dispatcher: KINDLAST_APP_BASE_URL is not set, " +
 			"so finding notifications will queue and not be delivered")
 		return
 	}
-	go dispatch.NewDoorbell(outbox, channel, logger, cfg.AppBaseURL, 0, 0).Run(ctx)
+	go dispatch.NewDoorbell(outbox, mail, logger, cfg.AppBaseURL, 0, 0).Run(ctx)
 }
 
 // newHTTPServer builds the listener, serving HTTP/1.1 and unencrypted HTTP/2 on
@@ -584,6 +605,15 @@ func (o tenantOpener) BeginDelegatedTenant(
 // and every ingest call would panic on a nil pool. This is the classic Go trap
 // and it is worth a named function rather than a clever inline conditional.
 func corpusDependency(store *postgres.CorpusStore) ingest.Writer {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+// The same typed-nil guard, for the delivery half of the transactional outbox
+// (ENT-256, part three).
+func outboxDependency(store *postgres.AgentStore) deliveryservice.Outbox {
 	if store == nil {
 		return nil
 	}

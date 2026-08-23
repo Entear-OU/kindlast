@@ -14,6 +14,45 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **Invitation email now leaves through Temporal, one workflow per message**
+  (ENT-256, part three of five). The ticker inside core-api that drained the
+  transactional outbox every ten seconds is gone. In its place, a
+  `relay-transactional-outbox` Schedule (every fifteen seconds,
+  `KINDLAST_OUTBOX_RELAY_INTERVAL`) asks core-api what is waiting and starts a
+  `DeliverMessageWorkflow` for each row, named `deliver-message/{row id}`, so
+  a message is never being delivered twice at once. Each delivery retries with
+  backoff (ten seconds, doubling, capped at ten minutes, no attempt limit) and
+  every attempt, with what the mail server answered, is in that workflow's
+  history. A message that is not leaving is a running workflow in the Temporal
+  UI with a reason, rather than a counter in a table.
+
+  What an operator has to know. Mail is still sent by core-api: the worker
+  asks it to deliver a message by id through a new internal service,
+  `DeliveryService` (`ListUndelivered`, `DeliverMessage`, `ReclaimMessages`,
+  all on `internal:ingest`), and core-api claims, sends on its SMTP channel and
+  records the outcome in one transaction, as before. So `KINDLAST_SMTP_ADDR`
+  stays on core-api, a workflow history never carries an address, a subject or
+  a body (the body of an invitation holds the raw token), and a deployment
+  without SMTP sees its deliveries retrying with a reason naming the setting,
+  and draining on their own once it is set. **`workers` must be running with
+  `KINDLAST_TEMPORAL_ADDR` set for invitation mail to leave at all**; a
+  gateway-only `workers` says so at boot.
+
+  The retention pass (ENT-242) moves with it: `reclaim-transactional-outbox`
+  runs hourly at forty past (`KINDLAST_OUTBOX_RECLAIM_SCHEDULE`) instead of on
+  a timer inside core-api, with the same window and the same rule that a
+  message which can still be delivered is never touched. It no longer runs at
+  core-api boot, because a schedule fires whether or not the process that
+  owns it has restarted, which was the reason the boot-time pass existed.
+
+  The outbox table stays. §16.2 says "an activity with a retry policy is the
+  outbox", and for the retry half that is what this is; the table remains the
+  durable handoff because the message is written in the same transaction as
+  the invitation, which a workflow started after the commit cannot promise.
+  Finding notifications (the "doorbell" emails) still go out on core-api's
+  timer and move next, as one workflow per notification with quiet hours held
+  rather than dropped.
+
 - **Deferred findings come back on their date, on a schedule, which is the
   first thing Temporal runs** (ENT-256, part two of five). Since the Supabase
   schema went, every finding anybody deferred has stayed deferred: the job that
