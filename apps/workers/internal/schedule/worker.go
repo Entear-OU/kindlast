@@ -130,8 +130,12 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		activityOptions(SettleSweepTriggerActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.ListSweepTargets,
 		activityOptions(ListSweepTargetsActivityName))
-	w.RegisterActivityWithOptions(opts.Activities.NarrateFindings,
-		activityOptions(NarrateFindingsActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.NextFindingToNarrate,
+		activityOptions(NextFindingToNarrateActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.RecordNarrative,
+		activityOptions(RecordNarrativeActivityName))
+	// DraftNarrative is deliberately NOT registered here: it runs on the
+	// `intelligence` task queue, served by the Python worker (§16.4).
 
 	if err := w.Start(); err != nil {
 		return nil, fmt.Errorf("schedule: starting the worker: %w", err)

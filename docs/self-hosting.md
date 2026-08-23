@@ -528,17 +528,29 @@ So a `deliver-notification/...` workflow showing as running overnight is a
 person asleep, and its history says who was told, who is being held, and
 until when. Nobody's address appears in it.
 
-**Narration is the third step of every sweep.** After the Watcher and the
-Analyst, and after a triggered sweep has settled its trigger, the workflow asks
-core-api to draft the narrative for findings that have none, one finding per
-activity, up to fifty per run. On a stack without the `model` profile core-api
-answers that Intelligence is not available and the step costs one activity;
-with it, a local model takes minutes per finding and each draft is one visible
-retryable unit in the workflow's history. The feed shows every finding with
-its deterministic text as soon as the sweep is done; explanations arrive as
-they are drafted. An organisation whose chosen provider cannot be honoured (a
-withdrawn provider, a key that will not open) is recorded as skipped in the
-run's result and the sweep is not failed.
+**Narration is the third step of every sweep, and it runs on two task
+queues.** After the Watcher and the Analyst, and after a triggered sweep has
+settled its trigger, the workflow narrates the organisation's findings that
+have none, up to fifty per run, as three activities per finding: `workers`
+(Go, the `core` queue) asks core-api for the next finding and the draft
+request built for it; **the `intelligence` container (Python, the
+`intelligence` queue) drafts it**, with every model call going back through
+core-api's `CompletionService` so it holds no endpoint and no key; and
+`workers` records the narrative or the refusal through core-api. Go loads,
+Python drafts, Go persists, each retrying on its own. The feed shows every
+finding with its deterministic text as soon as the sweep is done; explanations
+arrive as they are drafted.
+
+Three things an operator will see in a run's result: `Available: false` on a
+stack without the `model` profile (one activity, nothing wrong); `Skipped`
+naming the reason when an organisation's chosen provider cannot be honoured
+(a withdrawn provider, a key that will not open), or when **no Python worker
+is polling the `intelligence` queue**: the draft activity waits two minutes
+for a worker and then the sweep records that and moves on, so an
+`intelligence` container that is down costs explanations, never sweeps. The
+Python worker starts with the container and needs `KINDLAST_TEMPORAL_ADDR`
+(the bundled stack sets it); with it empty the container serves the RPC half
+alone and says so at boot.
 
 `SweepService.RunSweep` still exists for an operator who wants to sweep one
 organisation now, with a service credential; see the Postman collection. It is

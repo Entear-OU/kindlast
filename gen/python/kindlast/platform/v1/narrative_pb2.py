@@ -24,9 +24,10 @@ _sym_db = _symbol_database.Default()
 
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
+from kindlast.platform.v1 import intelligence_pb2 as kindlast_dot_platform_dot_v1_dot_intelligence__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$kindlast/platform/v1/narrative.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"R\n\x16NarrateFindingsRequest\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\x12!\n\x0cmax_findings\x18\x02 \x01(\x05R\x0bmaxFindings\"\xbc\x01\n\x17NarrateFindingsResponse\x12\x1c\n\tattempted\x18\x01 \x01(\x05R\tattempted\x12\x1a\n\x08narrated\x18\x02 \x01(\x05R\x08narrated\x12\x18\n\x07refused\x18\x03 \x01(\x05R\x07refused\x12\x16\n\x06\x66\x61iled\x18\x04 \x01(\x05R\x06\x66\x61iled\x12\x35\n\x16intelligence_available\x18\x05 \x01(\x08R\x15intelligenceAvailable2\xc6\x01\n\x10NarrativeService\x12\xb1\x01\n\x0fNarrateFindings\x12,.kindlast.platform.v1.NarrateFindingsRequest\x1a-.kindlast.platform.v1.NarrateFindingsResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/findings:narrate:\x01*B\xe2\x01\n\x18\x63om.kindlast.platform.v1B\x0eNarrativeProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$kindlast/platform/v1/narrative.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\x1a\'kindlast/platform/v1/intelligence.proto\"R\n\x16NarrateFindingsRequest\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\x12!\n\x0cmax_findings\x18\x02 \x01(\x05R\x0bmaxFindings\"\xbc\x01\n\x17NarrateFindingsResponse\x12\x1c\n\tattempted\x18\x01 \x01(\x05R\tattempted\x12\x1a\n\x08narrated\x18\x02 \x01(\x05R\x08narrated\x12\x18\n\x07refused\x18\x03 \x01(\x05R\x07refused\x12\x16\n\x06\x66\x61iled\x18\x04 \x01(\x05R\x06\x66\x61iled\x12\x35\n\x16intelligence_available\x18\x05 \x01(\x08R\x15intelligenceAvailable\"4\n\x1bNextFindingToNarrateRequest\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\"\xcd\x01\n\x1cNextFindingToNarrateResponse\x12\x35\n\x16intelligence_available\x18\x01 \x01(\x08R\x15intelligenceAvailable\x12\x14\n\x05\x66ound\x18\x02 \x01(\x08R\x05\x66ound\x12\x1d\n\nfinding_id\x18\x03 \x01(\tR\tfindingId\x12\x41\n\x05\x64raft\x18\x04 \x01(\x0b\x32+.kindlast.platform.v1.DraftNarrativeRequestR\x05\x64raft\"\x92\x01\n\x16RecordNarrativeRequest\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x1d\n\nfinding_id\x18\x02 \x01(\tR\tfindingId\x12\x42\n\x05\x64raft\x18\x03 \x01(\x0b\x32,.kindlast.platform.v1.DraftNarrativeResponseR\x05\x64raft\"5\n\x17RecordNarrativeResponse\x12\x1a\n\x08recorded\x18\x01 \x01(\x08R\x08recorded2\xc2\x04\n\x10NarrativeService\x12\xb1\x01\n\x0fNarrateFindings\x12,.kindlast.platform.v1.NarrateFindingsRequest\x1a-.kindlast.platform.v1.NarrateFindingsResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/findings:narrate:\x01*\x12\xc2\x01\n\x14NextFindingToNarrate\x12\x31.kindlast.platform.v1.NextFindingToNarrateRequest\x1a\x32.kindlast.platform.v1.NextFindingToNarrateResponse\"C\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02*\"%/internal/v1/findings:next-to-narrate:\x01*\x12\xb4\x01\n\x0fRecordNarrative\x12,.kindlast.platform.v1.RecordNarrativeRequest\x1a-.kindlast.platform.v1.RecordNarrativeResponse\"D\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02+\"&/internal/v1/findings:record-narrative:\x01*B\xe2\x01\n\x18\x63om.kindlast.platform.v1B\x0eNarrativeProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,10 +37,22 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'\n\030com.kindlast.platform.v1B\016NarrativeProtoP\001ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\242\002\003KPX\252\002\024Kindlast.Platform.V1\312\002\024Kindlast\\Platform\\V1\342\002 Kindlast\\Platform\\V1\\GPBMetadata\352\002\026Kindlast::Platform::V1'
   _globals['_NARRATIVESERVICE'].methods_by_name['NarrateFindings']._loaded_options = None
   _globals['_NARRATIVESERVICE'].methods_by_name['NarrateFindings']._serialized_options = b'\212\265\030\025internal:intelligence\202\323\344\223\002\"\"\035/internal/v1/findings:narrate:\001*'
-  _globals['_NARRATEFINDINGSREQUEST']._serialized_start=125
-  _globals['_NARRATEFINDINGSREQUEST']._serialized_end=207
-  _globals['_NARRATEFINDINGSRESPONSE']._serialized_start=210
-  _globals['_NARRATEFINDINGSRESPONSE']._serialized_end=398
-  _globals['_NARRATIVESERVICE']._serialized_start=401
-  _globals['_NARRATIVESERVICE']._serialized_end=599
+  _globals['_NARRATIVESERVICE'].methods_by_name['NextFindingToNarrate']._loaded_options = None
+  _globals['_NARRATIVESERVICE'].methods_by_name['NextFindingToNarrate']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002*\"%/internal/v1/findings:next-to-narrate:\001*'
+  _globals['_NARRATIVESERVICE'].methods_by_name['RecordNarrative']._loaded_options = None
+  _globals['_NARRATIVESERVICE'].methods_by_name['RecordNarrative']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002+\"&/internal/v1/findings:record-narrative:\001*'
+  _globals['_NARRATEFINDINGSREQUEST']._serialized_start=166
+  _globals['_NARRATEFINDINGSREQUEST']._serialized_end=248
+  _globals['_NARRATEFINDINGSRESPONSE']._serialized_start=251
+  _globals['_NARRATEFINDINGSRESPONSE']._serialized_end=439
+  _globals['_NEXTFINDINGTONARRATEREQUEST']._serialized_start=441
+  _globals['_NEXTFINDINGTONARRATEREQUEST']._serialized_end=493
+  _globals['_NEXTFINDINGTONARRATERESPONSE']._serialized_start=496
+  _globals['_NEXTFINDINGTONARRATERESPONSE']._serialized_end=701
+  _globals['_RECORDNARRATIVEREQUEST']._serialized_start=704
+  _globals['_RECORDNARRATIVEREQUEST']._serialized_end=850
+  _globals['_RECORDNARRATIVERESPONSE']._serialized_start=852
+  _globals['_RECORDNARRATIVERESPONSE']._serialized_end=905
+  _globals['_NARRATIVESERVICE']._serialized_start=908
+  _globals['_NARRATIVESERVICE']._serialized_end=1486
 # @@protoc_insertion_point(module_scope)

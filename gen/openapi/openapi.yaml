@@ -2244,6 +2244,75 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/findings:next-to-narrate:
+        post:
+            tags:
+                - NarrativeService
+            description: |-
+                The load step of a narration run, for the Temporal chain (ENT-256, part
+                 five): the next finding in this organisation that has no narrative yet,
+                 with the DraftNarrative request built for it exactly as NarrateFindings
+                 builds one (the signal, the one obligation it may cite, the provider and
+                 model names for the run record). The workflow hands that request to the
+                 Python worker as an activity on the `intelligence` task queue, and brings
+                 the answer back to RecordNarrative. Go loads, Python drafts, Go persists
+                 (§16.4).
+
+                 `intelligence_available` false means this deployment runs no
+                 Intelligence, which is supported; the workflow stops there. `found` false
+                 means nothing is waiting. The same finding is offered again until
+                 something is recorded for it, which is what makes a crashed draft a
+                 retry rather than a skipped finding.
+            operationId: NarrativeService_NextFindingToNarrate
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/NextFindingToNarrateRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/NextFindingToNarrateResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /internal/v1/findings:record-narrative:
+        post:
+            tags:
+                - NarrativeService
+            description: |-
+                The persist step: what the draft produced, recorded against the finding
+                 exactly as NarrateFindings records it. A succeeded draft writes the
+                 narrative and the run id; a refused or failed one writes the refusal with
+                 its reason, so the finding is not offered again and an operator can read
+                 why it has no explanation. Idempotent on a finding that already has one.
+            operationId: NarrativeService_RecordNarrative
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RecordNarrativeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecordNarrativeResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /internal/v1/gateway/tools:call:
         post:
             tags:
@@ -5264,6 +5333,27 @@ components:
                         Empty when Intelligence is not configured for this deployment, which is
                          supported rather than broken: the model service sits behind a compose
                          profile and a stack without it still produces findings.
+        NextFindingToNarrateRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+        NextFindingToNarrateResponse:
+            type: object
+            properties:
+                intelligenceAvailable:
+                    type: boolean
+                found:
+                    type: boolean
+                findingId:
+                    type: string
+                draft:
+                    allOf:
+                        - $ref: '#/components/schemas/DraftNarrativeRequest'
+                    description: |-
+                        The request the Python worker's DraftNarrative activity takes, built
+                         here so that the activity is a pure function of its input and the
+                         obligation it may cite is the finding's own.
         NotificationChannel:
             type: object
             properties:
@@ -6047,6 +6137,26 @@ components:
                     description: |-
                         The stored run's id, so a caller can reference it from whatever it goes on
                          to write.
+        RecordNarrativeRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                findingId:
+                    type: string
+                draft:
+                    allOf:
+                        - $ref: '#/components/schemas/DraftNarrativeResponse'
+                    description: What the draft produced, as the Python worker returned it.
+        RecordNarrativeResponse:
+            type: object
+            properties:
+                recorded:
+                    type: boolean
+                    description: |-
+                        True when this call wrote something; false when the finding already had
+                         a narrative or a refusal recorded, which a retried activity reads as
+                         done.
         RegulationPack:
             type: object
             properties:

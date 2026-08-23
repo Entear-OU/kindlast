@@ -952,6 +952,9 @@ services:
         condition: service_completed_successfully
       core-api:
         condition: service_healthy
+      # The worker half registers with the engine at boot (ENT-256).
+      temporal:
+        condition: service_healthy
       model:
         condition: service_healthy
     environment:
@@ -989,6 +992,15 @@ services:
       # No model URL here, since ENT-256 part five: this service dials no
       # model. Completions go through core-api's CompletionService, which
       # holds KINDLAST_MODEL_ENDPOINT and every organisation's key.
+
+      # THE TEMPORAL WORKER (ENT-256, part five): this service also polls the
+      # `intelligence` task queue for the drafts the Go worker's sweep
+      # workflow schedules (Go loads, Python drafts, Go persists). Empty means
+      # the RPC half alone, and the sweep then records narration as skipped.
+      KINDLAST_TEMPORAL_ADDR: ${KINDLAST_TEMPORAL_ADDR:-temporal:7233}
+      KINDLAST_TEMPORAL_NAMESPACE: default
+      # Drafts in flight at once: what one local model serves (ENT-235).
+      KINDLAST_INTELLIGENCE_CONCURRENCY: "2"
 
       # Recorded on every run, so a stored finding names the weights that
       # produced it rather than "a 4B".

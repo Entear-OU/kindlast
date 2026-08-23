@@ -499,6 +499,14 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.CompletionService.Complete": {
 			Method: "POST", Path: "/internal/v1/completions",
 		},
+		// The narration chain's load and persist steps (ENT-256, part five):
+		// what the Go worker calls either side of the Python activity.
+		"kindlast.platform.v1.NarrativeService.NextFindingToNarrate": {
+			Method: "POST", Path: "/internal/v1/findings:next-to-narrate",
+		},
+		"kindlast.platform.v1.NarrativeService.RecordNarrative": {
+			Method: "POST", Path: "/internal/v1/findings:record-narrative",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

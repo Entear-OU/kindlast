@@ -12,6 +12,30 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
+### Added
+
+- **Findings are narrated on both task queues: Go loads, Python drafts, Go
+  persists** (ENT-256, part five, second half; design §16.4, which is now
+  built as written). The `intelligence` container runs a Temporal worker
+  beside its RPC server, polling the `intelligence` task queue, and every
+  sweep's narration step is three activities per finding: `workers` asks
+  core-api for the next finding with no narrative and the draft request built
+  for it (`NarrativeService.NextFindingToNarrate`), the Python worker drafts
+  it (`DraftNarrative`, the same harness, guardrails and run record as the
+  RPC of that name, with every model call going back through core-api), and
+  `workers` records the narrative or the refusal
+  (`NarrativeService.RecordNarrative`). A draft that fails retries as a
+  draft, on its own queue, with its own history.
+
+  **Operators:** the `intelligence` container now takes `KINDLAST_TEMPORAL_ADDR`
+  (the bundled stack sets it) and `KINDLAST_INTELLIGENCE_CONCURRENCY` (drafts
+  in flight at once, default 2, what one local model serves). With no Python
+  worker polling, a sweep waits two minutes for a draft to be picked up,
+  records narration as skipped with that reason, and completes: an
+  `intelligence` container that is down costs explanations, never sweeps.
+  `NarrateFindings` remains for an operator who wants to narrate a batch by
+  hand.
+
 ### Changed
 
 - **Every model call now goes through core-api, and the Python service holds

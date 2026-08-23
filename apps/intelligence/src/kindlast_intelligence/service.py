@@ -78,8 +78,21 @@ class IntelligenceService:
         request: intelligence_pb2.DraftNarrativeRequest,
         ctx: RequestContext,
     ) -> intelligence_pb2.DraftNarrativeResponse:
+        """The RPC: authorise, then draft. The Temporal activity (worker.py)
+        calls `draft` directly, because its caller is the engine on a queue
+        only this deployment's workers poll, and what it is handed was built
+        by core-api."""
         self._authorise(ctx)
+        return self.draft(request)
 
+    def draft(
+        self,
+        request: intelligence_pb2.DraftNarrativeRequest,
+    ) -> intelligence_pb2.DraftNarrativeResponse:
+        """One draft: the harness, the guardrail ring, the citation validator
+        and the run record, for a request core-api built. Raises ConnectError
+        for a malformed request (INVALID_ARGUMENT) and for a run that could
+        not be recorded (INTERNAL)."""
         if not request.org_id:
             raise ConnectError(Code.INVALID_ARGUMENT, "org_id is required")
         if not request.signal.strip():

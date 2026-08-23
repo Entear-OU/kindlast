@@ -166,11 +166,234 @@ func (x *NarrateFindingsResponse) GetIntelligenceAvailable() bool {
 	return false
 }
 
+type NextFindingToNarrateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrgId         string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NextFindingToNarrateRequest) Reset() {
+	*x = NextFindingToNarrateRequest{}
+	mi := &file_kindlast_platform_v1_narrative_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NextFindingToNarrateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NextFindingToNarrateRequest) ProtoMessage() {}
+
+func (x *NextFindingToNarrateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_narrative_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NextFindingToNarrateRequest.ProtoReflect.Descriptor instead.
+func (*NextFindingToNarrateRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_narrative_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *NextFindingToNarrateRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+type NextFindingToNarrateResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	IntelligenceAvailable bool                   `protobuf:"varint,1,opt,name=intelligence_available,json=intelligenceAvailable,proto3" json:"intelligence_available,omitempty"`
+	Found                 bool                   `protobuf:"varint,2,opt,name=found,proto3" json:"found,omitempty"`
+	FindingId             string                 `protobuf:"bytes,3,opt,name=finding_id,json=findingId,proto3" json:"finding_id,omitempty"`
+	// The request the Python worker's DraftNarrative activity takes, built
+	// here so that the activity is a pure function of its input and the
+	// obligation it may cite is the finding's own.
+	Draft         *DraftNarrativeRequest `protobuf:"bytes,4,opt,name=draft,proto3" json:"draft,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NextFindingToNarrateResponse) Reset() {
+	*x = NextFindingToNarrateResponse{}
+	mi := &file_kindlast_platform_v1_narrative_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NextFindingToNarrateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NextFindingToNarrateResponse) ProtoMessage() {}
+
+func (x *NextFindingToNarrateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_narrative_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NextFindingToNarrateResponse.ProtoReflect.Descriptor instead.
+func (*NextFindingToNarrateResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_narrative_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *NextFindingToNarrateResponse) GetIntelligenceAvailable() bool {
+	if x != nil {
+		return x.IntelligenceAvailable
+	}
+	return false
+}
+
+func (x *NextFindingToNarrateResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *NextFindingToNarrateResponse) GetFindingId() string {
+	if x != nil {
+		return x.FindingId
+	}
+	return ""
+}
+
+func (x *NextFindingToNarrateResponse) GetDraft() *DraftNarrativeRequest {
+	if x != nil {
+		return x.Draft
+	}
+	return nil
+}
+
+type RecordNarrativeRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	OrgId     string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	FindingId string                 `protobuf:"bytes,2,opt,name=finding_id,json=findingId,proto3" json:"finding_id,omitempty"`
+	// What the draft produced, as the Python worker returned it.
+	Draft         *DraftNarrativeResponse `protobuf:"bytes,3,opt,name=draft,proto3" json:"draft,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordNarrativeRequest) Reset() {
+	*x = RecordNarrativeRequest{}
+	mi := &file_kindlast_platform_v1_narrative_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordNarrativeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordNarrativeRequest) ProtoMessage() {}
+
+func (x *RecordNarrativeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_narrative_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordNarrativeRequest.ProtoReflect.Descriptor instead.
+func (*RecordNarrativeRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_narrative_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *RecordNarrativeRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *RecordNarrativeRequest) GetFindingId() string {
+	if x != nil {
+		return x.FindingId
+	}
+	return ""
+}
+
+func (x *RecordNarrativeRequest) GetDraft() *DraftNarrativeResponse {
+	if x != nil {
+		return x.Draft
+	}
+	return nil
+}
+
+type RecordNarrativeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True when this call wrote something; false when the finding already had
+	// a narrative or a refusal recorded, which a retried activity reads as
+	// done.
+	Recorded      bool `protobuf:"varint,1,opt,name=recorded,proto3" json:"recorded,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordNarrativeResponse) Reset() {
+	*x = RecordNarrativeResponse{}
+	mi := &file_kindlast_platform_v1_narrative_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordNarrativeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordNarrativeResponse) ProtoMessage() {}
+
+func (x *RecordNarrativeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_narrative_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordNarrativeResponse.ProtoReflect.Descriptor instead.
+func (*RecordNarrativeResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_narrative_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *RecordNarrativeResponse) GetRecorded() bool {
+	if x != nil {
+		return x.Recorded
+	}
+	return false
+}
+
 var File_kindlast_platform_v1_narrative_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_narrative_proto_rawDesc = "" +
 	"\n" +
-	"$kindlast/platform/v1/narrative.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"R\n" +
+	"$kindlast/platform/v1/narrative.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\x1a'kindlast/platform/v1/intelligence.proto\"R\n" +
 	"\x16NarrateFindingsRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12!\n" +
 	"\fmax_findings\x18\x02 \x01(\x05R\vmaxFindings\"\xbc\x01\n" +
@@ -179,9 +402,26 @@ const file_kindlast_platform_v1_narrative_proto_rawDesc = "" +
 	"\bnarrated\x18\x02 \x01(\x05R\bnarrated\x12\x18\n" +
 	"\arefused\x18\x03 \x01(\x05R\arefused\x12\x16\n" +
 	"\x06failed\x18\x04 \x01(\x05R\x06failed\x125\n" +
-	"\x16intelligence_available\x18\x05 \x01(\bR\x15intelligenceAvailable2\xc6\x01\n" +
+	"\x16intelligence_available\x18\x05 \x01(\bR\x15intelligenceAvailable\"4\n" +
+	"\x1bNextFindingToNarrateRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\"\xcd\x01\n" +
+	"\x1cNextFindingToNarrateResponse\x125\n" +
+	"\x16intelligence_available\x18\x01 \x01(\bR\x15intelligenceAvailable\x12\x14\n" +
+	"\x05found\x18\x02 \x01(\bR\x05found\x12\x1d\n" +
+	"\n" +
+	"finding_id\x18\x03 \x01(\tR\tfindingId\x12A\n" +
+	"\x05draft\x18\x04 \x01(\v2+.kindlast.platform.v1.DraftNarrativeRequestR\x05draft\"\x92\x01\n" +
+	"\x16RecordNarrativeRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x1d\n" +
+	"\n" +
+	"finding_id\x18\x02 \x01(\tR\tfindingId\x12B\n" +
+	"\x05draft\x18\x03 \x01(\v2,.kindlast.platform.v1.DraftNarrativeResponseR\x05draft\"5\n" +
+	"\x17RecordNarrativeResponse\x12\x1a\n" +
+	"\brecorded\x18\x01 \x01(\bR\brecorded2\xc2\x04\n" +
 	"\x10NarrativeService\x12\xb1\x01\n" +
-	"\x0fNarrateFindings\x12,.kindlast.platform.v1.NarrateFindingsRequest\x1a-.kindlast.platform.v1.NarrateFindingsResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/internal/v1/findings:narrateB\xe2\x01\n" +
+	"\x0fNarrateFindings\x12,.kindlast.platform.v1.NarrateFindingsRequest\x1a-.kindlast.platform.v1.NarrateFindingsResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/internal/v1/findings:narrate\x12\xc2\x01\n" +
+	"\x14NextFindingToNarrate\x121.kindlast.platform.v1.NextFindingToNarrateRequest\x1a2.kindlast.platform.v1.NextFindingToNarrateResponse\"C\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02*:\x01*\"%/internal/v1/findings:next-to-narrate\x12\xb4\x01\n" +
+	"\x0fRecordNarrative\x12,.kindlast.platform.v1.RecordNarrativeRequest\x1a-.kindlast.platform.v1.RecordNarrativeResponse\"D\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02+:\x01*\"&/internal/v1/findings:record-narrativeB\xe2\x01\n" +
 	"\x18com.kindlast.platform.v1B\x0eNarrativeProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
 var (
@@ -196,19 +436,31 @@ func file_kindlast_platform_v1_narrative_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_narrative_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_narrative_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_kindlast_platform_v1_narrative_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_kindlast_platform_v1_narrative_proto_goTypes = []any{
-	(*NarrateFindingsRequest)(nil),  // 0: kindlast.platform.v1.NarrateFindingsRequest
-	(*NarrateFindingsResponse)(nil), // 1: kindlast.platform.v1.NarrateFindingsResponse
+	(*NarrateFindingsRequest)(nil),       // 0: kindlast.platform.v1.NarrateFindingsRequest
+	(*NarrateFindingsResponse)(nil),      // 1: kindlast.platform.v1.NarrateFindingsResponse
+	(*NextFindingToNarrateRequest)(nil),  // 2: kindlast.platform.v1.NextFindingToNarrateRequest
+	(*NextFindingToNarrateResponse)(nil), // 3: kindlast.platform.v1.NextFindingToNarrateResponse
+	(*RecordNarrativeRequest)(nil),       // 4: kindlast.platform.v1.RecordNarrativeRequest
+	(*RecordNarrativeResponse)(nil),      // 5: kindlast.platform.v1.RecordNarrativeResponse
+	(*DraftNarrativeRequest)(nil),        // 6: kindlast.platform.v1.DraftNarrativeRequest
+	(*DraftNarrativeResponse)(nil),       // 7: kindlast.platform.v1.DraftNarrativeResponse
 }
 var file_kindlast_platform_v1_narrative_proto_depIdxs = []int32{
-	0, // 0: kindlast.platform.v1.NarrativeService.NarrateFindings:input_type -> kindlast.platform.v1.NarrateFindingsRequest
-	1, // 1: kindlast.platform.v1.NarrativeService.NarrateFindings:output_type -> kindlast.platform.v1.NarrateFindingsResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	6, // 0: kindlast.platform.v1.NextFindingToNarrateResponse.draft:type_name -> kindlast.platform.v1.DraftNarrativeRequest
+	7, // 1: kindlast.platform.v1.RecordNarrativeRequest.draft:type_name -> kindlast.platform.v1.DraftNarrativeResponse
+	0, // 2: kindlast.platform.v1.NarrativeService.NarrateFindings:input_type -> kindlast.platform.v1.NarrateFindingsRequest
+	2, // 3: kindlast.platform.v1.NarrativeService.NextFindingToNarrate:input_type -> kindlast.platform.v1.NextFindingToNarrateRequest
+	4, // 4: kindlast.platform.v1.NarrativeService.RecordNarrative:input_type -> kindlast.platform.v1.RecordNarrativeRequest
+	1, // 5: kindlast.platform.v1.NarrativeService.NarrateFindings:output_type -> kindlast.platform.v1.NarrateFindingsResponse
+	3, // 6: kindlast.platform.v1.NarrativeService.NextFindingToNarrate:output_type -> kindlast.platform.v1.NextFindingToNarrateResponse
+	5, // 7: kindlast.platform.v1.NarrativeService.RecordNarrative:output_type -> kindlast.platform.v1.RecordNarrativeResponse
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_narrative_proto_init() }
@@ -216,13 +468,14 @@ func file_kindlast_platform_v1_narrative_proto_init() {
 	if File_kindlast_platform_v1_narrative_proto != nil {
 		return
 	}
+	file_kindlast_platform_v1_intelligence_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_narrative_proto_rawDesc), len(file_kindlast_platform_v1_narrative_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
