@@ -77,8 +77,23 @@ export async function GET(request: NextRequest) {
   // Best effort, both of them. A failure here must not strand someone holding
   // a valid token on an error page: they are signed in either way, and both
   // calls are idempotent on the subject, so the next navigation can retry.
+  //
+  // Best effort is not the same as unremarked, which is what it used to be
+  // (ENT-267). A new person whose token failed here is signed in, holds a
+  // personal organisation they never asked for, and has nothing telling them
+  // the invitation is why the company that invited them is nowhere to be seen.
+  // That was the shape of the PR #230 symptom: fixed at its cause, and still
+  // silent if it ever recurs.
+  let invitationFailed = false
   if (preAuth.invitationToken) {
-    await acceptInvitation(tokens.accessToken, preAuth.invitationToken)
+    const joined = await acceptInvitation(
+      tokens.accessToken,
+      preAuth.invitationToken,
+    )
+    // `orgSlug` rather than the response being present, matching the invite
+    // route: the redirect is built from the slug, so a response without one is
+    // no more usable than no response at all.
+    invitationFailed = !joined?.orgSlug
   }
 
   // The bootstrap. For a first-time arrival this is the call that creates the
@@ -95,8 +110,20 @@ export async function GET(request: NextRequest) {
     orgId: activeOrgFrom(me),
   })
 
+  // A failed invitation overrides the destination rather than decorating it.
+  // `/workspace` is the only path that renders the explanation, and it is
+  // where this flow was going anyway: /invite/{token} deliberately sets no
+  // returnTo, because the organisation being joined has no known URL until the
+  // redemption that just failed. Appending the parameter to some other
+  // destination would set it somewhere nothing reads it, which is the bug this
+  // is fixing.
   const response = NextResponse.redirect(
-    new URL(safeReturnTo(preAuth.returnTo), origin),
+    new URL(
+      invitationFailed
+        ? '/workspace?error=invitation'
+        : safeReturnTo(preAuth.returnTo),
+      origin,
+    ),
   )
   response.cookies.set(SESSION_COOKIE, sessionId, sessionCookieOptions())
   return response
