@@ -3,11 +3,29 @@
 //
 // # WHAT THIS SURFACE IS FOR
 //
-// It collects what an organisation is, one typed answer at a time, and on the
-// person's confirmation records those answers as profile facts with
-// `source = 'onboarding'`. It is the organisation memory's first feeder: the
-// same table the memory page reads, the same history, the same provenance, the
-// same `recorded_by`.
+// It collects what an organisation is, one typed answer at a time, and records
+// each answer as a profile fact with `source = 'onboarding'` at the moment it
+// is given. It is the organisation memory's first feeder: the same table the
+// memory page reads, the same history, the same provenance, the same
+// `recorded_by`.
+//
+// # THE CONFIRMATION STEP IS GONE (ENT-254)
+//
+// ENT-212 held answers in the transcript until `ConfirmProfile`. ENT-254 moved
+// the readiness assessment into this flow and ruled that answers save as they
+// are given, with no review-then-commit screen, because that is what "easy"
+// means for somebody who has an account and no compliance profile yet.
+//
+// The property the step existed for survives in a better place. It was there so
+// nothing was believed that the person had not read back; what they read back
+// now is the parsed value beside their own answer, at the moment they give it,
+// which is where a wrong reading is cheapest to notice. And every fact is
+// correctable afterwards with its history intact, which the confirmation screen
+// never made true.
+//
+// What still happens once, at the end, is the `compliance_profiles` projection,
+// the completed status and the sweep trigger. See `finishIfDone` for why those
+// three cannot be per-answer.
 //
 // # STREAMING IS NOT HERE, AND THAT IS A DECISION RATHER THAN AN OMISSION
 //
@@ -63,10 +81,10 @@ import (
 // `system-prompt.ts` settled at `db0bf83` and is a product decision that was
 // reviewed once already. It is a row rather than console copy so the
 // conversation a customer reads back is complete.
-const greeting = "Hello. I am going to ask about eleven short questions so " +
-	"Kindlast knows what your organisation actually does. Plain answers are " +
-	"best, and if a question does not apply or you do not know, say so and we " +
-	"will move on."
+const greeting = "Hello. I am going to ask eleven short questions so Kindlast " +
+	"knows what your organisation actually does. Every one is a tap, your " +
+	"answers are saved as you give them, and if you cannot answer one you can " +
+	"pass on it and we will move on."
 
 // store is what these handlers need of the request's transaction, declared
 // where it is used (§21.6).
@@ -75,6 +93,10 @@ type store interface {
 	StartOnboardingSession(ctx context.Context) (domain.Session, bool, error)
 	OnboardingTranscript(ctx context.Context, sessionID string) ([]domain.Turn, error)
 	AppendOnboardingTurn(ctx context.Context, sessionID, role, content, factKey, factValueJSON string) (domain.Turn, error)
+	// The same close-then-insert path a human correction takes. Onboarding is
+	// the organisation memory's first feeder, so its writes are the same
+	// writes, with the same provenance and the same history (ENT-254).
+	CorrectFact(ctx context.Context, key, valueJSON, source, note string) (memorydomain.Fact, bool, error)
 	ConfirmOnboarding(ctx context.Context, sessionID string, facts map[string]string) (string, error)
 	HasComplianceProfile(ctx context.Context) (bool, error)
 	ProfileFacts(ctx context.Context) ([]memorydomain.Fact, error)
@@ -170,10 +192,10 @@ func (s *Service) AnswerQuestion(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if session.Status == domain.StatusCompleted {
-		// Answers after confirmation would sit in the transcript changing
-		// nothing, because the profile is already written. Correcting a fact is
-		// what changing an answer looks like from here, and it has its own
-		// surface with its own history.
+		// Answers after the interview finished would sit in the transcript
+		// changing nothing, because the profile is already written. Correcting
+		// a fact is what changing an answer looks like from here, and it has
+		// its own surface with its own history.
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			errors.New("onboarding is finished for this organisation: correct a fact instead"))
 	}
@@ -198,11 +220,81 @@ func (s *Service) AnswerQuestion(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
+	// # THE ANSWER IS BELIEVED NOW, NOT AT A CONFIRMATION STEP (ENT-254)
+	//
+	// ENT-212 held answers in the transcript until `ConfirmProfile`, so that
+	// nothing was believed the person had not read back. ENT-254's ruling is
+	// that this flow should be easy, and a review-then-commit screen after
+	// eleven questions is the opposite of that. What the step protected is
+	// protected better here: the parsed value is shown beside the answer at the
+	// moment it is given, which is where a mistake is cheapest to catch, and a
+	// fact is correctable afterwards with its history intact.
+	//
+	// A skip writes nothing at all, which is why this is guarded on the value
+	// rather than on the request: an absent fact is the record of a question
+	// somebody declined, and a placeholder would be a guess wearing a value.
+	if valueJSON != "" {
+		if _, _, err := tenant.CorrectFact(ctx, key, valueJSON, "onboarding", ""); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
+
+	session, err = finishIfDone(ctx, tenant, session)
+	if err != nil {
+		return nil, err
+	}
+
 	state, err := stateAfterAsking(ctx, tenant, session)
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&corev1.AnswerQuestionResponse{State: state}), nil
+}
+
+// finishIfDone closes the interview once the last applicable question has an
+// answer or a skip.
+//
+// # WHY FINISHING IS STILL A DISTINCT MOMENT WITH NO CONFIRMATION STEP
+//
+// The facts are already written by the time this runs. What is left is the
+// `compliance_profiles` projection, the completed status and the sweep trigger,
+// and all three want to happen exactly once, when there is a whole profile to
+// reason from. Writing the projection on every answer would hand the Watcher a
+// half-described organisation and produce findings from an interview nobody had
+// finished, and `HasComplianceProfile` is what every authenticated route asks
+// before routing somebody here, so it would also stop routing them back part
+// way through.
+//
+// An interview where everything was skipped finishes nothing, deliberately. A
+// profile of eleven defaults nobody stated is worse than no profile, because
+// the Watcher cannot tell the difference.
+func finishIfDone(
+	ctx context.Context,
+	tenant store,
+	session domain.Session,
+) (domain.Session, error) {
+	if session.Status == domain.StatusCompleted {
+		return session, nil
+	}
+
+	transcript, err := tenant.OnboardingTranscript(ctx, session.ID)
+	if err != nil {
+		return session, connect.NewError(connect.CodeInternal, err)
+	}
+	answers := domain.AnswersFrom(transcript)
+	if _, more := domain.NextQuestion(answers); more {
+		return session, nil
+	}
+
+	facts := domain.FactsFrom(answers)
+	if len(facts) == 0 {
+		return session, nil
+	}
+	if _, err := tenant.ConfirmOnboarding(ctx, session.ID, facts); err != nil {
+		return session, connect.NewError(connect.CodeInternal, err)
+	}
+	session.Status = domain.StatusCompleted
+	return session, nil
 }
 
 func (s *Service) ConfirmProfile(
@@ -231,8 +323,8 @@ func (s *Service) ConfirmProfile(
 	facts := domain.FactsFrom(answers)
 	if len(facts) == 0 {
 		// A profile of nothing would still be a profile: the Watcher would
-		// start reasoning from eleven defaults nobody stated and produce
-		// findings the customer never gave it grounds for.
+		// start reasoning from a script's worth of defaults nobody stated and
+		// produce findings the customer never gave it grounds for.
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			errors.New("nothing has been answered yet, so there is nothing to record"))
 	}
@@ -369,8 +461,8 @@ func buildState(
 		state.Transcript = append(state.Transcript, turnToProto(turn))
 	}
 
-	// Script order rather than map order, so the confirmation screen lists the
-	// answers in the order they were given every time it is rendered.
+	// Script order rather than map order, so the console reads the answers in
+	// the order they were given every time this is rendered.
 	for _, q := range domain.Script() {
 		answer, given := answers[q.Key]
 		if !given || answer.Skipped || answer.ValueJSON == "" {
@@ -399,10 +491,22 @@ func questionToProto(question domain.Question) *corev1.Question {
 		Key:    keyToProto(question.Key),
 		Prompt: question.Prompt,
 		Help:   question.Help,
+		Basis:  question.Basis,
 		Shape:  shapeToProto(question.Shape()),
 	}
 	if question.Shape() == memorydomain.KindTriState {
 		out.Choices = domain.TriStateChoices
+	}
+	// The closed vocabulary, sent so the console renders exactly the tokens the
+	// server accepts. A console that invented one would produce an answer
+	// `Parse` refuses, which is the safe direction for that disagreement to
+	// fail in (ENT-254).
+	for _, option := range question.Options {
+		out.Options = append(out.Options, &corev1.QuestionOption{
+			Value:     option.Value,
+			Label:     option.Label,
+			Exclusive: option.Exclusive,
+		})
 	}
 	return out
 }

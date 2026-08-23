@@ -10,13 +10,13 @@ import {
   REGULATIONS,
   citationLabel,
   citationUrl,
-} from '@/lib/readiness/corpus'
-import { SCRIPT } from '@/lib/readiness/script'
-import { LEGAL_ASSERTION_PATTERNS, assertsLaw } from '@/lib/readiness/claims'
+} from '@/lib/onboarding/corpus'
+import { LAWFUL_BASIS_LABELS } from '@/lib/onboarding/answers'
+import { LEGAL_ASSERTION_PATTERNS, assertsLaw } from '@/lib/onboarding/claims'
 
 /**
- * ENT-189, holding ENT-248's ruling on the one surface where breaking it costs
- * the most.
+ * ENT-189 and ENT-254, holding ENT-248's ruling on the surface where a customer
+ * meets the product's claims first.
  *
  * The ruling: the statement of law comes from the corpus, and free text written
  * about the organisation may not assert law. It was settled after the local
@@ -24,17 +24,21 @@ import { LEGAL_ASSERTION_PATTERNS, assertsLaw } from '@/lib/readiness/claims'
  * opposite of Article 30(5) beside it. A citation validator cannot catch that,
  * because the citation was right.
  *
- * On the marketing site the reader has no account, no record to check it
- * against, and no reason yet to doubt us, so the guard has to be structural
- * rather than editorial. Two halves:
+ * The guard is structural rather than editorial, in two halves:
  *
  *  1. Every sentence of law the assessment renders is byte-identical to a
  *     `summary` in `data/corpus/obligations.json`. There is no second copy in
  *     `apps/web` that could drift.
- *  2. Every sentence the assessment writes ITSELF (the question prompts, the
- *     help text, the "why this reached you" lines) is run past the same
- *     detector `apps/intelligence`'s code critic uses, and must come back
- *     clean.
+ *  2. Every sentence the assessment writes ITSELF is run past the same detector
+ *     `apps/intelligence`'s code critic uses, and must come back clean.
+ *
+ * THE QUESTION PROMPTS MOVED, AND SO DID THEIR HALF OF THIS TEST. Until ENT-254
+ * the script lived in `lib/readiness/script.ts` and the walk over it was here.
+ * The questions are core-api's now, so the same detector walks them from Go, in
+ * `apps/core-api/internal/domain/onboarding/script_test.go`, using
+ * `internal/domain/claims`. What stays here is everything still authored in
+ * TypeScript: `copy.ts` (its own file) and `evaluate.ts`'s sentences about the
+ * organisation (`evaluate.test.ts`).
  */
 
 const CORPUS = path.resolve(__dirname, '../../../../../data/corpus')
@@ -133,17 +137,21 @@ describe('the detector itself', () => {
 })
 
 describe('everything this surface writes for itself', () => {
-  it('asserts no law in any question the assessment asks', () => {
-    for (const question of SCRIPT) {
-      expect(assertsLaw(question.prompt), question.prompt).toBe(false)
-      if (question.help) {
-        expect(assertsLaw(question.help), question.help).toBe(false)
-      }
-      if (question.kind === 'multi') {
-        for (const option of question.options) {
-          expect(assertsLaw(option.label), option.label).toBe(false)
-        }
-      }
+  it('asserts no law in any lawful-basis label', () => {
+    for (const label of Object.values(LAWFUL_BASIS_LABELS)) {
+      expect(assertsLaw(label), label).toBe(false)
+    }
+  })
+
+  it('can name every lawful basis the corpus narrows on', () => {
+    // `evaluate.ts` explains why Article 7 reached somebody by naming the
+    // ground they said they rely on, in words. An obligation narrowing on a
+    // basis this table does not hold would produce a sentence with a token in
+    // it, on the one page whose promise is that the result is checkable.
+    for (const obligation of OBLIGATIONS) {
+      const basis = obligation.appliesWhen?.lawful_basis_includes
+      if (!basis) continue
+      expect(Object.keys(LAWFUL_BASIS_LABELS), basis).toContain(basis)
     }
   })
 })

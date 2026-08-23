@@ -201,13 +201,20 @@ func (t *Tenant) HasComplianceProfile(ctx context.Context) (bool, error) {
 // ConfirmOnboarding records the interview's answers as what the organisation
 // believes, and marks the session finished.
 //
-// # THIS IS THE ONLY PLACE ONBOARDING WRITES A FACT
+// # IT IS NO LONGER WHERE A FACT IS FIRST WRITTEN (ENT-254)
 //
-// Until it is called, the interview is a conversation: rows in
-// `onboarding_messages` and nothing else. No fact exists, no profile row
-// exists, and therefore no finding can have been reasoned from any of it. That
-// is how "the person sees and confirms the profile before it drives anything"
-// is enforced structurally rather than by a screen somebody could skip.
+// Every answer is recorded as it is given, through `CorrectFact`, so by the
+// time this runs the facts are already believed. The loop below stays, and it
+// is a no-op in the ordinary case: `CorrectFact` reports no change when a value
+// equals what is already stored and writes nothing. It earns its place for the
+// path where a fact was corrected on the memory page mid-interview and for a
+// session finished by an explicit `ConfirmProfile`, and keeping it costs
+// nothing because of that idempotence.
+//
+// What this call is really for is the three things that happen exactly once:
+// the `compliance_profiles` projection, the completed status, and the sweep
+// trigger. Doing them per answer would hand the Watcher a half-described
+// organisation.
 //
 // # THE FACTS ARE THE RECORD; THE PROFILE ROW IS A PROJECTION
 //
@@ -245,6 +252,19 @@ func (t *Tenant) ConfirmOnboarding(
 		return "", err
 	}
 
+	// Read before writing, and locked, so the enqueue below can tell a first
+	// finish from a repeat. `for update` rather than a plain read, because two
+	// requests finishing one session at once would otherwise both see
+	// `in_progress` and both enqueue.
+	var previous string
+	if err := t.tx.QueryRow(ctx, `
+		select status
+		  from public.onboarding_sessions
+		 where id = $1::uuid
+		   for update`, sessionID).Scan(&previous); err != nil {
+		return "", fmt.Errorf("postgres: reading the onboarding session to finish it: %w", err)
+	}
+
 	if _, err := t.tx.Exec(ctx, `
 		update public.onboarding_sessions
 		   set status = $2,
@@ -259,8 +279,17 @@ func (t *Tenant) ConfirmOnboarding(
 	// row before the profile it names is visible to any other connection. See
 	// the migration header for why that ordering has to be structural rather
 	// than "the worker waits a bit".
-	if err := t.EnqueueSweepTrigger(ctx, onboarding.ReasonOnboardingConfirmed); err != nil {
-		return "", err
+	//
+	// ONCE PER SESSION, NOT ONCE PER CALL (ENT-254). The last answer now
+	// finishes the interview, so a client that then calls `ConfirmProfile`, or
+	// a retry of one that did, arrives at an already-completed session.
+	// Enqueuing again would give one organisation two sweeps for one interview:
+	// a duplicated agent run, a duplicated model spend, and a feed with every
+	// finding in it twice.
+	if previous != onboarding.StatusCompleted {
+		if err := t.EnqueueSweepTrigger(ctx, onboarding.ReasonOnboardingConfirmed); err != nil {
+			return "", err
+		}
 	}
 
 	return profileID, nil

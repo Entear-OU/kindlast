@@ -1,5 +1,5 @@
 /**
- * The corpus, as the public readiness assessment reads it (ENT-189).
+ * The corpus, as the onboarding assessment reads it (ENT-189, ENT-254).
  *
  * # THE STATEMENT OF LAW IS IMPORTED, NEVER WRITTEN HERE
  *
@@ -11,26 +11,25 @@
  * beside it, and no citation validator can catch that, because the citation
  * was right.
  *
- * On the marketing site the same mistake is worse. The reader has no account,
- * no compliance record to check the claim against, and no reason yet to doubt
- * us. So this module imports `data/corpus/obligations.json` and the two
- * regulation packs directly, and every sentence of law the assessment renders
- * is a `summary` string out of those files, unedited. There is no second copy
- * of the text in `apps/web` for somebody to "improve" for the web, and
- * `__tests__/lib/readiness/corpus.test.ts` fails if one appears.
+ * So this module imports `data/corpus/obligations.json` and the two regulation
+ * packs directly, and every sentence of law the interview renders is a
+ * `summary` string out of those files, unedited. There is no second copy of the
+ * text in `apps/web` for somebody to "improve for the screen", and
+ * `__tests__/lib/onboarding/corpus.test.ts` fails if one appears.
  *
- * # WHY AN IMPORT AND NOT AN RPC
+ * # WHY AN IMPORT AND NOT AN RPC, EVEN NOW THAT THERE IS A SESSION
  *
- * `CorpusService` would be the obvious source, and it is the wrong one here:
- * every RPC on it needs a bearer token, and this surface has no session by
- * design. Reaching core-api unauthenticated would mean opening a public read
- * path into the resource server for a marketing page, which is a security
- * boundary moved for a conversion action.
+ * `CorpusService` is a bearer-token call away, and this surface is
+ * authenticated since ENT-254, so the objection that killed the idea on the
+ * marketing site is gone. It is still the wrong source, for a plainer reason:
+ * the corpus column has to narrow between one tap and the next, and a
+ * fifteen-row read per answered question is a request in front of an
+ * interaction that should not have one. The obligations are a build input that
+ * changes when a regulation pack changes, which is a deploy.
  *
  * The JSON is not a copy of the corpus, it IS the corpus: `corpus-load` ingests
  * these same files, and `corpus_drift_test.go` asserts the rows read back match
- * them. Importing at build time gets the identical text with no request, no
- * token, and nothing to rate limit.
+ * them. Importing at build time gets the identical text with no request.
  */
 import aiAct from '../../../../data/corpus/eu-ai-act.json'
 import gdpr from '../../../../data/corpus/gdpr.json'

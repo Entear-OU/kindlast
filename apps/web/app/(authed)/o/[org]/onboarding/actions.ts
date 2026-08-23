@@ -8,13 +8,12 @@ import type { ActionState } from '@/lib/org/action-state'
 import { FACT_LABELS, type ProfileFactKey } from '@/lib/memory/client'
 import {
   answerQuestion,
-  confirmProfile,
   startOnboarding,
   type Failure,
 } from '@/lib/onboarding/client'
 
 /**
- * The interview's writes (ENT-212).
+ * The interview's writes (ENT-212, ENT-254).
  *
  * # THE ORGANISATION COMES FROM THE SLUG, NEVER FROM THE FORM
  *
@@ -118,31 +117,20 @@ export async function answerQuestionAction(
   if (!result.ok) return say(result.error)
 
   revalidatePath(orgPath(slug, '/onboarding'))
-  return { status: 'ok', message: '' }
-}
 
-export async function confirmProfileAction(
-  slug: string,
-  _previous: ActionState,
-  _form: FormData,
-): Promise<ActionState> {
-  const who = await acting(slug)
-  if (!who) return expired
-
-  const result = await confirmProfile(who.token, who.orgId)
-  if (!result.ok) return say(result.error)
-
-  // Everything the profile now unblocks. The dashboard and the feed were
-  // showing "nothing to check yet", the record registers were refusing writes,
-  // and the memory page was saying we knew nothing: all three change on this
-  // one call, and none of them would notice without being told.
-  revalidatePath(orgPath(slug, '/onboarding'))
-  revalidatePath(orgPath(slug))
-  revalidatePath(orgPath(slug, '/feed'))
-  revalidatePath(orgPath(slug, '/settings/memory'))
-
-  return {
-    status: 'ok',
-    message: 'Recorded. This is now what Kindlast knows about you.',
+  // EVERYTHING THE PROFILE UNBLOCKS, ON THE ANSWER THAT WROTE IT (ENT-254).
+  //
+  // This used to sit behind a confirm button, which made it easy to see when
+  // it had to run. Now the last answer writes the profile, so the dashboard
+  // stops saying "nothing to check yet", the feed fills, the record registers
+  // start accepting writes and the memory page stops saying we know nothing,
+  // all on one ordinary answer. None of them would notice without being told,
+  // and there is no longer a second call to tell them.
+  if (result.value.state?.profileExists) {
+    revalidatePath(orgPath(slug))
+    revalidatePath(orgPath(slug, '/feed'))
+    revalidatePath(orgPath(slug, '/settings/memory'))
   }
+
+  return { status: 'ok', message: '' }
 }

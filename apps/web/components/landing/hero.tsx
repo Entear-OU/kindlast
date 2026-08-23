@@ -98,16 +98,18 @@ export function Hero() {
           </p>
 
           {/* Action. ENT-189 gave the site something to DO for the first time
-              since the waitlist went, so the readiness check takes the primary
-              slot and reading the source moves beside it. Both are honest asks
-              and neither is a form: the check needs no account and sends
-              nothing, and the repository is still the product claim. */}
+              since the waitlist went, and what it offered was an assessment
+              needing no account. ENT-254 moved that assessment inside the
+              product, so this slot now asks for the thing it actually leads to.
+              The ask is smaller than it looks and the line under it says so:
+              setting up IS the assessment, and it is the first screen after
+              signing up rather than something waiting behind it. */}
           <div className="mt-11 flex flex-col items-center gap-4 sm:flex-row">
             <Link
-              href="/readiness"
+              href="/auth/signup"
               className="inline-flex items-center gap-2.5 rounded-full bg-[#00C9A7] px-7 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-[#2AD6BA] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
-              Check where you stand
+              Find out what applies to you
             </Link>
             <a
               href={GITHUB_REPO_URL}
@@ -121,7 +123,8 @@ export function Hero() {
           </div>
 
           <p className="mt-5 text-[14px] font-medium tracking-[-0.005em] text-white/40">
-            No account, and your answers never leave the page.
+            Eleven questions once you are in, all of them a tap. Free to run,
+            and self-hostable.
           </p>
 
           {/* What the shape of the product actually guarantees */}

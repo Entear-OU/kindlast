@@ -17,13 +17,6 @@ describe('sitemap', () => {
     expect(paths).toContain('/features')
   })
 
-  it('lists the readiness assessment', () => {
-    // ENT-189. It is the only route on the public site that does something
-    // rather than explaining something, so it is the one worth arriving on
-    // from a search rather than reaching through the home page.
-    expect(urls().map((url) => new URL(url).pathname)).toContain('/readiness')
-  })
-
   it('keeps the login route', () => {
     expect(urls().map((url) => new URL(url).pathname)).toContain('/login')
   })
@@ -33,6 +26,10 @@ describe('sitemap', () => {
     expect(paths).not.toContain('/pricing')
     // Open source stayed a section on `/`, so there is nothing to index here.
     expect(paths).not.toContain('/open-source')
+    // ENT-254 moved the assessment inside the product and removed the public
+    // page. A sitemap entry for it would send a crawler, and then a reader,
+    // to a 404 that used to be the site's only call to action.
+    expect(paths).not.toContain('/readiness')
   })
 
   it('ranks the pipeline explainer above the capability detail', () => {

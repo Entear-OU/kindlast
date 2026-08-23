@@ -7,10 +7,10 @@ import type { ActionState } from '@/lib/org/action-state'
 import type { OnboardingState } from '@/lib/onboarding/client'
 
 /**
- * The interview (ENT-212).
+ * The interview's controls (ENT-212, ENT-254).
  *
  * The assertions are about the things that would let a value into a customer's
- * profile that nobody typed, or lose an answer somebody meant to give.
+ * profile that nobody chose, or lose an answer somebody meant to give.
  *
  *   * A tri-state question offers exactly three buttons, because the server
  *     accepts exactly yes, no and unsure, and a free-text box would invite an
@@ -20,9 +20,16 @@ import type { OnboardingState } from '@/lib/onboarding/client'
  *     said no.
  *   * Skipping posts a skip rather than an empty answer, because a declined
  *     question leaves the fact absent and a blank box is a mistake.
- *   * The review screen shows what was said beside what it was taken to mean,
- *     which is the check that makes the profile worth trusting.
- *   * Nothing is recorded until the confirm button, and the copy says so.
+ *   * Nothing here is typed, because both evaluators that decide which
+ *     obligations apply match tokens rather than prose.
+ *
+ * THE REVIEW SCREEN'S TESTS ARE GONE WITH THE REVIEW SCREEN. ENT-212 held
+ * answers in the transcript until a confirm button, and four tests here checked
+ * that the screen said so and that nothing was recorded before it. ENT-254
+ * removed the step: an answer is a fact the moment it is given. What replaced
+ * those assertions is in
+ * `apps/core-api/internal/server/interceptor/onboarding_test.go`, which reads
+ * the memory service after one answer and finds the fact already there.
  */
 
 function capturing() {
@@ -40,200 +47,125 @@ function capturing() {
   return { action, seen }
 }
 
+function show(state: OnboardingState, answer: ReturnType<typeof capturing>) {
+  render(
+    <Interview
+      slug="acme"
+      state={state}
+      answer={answer.action}
+      dashboardHref="/o/acme"
+      memoryHref="/o/acme/settings/memory"
+    />,
+  )
+}
+
 const triStateQuestion: OnboardingState = {
   sessionId: 'session-1',
   status: 'in_progress',
-  transcript: [
-    { id: 't1', role: 'assistant', content: 'Hello.' },
-    {
-      id: 't2',
-      role: 'user',
-      content: 'Ireland, Spain',
-      key: 'PROFILE_FACT_KEY_EU_JURISDICTIONS',
-      value: { list: { values: ['Ireland', 'Spain'] } },
-    },
-  ],
+  totalQuestions: 11,
+  answeredQuestions: 8,
   nextQuestion: {
     key: 'PROFILE_FACT_KEY_HAS_DPO',
     prompt: 'Have you appointed a data protection officer?',
+    help: 'A named person formally appointed to be responsible for data protection.',
     shape: 'ANSWER_SHAPE_TRI_STATE',
     choices: ['yes', 'no', 'unsure'],
+    basis: 'gdpr-art-37-dpo-appointment',
   },
-  totalQuestions: 11,
-  answeredQuestions: 1,
+  draft: [],
 }
 
 describe('Interview', () => {
   it('offers exactly the three answers the server accepts', () => {
-    const { action } = capturing()
-    render(
-      <Interview
-        slug="alpha"
-        state={triStateQuestion}
-        answer={action}
-        confirm={action}
-      />,
-    )
+    show(triStateQuestion, capturing())
 
-    expect(screen.getByRole('button', { name: 'yes' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'no' })).toBeTruthy()
-    // Rendered as "Not sure" and posted as "unsure": the product's word is not
-    // the person's word, and only one of them is a wire value.
-    expect(screen.getByRole('button', { name: 'Not sure' })).toBeTruthy()
-    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument()
+    // "Not sure" is an answer rather than a way of declining. Hiding it would
+    // push somebody towards a "no" that changes which obligations they see.
+    expect(screen.getByRole('button', { name: 'Not sure' })).toBeInTheDocument()
   })
 
   it('posts the answer against the key it was asked under', async () => {
-    const { action, seen } = capturing()
-    render(
-      <Interview
-        slug="alpha"
-        state={triStateQuestion}
-        answer={action}
-        confirm={action}
-      />,
-    )
+    const user = userEvent.setup()
+    const captured = capturing()
+    show(triStateQuestion, captured)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Not sure' }))
-    await waitFor(() => expect(seen).toHaveLength(1))
+    await user.click(screen.getByRole('button', { name: 'Not sure' }))
 
-    expect(seen[0].get('key')).toBe('PROFILE_FACT_KEY_HAS_DPO')
-    expect(seen[0].get('answer')).toBe('unsure')
-    // The organisation is never in the form. It comes from the slug in the URL
-    // and is resolved against the caller's own memberships.
-    expect(seen[0].get('orgId')).toBeNull()
+    await waitFor(() => expect(captured.action).toHaveBeenCalled())
+    const form = captured.seen[0]
+    expect(form.get('key')).toBe('PROFILE_FACT_KEY_HAS_DPO')
+    expect(form.get('answer')).toBe('unsure')
+    expect(form.get('skip')).toBeNull()
   })
 
   it('records a skip as a skip rather than as an empty answer', async () => {
-    const { action, seen } = capturing()
+    const user = userEvent.setup()
+    const captured = capturing()
+    show(triStateQuestion, captured)
+
+    await user.click(
+      screen.getByRole('button', { name: /would rather not say/i }),
+    )
+
+    await waitFor(() => expect(captured.action).toHaveBeenCalled())
+    // A skip leaves the fact absent on purpose; a blank answer is a mistake to
+    // correct. Collapsing them would record a deliberate refusal every time
+    // somebody reached for the wrong control.
+    expect(captured.seen[0].get('skip')).toBe('true')
+  })
+
+  it('offers no free-text box anywhere in the interview', () => {
+    const { container } = render(
+      <Interview
+        slug="acme"
+        state={triStateQuestion}
+        answer={capturing().action}
+        dashboardHref="/o/acme"
+        memoryHref="/o/acme/settings/memory"
+      />,
+    )
+    // Every answer is a tap. A box here would take a sentence the closed
+    // vocabulary refuses, or worse, one it accepts and nothing matches.
+    expect(container.querySelector('input[type="text"]')).toBeNull()
+    expect(container.querySelector('textarea')).toBeNull()
+  })
+
+  it('shows the refusal core-api wrote, rather than something vaguer', async () => {
+    const user = userEvent.setup()
+    const action = vi.fn(async (): Promise<ActionState> => ({
+      status: 'error',
+      message:
+        'onboarding: answer that one with yes, no or unsure; unsure is a real answer',
+    }))
     render(
       <Interview
-        slug="alpha"
+        slug="acme"
         state={triStateQuestion}
         answer={action}
-        confirm={action}
+        dashboardHref="/o/acme"
+        memoryHref="/o/acme/settings/memory"
       />,
     )
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'I would rather not say' }),
-    )
-    await waitFor(() => expect(seen).toHaveLength(1))
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
 
-    // A skip leaves the fact absent on purpose. An empty answer would be
-    // refused, and collapsing the two would record a deliberate refusal every
-    // time somebody submitted too early.
-    expect(seen[0].get('skip')).toBe('true')
+    // The server's sentence is the specific one and is written for a person to
+    // read. Replacing it with "something went wrong" loses the only part that
+    // helps them answer again.
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /unsure is a real answer/,
+      ),
+    )
   })
 
-  it('shows what an answer was taken to mean, beside what was typed', () => {
-    const { action } = capturing()
-    render(
-      <Interview
-        slug="alpha"
-        state={triStateQuestion}
-        answer={action}
-        confirm={action}
-      />,
-    )
-
-    expect(screen.getByText('Ireland, Spain')).toBeTruthy()
-    expect(screen.getByText(/Recorded as: Ireland, Spain/)).toBeTruthy()
-  })
-
-  it('does not offer a free-text box for a question with fixed answers', () => {
-    const { action } = capturing()
-    render(
-      <Interview
-        slug="alpha"
-        state={{
-          ...triStateQuestion,
-          nextQuestion: {
-            key: 'PROFILE_FACT_KEY_EU_JURISDICTIONS',
-            prompt: 'Which countries?',
-            shape: 'ANSWER_SHAPE_LIST',
-          },
-        }}
-        answer={action}
-        confirm={action}
-      />,
-    )
-
-    // A list question does get one, so the absence above is about the shape
-    // rather than about the component never rendering an input.
-    expect(screen.getByRole('textbox')).toBeTruthy()
-  })
-})
-
-describe('the review before anything is recorded', () => {
-  const ready: OnboardingState = {
-    sessionId: 'session-1',
-    status: 'in_progress',
-    transcript: [],
-    readyToConfirm: true,
-    totalQuestions: 2,
-    answeredQuestions: 2,
-    draft: [
-      {
-        key: 'PROFILE_FACT_KEY_EU_JURISDICTIONS',
-        value: { list: { values: ['Ireland', 'Spain'] } },
-        answer: 'Ireland and Spain',
-      },
-      {
-        key: 'PROFILE_FACT_KEY_HAS_ROPA',
-        value: { triState: 'TRI_STATE_NO' },
-        answer: 'no',
-      },
-    ],
-  }
-
-  it('says plainly that nothing has been saved yet', () => {
-    const { action } = capturing()
-    render(
-      <Interview slug="alpha" state={ready} answer={action} confirm={action} />,
-    )
-
-    expect(screen.getByText(/Nothing below has been saved yet/)).toBeTruthy()
-  })
-
-  it('shows the parsed value against the words that produced it', () => {
-    const { action } = capturing()
-    render(
-      <Interview slug="alpha" state={ready} answer={action} confirm={action} />,
-    )
-
-    // The parse is checkable precisely because both halves are on screen: a
-    // list that split the wrong way is visible here and nowhere else.
-    expect(screen.getByText('Ireland, Spain')).toBeTruthy()
-    expect(screen.getByText(/You said: Ireland and Spain/)).toBeTruthy()
-  })
-
-  it('confirms only when the person says so', async () => {
-    const { action, seen } = capturing()
-    render(
-      <Interview slug="alpha" state={ready} answer={action} confirm={action} />,
-    )
-
-    expect(action).not.toHaveBeenCalled()
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Yes, this is right' }),
-    )
-    await waitFor(() => expect(seen).toHaveLength(1))
-  })
-
-  it('says how many questions were left blank', () => {
-    const { action } = capturing()
-    render(
-      <Interview
-        slug="alpha"
-        state={{ ...ready, totalQuestions: 4 }}
-        answer={action}
-        confirm={action}
-      />,
-    )
-
-    // A blank changes which obligations the Watcher decides apply, so somebody
-    // should know they left one rather than discovering it in a finding.
-    expect(screen.getByText(/2 question\(s\) were skipped/)).toBeTruthy()
+  it('tells somebody how far through they are without lying about it', () => {
+    show(triStateQuestion, capturing())
+    // The counts come from the server, which knows which questions a branch
+    // has closed. Counting the script in the browser would keep promising a
+    // question that will never be asked.
+    expect(screen.getByText('Question 9 of 11')).toBeInTheDocument()
   })
 })

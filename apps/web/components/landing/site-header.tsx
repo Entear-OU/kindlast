@@ -87,7 +87,6 @@ export function SiteHeader() {
   const toggleRef = useRef<HTMLButtonElement>(null)
 
   const hasDarkHero = DARK_HERO_ROUTES.has(pathname ?? '')
-  const onReadiness = pathname === '/readiness'
   // Once the panel is open it sits on its own solid surface, so the bar has to
   // stop pretending it is floating over a photograph.
   const overDarkHero = hasDarkHero && !scrolled && !menuOpen
@@ -194,39 +193,24 @@ export function SiteHeader() {
 
                 ENT-189 changed what the pill says. The site had nothing to do
                 but read, so the pill pointed at GitHub and duplicated the icon
-                beside it; the readiness check is now the one action a visitor
-                can take, and the icon still carries the repository. */}
-            {/* On `/readiness` itself the pill would point at the page the
-                reader is already on, so the repository takes the slot back
-                there. A call to action that does nothing is worse than one
-                fewer call to action. */}
-            {onReadiness ? (
-              <a
-                href={GITHUB_REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={[
-                  'hidden whitespace-nowrap rounded-full px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] transition-all duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7] sm:inline-flex',
-                  overDarkHero
-                    ? 'bg-white text-[#0D1B2A] hover:bg-white/90'
-                    : 'bg-[#0D1B2A] text-white hover:bg-[#162537]',
-                ].join(' ')}
-              >
-                Read the source
-              </a>
-            ) : (
-              <Link
-                href="/readiness"
-                className={[
-                  'hidden whitespace-nowrap rounded-full px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] transition-all duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7] sm:inline-flex',
-                  overDarkHero
-                    ? 'bg-white text-[#0D1B2A] hover:bg-white/90'
-                    : 'bg-[#0D1B2A] text-white hover:bg-[#162537]',
-                ].join(' ')}
-              >
-                Check where you stand
-              </Link>
-            )}
+                beside it; an assessment was the one action a visitor could
+                take, and the icon still carries the repository.
+
+                ENT-254 moved that assessment inside the product, so the pill
+                now points at signing up. There is no page it could point at
+                that the reader might already be on, which is why the special
+                case for one route went with it. */}
+            <Link
+              href="/auth/signup"
+              className={[
+                'hidden whitespace-nowrap rounded-full px-6 py-2.5 text-[15px] font-semibold tracking-[-0.01em] transition-all duration-150 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7] sm:inline-flex',
+                overDarkHero
+                  ? 'bg-white text-[#0D1B2A] hover:bg-white/90'
+                  : 'bg-[#0D1B2A] text-white hover:bg-[#162537]',
+              ].join(' ')}
+            >
+              Get started
+            </Link>
 
             {/* Below `md` the nav above is hidden, so without this the footer
                 was the only route between pages on a phone. */}
@@ -269,11 +253,11 @@ export function SiteHeader() {
               ))}
 
               <Link
-                href="/readiness"
+                href="/auth/signup"
                 onClick={() => setMenuOpen(false)}
                 className="mt-5 inline-flex items-center justify-center rounded-full bg-[#0D1B2A] px-6 py-3.5 text-[16px] font-semibold tracking-[-0.01em] text-white transition-all duration-150 hover:bg-[#162537] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00C9A7]"
               >
-                Check where you stand
+                Get started
               </Link>
 
               <a

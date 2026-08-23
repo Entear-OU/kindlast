@@ -44,12 +44,25 @@ import "kindlast/options/v1/scope.proto";
 // fact is simply absent, which is what "left empty rather than guessed" means
 // when it is a property of the code instead of an instruction in a prompt.
 //
-// # AND NOTHING IS BELIEVED UNTIL THE PERSON SAYS SO
+// # ANSWERS ARE SAVED AS THEY ARE GIVEN, AND THERE IS NO REVIEW SCREEN
 //
-// Answers live in `onboarding_messages` until `ConfirmProfile`. Before that
-// call there is no fact, no profile row, and therefore nothing any finding can
-// be reasoned from. The confirmation step is structural rather than a screen
-// somebody could skip past.
+// ENT-212 shipped a confirmation step: answers sat in `onboarding_messages`
+// until `ConfirmProfile`, and only then became facts. ENT-254 removed it,
+// because the ruling was that a person with an account and no compliance
+// profile should find this easy, and a review-then-commit screen at the end of
+// eleven questions is the opposite of that.
+//
+// What the confirmation step was protecting is protected differently and
+// better. It existed so nothing was believed that the person had not seen; what
+// they see now is the parsed value beside their own answer at the moment they
+// give it, which is where a mistake is cheapest to notice. And correcting a
+// fact is a first-class surface with its own history, so a wrong answer is
+// fixable rather than final.
+//
+// `AnswerQuestion` therefore writes the fact. `compliance_profiles`, the
+// projection the Watcher reads, is still written once, when the last applicable
+// question has an answer or a skip, so a half-finished interview does not start
+// producing findings from a profile nobody has finished describing.
 //
 // # THE §25 QUESTION, ANSWERED: THE STREAM PASSES THROUGH CORE-API
 //
@@ -98,7 +111,18 @@ service OnboardingService {
   // The key travels in the request rather than being inferred from position,
   // because a person may go back and change an earlier answer and because a
   // retry must not be able to attach an answer to a different question than the
-  // one it was typed under.
+  // one it was given under.
+  //
+  // THIS WRITES THE FACT (ENT-254). The answer is parsed into the key's
+  // declared kind, refused with a sentence when it does not fit, and recorded
+  // through the same close-then-insert path a human correction takes, with
+  // `source = 'onboarding'`. A skip records nothing at all: the fact stays
+  // absent rather than being guessed, which is what "left empty rather than
+  // guessed" means when it is a property of the code instead of an instruction
+  // in a prompt.
+  //
+  // Answering the last applicable question also finishes the session and writes
+  // the compliance profile, so there is nothing further for the person to do.
   rpc AnswerQuestion(AnswerQuestionRequest) returns (AnswerQuestionResponse) {
     option (kindlast.options.v1.required_scope) = "onboarding:write";
     option (google.api.http) = {
@@ -107,12 +131,17 @@ service OnboardingService {
     };
   }
 
-  // Record what was said as what the organisation believes.
+  // Finish the interview with what has been answered so far.
   //
-  // This is the only call in this service that writes a fact. Until it is made,
-  // the interview is a conversation and nothing else, which is how "the person
-  // sees and confirms the profile before it drives anything" is enforced rather
-  // than promised.
+  // Since ENT-254 this is no longer where a fact is first written: every answer
+  // is already recorded by the call that gave it. What is left is finishing,
+  // which is a real thing to want: somebody who has answered enough and would
+  // rather stop than skip five more questions one at a time. It writes the
+  // compliance profile from every fact currently believed, marks the session
+  // completed, and enqueues the sweep that produces the first findings.
+  //
+  // Answering the last applicable question does the same thing without this
+  // call, which is why the console has no confirm button.
   //
   // Idempotent: confirming twice records the same values, and a value equal to
   // what is already believed writes no history row.
@@ -140,6 +169,28 @@ enum AnswerShape {
   ANSWER_SHAPE_NUMBER = 4;
 }
 
+// One answer a list question offers (ENT-254).
+//
+// The closed vocabulary travels to the client so the console renders exactly
+// the tokens the server accepts. It is not a rendering convenience: an answer
+// outside this set is refused by `Parse`, and both evaluators that decide which
+// obligations apply match on these tokens rather than on prose, so a console
+// inventing one produces a fact nothing will ever match.
+message QuestionOption {
+  // What is stored, and what the applicability rules are matched against.
+  string value = 1;
+
+  // How it reads to the person answering. Plain English, and never a statement
+  // of what the law requires: the law is quoted from the corpus row `basis`
+  // names, unedited (ENT-248).
+  string label = 2;
+
+  // Picking this clears every other choice. "Nobody outside the company
+  // touches it" and "I could not say" are each a complete answer, and neither
+  // combines with naming a supplier.
+  bool exclusive = 3;
+}
+
 // One question, as the person is asked it.
 message Question {
   ProfileFactKey key = 1;
@@ -159,6 +210,24 @@ message Question {
 
   // A sentence under the question, when one helps. Never a legal term.
   string help = 5;
+
+  // The answers a list question offers (ENT-254). Empty for a tri-state, whose
+  // three answers are `choices` above.
+  //
+  // A list question with options is answered by tapping and the values are sent
+  // back comma separated, which is why no new request field was needed: the
+  // answer is still a string and the server still decides what it means.
+  repeated QuestionOption options = 6;
+
+  // The corpus obligation to quote when somebody asks why we want to know.
+  //
+  // A slug rather than a sentence, deliberately. ENT-248's ruling is that the
+  // statement of law comes from a corpus row byte for byte, because the
+  // narrator was observed citing Article 30 correctly and stating the law
+  // wrongly beside it, and a citation validator cannot catch that. The console
+  // renders this obligation's `summary` unedited; nothing on the wire here is
+  // a claim about what any of it requires.
+  string basis = 7;
 }
 
 // One turn, as it is stored.
@@ -211,16 +280,19 @@ message OnboardingState {
   // skip.
   Question next_question = 4;
 
-  // What would be recorded if the person confirmed now, as typed values.
+  // What has been recorded so far, as typed values.
   //
-  // Derived from the answers rather than stored, so it cannot drift from them,
-  // and shown before anything is written because that is the whole of the
-  // confirmation step.
+  // Derived from the answers rather than stored, so it cannot drift from them.
+  // Before ENT-254 this was the confirmation screen's contents; it is now the
+  // answer sheet the console evaluates the corpus against, so a person can see
+  // which obligations their answers have opened while they are still answering.
   repeated DraftFact draft = 5;
 
-  // True when there is nothing left to ask. A person may confirm before this,
-  // and the facts they skipped are simply absent; the flag is what a console
-  // uses to decide whether to nudge.
+  // True when there is nothing left to ask.
+  //
+  // Named for the step that no longer exists, and kept because renaming a field
+  // is a breaking change for a property that has not changed: it still means
+  // "every applicable question has an answer or a skip".
   bool ready_to_confirm = 6;
 
   // Whether this organisation has a compliance profile at all.
@@ -241,9 +313,9 @@ message DraftFact {
   ProfileFactKey key = 1;
   FactValue value = 2;
 
-  // Verbatim, what the person typed to produce it. Shown next to the parsed
-  // value on the confirmation screen, because "we read this as a list of three
-  // countries" is checkable and "United Kingdom, Ireland, Spain" alone is not.
+  // Verbatim, what the person answered to produce it. Shown next to the parsed
+  // value, because "we read this as two processors" is checkable and the list
+  // on its own is not.
   string answer = 3;
 }
 

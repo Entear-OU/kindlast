@@ -1,6 +1,7 @@
 package onboarding
 
 import (
+	"sort"
 	"time"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/memory"
@@ -122,23 +123,41 @@ func FactsFrom(answers Answers) map[string]string {
 // Order matters for one narrow reason: each fact opens its own interval at its
 // own `clock_timestamp()`, so writing them in a map's iteration order would
 // give a customer a history whose entries are ordered differently on every
-// confirmation. Script order makes the history read the way the conversation
-// went.
+// write. Script order makes the history read the way the conversation went.
+//
+// A FACT THE SCRIPT DOES NOT ASK ABOUT IS STILL WRITTEN, after the ones it
+// does, in a stable order. That case exists because the interview no longer
+// asks about every key in the vocabulary (ENT-254): an organisation can hold
+// `industry` from the memory page, and a version of this that iterated only the
+// script would silently drop it on the way to the profile projection. Ordering
+// by key rather than leaving it to the map keeps two runs identical.
 func OrderedFacts(facts map[string]string) []struct {
 	Key       string
 	ValueJSON string
 } {
-	out := make([]struct {
+	type fact = struct {
 		Key       string
 		ValueJSON string
-	}, 0, len(facts))
+	}
+
+	out := make([]fact, 0, len(facts))
+	written := make(map[string]bool, len(facts))
 	for _, question := range Script() {
 		if value, ok := facts[question.Key]; ok {
-			out = append(out, struct {
-				Key       string
-				ValueJSON string
-			}{question.Key, value})
+			out = append(out, fact{question.Key, value})
+			written[question.Key] = true
 		}
+	}
+
+	rest := make([]string, 0, len(facts))
+	for key := range facts {
+		if !written[key] {
+			rest = append(rest, key)
+		}
+	}
+	sort.Strings(rest)
+	for _, key := range rest {
+		out = append(out, fact{key, facts[key]})
 	}
 	return out
 }
