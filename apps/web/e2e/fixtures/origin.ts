@@ -34,3 +34,25 @@ export function onOrigin(pathPattern = ''): RegExp {
 function escapeLiteral(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+/**
+ * Where a sign-in actually lands, which is not only `/o/{slug}` (ENT-264).
+ *
+ * ENT-212 put a compliance-profile gate under `/o/{slug}/`: a member of an
+ * organisation that has no profile yet is routed to `/o/{slug}/onboarding`
+ * rather than to the dashboard, because the alternative was a console showing
+ * data it had no basis for. Every fixture user is brand new, so in these tests
+ * that branch is the only one ever taken.
+ *
+ * It is one pattern in one place because six call sites spelled the old one
+ * out, and six copies is how a gate stays broken: when ENT-212 landed, nothing
+ * ran this suite, so all six kept waiting for a URL the product had stopped
+ * producing. The suite is a CI gate now, which is the reason that could not
+ * happen twice, and this constant is the reason it costs one edit rather than
+ * six when the landing place moves again.
+ *
+ * `(/onboarding)?` rather than a hard `/onboarding`, deliberately: a test
+ * asserting arrival should keep passing on the day a fixture arrives already
+ * profiled, since where it landed is not what any of them is about.
+ */
+export const LANDED_IN_ORG = onOrigin('/o/[a-z0-9-]+(/onboarding)?$')

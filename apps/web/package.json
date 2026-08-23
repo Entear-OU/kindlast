@@ -15,6 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "wire:ai-act-annex": "bun scripts/wire-annex-and-dates.ts",
     "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install --with-deps chromium",
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {

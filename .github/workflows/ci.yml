@@ -711,3 +711,34 @@ jobs:
         run: |
           docker compose -f deploy/compose.yaml -f deploy/compose.airgap.yaml \
             down -v || true
+
+  # THE BROWSER SUITE, WHICH IS NOW A GATE (ENT-264).
+  #
+  # It used to be the one suite in the repository that nobody ran. AGENTS.md
+  # said so plainly and the sentence has been removed with this job, because
+  # the cost was becoming visible: three bugs fixed in a single week were
+  # invisible to every suite that ran here and visible only in a browser
+  # against the running stack. A suite that catches the class of bug the
+  # project keeps shipping, and that nothing runs, is the most expensive kind
+  # of test to own.
+  #
+  # A CALL RATHER THAN A JOB, because nightly.yml runs the same steps against
+  # main and the two must not drift apart. e2e.yml carries the steps and the
+  # reasoning.
+  #
+  # `auth` and `journey`, and not `surfaces`. That was meant to be a judgement
+  # about minutes and turned out to be a statement of fact: wiring this gate
+  # found that `surfaces.spec.ts` cannot pass at all, because ENT-212's
+  # compliance-profile gate routes every fixture user into onboarding before
+  # they reach any page it visits. nightly.yml says what unblocking it needs.
+  #
+  # IT CANNOT BE GREEN WITHOUT HAVING TESTED SOMETHING, which is the property
+  # the `stack` job above states and this file has repeated since the Supabase
+  # job was removed. scripts/e2e-check.sh enforces it: no console URL means no
+  # run, an unreachable stack fails before a browser starts, and afterwards the
+  # JSON report has to show a test from every spec named and not one skip.
+  e2e:
+    name: Browser end to end
+    uses: ./.github/workflows/e2e.yml
+    with:
+      specs: auth.spec.ts journey.spec.ts

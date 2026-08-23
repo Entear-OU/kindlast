@@ -895,6 +895,38 @@ what they have to do about it, which no commit subject knows.
   the case this fixes, and if the namespace genuinely never arrives, Temporal
   now stays unhealthy and says so instead of a worker exiting with an error
   about schedules.
+### The browser suite is a CI gate (ENT-264)
+
+- **`bun run test:e2e` now runs in CI, against the compose stack and the
+  console the stack serves.** It was the one suite in the repository nothing
+  ran automatically, and the cost had become visible: several bugs fixed in a
+  single week were invisible to every suite CI did run, and visible only in a
+  browser against a running stack. It gates every pull request
+  (`.github/workflows/ci.yml`, the `e2e` job) and runs again nightly against
+  main (`.github/workflows/nightly.yml`).
+- **It drives the production console behind the edge, not the development
+  server.** The two fail differently, and the containerised build is the one a
+  self-hoster runs.
+- **The job cannot report green without having tested anything.**
+  `scripts/e2e-check.sh` wraps the run: it refuses to start without being told
+  which console to drive, it proves the console and the identity provider
+  answer before a browser opens, and afterwards it reads Playwright's JSON
+  report and fails when the run held no tests, when a spec the job named
+  produced none, or when anything was skipped. Playwright exits 0 on the last
+  two, so a parked test or a renamed spec file used to be a green tick over
+  nothing. The wrapper is usable locally with the same arguments.
+- **Three defects in the suite itself, all of which had never run.** Every
+  fixture user now lands on onboarding rather than on the dashboard, because of
+  the compliance-profile gate, and six assertions still waited for the old URL.
+  The invitation fixture passed a `psql` variable through `-c`, which does not
+  interpolate, so it was a syntax error every time. And the sign-out test
+  demanded a password field where the authorization server shows an account
+  picker marked "Signed out", so it failed against a stack where sign-out was
+  working correctly.
+- **`surfaces.spec.ts` is not in either job yet**, and its own header says why:
+  every page it visits sits behind the compliance-profile gate, so a brand-new
+  fixture user never reaches one. Unblocking it needs a fixture that arrives
+  already profiled.
 
 ## [0.1.0]
 

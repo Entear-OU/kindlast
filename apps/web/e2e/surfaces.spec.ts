@@ -5,7 +5,7 @@ import {
   FIXTURE_PASSWORD,
   type FixtureUser,
 } from './fixtures/identity'
-import { onOrigin } from './fixtures/origin'
+import { LANDED_IN_ORG, onOrigin } from './fixtures/origin'
 
 /**
  * The console surfaces, in a real browser, signed in (ENT-207, ENT-210,
@@ -34,6 +34,26 @@ import { onOrigin } from './fixtures/origin'
  *     docker compose -f deploy/compose.yaml up -d
  *     bash scripts/web-env.sh   # after any `down -v`
  *     bun run dev
+ *
+ * # THIS ONE DOES NOT RUN IN CI, AND IT CANNOT PASS TODAY (ENT-264)
+ *
+ * `auth.spec.ts` and `journey.spec.ts` are a gate on every pull request and a
+ * nightly against main. This file is in neither, and the reason is not that
+ * somebody judged it too slow.
+ *
+ * ENT-212 put a compliance-profile gate under `/o/{slug}/`: a member of an
+ * organisation with no profile is routed to `/o/{slug}/onboarding` rather than
+ * to the page they asked for. Every page below is behind that gate, and every
+ * fixture user is brand new, so every navigation here lands on onboarding
+ * instead. That went unnoticed because nothing ran this suite, which is the
+ * whole of what ENT-264 is about.
+ *
+ * Making it run needs a fixture that arrives already profiled, either by
+ * writing a `compliance_profiles` row out of band the way `mintInvitation`
+ * writes an invitation, or by driving the eleven-question interview once and
+ * reusing the session. Both are real work rather than a line of YAML, so this
+ * file is honestly excluded rather than quietly half-passing. When that lands,
+ * add it to the `specs` input in `.github/workflows/nightly.yml`.
  *
  * # AND THERE IS A SHORT LIST THIS STILL CANNOT REACH
  *
@@ -76,7 +96,7 @@ async function enterConsole(page: Page, user: FixtureUser) {
   await page.goto('/sign-in')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await signIn(page, user)
-  await page.waitForURL(onOrigin('/o/[a-z0-9-]+$'), { timeout: 30_000 })
+  await page.waitForURL(LANDED_IN_ORG, { timeout: 30_000 })
 }
 
 async function signIn(page: Page, user: FixtureUser) {
