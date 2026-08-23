@@ -57,18 +57,51 @@ refused at the scope stage, because Zitadel's access tokens carry no `scope`
 claim; see `scripts/validate-core-api-auth.sh`, which explains that gap where
 it shows up.
 
-## What is in here, and what will not stay
+## What is in here, and which half is generated
 
-Two halves, with different futures.
+**Auth, web and Stack health** describe endpoints Zitadel serves and the
+Next.js app redirects to. They will never appear in a proto file, so this
+collection is their source of truth. Nothing generates them and nothing
+rewrites them.
 
-**Auth and web** describe endpoints Zitadel serves and the Next.js app
-redirects to. They will never appear in a proto file, so this collection
-stays their source of truth.
+**Core API v1** describes the proto surface, and part of it is generated
+(ENT-265):
 
-**Core API v1** describes the proto surface. Once `buf` emits OpenAPI
-(design doc §23.2), those requests should be generated from the spec rather
-than maintained by hand, or the two will disagree and the collection will be
-the one that is wrong. Treat the hand-written ones as a stopgap.
+```bash
+bun run gen:postman          # or ./scripts/gen-postman.py
+./scripts/gen-postman.py --check   # what CI runs, without writing
+```
+
+The generator owns three things per request, and nothing else: that a request
+exists at all for every RPC in `proto/`, the Connect path it calls, and the
+block below `**From the contract.**` in its description, which carries the
+required scope and the declared REST binding. CI regenerates in the job that
+already has `buf` and fails on any diff, so an RPC added without a request here
+is a red build rather than a rule somebody remembered.
+
+Everything else stays hand-written, because the contract does not carry it: the
+request's name, its body, its headers, and the prose above the marker. Which
+calls need `Kindlast-Org-Id` is the clearest case. It is not in the proto and
+not derivable from the package, and seven requests contradict the obvious rule,
+in both directions. A request that already exists keeps all of
+it; a new RPC arrives with the proto comment as its prose, a `{}` body and a
+guessed header set for a human to correct.
+
+Two consequences worth knowing before they surprise you.
+
+**Every description names a REST binding that nothing routes.** The proto
+declares one per RPC, so `gen/openapi/openapi.yaml` and any client generated
+from it will use `GET /api/v1/me` and its siblings. The edge routes the Connect
+paths and opens exactly one `/api/v1` path, for the billing webhook. Opening
+the REST surface is ENT-193, with a gateway, CORS policy and rate limiting
+attached to that decision. From here, use the Connect path, which is what each
+request already does.
+
+**The generator does not reformat.** It reads the file into a tree that
+remembers whether each object was written on one line and what bytes each
+string was written with, and prints those back untouched, so a regeneration
+touches only the requests it changed. `scripts/test_gen_postman.py` asserts
+that, including that the assertion can fail.
 
 ## Requests marked NOT YET IMPLEMENTED
 

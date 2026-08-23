@@ -13,6 +13,8 @@
     "start": "bun run --cwd apps/web start",
     "lint": "bun run --cwd apps/web lint",
     "format": "prettier --write .",
+    "gen:postman": "./scripts/gen-postman.py",
+    "gen:postman:check": "./scripts/gen-postman.py --check",
     "version:check": "./scripts/version-check.sh",
     "version:set": "./scripts/version-set.sh",
     "format:check": "prettier --check .",
