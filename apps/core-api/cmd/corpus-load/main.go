@@ -36,6 +36,29 @@
 // for first: it reports every dangling citation at once rather than failing on
 // the first, so a curator can see whether to fix the pack or ingest the
 // regulation it depends on.
+//
+// # OR IT MINTS ITS OWN TOKEN, WHICH IS WHAT LETS A FRESH STACK LOAD (ENT-266)
+//
+// A person at a terminal can paste a token. A job container cannot: a token
+// lives ten minutes, a cold `docker compose up` takes longer than that, and
+// there is nobody there to paste anything. So this also accepts a client id
+// and a secret and mints, through the same client-credentials grant every
+// other machine principal in this system uses, against the same credential
+// file core-api, Intelligence and the Temporal worker read.
+//
+//	corpus-load -client-file /machinekey/core-api-client.json \
+//	  -audience-file /machinekey/core-api-audience.txt \
+//	  -oidc-discovery-url http://auth:8080/.well-known/openid-configuration \
+//	  -oidc-issuer http://localhost:8300 -oidc-host-header localhost:8300
+//
+// Every flag also reads the environment variable core-api reads for the same
+// setting, so the compose job's environment block is a copy of core-api's
+// rather than a second vocabulary to keep in step.
+//
+// The wait is not politeness. `auth` and this job start together, so the first
+// discovery routinely lands before Zitadel answers, and a loader that gave up
+// there would leave a stack whose Regulation page says no regulation has been
+// loaded, which is the state ENT-266 exists to remove.
 package main
 
 import (
@@ -53,29 +76,56 @@ import (
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/corpuspack"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/corpus"
+	"github.com/Entear-OU/kindlast/libs/chassis/oidc"
 )
 
 func main() {
-	if err := run(); err != nil {
+	if err := run(os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "corpus-load: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	api := flag.String("api", envOr("KINDLAST_CORE_API_URL", "http://localhost:8080"),
-		"core-api base URL")
-	token := flag.String("token", os.Getenv("KINDLAST_INGEST_TOKEN"),
-		"a bearer token carrying the internal:ingest scope")
-	dir := flag.String("dir", "data/corpus", "the corpus directory")
-	dryRun := flag.Bool("dry-run", false, "validate and report, write nothing")
-	timeout := flag.Duration("timeout", 2*time.Minute, "per-request timeout")
-	flag.Parse()
+func run(args []string, out io.Writer) error {
+	// Its own flag set rather than the package-level one, so a test can drive
+	// this the way an operator does: with arguments, from the top, more than
+	// once in a process.
+	fs := flag.NewFlagSet("corpus-load", flag.ContinueOnError)
+	fs.SetOutput(out)
 
-	if strings.TrimSpace(*token) == "" {
-		return errors.New("no token: pass -token or set KINDLAST_INGEST_TOKEN. " +
-			"It must carry internal:ingest, which is issued to service clients " +
-			"through client credentials and never to the browser client")
+	api := fs.String("api", envOr("KINDLAST_CORE_API_URL", "http://localhost:8080"),
+		"core-api base URL")
+	token := fs.String("token", os.Getenv("KINDLAST_INGEST_TOKEN"),
+		"a bearer token carrying the internal:ingest scope")
+	dir := fs.String("dir", "data/corpus", "the corpus directory")
+	dryRun := fs.Bool("dry-run", false, "validate and report, write nothing")
+	timeout := fs.Duration("timeout", 2*time.Minute, "per-request timeout")
+
+	// The client-credentials half. Named for the environment variables
+	// core-api already reads, so a deployment configures one vocabulary.
+	issuer := fs.String("oidc-issuer", os.Getenv("KINDLAST_OIDC_ISSUER"),
+		"the issuer the discovery document must declare")
+	discovery := fs.String("oidc-discovery-url", os.Getenv("KINDLAST_OIDC_DISCOVERY_URL"),
+		"where to fetch the discovery document, when that is not the issuer's own address")
+	hostHeader := fs.String("oidc-host-header", os.Getenv("KINDLAST_OIDC_HOST_HEADER"),
+		"the Host header to send to the authorization server, for a split-horizon deployment")
+	audience := fs.String("audience", os.Getenv("KINDLAST_OIDC_AUDIENCE"),
+		"the audience to request, which on Zitadel is the project id")
+	audienceFile := fs.String("audience-file", os.Getenv("KINDLAST_OIDC_AUDIENCE_FILE"),
+		"a file holding the audience, written by the seed because the project id is generated")
+	clientID := fs.String("client-id", os.Getenv("KINDLAST_INTERNAL_CLIENT_ID"),
+		"the client id, which on Zitadel is a service user's username rather than its id")
+	clientSecret := fs.String("client-secret", os.Getenv("KINDLAST_INTERNAL_CLIENT_SECRET"),
+		"the client secret")
+	clientFile := fs.String("client-file", os.Getenv("KINDLAST_INTERNAL_CLIENT_FILE"),
+		"a file holding {clientId, clientSecret}, as the authorization server wrote it")
+	wait := fs.Duration("wait", 2*time.Minute,
+		"how long to wait for the authorization server to start answering")
+	retryInterval := fs.Duration("retry-interval", 2*time.Second,
+		"how long to wait between attempts at the authorization server")
+
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
 
 	packs, err := corpuspack.All(*dir)
@@ -92,6 +142,25 @@ func run() error {
 		}
 	}
 
+	ctx := context.Background()
+
+	bearer, err := resolveToken(ctx, out, credentials{
+		token:         *token,
+		issuer:        *issuer,
+		discoveryURL:  *discovery,
+		hostHeader:    *hostHeader,
+		audience:      *audience,
+		audienceFile:  *audienceFile,
+		clientID:      *clientID,
+		clientSecret:  *clientSecret,
+		clientFile:    *clientFile,
+		wait:          *wait,
+		retryInterval: *retryInterval,
+	})
+	if err != nil {
+		return err
+	}
+
 	base := strings.TrimRight(*api, "/")
 	client := &http.Client{Timeout: *timeout}
 
@@ -99,15 +168,217 @@ func run() error {
 	// the regulations go first. A run that sent obligations first would have
 	// every one of them refused against an empty corpus, entirely correctly.
 	for _, pack := range packs {
-		if err := ingest(context.Background(), client, base, *token, pack, *dryRun); err != nil {
+		if err := ingest(ctx, client, out, base, bearer, pack, *dryRun); err != nil {
 			return err
 		}
 	}
 
 	if *dryRun {
-		fmt.Println("dry run: nothing was written")
+		_, _ = fmt.Fprintln(out, "dry run: nothing was written")
 	}
 	return nil
+}
+
+// credentials is every way this command can come by a bearer token.
+type credentials struct {
+	token        string
+	issuer       string
+	discoveryURL string
+	hostHeader   string
+	audience     string
+	audienceFile string
+	clientID     string
+	clientSecret string
+	clientFile   string
+
+	wait          time.Duration
+	retryInterval time.Duration
+}
+
+// resolveToken returns the token to present, minting one if it was given
+// credentials instead.
+//
+// A token that was handed over is used as it is and nothing is contacted. That
+// is the curator's path, and it stays the shortest one: a person debugging a
+// refused ingest should not also be debugging a token exchange.
+func resolveToken(ctx context.Context, out io.Writer, c credentials) (string, error) {
+	if given := strings.TrimSpace(c.token); given != "" {
+		return given, nil
+	}
+
+	id, secret, err := clientCredentials(c)
+	if err != nil {
+		return "", err
+	}
+	if id == "" || secret == "" {
+		return "", errors.New(
+			"no way in: pass -token (or KINDLAST_INGEST_TOKEN) with a token carrying " +
+				"internal:ingest, or pass -client-id and -client-secret (or -client-file, " +
+				"or KINDLAST_INTERNAL_CLIENT_FILE) so this can mint one. The scope is " +
+				"issued to service clients through client credentials and never to the " +
+				"browser client")
+	}
+
+	audience, err := valueOrFile(c.audience, c.audienceFile)
+	if err != nil {
+		return "", fmt.Errorf("reading the audience: %w", err)
+	}
+	if audience == "" {
+		return "", errors.New(
+			"no audience: pass -audience or -audience-file. On Zitadel it is the " +
+				"project id, which the seed writes to the shared volume because it is " +
+				"generated rather than configured")
+	}
+
+	discoveryURL := strings.TrimSpace(c.discoveryURL)
+	issuer := strings.TrimSpace(c.issuer)
+	if discoveryURL == "" {
+		if issuer == "" {
+			return "", errors.New(
+				"no authorization server: pass -oidc-issuer, or -oidc-discovery-url " +
+					"when the address this process can reach differs from the issuer " +
+					"the document declares")
+		}
+		discoveryURL = strings.TrimSuffix(issuer, "/") + oidc.DiscoveryPath
+	}
+
+	transport := &oidc.Transport{Host: strings.TrimSpace(c.hostHeader)}
+	provider, err := discoverWithRetry(ctx, out, transport, discoveryURL, issuer,
+		c.wait, c.retryInterval)
+	if err != nil {
+		return "", err
+	}
+	if provider.TokenEndpoint == "" {
+		return "", errors.New("the authorization server advertises no token_endpoint, " +
+			"so the corpus loader cannot mint a token to call core-api")
+	}
+
+	source, err := oidc.NewClientCredentials(oidc.ClientCredentialsConfig{
+		Endpoint: provider.TokenEndpoint,
+		ClientID: id,
+		Secret:   secret,
+		Audience: audience,
+		// Both, and the second is the one people leave out. With the audience
+		// scope alone the token authenticates perfectly and carries no roles,
+		// so core-api answers permission_denied and sends somebody reading
+		// grants that are already correct. The plural is not a typo.
+		Scopes: []string{
+			"openid",
+			"urn:zitadel:iam:org:projects:roles",
+			fmt.Sprintf("urn:zitadel:iam:org:project:id:%s:aud", audience),
+		},
+		Transport: transport,
+	})
+	if err != nil {
+		return "", fmt.Errorf("building the corpus loader's token source: %w", err)
+	}
+
+	minted, err := source.Token(ctx)
+	if err != nil {
+		return "", err
+	}
+	return minted, nil
+}
+
+// clientCredentials resolves the client id and secret, from flags or from the
+// file the authorization server wrote.
+//
+// The field names are Zitadel's, read as it writes them rather than
+// transformed by the seed into a shape of our own, which is the same decision
+// core-api's config made and for the same reason: one fewer step that can
+// silently stop matching.
+func clientCredentials(c credentials) (id, secret string, err error) {
+	id = strings.TrimSpace(c.clientID)
+	secret = strings.TrimSpace(c.clientSecret)
+	if id != "" && secret != "" {
+		return id, secret, nil
+	}
+
+	path := strings.TrimSpace(c.clientFile)
+	if path == "" {
+		return id, secret, nil
+	}
+
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		// Loud, unlike core-api's, which treats an unreadable file as "this
+		// deployment does not narrate". Here there is nothing else to fall
+		// back to and the run is about to fail anyway, so it fails saying
+		// which file it could not read.
+		return "", "", fmt.Errorf("reading the client credentials from %s: %w", path, err)
+	}
+
+	var credential struct {
+		ClientID     string `json:"clientId"`
+		ClientSecret string `json:"clientSecret"`
+	}
+	if err := json.Unmarshal(contents, &credential); err != nil {
+		return "", "", fmt.Errorf("parsing the client credentials in %s: %w", path, err)
+	}
+
+	if id == "" {
+		id = strings.TrimSpace(credential.ClientID)
+	}
+	if secret == "" {
+		secret = strings.TrimSpace(credential.ClientSecret)
+	}
+	return id, secret, nil
+}
+
+// valueOrFile prefers a value and falls back to the contents of a file.
+//
+// Trimmed, and the trim is load-bearing: the audience file is written by a
+// shell `printf` onto a shared volume, and an audience carrying a newline
+// produces a scope Zitadel does not recognise and therefore a token with no
+// roles at all.
+func valueOrFile(value, path string) (string, error) {
+	if trimmed := strings.TrimSpace(value); trimmed != "" {
+		return trimmed, nil
+	}
+	if strings.TrimSpace(path) == "" {
+		return "", nil
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(contents)), nil
+}
+
+// discoverWithRetry is core-api's and the worker's, for the same race: `auth`
+// and this job start together and the first discovery lands before Zitadel
+// answers more often than not.
+func discoverWithRetry(
+	ctx context.Context, out io.Writer, transport *oidc.Transport,
+	discoveryURL, expectedIssuer string, wait, interval time.Duration,
+) (*oidc.Provider, error) {
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	deadline := time.Now().Add(wait)
+
+	var lastErr error
+	for attempt := 1; ; attempt++ {
+		provider, err := oidc.DiscoverAt(ctx, transport, discoveryURL, expectedIssuer)
+		if err == nil {
+			return provider, nil
+		}
+		lastErr = err
+
+		if !time.Now().Add(interval).Before(deadline) {
+			return nil, fmt.Errorf(
+				"the authorization server at %s never answered within %s: %w",
+				discoveryURL, wait, lastErr)
+		}
+		_, _ = fmt.Fprintf(out, "waiting for the authorization server at %s (attempt %d): %v\n",
+			discoveryURL, attempt, err)
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(interval):
+		}
+	}
 }
 
 type ingestResponse struct {
@@ -128,7 +399,7 @@ type ingestResponse struct {
 }
 
 func ingest(
-	ctx context.Context, client *http.Client,
+	ctx context.Context, client *http.Client, out io.Writer,
 	base, token string, pack corpus.Pack, dryRun bool,
 ) error {
 	body, err := json.Marshal(map[string]any{
@@ -171,16 +442,17 @@ func ingest(
 	}
 
 	if len(parsed.UnresolvedCitations) > 0 {
-		fmt.Printf("%s: %d citation(s) do not resolve:\n", pack.ID, len(parsed.UnresolvedCitations))
+		_, _ = fmt.Fprintf(out, "%s: %d citation(s) do not resolve:\n",
+			pack.ID, len(parsed.UnresolvedCitations))
 		for _, citation := range parsed.UnresolvedCitations {
-			fmt.Printf("  %s\n", citation)
+			_, _ = fmt.Fprintf(out, "  %s\n", citation)
 		}
 		// Not an error on a dry run, which is what a dry run is for. A real run
 		// would have failed above with a non-200.
 		return nil
 	}
 
-	fmt.Printf("%s: %s\n", pack.ID, summarise(parsed))
+	_, _ = fmt.Fprintf(out, "%s: %s\n", pack.ID, summarise(parsed))
 	return nil
 }
 

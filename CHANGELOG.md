@@ -31,6 +31,31 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **A fresh install comes up with the regulation in it** (ENT-266). Until now
+  `docker compose up` from a clean checkout produced a deployment with an
+  empty `regulatory_documents` and `regulatory_articles`: the Regulation page
+  said no regulation had been loaded, and every obligation said the text
+  behind its citation was not in this deployment. The corpus was committed
+  under `data/corpus/` the whole time and nothing ever loaded it. A
+  `corpus-load` job container now reads that directory and ingests it through
+  the resource server, the same way `migrate` applies the schema and exits.
+
+  **Nothing to run and nothing to configure.** The job mints its own token
+  from the service credential core-api, Intelligence and the Temporal worker
+  already share, so no new client, grant or secret arrives with it. It is
+  idempotent, so a second `up` costs one pass and changes nothing.
+
+  **It needs no route out.** It reads the JSON on disk and reaches only your
+  own `auth` and `core-api`, so an air-gapped install gets the same corpus as
+  any other. `bun run test:airgap` now waits for that job and fails if it
+  could not finish, which is what stops the property being true today and
+  quietly false later.
+
+  **Updating the corpus later** is a `git pull` (or a newer release) and
+  `docker compose -f deploy/compose.yaml up -d --build corpus-load`. That is
+  the one piece of this that is an operator's decision rather than automatic:
+  nothing polls for a newer corpus. `docs/self-hosting.md` has the section.
+
 - **The machine surface an agentic Watcher needs: what it may read, and the
   one thing it may write** (ENT-258, first of three). The Watcher today is
   three fixed detectors over the compliance profile and the DSAR table; it

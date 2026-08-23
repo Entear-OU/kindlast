@@ -93,6 +93,16 @@ corpus-load -api http://localhost:8080 -token "$TOKEN" -dry-run
 The dry run reports every unresolved citation at once. No Go change is needed
 for any of this, which is the property ENT-233 added and the thing to preserve.
 
+Once it validates, put it in the local stack:
+
+```bash
+docker compose -f deploy/compose.yaml up -d --build corpus-load
+```
+
+That is the same job a fresh `up` runs (ENT-266), so the pack you just added
+arrives by the path a self-hoster's install uses rather than by a command only
+maintainers know.
+
 ### 2. The obligations, which are data with a vocabulary
 
 Each obligation carries `appliesWhen`, saying who it binds. **The vocabulary is

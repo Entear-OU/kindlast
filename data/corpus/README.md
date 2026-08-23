@@ -3,7 +3,18 @@
 Source data for the Analyst's regulatory knowledge base.
 
 Ingested through `IngestService.IngestCorpus` on the platform surface, by the
-`corpus-load` command:
+`corpus-load` command.
+
+**A fresh `docker compose up` loads it, and nobody has to run anything**
+(ENT-266). The `corpus-load` job container runs that command with the same
+service credential core-api, Intelligence and the Temporal worker use, mints
+its own token, and exits. It is idempotent, so a second `up` reloads whatever
+changed here and leaves the rest alone. Before it existed, a clean checkout
+came up with `regulatory_documents` and `regulatory_articles` empty, and the
+product said the text behind every citation was not in the deployment while
+these files sat in the checkout.
+
+To load it by hand, which is what a curator wants while editing:
 
 ```bash
 go run ./apps/core-api/cmd/corpus-load -api http://localhost:8080 -token "$TOKEN" -dry-run
@@ -12,6 +23,12 @@ go run ./apps/core-api/cmd/corpus-load -api http://localhost:8080 -token "$TOKEN
 The token needs the `internal:ingest` scope. The dry run validates everything,
 writes nothing, and reports every unresolved citation at once, so it is the one
 to reach for first.
+
+To re-run the job instead, with no token to fetch:
+
+```bash
+docker compose -f deploy/compose.yaml up -d --build corpus-load
+```
 
 Nothing here is loaded by a script with a database connection. Supabase and the
 `bun run ingest:*` scripts this file used to describe were removed in ENT-200,

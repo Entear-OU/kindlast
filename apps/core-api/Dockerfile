@@ -49,11 +49,40 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
       -o /out/core-api \
       ./apps/core-api/cmd/core-api
 
+# The corpus loader, from the same source tree and the same module cache
+# (ENT-266). It is a job rather than a server: it reads `data/corpus/`, mints
+# its own token, calls IngestCorpus once per pack and exits.
+#
+# Built here rather than in a Dockerfile of its own so the two binaries share
+# one `go mod download` and one compile of the packages they have in common.
+# The two runtime stages below stay separate, because the resource server has
+# no business carrying a loader and the loader has no business carrying a
+# server.
+RUN CGO_ENABLED=0 GOOS=linux go build \
+      -trimpath \
+      -ldflags='-s -w' \
+      -o /out/corpus-load \
+      ./apps/core-api/cmd/corpus-load
+
+# The corpus loader's runtime, on the same base and for the same reasons.
+#
+# NOT the last stage in this file, deliberately. `docker build -f
+# apps/core-api/Dockerfile .` with no --target builds whatever comes last, and
+# what that produces is documented at the top of this file as the resource
+# server. So this sits above it and compose asks for it by name.
+FROM gcr.io/distroless/static-debian12:nonroot AS corpus-load
+
+COPY --from=build /out/corpus-load /corpus-load
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/corpus-load"]
+
 # distroless/static: no shell, no package manager, no libc. Around 15-25 MB
 # total, and a meaningfully smaller attack surface to describe in a security
 # questionnaire than an Alpine base (§0.4). The consequence is that the compose
 # healthcheck cannot be a curl, so the binary probes itself; see main.go.
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot AS core-api
 
 COPY --from=build /out/core-api /core-api
 
