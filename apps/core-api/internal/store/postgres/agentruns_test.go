@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/stackenv"
 )
@@ -88,6 +89,30 @@ func aRun(org uuid.UUID) AgentRun {
 	}
 }
 
+// agentTxFor opens a producer transaction pointed at one organisation, for
+// tests that read a row back after writing it.
+//
+// Until 00037 (ENT-272) these read backs went straight at `store.pool`, which
+// worked because `agent_runs_agent` was `for all using (true)`: the producer
+// could read any organisation's run records from a session that had never
+// said which organisation it meant. That is the thing the migration removed,
+// so a test that reads one has to name a tenant the same way the store's own
+// methods do. Reaching past the policy with the migrator would have been the
+// shorter fix and the wrong one, because then these tests would no longer be
+// running against the role the code runs as.
+func agentTxFor(t *testing.T, store *AgentStore, org uuid.UUID) pgx.Tx {
+	t.Helper()
+	tx, err := store.pool.Begin(t.Context())
+	if err != nil {
+		t.Fatalf("beginning a producer read: %v", err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	if err := setLocal(t.Context(), tx, "app.current_org_id", org.String()); err != nil {
+		t.Fatalf("pointing the read at %s: %v", org, err)
+	}
+	return tx
+}
+
 func TestRecordingARunStoresWhatItWasGiven(t *testing.T) {
 	store := agentStore(t)
 	org := seedOrg(t)
@@ -103,7 +128,7 @@ func TestRecordingARunStoresWhatItWasGiven(t *testing.T) {
 	var skill, model, outcome string
 	var toolCalls, citations string
 	var onBehalfOf *uuid.UUID
-	err = store.pool.QueryRow(t.Context(), `
+	err = agentTxFor(t, store, org).QueryRow(t.Context(), `
 		select skill, model, outcome, tool_calls::text, citations::text,
 		       on_behalf_of_user_id
 		  from agent_runs where id = $1`, id).
@@ -147,7 +172,7 @@ func TestARefusalIsARunAndIsRecorded(t *testing.T) {
 	}
 
 	var outcome, detail, citations string
-	err = store.pool.QueryRow(t.Context(),
+	err = agentTxFor(t, store, org).QueryRow(t.Context(),
 		`select outcome, outcome_detail, citations::text from agent_runs where id = $1`, id).
 		Scan(&outcome, &detail, &citations)
 	if err != nil {
@@ -201,7 +226,7 @@ func TestACriticsRefusalKeepsTheTextAndTheRuleThatRejectedIt(t *testing.T) {
 	}
 
 	var refusal string
-	err = store.pool.QueryRow(t.Context(),
+	err = agentTxFor(t, store, org).QueryRow(t.Context(),
 		`select refusal::text from agent_runs where id = $1`, id).Scan(&refusal)
 	if err != nil {
 		t.Fatalf("reading the refusal back: %v", err)
@@ -224,7 +249,7 @@ func TestACriticsRefusalKeepsTheTextAndTheRuleThatRejectedIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recording a clean run: %v", err)
 	}
-	if err := store.pool.QueryRow(t.Context(),
+	if err := agentTxFor(t, store, org).QueryRow(t.Context(),
 		`select refusal::text from agent_runs where id = $1`, clean).Scan(&refusal); err != nil {
 		t.Fatalf("reading the clean run back: %v", err)
 	}

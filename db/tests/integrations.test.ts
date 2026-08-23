@@ -459,10 +459,20 @@ describe.skipIf(!reachable)(
       // Column-level select. The agent holds no key, so a ciphertext would buy
       // an attacker little; naming the columns costs one line and removes the
       // argument entirely.
+      //
+      // No organisation is set for this half on purpose. Column privileges are
+      // checked before row level security, so this is denied for the reason
+      // the test is about rather than for the reason ENT-272 added below.
       await expect(
         agent.query(`select credential_ciphertext from integrations`),
       ).rejects.toThrow(/permission denied/i)
 
+      // And the readable half needs one, since 00037 (ENT-272). `integrations`
+      // used to be `for select to kindlast_agent using (true)`, so this read
+      // worked from a session that had never said whose connections it wanted.
+      await agent.query(`select set_config('app.current_org_id', $1, false)`, [
+        orgA,
+      ])
       const readable = await agent.query(
         `select display_name from integrations where id = $1`,
         [connection],

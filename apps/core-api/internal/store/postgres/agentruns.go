@@ -42,13 +42,24 @@ type AgentRun struct {
 
 // RecordAgentRun writes one run and returns its id.
 //
-// # NO GUCs, AND THAT IS THE SAME EXCEPTION RunSweep TAKES
+// # NO USER GUC, AND THAT IS THE SAME EXCEPTION RunSweep TAKES
 //
 // The agent runs for organisations nobody is signed in to, so there is no
-// member to name and no `app.current_user_id` to set. Its policy on
-// `agent_runs` is unconditional for exactly that reason (00019), and what
-// keeps the exception honest is that the role can reach almost nothing else
-// and that every row it writes names the organisation it was for.
+// member to name and no `app.current_user_id` to set.
+//
+// There IS an organisation, and until ENT-272 this did not say so. The policy
+// on `agent_runs` was `for all using (true)` (00019), justified by the agent
+// having no tenancy GUC to be checked against, and this method took that at
+// its word: no transaction, a bare `pool.QueryRow`, and the org travelling
+// only as `$1`. That made the value in the column a claim by the caller
+// rather than a thing the database had checked, and it made a caller that
+// passed the wrong org indistinguishable from one that passed the right one.
+//
+// 00037 made the policy org equality, so the organisation is now set on the
+// session and the insert is checked against it. The `returning id` is the
+// half worth noticing: `with check` admits the write, and then the SELECT
+// policy has to admit the row on the way back out, so this would fail rather
+// than silently return nothing if the two ever disagreed.
 //
 // # THE ORG COMES FROM THE MESSAGE, WHICH IS WORTH BEING NERVOUS ABOUT
 //
@@ -99,8 +110,18 @@ func (a *AgentStore) RecordAgentRun(ctx context.Context, run AgentRun) (uuid.UUI
 		)
 		returning id`
 
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("postgres: beginning the agent run record: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := setLocal(ctx, tx, "app.current_org_id", run.OrgID.String()); err != nil {
+		return uuid.Nil, err
+	}
+
 	var id uuid.UUID
-	err := a.pool.QueryRow(ctx, query,
+	err = tx.QueryRow(ctx, query,
 		run.OrgID, run.Skill, run.SkillVersion, run.Model, run.ModelVersion,
 		run.OnBehalfOfUserID,
 		nullifEmpty(run.RequestJSON), nullifEmpty(run.ToolCallsJSON), nullifEmpty(run.CitationsJSON),
@@ -110,6 +131,10 @@ func (a *AgentStore) RecordAgentRun(ctx context.Context, run AgentRun) (uuid.UUI
 	).Scan(&id)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("postgres: recording the agent run: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return uuid.Nil, fmt.Errorf("postgres: committing the agent run record: %w", err)
 	}
 	return id, nil
 }
