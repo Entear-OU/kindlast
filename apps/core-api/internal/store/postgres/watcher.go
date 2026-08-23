@@ -354,6 +354,15 @@ type Signal struct {
 // corpus does not have.
 var ErrUnknownObligation = errors.New("postgres: no such obligation")
 
+// AgentDedupPrefix namespaces every deduplication key an agent writes, so one
+// can never land on a row a deterministic detector owns. See RaiseSignal for
+// what happened before it existed.
+//
+// Exported because the test that proves the property has to know the shape of
+// the key it is looking for, and a test that hard-codes "agent:" beside a
+// constant is a test that passes after somebody changes the constant.
+const AgentDedupPrefix = "agent:"
+
 // RaiseSignal writes one signal through the same function the deterministic
 // detectors use.
 //
@@ -375,6 +384,34 @@ var ErrUnknownObligation = errors.New("postgres: no such obligation")
 // or no finding at all, days later, with nobody able to say why. Checked here,
 // the run is refused while the model that produced it is still on the other
 // end of the call.
+//
+// # AND THE DEDUPLICATION KEY IS NAMESPACED, WHICH IS NOT TIDINESS (ENT-258)
+//
+// `emit_watcher_finding` upserts on `(profile_id, dedup_key)`, so whoever
+// writes a key OWNS the row it lands on. The deterministic detectors use keys
+// of their own shape, `gap:obligation:{slug}` and the rest, and a watch is
+// shown every open signal with its key, because a run that is not told what is
+// already open repeats it.
+//
+// Those two facts together were a hole, and it was found by
+// `scripts/watcher-comparison.py` the first time that gate ran: a model that
+// echoes back a key it was shown does not raise a duplicate, it OVERWRITES the
+// detector's row. The observed case rewrote "Profile gap: Records of
+// Processing Activities" and dropped its severity from high to medium, which
+// is a deterministic finding silently restated by a 4B and exactly the failure
+// this product cannot have.
+//
+// Prefixing closes it structurally rather than by a check that has to be
+// remembered. An agent-raised key cannot collide with a detector's, whatever
+// the model emits, including a model deliberately trying to. Deduplication
+// among agent-raised signals is unaffected, because they are all prefixed the
+// same way, and the prefix is visible in the context a later run reads, which
+// tells it which signals were its own.
+//
+// The alternative was a `source` column and a policy refusing cross-source
+// updates. It is the better long-term shape and it is a migration, a backfill
+// and a new predicate on the hot path, for a property one prefix already
+// gives.
 func (a *AgentStore) RaiseSignal(ctx context.Context, orgID string, signal Signal) (id string, raised bool, err error) {
 	org, err := uuid.Parse(orgID)
 	if err != nil {
@@ -416,13 +453,18 @@ func (a *AgentStore) RaiseSignal(ctx context.Context, orgID string, signal Signa
 		}
 	}
 
+	// Namespaced before anything reads or writes it, so every lookup below and
+	// the upsert itself see the same key. See the header for what happened
+	// without this.
+	dedupKey := AgentDedupPrefix + signal.DedupKey
+
 	// Was it already open? Read before the write, for the same reason the act
 	// path reads a status before acting: afterwards the answer is always yes.
 	var existing string
 	err = tx.QueryRow(ctx, `
 		select id::text from watcher_findings
 		 where profile_id = $1::uuid and dedup_key = $2 and status = 'open'
-	`, profileID, signal.DedupKey).Scan(&existing)
+	`, profileID, dedupKey).Scan(&existing)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", false, fmt.Errorf("postgres: looking for an open signal: %w", err)
 	}
@@ -435,7 +477,7 @@ func (a *AgentStore) RaiseSignal(ctx context.Context, orgID string, signal Signa
 	var signalID string
 	if err := tx.QueryRow(ctx, `
 		select emit_watcher_finding($1::uuid, $2, $3, $4, $5, $6, $7, $8::jsonb)::text
-	`, profileID, signal.Kind, signal.DedupKey, signal.Title,
+	`, profileID, signal.Kind, dedupKey, signal.Title,
 		nullIfEmpty(signal.Detail), signal.Severity,
 		nullIfEmpty(signal.ObligationSlug), metadata).Scan(&signalID); err != nil {
 		return "", false, fmt.Errorf("postgres: raising a signal: %w", err)

@@ -162,7 +162,7 @@ func sweepOrganisation(ctx workflow.Context, orgID string) (SweepResult, error) 
 		return SweepResult{}, err
 	}
 
-	// THE AGENT BETWEEN THE TWO, WHEN IT IS ON (ENT-258).
+	// THE AGENT BETWEEN THE TWO (ENT-258).
 	//
 	// After the detectors so it is shown what they already raised, which is
 	// most of what stops it repeating them. Before the Analyst so a signal it
@@ -193,30 +193,51 @@ func sweepOrganisation(ctx workflow.Context, orgID string) (SweepResult, error) 
 // agenticWatcherEnabled reports whether this deployment runs the agentic
 // Watcher as part of a sweep.
 //
+// # ON UNLESS SOMEBODY TURNS IT OFF (ENT-258, PR 3)
+//
+// It shipped off, because a PR that had not run the comparison should not have
+// turned an unproven agent loose on every customer's daily sweep. The
+// comparison runs in CI now, against a real model on a real stack, and what it
+// gates is the part that matters: every signal the fixed detectors raised
+// survives the agent untouched, nothing is written outside the vocabulary or
+// citing an obligation the run was not offered, and no finding is written.
+//
+// So the default moved. `KINDLAST_WATCHER_AGENT=0` turns it off, and the
+// reason to reach for that is cost rather than safety: a watch is several
+// model calls where a draft is one, so a deployment running a local model on
+// modest hardware pays minutes per organisation per sweep.
+//
 // # WHY A SIDE EFFECT AND NOT os.Getenv
 //
 // A workflow must produce the same decisions when it is replayed, and an
-// environment read is not a decision Temporal recorded: an operator who turns
-// the flag on between a run and its replay would make the replay take a
-// different path, and the SDK fails the workflow with a non-determinism error
-// rather than silently diverging. `workflow.SideEffect` records the value in
-// the history the first time and hands back the recorded one ever after, which
-// is exactly the property wanted here.
+// environment read is not a decision Temporal recorded: an operator who
+// changes the variable between a run and its replay would make the replay take
+// a different path, and the SDK fails the workflow with a non-determinism
+// error rather than silently diverging. `workflow.SideEffect` records the
+// value in the history the first time and hands back the recorded one ever
+// after, which is exactly the property wanted here.
 func agenticWatcherEnabled(ctx workflow.Context) bool {
 	var enabled bool
 	if err := workflow.SideEffect(ctx, func(workflow.Context) any {
-		return truthy(os.Getenv("KINDLAST_WATCHER_AGENT"))
+		return !falsy(os.Getenv("KINDLAST_WATCHER_AGENT"))
 	}).Get(&enabled); err != nil {
-		return false
+		// A side effect that cannot be recorded is a broken history, not a
+		// reason to change what the deployment does. Default to the default.
+		return true
 	}
 	return enabled
 }
 
-// truthy is the workers module's reading of a boolean environment variable,
-// matching internal/config so an operator does not have to learn two.
-func truthy(value string) bool {
+// falsy reads the off switch, and reads ONLY the off switch.
+//
+// Unset means on, so this asks whether somebody said no rather than whether
+// somebody said yes. Written this way round on purpose: a `truthy` helper with
+// an inverted default is the shape where somebody eventually reads
+// `truthy(os.Getenv(...))` at a glance and concludes the opposite of what the
+// code does.
+func falsy(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1", "true", "yes", "on":
+	case "0", "false", "no", "off":
 		return true
 	default:
 		return false

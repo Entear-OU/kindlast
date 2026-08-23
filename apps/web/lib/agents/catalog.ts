@@ -111,22 +111,32 @@ export const AGENTS: readonly Agent[] = [
   {
     slug: 'watcher',
     name: 'The Watcher',
-    does: 'Reads your profile against the obligations that apply to you.',
-    status: 'partly-working',
+    does: 'Looks at your profile, what you have connected, and what has changed, and raises what is worth your attention.',
+    status: 'working',
     runs: 'When a sweep is triggered for your organisation, and once a day for every organisation.',
     effects:
-      'Writes evidence and signals. It never changes a record and never sends anything.',
-    // STILL `partly-working`, AND THE SKILL BELOW IS WHY THAT IS NOT A
-    // CONTRADICTION (ENT-258, PR 2).
+      'Raises signals, and that is the only thing it can write. It cannot write a finding, change a record or send anything.',
+    // `working` AS OF ENT-258 PR 3, AND WHAT CHANGED (ENT-232 asks the status
+    // to say so).
     //
-    // The skill exists, and a deployment that sets KINDLAST_WATCHER_AGENT runs
-    // it. What has not happened is the comparison: nobody has yet shown that
-    // the agent finds at least what the three fixed detectors find, and until
-    // somebody has, saying "Working" here would be the console making a claim
-    // ahead of the evidence. That comparison is the next change and it is what
-    // moves this to `working`.
+    // Two things run now where one ran before. The three fixed detectors are
+    // unchanged and still run first; the agent runs after them, is shown what
+    // they raised, and adds what no fixed rule was written to look for.
+    //
+    // The evidence for saying "Working" rather than "Working, in part" is
+    // `scripts/watcher-comparison.py`, which runs in CI against a real model on
+    // a real stack every time this repository is changed. It does not assert
+    // that the agent covers the detectors, because it is told not to repeat
+    // them; it asserts that their signals survive it untouched, that nothing it
+    // writes is outside the vocabulary or cites an obligation it was not
+    // offered, and that no finding is written.
+    //
+    // WHAT IS STILL MISSING IS THE READ PATH, WHICH IS THE ANALYST'S PROBLEM
+    // TOO. Every run leaves an `agent_runs` record and the console cannot yet
+    // show you one, so `remaining` says that rather than claiming nothing is
+    // left.
     remaining:
-      'The skill exists and is off by default. It becomes the Watcher for everyone once it has been shown to find at least what the fixed rules find.',
+      'The console cannot yet show you the runs it has made, so you can see what it raised but not how it decided.',
     skill: {
       module: 'watcher',
       name: 'watcher.sweep',

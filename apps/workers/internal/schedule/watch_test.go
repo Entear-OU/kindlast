@@ -16,9 +16,9 @@ import (
 // registers, which is what lets the chain be asserted without a Python
 // process; what is asserted is this package's behaviour, not the agent's.
 //
-// The flag is set with `t.Setenv` rather than faked, because the thing worth
-// testing is that the switch reaches the workflow through `workflow.SideEffect`
-// and that a deployment which has not set it runs exactly what it ran before.
+// The switch is set with `t.Setenv` rather than faked, because the thing worth
+// testing is that it reaches the workflow through `workflow.SideEffect` and
+// that a deployment which sets nothing gets the default (ENT-258, PR 3: on).
 
 type fakeWatcherAPI struct {
 	mu          sync.Mutex
@@ -87,8 +87,7 @@ func registerWatch(env *testsuite.TestWorkflowEnvironment, a *Activities, agent 
 }
 
 func TestTheAgenticWatcherRunsBetweenTheDetectorsAndTheAnalyst(t *testing.T) {
-	t.Setenv("KINDLAST_WATCHER_AGENT", "1")
-
+	// Nothing set: the default, which is what every deployment gets.
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 
@@ -139,10 +138,12 @@ func TestTheAgenticWatcherRunsBetweenTheDetectorsAndTheAnalyst(t *testing.T) {
 	}
 }
 
-func TestWithoutTheFlagTheSweepIsExactlyWhatItWasBefore(t *testing.T) {
-	// Deliberately not set. This is every deployment today, and the property
-	// is that the agent costs it nothing at all: not an activity, not a
-	// call to core-api, not a line in the history.
+func TestTurningItOffLeavesTheSweepExactlyAsItWas(t *testing.T) {
+	// The off switch, and the property is that it costs nothing at all: not an
+	// activity, not a call to core-api, not a line in the history. An operator
+	// who turns this off because a local model is too slow gets back precisely
+	// the sweep they had before, rather than a cheaper version of the new one.
+	t.Setenv("KINDLAST_WATCHER_AGENT", "0")
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 
@@ -163,16 +164,14 @@ func TestWithoutTheFlagTheSweepIsExactlyWhatItWasBefore(t *testing.T) {
 		t.Fatalf("reading the result: %v", err)
 	}
 	if result.Watch.Ran {
-		t.Fatal("the agentic Watcher ran without the flag")
+		t.Fatal("the agentic Watcher ran with KINDLAST_WATCHER_AGENT=0")
 	}
 	if watchers.calls != 0 || len(agent.handed) != 0 {
 		t.Fatalf("the step cost %d loads and %d watches, want none", watchers.calls, len(agent.handed))
 	}
 }
 
-func TestADeploymentWithTheFlagAndNoIntelligenceCostsOneActivity(t *testing.T) {
-	t.Setenv("KINDLAST_WATCHER_AGENT", "1")
-
+func TestADeploymentWithNoIntelligenceCostsOneActivity(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 
@@ -199,8 +198,6 @@ func TestADeploymentWithTheFlagAndNoIntelligenceCostsOneActivity(t *testing.T) {
 }
 
 func TestAnOrganisationPartWayThroughOnboardingIsNotWatched(t *testing.T) {
-	t.Setenv("KINDLAST_WATCHER_AGENT", "1")
-
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 
@@ -222,8 +219,6 @@ func TestAnOrganisationPartWayThroughOnboardingIsNotWatched(t *testing.T) {
 }
 
 func TestARefusedWatchIsRecordedAndTheSweepStillSucceeds(t *testing.T) {
-	t.Setenv("KINDLAST_WATCHER_AGENT", "1")
-
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 
@@ -260,5 +255,33 @@ func TestARefusedWatchIsRecordedAndTheSweepStillSucceeds(t *testing.T) {
 	}
 	if result.Watch.Detail == "" {
 		t.Fatal("a refusal with no reason in the history is a refusal nobody can act on")
+	}
+}
+
+// EVERY VALUE THE OFF SWITCH ACCEPTS, AND EVERYTHING ELSE MEANING ON.
+//
+// Written out because the default is on and the helper reads the negative,
+// which is the shape somebody skim-reading gets backwards. A deployment that
+// sets KINDLAST_WATCHER_AGENT=true meaning "yes please" must not be switched
+// off by a helper that only understood "1".
+func TestWhatTheOffSwitchAccepts(t *testing.T) {
+	for _, c := range []struct {
+		value string
+		off   bool
+	}{
+		{"", false},
+		{"0", true},
+		{"false", true},
+		{"FALSE", true},
+		{" no ", true},
+		{"off", true},
+		{"1", false},
+		{"true", false},
+		{"yes", false},
+		{"anything else", false},
+	} {
+		if got := falsy(c.value); got != c.off {
+			t.Errorf("falsy(%q) = %v, want %v", c.value, got, c.off)
+		}
 	}
 }

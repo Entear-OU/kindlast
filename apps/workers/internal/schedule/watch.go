@@ -42,17 +42,15 @@ import (
 // the citation and writes under the producer role's policies. The Python worker
 // gains one call it may make, not a database handle.
 //
-// # OFF UNLESS AN OPERATOR TURNS IT ON
+// # ON UNLESS SOMEBODY TURNS IT OFF (ENT-258, PR 3)
 //
-// `KINDLAST_WATCHER_AGENT=1`. The deterministic detectors are what every
-// deployment runs today and they stay the baseline ENT-258 compares against;
-// turning an unproven agent loose on every customer's daily sweep is not
-// something a PR that has not run the comparison yet should do. PR 3 runs the
-// comparison in CI and is where the default changes.
+// `KINDLAST_WATCHER_AGENT=0` turns it off. It shipped off and the default moved
+// once `scripts/watcher-comparison.py` was running in CI against a real model:
+// see `agenticWatcherEnabled` for what that gates and why cost rather than
+// safety is the reason to reach for the switch.
 //
-// A deployment with the flag on and no Intelligence costs one activity and does
-// nothing: the load step answers `intelligence_available: false` and the step
-// returns.
+// A deployment with no Intelligence costs one activity and does nothing: the
+// load step answers `intelligence_available: false` and the step returns.
 
 // Registered activity names. WatchActivityName is the name the Python worker
 // registers; it is pinned here and in

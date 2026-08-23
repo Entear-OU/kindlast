@@ -79,12 +79,24 @@ describe('the agent catalogue (ENT-232)', () => {
   // The honesty assertion, and the reason this file exists. ENT-161 happened
   // because a dashboard said everything was fine about work nothing had done.
   // Exactly one of the four is a working skill today; two are not built at all.
-  it('claims one working agent, not four', () => {
-    const working = AGENTS.filter((a) => a.status === 'working')
-    expect(working.map((a) => a.slug)).toEqual(['analyst'])
+  it('claims two working agents, not four', () => {
+    // The Watcher joined the Analyst in ENT-258, and the count is asserted
+    // rather than the absence of a count for the reason this test was written
+    // for: the page used to make one claim about all four, and the failure
+    // that hides is a placeholder reading like a feature. A third agent
+    // becoming "working" should have to change this line and say why in the
+    // commit that does.
+    expect(
+      AGENTS.filter((a) => a.status === 'working').map((a) => a.slug),
+    ).toEqual(['watcher', 'analyst'])
     expect(
       AGENTS.filter((a) => a.status === 'not-built').map((a) => a.slug),
     ).toEqual(['messenger', 'hands'])
+    // Nothing is partly working now. The state still exists and is still
+    // rendered, because it is the honest answer for the next agent that gets
+    // half built, and an unused state is cheaper than the pressure to call
+    // something finished for want of a label.
+    expect(AGENTS.filter((a) => a.status === 'partly-working')).toHaveLength(0)
   })
 
   it('says what remains for every agent that is not finished', () => {

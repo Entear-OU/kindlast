@@ -63,6 +63,41 @@ what they have to do about it, which no commit subject knows.
   through an RPC that validates the vocabulary, requires a deduplication key
   and resolves the citation before anything is written.
 
+- **The agentic Watcher runs for everyone, and the comparison against the fixed
+  detectors runs in CI** (ENT-258, third of three). The rail now says the
+  Watcher is Working rather than Working in part, and what changed is that two
+  things run where one ran before: the three fixed detectors are unchanged and
+  still go first, and the agent runs after them, is shown what they raised, and
+  adds what no fixed rule was written to look for.
+
+  **`KINDLAST_WATCHER_AGENT=0` on the workers process turns the agent off** and
+  gives you back exactly the sweep you had before, not a cheaper version of the
+  new one. The reason to reach for it is cost rather than safety: a watch is
+  several model calls where a narrative draft is one, so a deployment running a
+  local model on modest hardware pays minutes per organisation per sweep.
+
+  `scripts/watcher-comparison.py` runs on every change to this repository,
+  against a real model on a real stack. It deliberately does not assert that the
+  agent covers the detectors, because it is shown their output and told not to
+  repeat it. It asserts what must hold whatever the model decided: their signals
+  survive it untouched, nothing is written outside the vocabulary or citing an
+  obligation the run was not offered, and no finding is written.
+
+- **Fixed: an agent could overwrite a signal a deterministic detector had
+  raised** (ENT-258). Signals are deduplicated on `(profile, key)`, so whoever
+  writes a key owns the row it lands on, and a watch is shown every open signal
+  with its key so that it does not repeat one. Together those meant a model
+  that echoed back a key it had been shown did not create a duplicate, it
+  rewrote the detector's row.
+
+  Found by the comparison above the first time it ran, on a fixture whose
+  "Profile gap: Records of Processing Activities" came back retitled and
+  downgraded from high to medium. **Every deduplication key an agent writes is
+  now namespaced**, so the collision is impossible rather than checked for. If
+  you have run the agent from a pre-release build, its signals will be re-raised
+  once under the new keys and the old rows stay open until somebody resolves
+  them.
+
 ### Changed
 
 - **Approving a finding creates its record a moment later, through the

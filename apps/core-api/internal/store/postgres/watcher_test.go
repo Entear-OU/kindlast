@@ -229,11 +229,14 @@ func TestRaisingTheSameSignalTwiceKeepsOneOpenRow(t *testing.T) {
 
 	var rows int
 	var title, severity string
+	// The stored key is namespaced (ENT-258, PR 3), so a lookup by the key the
+	// caller passed finds nothing. Through the constant rather than a literal,
+	// so a test hard-coding "agent:" cannot outlive a change to it.
 	if err := migratorPool(t).QueryRow(context.Background(), `
 		select count(*) over (), title, severity::text
 		  from watcher_findings
 		 where profile_id = $1::uuid and dedup_key = $2
-	`, profile, signal.DedupKey).Scan(&rows, &title, &severity); err != nil {
+	`, profile, AgentDedupPrefix+signal.DedupKey).Scan(&rows, &title, &severity); err != nil {
 		t.Fatalf("reading the signal back: %v", err)
 	}
 	if rows != 1 {
@@ -262,7 +265,7 @@ func TestASignalCitingAnUnknownObligationIsRefused(t *testing.T) {
 
 	var rows int
 	if err := migratorPool(t).QueryRow(context.Background(),
-		`select count(*) from watcher_findings where dedup_key = 'gap:invented'`).Scan(&rows); err != nil {
+		`select count(*) from watcher_findings where dedup_key like '%gap:invented'`).Scan(&rows); err != nil {
 		t.Fatalf("counting: %v", err)
 	}
 	if rows != 0 {
@@ -291,7 +294,7 @@ func TestASignalCitingARealObligationKeepsTheCitation(t *testing.T) {
 	var stored string
 	if err := migratorPool(t).QueryRow(context.Background(), `
 		select obligation_slug from watcher_findings where dedup_key = $1
-	`, "update:"+slug).Scan(&stored); err != nil {
+	`, AgentDedupPrefix+"update:"+slug).Scan(&stored); err != nil {
 		t.Fatalf("reading back: %v", err)
 	}
 	if stored != slug {
@@ -362,5 +365,106 @@ func TestTheObligationsOfferedAreTheOnesThatApplyToThisOrganisation(t *testing.T
 	}
 	if len(context.Obligations) != applicable {
 		t.Fatalf("offered %d obligations and %d apply", len(context.Obligations), applicable)
+	}
+}
+
+// AN AGENT CANNOT OVERWRITE A DETERMINISTIC DETECTOR'S SIGNAL (ENT-258, PR 3).
+//
+// `emit_watcher_finding` upserts on `(profile_id, dedup_key)`, so whoever
+// writes a key owns the row it lands on. A watch is shown every open signal
+// WITH its deduplication key, because a run that is not told what is already
+// open repeats it. Those two facts were a hole: a model that echoes back a key
+// it was shown does not create a duplicate, it rewrites the detector's row.
+//
+// It is not hypothetical. `scripts/watcher-comparison.py` caught it the first
+// time that gate ran, against a real stack: the fixture's "Profile gap:
+// Records of Processing Activities" came back retitled and downgraded from
+// high to medium. A deterministic finding silently restated by a model is the
+// failure this product cannot have.
+//
+// The fix is the prefix, so the collision is impossible rather than merely
+// checked for. This test is the one that goes red if somebody removes it.
+func TestAnAgentCannotOverwriteADeterministicSignal(t *testing.T) {
+	agent := agentStore(t)
+	org, profile := seedWatcherOrg(t)
+	pool := migratorPool(t)
+
+	// A signal in exactly the shape a detector writes: no prefix, and a key
+	// the agent is about to be handed.
+	const detectorKey = "gap:obligation:gdpr-art-30-ropa"
+	if _, err := pool.Exec(t.Context(), `
+		insert into watcher_findings
+		  (profile_id, org_id, kind, dedup_key, title, severity, status)
+		values ($1::uuid, $2, 'profile_gap', $3,
+		        'Profile gap: Records of Processing Activities', 'high', 'open')
+	`, profile, org, detectorKey); err != nil {
+		t.Fatalf("seeding a detector signal: %v", err)
+	}
+
+	// The agent raises using the detector's own key, which is what a model
+	// that read its context and copied a value would do.
+	id, raised, err := agent.RaiseSignal(t.Context(), org.String(), Signal{
+		Kind:     "profile_gap",
+		DedupKey: detectorKey,
+		Title:    "Something the model decided to say instead",
+		Severity: "low",
+	})
+	if err != nil {
+		t.Fatalf("raising: %v", err)
+	}
+	if !raised {
+		t.Fatal("the agent's signal was treated as already open, which means it landed on the detector's row")
+	}
+
+	// The detector's row is untouched.
+	var title, severity string
+	if err := pool.QueryRow(t.Context(), `
+		select title, severity from watcher_findings
+		 where profile_id = $1::uuid and dedup_key = $2
+	`, profile, detectorKey).Scan(&title, &severity); err != nil {
+		t.Fatalf("reading the detector signal back: %v", err)
+	}
+	if title != "Profile gap: Records of Processing Activities" || severity != "high" {
+		t.Fatalf("the detector's signal became %q at %q severity", title, severity)
+	}
+
+	// And the agent's landed on its own, namespaced row.
+	var agentKey string
+	if err := pool.QueryRow(t.Context(),
+		`select dedup_key from watcher_findings where id = $1::uuid`, id).Scan(&agentKey); err != nil {
+		t.Fatalf("reading the agent's signal back: %v", err)
+	}
+	if agentKey != AgentDedupPrefix+detectorKey {
+		t.Fatalf("the agent's key is %q, want it namespaced", agentKey)
+	}
+}
+
+// The namespace must not break deduplication among the agent's own signals:
+// the whole reason a key exists is that a daily sweep raising one row a day for
+// one unchanged condition is the failure it prevents.
+func TestTheNamespaceDoesNotBreakTheAgentsOwnDeduplication(t *testing.T) {
+	agent := agentStore(t)
+	org, _ := seedWatcherOrg(t)
+
+	first, raised, err := agent.RaiseSignal(t.Context(), org.String(), Signal{
+		Kind: "profile_gap", DedupKey: "has_dpo",
+		Title: "No data protection officer recorded", Severity: "medium",
+	})
+	if err != nil || !raised {
+		t.Fatalf("the first raise: id=%q raised=%v err=%v", first, raised, err)
+	}
+
+	second, raisedAgain, err := agent.RaiseSignal(t.Context(), org.String(), Signal{
+		Kind: "profile_gap", DedupKey: "has_dpo",
+		Title: "No data protection officer recorded", Severity: "medium",
+	})
+	if err != nil {
+		t.Fatalf("the second raise: %v", err)
+	}
+	if raisedAgain {
+		t.Fatal("tomorrow's sweep raised the same condition again")
+	}
+	if second != first {
+		t.Fatalf("the second raise returned %q, want the first row %q", second, first)
 	}
 }

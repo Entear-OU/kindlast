@@ -314,6 +314,33 @@ jobs:
       - name: Draft a narrative end to end
         run: python3 scripts/intelligence-smoke.py
 
+      # ENT-258'S COMPARISON, AND WHY IT LIVES IN THIS JOB.
+      #
+      # It needs the same three things this job already pays for: a real model,
+      # a real stack, and a seeded Zitadel. A job of its own would download the
+      # weights again to run one more request against them.
+      #
+      # It gates on properties rather than on what the model decided, and the
+      # script's docstring carries the full argument. The short version is that
+      # the fixed detectors are not a target the agent has to reach: it is
+      # shown their output and told not to repeat it, so scoring it on covering
+      # them would measure the one thing it is designed not to do. What must
+      # hold on every run is that their signals survive it untouched, that
+      # nothing was written outside the vocabulary or citing an obligation the
+      # run was never offered, and that no finding was written.
+      #
+      # THAT LAST ONE IS WHY THIS IS NOT A UNIT TEST. The skill's allow-list
+      # holds one tool and there is no RPC that writes a finding anywhere on the
+      # surface, and both of those have tests. "No finding appeared while an
+      # agent ran against the whole stack" is a claim about the surface, and
+      # only a running system can make it.
+      #
+      # The comparison itself is written to the run summary, so the numbers are
+      # on the run page rather than fifty lines into a job nobody opens on a
+      # green build.
+      - name: Compare the agentic Watcher against the fixed detectors
+        run: python3 scripts/watcher-comparison.py
+
       - name: Stack logs on failure
         if: failure()
         run: docker compose -f deploy/compose.yaml --profile model logs --tail 100
