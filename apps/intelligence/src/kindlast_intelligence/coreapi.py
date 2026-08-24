@@ -1,6 +1,6 @@
 """The core-api client: this service's only way to reach anything (§1.6, §26.3).
 
-# TWO RPCs, AND THE SHORTNESS IS STILL THE POINT
+# THREE RPCs, AND THE SHORTNESS IS STILL THE POINT
 
 ENT-218 says an agent's tools are core-api RPCs and nothing else. No
 filesystem, no shell, no database handle, no third-party credential. That is
@@ -8,15 +8,24 @@ not a limitation to work around later; it is the reason a model is allowed near
 a compliance record at all, because everything it can reach is something
 core-api already checks.
 
-This wraps two calls and offers no way to make a third. Adding one means adding
-a method here, which means a reviewer sees it, which is the mechanism rather
-than the number.
+This wraps three calls and offers no way to make a fourth. Adding one means
+adding a method here, which means a reviewer sees it, which is the mechanism
+rather than the number.
 
-`RecordAgentRun` writes the provenance of every run. `RaiseSignal` is the
-Watcher's one tool (ENT-258), and it is here rather than reached some other way
-for exactly the reason above: an agent's tools are core-api RPCs, so a tool has
-to be a method on this object, in front of a reviewer, and not an HTTP call
-assembled inside a skill.
+`RecordAgentRun` writes the provenance of every run. `RaiseSignal` and
+`ReadEvidence` are the Watcher's two tools (ENT-258, ENT-274), and they are here
+rather than reached some other way for exactly the reason above: an agent's
+tools are core-api RPCs, so a tool has to be a method on this object, in front
+of a reviewer, and not an HTTP call assembled inside a skill.
+
+`ReadEvidence` is the one whose ANSWER is a customer's own systems' output, and
+it is worth saying what it does not change. This service still holds no
+third-party credential, dials no customer endpoint and declares no client
+library that could. What comes back is rows core-api already stored, redacted
+by the gateway before they were written, read under the producer role's
+policies for the organisation core-api named. The Python half of the boundary
+is that the content goes into a user turn and nowhere else, and that lives in
+`harness/watch.py` rather than here.
 
 What `RaiseSignal` does NOT let this service do is worth stating, because the
 first question about giving an agent a write is what it can now reach. It
@@ -159,6 +168,63 @@ class CoreAPI:
             ) from exc
 
         return response.id
+
+    def read_evidence(
+        self, org_id: str, connection_id: str, tool: str, limit: int = 0
+    ) -> list[dict[str, object]]:
+        """Read what one connection has already reported (ENT-274).
+
+        Everything that decides whether this is allowed happens on the far
+        side: that the connection is this organisation's and that the tool is
+        granted on it are core-api's checks under the producer role's policies,
+        and this client cannot ask it to skip either. A `limit` of zero takes
+        core-api's default, which is small on purpose.
+
+        Returns plain dicts rather than the generated messages, for the reason
+        `service._watch_context` gives: the skill and the harness deal in plain
+        data, so nothing under `harness/` needs the generated package importable
+        to be testable.
+
+        NO ORGANISATION HEADER, for the reason `record_run` gives.
+        """
+        request = watcher_pb2.ReadEvidenceRequest(
+            org_id=org_id,
+            connection_id=connection_id,
+            tool=tool,
+            limit=limit,
+        )
+        try:
+            response = self._watcher.read_evidence(
+                request, headers={"Authorization": f"Bearer {self._tokens.get()}"}
+            )
+        except Exception as exc:
+            raise CoreAPIError(
+                f"reading the evidence: {exc}", code=code_of(exc)
+            ) from exc
+
+        return [
+            {
+                "evidence_id": o.evidence_id,
+                "connection_id": o.connection_id,
+                "tool": o.tool,
+                "observed_at": (
+                    o.observed_at.ToDatetime().isoformat()
+                    if o.HasField("observed_at")
+                    else ""
+                ),
+                "fetched_at": (
+                    o.fetched_at.ToDatetime().isoformat()
+                    if o.HasField("fetched_at")
+                    else ""
+                ),
+                # THE ONE FIELD THAT IS SOMEBODY ELSE'S TEXT. Carried across
+                # unread and unparsed: code here that branched on it would be
+                # code a customer's system can steer, which is the whole reason
+                # the contract carries it as a string.
+                "body_json": o.body_json,
+            }
+            for o in response.observations
+        ]
 
     def raise_signal(self, org_id: str, signal: dict[str, object]) -> tuple[str, bool]:
         """Raise one signal, and answer whether it was new.

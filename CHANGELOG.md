@@ -1192,6 +1192,38 @@ what they have to do about it, which no commit subject knows.
   Intelligence answers `failed_precondition` with a reason rather than 404, so
   the surface is present and honest about being unusable, and every finding
   still carries exactly what it carried before.
+- **The Watcher can look at what your connected systems reported, not only at
+  the fact that you connected them** (ENT-274). Until now the agentic Watcher
+  was shown which systems an organisation had connected and which of their
+  tools were granted, and had no way to read any of it: it decided from
+  onboarding answers and connection metadata. It now has a second tool,
+  `read_evidence`, which returns the observations a fetch already deposited for
+  one connection and one of its granted tools.
+
+  **It reaches nothing.** Nothing about this puts a packet on your network. A
+  Watcher run reads rows that a fetch through the policy gateway had already
+  stored, redacted before they were written; the live call is still the
+  Integrations page's "fetch now", which a person starts and waits for. A
+  sweep calling a slow endpoint on its own initiative is a different shape of
+  change and is not this one.
+
+  **A tool you have not granted is refused, and the refusal is in the record.**
+  The grant is checked in core-api against `integration_tools` as well as in
+  the harness, and withdrawing a grant stops an agent reading what that tool
+  deposited even though the rows remain. A refused read appears in
+  `agent_runs.tool_calls` marked refused, with the reason, so "we did not look
+  at that because you have not granted it" is a sentence you can read back.
+
+  **What comes back is data and never instruction.** It reaches the model in a
+  user turn, fenced and labelled, and never in a system prompt. Each run may
+  read at most three times and each read is capped in size, so a system that
+  returns a great deal of text cannot fill a run's context with it.
+
+  New RPC `WatcherService.ReadEvidence` on the internal surface, requiring
+  `internal:ingest`, which is issued to service principals and never to a
+  browser. No migration and no new grant: it reads through the producer role's
+  existing privileges. The Watcher skill version moves to `1.1.0`, so runs
+  recorded before and after this are distinguishable in `agent_runs`.
 
 ## [0.1.0]
 

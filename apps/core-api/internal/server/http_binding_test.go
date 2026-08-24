@@ -589,6 +589,14 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.WatcherService.RaiseSignal": {
 			Method: "POST", Path: "/internal/v1/signals",
 		},
+		// And what one connection has already reported (ENT-274). A custom
+		// action on the same collective noun as the context, for the same
+		// reason: it is a read assembled for one caller out of two tables,
+		// not a resource anybody can address.
+		"kindlast.platform.v1.WatcherService.ReadEvidence": {
+			Method: "POST", Path: "/internal/v1/watcher:evidence",
+		},
+
 		// The Hands' surface (ENT-261): what approving a finding will do, and
 		// the plan it prepares. Both are custom actions rather than resources,
 		// because neither creates one: the first runs an agent and the second

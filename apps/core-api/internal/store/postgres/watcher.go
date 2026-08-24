@@ -510,3 +510,150 @@ func (a *AgentStore) RaiseSignal(ctx context.Context, orgID string, signal Signa
 	}
 	return signalID, !alreadyOpen, nil
 }
+
+// StoredObservation is one thing a customer's own system reported, as it was
+// stored (ENT-274).
+//
+// BodyJSON is third-party content. It was redacted by the gateway before
+// anything was written and nothing here redacts again, for the reason
+// `IngestEvidence` gives: a second implementation is free to disagree with the
+// first, and the one that decided is the one that already ran.
+type StoredObservation struct {
+	EvidenceID   string
+	ConnectionID string
+	Tool         string
+	ObservedAt   time.Time
+	FetchedAt    time.Time
+	BodyJSON     string
+}
+
+// ErrToolNotGranted is a tool the connection has not granted for reading.
+var ErrToolNotGranted = errors.New("that tool is not granted on that connection")
+
+// The most observations one read may return, and the default when a caller
+// asks for none. Small, because the caller is a run that puts what comes back
+// in front of a model: "what does this system say now" is the newest few, and
+// a hundred rows is a customer's history rather than an answer.
+const (
+	maxObservations     = 20
+	defaultObservations = 5
+)
+
+// EvidenceFor reads what one connection has already reported through one of
+// its granted tools (ENT-274).
+//
+// # THE GRANT IS CHECKED HERE AND NOT ONLY IN THE CALLER
+//
+// The harness checks the tool against the context the run was shown, which
+// catches a model naming something it was never offered. This checks the row,
+// which is the invariant: no run reads through a tool the customer has not
+// granted, whatever any caller believes. Two checks that refuse different
+// things, the same arrangement a citation gets.
+//
+// A connection outside this organisation is not a special case and gets no
+// special code. The agent's policies scope every read to the GUC's
+// organisation, so it simply has no tools and no rows, and the answer is
+// ErrNoConnection: what a caller must never be able to learn from this is
+// whether an id it guessed exists somewhere else.
+//
+// # SUPERSEDED ROWS ARE LEFT OUT
+//
+// A Watcher asks what a system says now. An observation something later
+// replaced is what it used to say, which is a real question and a different
+// one, and answering both here would put two claims in front of a model with
+// nothing to tell it which is current.
+func (a *AgentStore) EvidenceFor(
+	ctx context.Context, orgID, connectionID, tool string, limit int,
+) (connectionName string, observations []StoredObservation, err error) {
+	org, err := uuid.Parse(orgID)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %q is not a uuid", ErrBadOrganisation, orgID)
+	}
+	connection, err := uuid.Parse(connectionID)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %q is not a uuid", ErrNoConnection, connectionID)
+	}
+	if limit <= 0 {
+		limit = defaultObservations
+	}
+	if limit > maxObservations {
+		limit = maxObservations
+	}
+
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("postgres: reading stored evidence: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := setLocal(ctx, tx, "app.current_org_id", org.String()); err != nil {
+		return "", nil, err
+	}
+
+	err = tx.QueryRow(ctx, `
+		select display_name
+		  from integrations
+		 where id = $1::uuid and org_id = $2::uuid
+	`, connection, org).Scan(&connectionName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, ErrNoConnection
+	}
+	if err != nil {
+		return "", nil, fmt.Errorf("postgres: reading the connection to read evidence for: %w", err)
+	}
+
+	var granted bool
+	err = tx.QueryRow(ctx, `
+		select granted
+		  from integration_tools
+		 where integration_id = $1::uuid and org_id = $2::uuid and name = $3
+	`, connection, org, tool).Scan(&granted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A tool the connection never offered reads the same as one it has not
+		// granted, deliberately. The distinction is only interesting to
+		// somebody probing for tool names, and it is not information this
+		// caller needs to do its job.
+		return "", nil, ErrToolNotGranted
+	}
+	if err != nil {
+		return "", nil, fmt.Errorf("postgres: reading the tool grant: %w", err)
+	}
+	if !granted {
+		return "", nil, ErrToolNotGranted
+	}
+
+	// `integration.<tool>` is the kind `IngestEvidence` and `RecordObservation`
+	// both write, so matching on it is matching what a fetch through that tool
+	// deposited. Compared as a whole string rather than with a prefix or a
+	// pattern: a tool named `search` must not answer with what `search_all`
+	// reported.
+	rows, err := tx.Query(ctx, `
+		select id::text, coalesce(connection_id::text, ''), observed_at,
+		       fetched_at, body::text
+		  from org_evidence
+		 where org_id = $1::uuid
+		   and connection_id = $2::uuid
+		   and source = 'integration'
+		   and kind = $3
+		   and superseded_by is null
+		 order by observed_at desc, fetched_at desc
+		 limit $4
+	`, org, connection, "integration."+tool, limit)
+	if err != nil {
+		return "", nil, fmt.Errorf("postgres: reading stored evidence: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		observation := StoredObservation{Tool: tool}
+		if err := rows.Scan(&observation.EvidenceID, &observation.ConnectionID,
+			&observation.ObservedAt, &observation.FetchedAt, &observation.BodyJSON); err != nil {
+			return "", nil, fmt.Errorf("postgres: reading a stored observation: %w", err)
+		}
+		observations = append(observations, observation)
+	}
+	if err := rows.Err(); err != nil {
+		return "", nil, fmt.Errorf("postgres: reading stored evidence: %w", err)
+	}
+	return connectionName, observations, nil
+}
