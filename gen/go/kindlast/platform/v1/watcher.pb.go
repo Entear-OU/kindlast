@@ -476,13 +476,37 @@ func (x *ConnectionTool) GetGranted() bool {
 }
 
 type OpenSignal struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SignalId      string                 `protobuf:"bytes,1,opt,name=signal_id,json=signalId,proto3" json:"signal_id,omitempty"`
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	DedupKey      string                 `protobuf:"bytes,3,opt,name=dedup_key,json=dedupKey,proto3" json:"dedup_key,omitempty"`
-	Title         string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
-	Severity      string                 `protobuf:"bytes,5,opt,name=severity,proto3" json:"severity,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SignalId  string                 `protobuf:"bytes,1,opt,name=signal_id,json=signalId,proto3" json:"signal_id,omitempty"`
+	Kind      string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	DedupKey  string                 `protobuf:"bytes,3,opt,name=dedup_key,json=dedupKey,proto3" json:"dedup_key,omitempty"`
+	Title     string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	Severity  string                 `protobuf:"bytes,5,opt,name=severity,proto3" json:"severity,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// `detector` or `agent`, matching `watcher_findings.source` (00039).
+	//
+	// # WHY THE AGENT IS TOLD WHOSE SIGNAL IT IS LOOKING AT (ENT-276)
+	//
+	// Every open signal is shown with its deduplication key, because a run that
+	// is not told what is already open repeats it. Keys are also what the
+	// schema deduplicates on, so a key is an address: writing one lands on
+	// whatever row already has it.
+	//
+	// ENT-273 made that safe. A trigger refuses an update that changes a
+	// signal's source, so a model echoing a detector's key back can no longer
+	// overwrite a rule's row. What it can still do is TRY, and be refused, and
+	// end the whole run: the customer gets nothing from that sweep, for a
+	// reason they cannot act on.
+	//
+	// The model is not being unreasonable there. It is shown a list of
+	// addresses with no indication that some are not its to write. This is that
+	// indication.
+	//
+	// It is not the authority and must not become it. The trigger is the
+	// authority and is unchanged; this makes the refusal predictable rather
+	// than moving the check into a prompt, which AGENTS.md is explicit is the
+	// one thing a prompt must never be.
+	Source        string `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -557,6 +581,13 @@ func (x *OpenSignal) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *OpenSignal) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
 }
 
 type RaiseSignalRequest struct {
@@ -843,7 +874,7 @@ const file_kindlast_platform_v1_watcher_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12#\n" +
 	"\rwrite_capable\x18\x03 \x01(\bR\fwriteCapable\x12\x18\n" +
-	"\agranted\x18\x04 \x01(\bR\agranted\"\xc7\x01\n" +
+	"\agranted\x18\x04 \x01(\bR\agranted\"\xdf\x01\n" +
 	"\n" +
 	"OpenSignal\x12\x1b\n" +
 	"\tsignal_id\x18\x01 \x01(\tR\bsignalId\x12\x12\n" +
@@ -852,7 +883,8 @@ const file_kindlast_platform_v1_watcher_proto_rawDesc = "" +
 	"\x05title\x18\x04 \x01(\tR\x05title\x12\x1a\n" +
 	"\bseverity\x18\x05 \x01(\tR\bseverity\x129\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xf4\x01\n" +
+	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x16\n" +
+	"\x06source\x18\a \x01(\tR\x06source\"\xf4\x01\n" +
 	"\x12RaiseSignalRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1b\n" +

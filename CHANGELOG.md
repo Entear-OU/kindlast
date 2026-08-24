@@ -952,6 +952,25 @@ what they have to do about it, which no commit subject knows.
   now stays unhealthy and says so instead of a worker exiting with an error
   about schedules.
 
+### Changed
+
+- **The Watcher is told which signals a rule raised** (ENT-276). Every sweep
+  shows the agent what is already open, with the key each signal is stored
+  under, because a run that is not told what is open repeats it. Those keys are
+  also addresses: the schema deduplicates on them, so writing one lands on
+  whatever row already holds it.
+
+  ENT-273 made that safe, by refusing any attempt to take over a signal a
+  deterministic rule raised. What it could not do is make the constraint
+  visible to the thing it applies to. A model shown a list of addresses, with
+  no indication that some are not its to write, will reasonably try one, be
+  refused, and end the run: the organisation gets nothing from that sweep, for
+  a reason nobody can act on.
+
+  Signals a rule raised now say so, in words, in the context the model reads.
+  The refusal is unchanged and still lives in the database, which is where the
+  authority belongs; this only makes it predictable.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,

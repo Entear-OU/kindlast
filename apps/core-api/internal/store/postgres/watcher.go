@@ -80,11 +80,15 @@ type WatchedTool struct {
 
 // OpenSignal is something the Watcher has already said.
 type OpenSignal struct {
-	ID        string
-	Kind      string
-	DedupKey  string
-	Title     string
-	Severity  string
+	ID       string
+	Kind     string
+	DedupKey string
+	Title    string
+	Severity string
+	// Source is `detector` or `agent` (00039). Carried out to the model so it
+	// can tell which of these keys are a rule's and not its to write. See the
+	// field's comment in watcher.proto for why that is worth a round trip.
+	Source    string
 	UpdatedAt time.Time
 }
 
@@ -318,7 +322,7 @@ func watchedTools(ctx context.Context, tx pgx.Tx, orgID string) (map[string][]Wa
 // openSignals reads what the Watcher has already said about this profile.
 func openSignals(ctx context.Context, tx pgx.Tx, profileID string) ([]OpenSignal, error) {
 	rows, err := tx.Query(ctx, `
-		select id::text, kind, dedup_key, title, severity::text, updated_at
+		select id::text, kind, dedup_key, title, severity::text, source, updated_at
 		  from watcher_findings
 		 where profile_id = $1::uuid and status = 'open'
 		 order by updated_at desc
@@ -331,7 +335,8 @@ func openSignals(ctx context.Context, tx pgx.Tx, profileID string) ([]OpenSignal
 	var signals []OpenSignal
 	for rows.Next() {
 		var s OpenSignal
-		if err := rows.Scan(&s.ID, &s.Kind, &s.DedupKey, &s.Title, &s.Severity, &s.UpdatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Kind, &s.DedupKey, &s.Title, &s.Severity,
+			&s.Source, &s.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("postgres: reading an open signal: %w", err)
 		}
 		signals = append(signals, s)

@@ -530,6 +530,7 @@ def _watch_context(context: watcher_pb2.WatcherContextResponse) -> dict:
                 "dedup_key": s.dedup_key,
                 "title": s.title,
                 "severity": s.severity,
+                "source": s.source,
             }
             for s in context.open_signals
         ],
