@@ -22,13 +22,27 @@ import (
 
 // PendingMessage is a row the dispatcher has claimed.
 type PendingMessage struct {
-	ID             string
-	Kind           string
-	RecipientEmail string
-	Subject        string
-	BodyText       string
-	BodyHTML       string
-	Attempts       int32
+	ID   string
+	Kind string
+	// Channel is which adapter delivers this row (ENT-263). The dispatcher
+	// passes it to delivery.Router and reads neither recipient field for
+	// itself, so a channel added later needs no change here.
+	Channel         string
+	RecipientEmail  string
+	RecipientChatID string
+	Subject         string
+	BodyText        string
+	BodyHTML        string
+	Attempts        int32
+}
+
+// Recipient is this message's address in its own channel's terms, which is
+// what delivery.Message wants and the only thing the dispatcher needs.
+func (m PendingMessage) Recipient() string {
+	if m.Channel == notify.ChannelTelegram {
+		return m.RecipientChatID
+	}
+	return m.RecipientEmail
 }
 
 // EnqueueMessage writes a message onto the outbox in the caller's transaction.
@@ -45,11 +59,18 @@ func (t *Tenant) EnqueueMessage(ctx context.Context, msg notify.Message) error {
 		html = msg.BodyHTML
 	}
 
+	channel := msg.Channel
+	if channel == "" {
+		channel = notify.ChannelEmail
+	}
+
 	_, err := t.tx.Exec(ctx, `
 		insert into transactional_outbox
-			(org_id, kind, recipient_email, subject, body_text, body_html)
-		values ($1, $2, $3, $4, $5, $6)
-	`, t.orgID, msg.Kind, msg.RecipientEmail, msg.Subject, msg.BodyText, html)
+			(org_id, kind, channel, recipient_email, recipient_chat_id,
+			 subject, body_text, body_html)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, t.orgID, msg.Kind, channel, msg.RecipientEmail, msg.RecipientChatID,
+		msg.Subject, msg.BodyText, html)
 	if err != nil {
 		return fmt.Errorf("postgres: enqueuing a transactional message: %w", err)
 	}
@@ -200,13 +221,13 @@ func (a *AgentStore) DeliverMessage(ctx context.Context, id string, deliver Deli
 
 	var msg PendingMessage
 	err = tx.QueryRow(ctx, `
-		select id::text, kind, recipient_email, subject, body_text,
-		       coalesce(body_html, ''), attempts
+		select id::text, kind, channel, recipient_email, recipient_chat_id,
+		       subject, body_text, coalesce(body_html, ''), attempts
 		  from transactional_outbox
 		 where id = $1::uuid and status = 'pending'
 		 for update
-	`, id).Scan(&msg.ID, &msg.Kind, &msg.RecipientEmail, &msg.Subject,
-		&msg.BodyText, &msg.BodyHTML, &msg.Attempts)
+	`, id).Scan(&msg.ID, &msg.Kind, &msg.Channel, &msg.RecipientEmail,
+		&msg.RecipientChatID, &msg.Subject, &msg.BodyText, &msg.BodyHTML, &msg.Attempts)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, nil

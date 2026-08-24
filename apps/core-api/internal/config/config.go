@@ -136,6 +136,28 @@ type Config struct {
 	// EmailFrom is the envelope and header sender for dispatched messages.
 	EmailFrom string
 
+	// TelegramBotToken is the credential the Telegram channel sends with
+	// (ENT-263).
+	//
+	// Optional, and absent means the channel is not offered at all rather than
+	// offered and failing: no adapter is registered, GetNotificationCapabilities
+	// reports Telegram unavailable with a reason, and LinkTelegramChat refuses
+	// before it writes anything. That is what makes `bun run test:airgap` hold:
+	// a deployment with no token has nothing that could reach out.
+	//
+	// Through fileOrValue, like the sealing key and the webhook secret, and for
+	// a reason sharper than either. Telegram puts the token in the URL PATH of
+	// every Bot API call, so it leaks through anything that records a request:
+	// a wrapped transport error, a log line, a proxy's access log. Keeping it
+	// out of an environment variable that a process listing prints is the first
+	// of the mitigations; `internal/delivery.Telegram` carries the rest.
+	//
+	// It is an operator secret, not a tenant's. It is deliberately not in the
+	// database, not in `web` and not in Intelligence: one bot serves the
+	// deployment, and putting it in a table would place a live credential in
+	// every backup of the domain schema.
+	TelegramBotToken string
+
 	// IngestDatabaseURL must connect as `kindlast_ingest`, the corpus writer's
 	// role (ENT-207).
 	//
@@ -306,6 +328,7 @@ func Load() (*Config, error) {
 		AppBaseURL:           strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_APP_BASE_URL")), "/"),
 		SMTPAddr:             strings.TrimSpace(os.Getenv("KINDLAST_SMTP_ADDR")),
 		EmailFrom:            valueOr("KINDLAST_EMAIL_FROM", "noreply@kindlast.localhost"),
+		TelegramBotToken:     fileOrValue("KINDLAST_TELEGRAM_BOT_TOKEN"),
 
 		GatewayURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("KINDLAST_GATEWAY_URL")), "/"),
 		GatewaySecret: fileOrValue("KINDLAST_GATEWAY_TOKEN"),

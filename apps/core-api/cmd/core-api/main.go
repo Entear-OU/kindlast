@@ -330,11 +330,14 @@ func run(logger *slog.Logger) error {
 			"policy", policy)
 	}
 
-	// The mail channel, on which DeliveryService sends invitation mail and
-	// finding notifications when the Temporal worker asks. Nil without an
-	// SMTP address, which is a supported state rather than a broken one; see
+	// Every channel DeliveryService can send on, behind the one seam it has
+	// held since ENT-219 (ENT-263). Empty without an SMTP address and without
+	// a bot token, which is a supported state rather than a broken one; see
 	// mailChannel.
+	channels := delivery.NewRouter()
 	mail := mailChannel(logger, cfg)
+	channels.Register(delivery.ChannelEmail, mail)
+	channels.Register(delivery.ChannelTelegram, telegramChannel(logger, cfg))
 
 	handler, err := server.New(server.Dependencies{
 		Verifier: verifier,
@@ -363,10 +366,9 @@ func run(logger *slog.Logger) error {
 		// The agentic Watcher's surface (ENT-258), on the producer pool.
 		Watcher:        watcherDependency(outbox),
 		Executions:     store,
-		Mail:           mail,
+		Channels:       channels,
 		BillingEnabled: cfg.BillingEnabled,
 		AppBaseURL:     cfg.AppBaseURL,
-		SMTPConfigured: cfg.SMTPAddr != "",
 		Tokens:         store,
 		// The approve-from-email endpoint (ENT-249). The same application pool:
 		// redemption resolves the delegation and then acts as the person it
@@ -420,7 +422,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	if outbox != nil && mail != nil && cfg.AppBaseURL == "" {
+	if outbox != nil && !channels.Empty() && cfg.AppBaseURL == "" {
 		logger.Warn("KINDLAST_APP_BASE_URL is not set, " +
 			"so finding notifications will queue and not be delivered: every one carries a link into the console")
 	}
@@ -477,6 +479,43 @@ func mailChannel(logger *slog.Logger, cfg *config.Config) delivery.Channel {
 	if err != nil {
 		logger.Error("no mail channel: the SMTP channel could not be built; "+
 			"transactional messages will queue and not be delivered", "error", err)
+		return nil
+	}
+	return channel
+}
+
+// telegramChannel builds the Telegram channel, or nothing (ENT-263).
+//
+// # AN ABSENT TOKEN IS NOT A DEGRADED STATE, IT IS THE CHANNEL NOT EXISTING
+//
+// mailChannel's absence is degraded: rows queue and drain later, because the
+// product wrote them expecting to send. This is different. Nothing is ever
+// addressed to Telegram on a deployment that has no bot, because linking a chat
+// is refused before it writes anything and nobody can therefore choose a channel
+// they cannot link. So an absent token leaves no backlog and nothing waiting; it
+// leaves a product with one channel.
+//
+// That is also what `bun run test:airgap` asserts from the outside: with no
+// token there is no adapter on the router, so no code path in this process can
+// construct a call to api.telegram.org. Not "does not call it in practice",
+// which is a claim about behaviour, but "has no object that could".
+//
+// It logs at info rather than warn for the same reason. A self-hoster who never
+// wanted Telegram is not misconfigured, and a warning on every boot for a
+// deliberate choice is how operators learn to stop reading warnings.
+//
+// The token is never logged, here or anywhere. What is logged is that there is
+// one.
+func telegramChannel(logger *slog.Logger, cfg *config.Config) delivery.Channel {
+	if cfg.TelegramBotToken == "" {
+		logger.Info("no Telegram channel: KINDLAST_TELEGRAM_BOT_TOKEN is not set, " +
+			"so Telegram is not offered as a notification channel")
+		return nil
+	}
+	channel, err := delivery.NewTelegram(cfg.TelegramBotToken, "", nil)
+	if err != nil {
+		logger.Error("no Telegram channel: it could not be built; "+
+			"Telegram is not offered as a notification channel", "error", err)
 		return nil
 	}
 	return channel

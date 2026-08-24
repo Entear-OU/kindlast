@@ -41,12 +41,14 @@ func (t *Tenant) Preferences(ctx context.Context) (notify.Preferences, error) {
 		       deadline_alerts_enabled,
 		       timezone,
 		       to_char(quiet_hours_start, 'HH24:MI'),
-		       to_char(quiet_hours_end, 'HH24:MI')
+		       to_char(quiet_hours_end, 'HH24:MI'),
+		       finding_channel
 		  from notification_preferences
 		 where org_id = $1 and user_id = $2
 	`, t.orgID, t.userID).Scan(
 		&email, &prefs.MinSeverityForEmail, &prefs.WeeklyBriefingEnabled,
 		&prefs.DeadlineAlertsEnabled, &timezone, &quietStart, &quietEnd,
+		&prefs.FindingChannel,
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -79,8 +81,8 @@ func (t *Tenant) SavePreferences(ctx context.Context, p notify.Preferences) erro
 		insert into notification_preferences
 			(org_id, user_id, email, min_severity_for_email,
 			 weekly_briefing_enabled, deadline_alerts_enabled, timezone,
-			 quiet_hours_start, quiet_hours_end)
-		values ($1, $2, $3, $4::public.severity_level, $5, $6, $7, $8::time, $9::time)
+			 quiet_hours_start, quiet_hours_end, finding_channel)
+		values ($1, $2, $3, $4::public.severity_level, $5, $6, $7, $8::time, $9::time, $10)
 		on conflict (org_id, user_id) do update
 		   set email                   = excluded.email,
 		       min_severity_for_email  = excluded.min_severity_for_email,
@@ -88,11 +90,13 @@ func (t *Tenant) SavePreferences(ctx context.Context, p notify.Preferences) erro
 		       deadline_alerts_enabled = excluded.deadline_alerts_enabled,
 		       timezone                = excluded.timezone,
 		       quiet_hours_start       = excluded.quiet_hours_start,
-		       quiet_hours_end         = excluded.quiet_hours_end
+		       quiet_hours_end         = excluded.quiet_hours_end,
+		       finding_channel         = excluded.finding_channel
 	`,
 		t.orgID, t.userID, nullIfEmpty(p.Email), p.MinSeverityForEmail,
 		p.WeeklyBriefingEnabled, p.DeadlineAlertsEnabled, p.Timezone,
 		nullIfEmpty(p.QuietHoursStart), nullIfEmpty(p.QuietHoursEnd),
+		p.FindingChannel,
 	)
 	if err != nil {
 		return fmt.Errorf("postgres: saving notification preferences: %w", err)
@@ -142,6 +146,15 @@ type Recipient struct {
 	// `notification_recipients` exists to close.
 	OrgSlug string
 	OrgName string
+
+	// The channel half (ENT-263), and the same shape as everything above it:
+	// raw facts, no decision. FindingChannel is what this person chose,
+	// TelegramChatID is what they claimed, and TelegramVerified is whether
+	// they proved it. notify.RouteFor turns the three into somewhere to send,
+	// which is what makes "an unverified chat is refused" a Go table test.
+	FindingChannel   string
+	TelegramChatID   string
+	TelegramVerified bool
 }
 
 // PendingDoorbellIDs lists up to `limit` pending notifications, oldest first,
@@ -232,7 +245,8 @@ func (a *AgentStore) Recipients(ctx context.Context, tx pgx.Tx, outboxID string)
 		       min_severity::text, finding_severity::text, timezone,
 		       coalesce(to_char(quiet_hours_start, 'HH24:MI'), ''),
 		       coalesce(to_char(quiet_hours_end, 'HH24:MI'), ''),
-		       org_slug, org_name
+		       org_slug, org_name,
+		       finding_channel, telegram_chat_id, telegram_verified
 		  from notification_recipients($1::uuid)
 	`, outboxID)
 	if err != nil {
@@ -245,7 +259,8 @@ func (a *AgentStore) Recipients(ctx context.Context, tx pgx.Tx, outboxID string)
 		var r Recipient
 		if err := rows.Scan(&r.UserID, &r.Email, &r.EmailVerified, &r.MinSeverity,
 			&r.FindingSeverity, &r.Timezone, &r.QuietHoursStart, &r.QuietHoursEnd,
-			&r.OrgSlug, &r.OrgName); err != nil {
+			&r.OrgSlug, &r.OrgName,
+			&r.FindingChannel, &r.TelegramChatID, &r.TelegramVerified); err != nil {
 			return nil, fmt.Errorf("postgres: reading a recipient: %w", err)
 		}
 		out = append(out, r)

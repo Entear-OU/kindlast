@@ -19,13 +19,40 @@ import (
 	"time"
 )
 
+// The channels this build knows how to speak. Constants rather than free text
+// because the same strings appear in a check constraint, a preferences column,
+// a proto field and a map key, and a typo in any one of them is a message that
+// goes nowhere with no error.
+const (
+	ChannelEmail    = "email"
+	ChannelTelegram = "telegram"
+)
+
 // Message is a rendered message ready to leave.
 //
 // Deliberately not the store's row type and not the domain's: a channel needs a
 // recipient, a subject and a body, and giving it the database id would invite a
 // channel that updates the row itself.
 type Message struct {
-	To       string
+	// Channel names which adapter this message is addressed to, and is the
+	// only thing Router reads. Empty means email, so every caller written
+	// before there was a second channel keeps working unchanged (ENT-263).
+	Channel string
+
+	// To is the address in the named channel's own terms: a mail address for
+	// email, a chat id for Telegram.
+	//
+	// One field rather than one per channel, and the reason is the failure it
+	// avoids rather than tidiness. With `To` and `ChatID` side by side, a
+	// caller that set the wrong one would produce a message the adapter
+	// refused at delivery, hours later, on a row nobody is watching. With one
+	// field, Channel and To are written together or the message has no
+	// recipient at all, which fails at the first send.
+	To string
+
+	// Subject is a header on email and has no equivalent on a chat channel,
+	// where the Telegram adapter puts it on the first line rather than
+	// dropping it.
 	Subject  string
 	BodyText string
 	BodyHTML string
@@ -87,6 +114,10 @@ func NewSMTP(addr, from string) (*SMTP, error) {
 	return &SMTP{addr: addr, from: from}, nil
 }
 
+// Name is the provider rather than the channel. SMTP is one way of serving the
+// `email` channel and a hosted API would be another, so a log line saying which
+// one refused a message is worth more than one repeating the channel the
+// message already names.
 func (s *SMTP) Name() string { return "smtp" }
 
 func (s *SMTP) Send(ctx context.Context, msg Message) error {

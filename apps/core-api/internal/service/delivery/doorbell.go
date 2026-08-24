@@ -163,10 +163,10 @@ func (s *Service) NotifyRecipients(
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("a notification goes to somebody; send user_ids"))
 	}
-	if s.channel == nil {
+	if s.channels.Empty() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			errors.New("no mail channel is configured (KINDLAST_SMTP_ADDR is not set), "+
-				"so the notification stays queued until one is"))
+			errors.New("no delivery channel is configured (neither KINDLAST_SMTP_ADDR nor "+
+				"KINDLAST_TELEGRAM_BOT_TOKEN is set), so the notification stays queued until one is"))
 	}
 	if s.baseURL == "" {
 		// Every notification carries a link into `/o/{slug}/`, and an email
@@ -316,6 +316,21 @@ func (s *Service) sendAll(
 	ctx context.Context, tx pgx.Tx, bell postgres.Doorbell, recipients []postgres.Recipient,
 ) error {
 	for _, r := range recipients {
+		// Which channel, decided in Go over rows the function merely fetched
+		// (ENT-263). An unverified chat, and a chat that has been unlinked,
+		// both come back as the remaining channel or as nowhere, never as the
+		// chat: notify.RouteFor is where that is written and where it is
+		// tested.
+		route := notify.RouteFor(r.FindingChannel, r.Email, r.TelegramChatID, r.TelegramVerified)
+		if !route.Deliverable() {
+			// Skipped rather than failing the batch. One member of an
+			// organisation with no address and no verified chat must not stop
+			// their colleagues from being told, and failing here would retry
+			// the whole notification forever over a person who cannot be
+			// reached by any means.
+			continue
+		}
+
 		// Built per recipient from the row's own organisation, so the link
 		// lands in the organisation the notification is about rather than
 		// wherever the reader's session last pointed. §8 names the failure that
@@ -346,8 +361,12 @@ func (s *Service) sendAll(
 			ApproveURL:     approveURL,
 		})
 
-		if err := s.channel.Send(ctx, delivery.Message{
-			To:       msg.RecipientEmail,
+		if err := s.channels.Send(ctx, delivery.Message{
+			Channel: route.Channel,
+			To:      route.To,
+			// From the route, not from the row. The two agree for email and
+			// the route is the one that was decided; reading the row here is
+			// how a refusal upstream gets undone by a line nobody reviewed.
 			Subject:  msg.Subject,
 			BodyText: msg.BodyText,
 		}); err != nil {

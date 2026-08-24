@@ -1082,6 +1082,52 @@ what they have to do about it, which no commit subject knows.
   Call and Walkthrough now say they are not built yet, in the same words the
   agents page uses for the Messenger and the Hands, rather than sharing one
   sentence with something that works.
+- **Telegram is a second notification channel, on the one dispatch path**
+  (ENT-263). A member can link a Telegram chat in notification settings, prove
+  they hold it with a code that arrives there, and have finding notifications
+  delivered to it instead of by email.
+
+  What matters for anybody operating this is what did **not** happen. There is
+  no second queue, no second retry policy and no second answer to "did this go
+  out". `transactional_outbox`, `notification_outbox` and the Temporal relay
+  are unchanged; Telegram is an adapter behind the delivery seam core-api has
+  held since the outbox was built, chosen by a channel name the row already
+  carries. Quiet hours and the severity floor are untouched and still apply per
+  person regardless of channel, because they say when somebody wants to be
+  interrupted rather than how.
+
+  **`KINDLAST_TELEGRAM_BOT_TOKEN` on core-api is the whole of the
+  configuration, and leaving it unset means the channel is not offered rather
+  than offered and broken.** With no token there is no adapter: the settings
+  page reports Telegram unavailable with a reason, linking a chat is refused
+  before anything is written, and nothing in the process can reach
+  `api.telegram.org`. Existing deployments therefore need to do nothing, and
+  `bun run test:airgap` is unaffected. `KINDLAST_TELEGRAM_BOT_TOKEN_FILE` is
+  preferred over the variable, because Telegram puts the token in the URL path
+  of every API call and it leaks through anything that records a request.
+
+  The token is per deployment, not per organisation. It is not in the database,
+  not in `web` and not in the Python service, so it is in no backup of the
+  domain schema.
+
+  An unverified chat is never delivered to. The notification goes to the
+  person's email instead with the reason recorded, and the same holds after
+  they unlink: future messages go to the remaining channel or nowhere, never to
+  the chat that was removed.
+
+  **There is no inbound path, deliberately.** core-api registers no webhook and
+  polls for nothing, so nothing typed into a chat enters the product. That is
+  why linking asks a person for their own chat id rather than having them
+  message the bot: a chat message is data and never instruction, and reading
+  one means owing a full answer about where that text may flow. Reading replies
+  arrives with the Messenger, with that answer.
+
+  Migration `00044` adds `notification_channels`, a `finding_channel` column on
+  `notification_preferences` defaulting to `email`, and a channel and chat
+  recipient on `transactional_outbox`. Every existing row keeps behaving
+  identically. The retention pass now clears a chat id alongside an address,
+  and abandons an undelivered verification code after an hour rather than
+  retrying one that can no longer be used.
 
 ## [0.1.0]
 

@@ -564,6 +564,55 @@ notifications also need `KINDLAST_APP_BASE_URL` on core-api, for the link
 into the console every one of them carries; without it they wait the same
 way.
 
+### Telegram, the second channel
+
+A person can have their finding notifications arrive in a Telegram chat
+instead of by email (ENT-263). It is the same queue, the same relay, the same
+retry policy and the same record of what was attempted: Telegram is an adapter
+on the dispatch path, not a second path. Nothing about quiet hours or the
+severity floor changes, because those say when somebody wants to be
+interrupted rather than how.
+
+**`KINDLAST_TELEGRAM_BOT_TOKEN` on core-api is the whole of the
+configuration, and leaving it unset means the channel is simply not
+offered.** Not offered and failing: with no token there is no adapter, the
+settings page reports Telegram unavailable with a reason, and a request to
+link a chat is refused before it writes anything. So a deployment that does
+not want Telegram has nothing to turn off, and `bun run test:airgap` still
+passes, because there is no object in the process that could reach
+`api.telegram.org`.
+
+To offer it, create a bot with Telegram's `@BotFather`, and give core-api the
+token it hands back. It is an operator secret of the same class as an SMTP
+password, so it takes the same shape as the other secrets on this page:
+`KINDLAST_TELEGRAM_BOT_TOKEN_FILE` pointing at a mounted file is preferred
+over the variable, and the reason is sharper here than elsewhere. Telegram
+puts the token in the URL **path** of every API call, so it leaks through
+anything that records a request: a wrapped transport error, an access log, a
+proxy's error page. core-api scrubs its own errors for it and never logs it,
+and keeping it out of a variable that a process listing prints closes the
+remaining door.
+
+The token is per deployment and not per organisation. It is not in the
+database, not in `web` and not in the Python service, so it is not in a dump
+of the domain schema and not in a backup of one.
+
+**What a member does.** In notification settings they give the numeric id of
+their private chat with your bot, receive a six-digit code in that chat, and
+type it back. Until they do, the chat is a string one person asserted about a
+messenger account, and the dispatcher refuses it: a notification goes to their
+email instead, with the reason recorded. The code is good for ten minutes and
+five attempts, and is stored hashed, so a database dump yields no working
+code.
+
+**There is no inbound path, deliberately.** core-api registers no webhook and
+polls for nothing, so nothing anybody types into a chat enters the product.
+That is why linking needs the person to supply their own chat id rather than
+message the bot: a message from a chat is data and never instruction, and the
+day the product reads one it owes a full answer about where that text may
+flow. Reading replies arrives with the Messenger (ENT-260), together with that
+answer.
+
 **A finding notification is one workflow that may live for hours**, and that
 is the feature rather than a stuck run. The workflow asks core-api who should
 hear about the finding and when: somebody whose preferences say "not inside

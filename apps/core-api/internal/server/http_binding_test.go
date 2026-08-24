@@ -215,6 +215,33 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "GET", Path: "/api/v1/notification-capabilities",
 		},
 
+		// The caller's own linked channels (ENT-263). A collection under the
+		// person rather than under a user id, like the preferences above and
+		// for a sharper reason: a path segment naming a member would be an
+		// endpoint for enumerating which colleagues are reachable on Telegram
+		// and at which chat. There is nowhere to put one.
+		"kindlast.core.v1.NotificationService.ListLinkedChannels": {
+			Method: "GET", Path: "/api/v1/notification-channels",
+		},
+		// POST and DELETE on the channel itself, because linking creates the
+		// caller's one Telegram channel and unlinking removes it. Not PUT:
+		// linking mints a verification code as a side effect, which is not
+		// something a caller can repeat idempotently and get the same answer.
+		"kindlast.core.v1.NotificationService.LinkTelegramChat": {
+			Method: "POST", Path: "/api/v1/notification-channels/telegram",
+		},
+		"kindlast.core.v1.NotificationService.UnlinkTelegramChat": {
+			Method: "DELETE", Path: "/api/v1/notification-channels/telegram",
+		},
+		// A custom method on the same resource, in the `:verb` form, because
+		// proving you hold a chat is an action on the channel rather than a
+		// write to any field of it. The alternative was a PUT of a `verified`
+		// flag, which would describe the caller as setting the thing they are
+		// asking the server to decide.
+		"kindlast.core.v1.NotificationService.VerifyTelegramChat": {
+			Method: "POST", Path: "/api/v1/notification-channels/telegram:verify",
+		},
+
 		// Billing (ENT-210). A singleton like the notification preferences
 		// above, and read-only: there is no PUT, because a plan changes when
 		// the signed webhook says so and never because a session asked.

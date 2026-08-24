@@ -24,6 +24,18 @@ type Preferences struct {
 	Timezone              string
 	QuietHoursStart       string
 	QuietHoursEnd         string
+
+	// FindingChannel is where this person wants a finding notification
+	// (ENT-263). One of the ChannelX constants; email unless they said
+	// otherwise.
+	//
+	// One field, and what it does NOT do is the point. The severity floor and
+	// the quiet window above it stay channel-independent, because they are
+	// statements about when somebody wants to be interrupted rather than
+	// about how. Per-channel copies would let a person set a quiet window on
+	// email, forget the one on Telegram, and be woken at four in the morning
+	// by a product that had been told twice not to.
+	FindingChannel string
 }
 
 // DefaultTimezone matches the schema's default so a row written here and a row
@@ -43,6 +55,11 @@ func Defaults() Preferences {
 		WeeklyBriefingEnabled: true,
 		DeadlineAlertsEnabled: true,
 		Timezone:              DefaultTimezone,
+		// Email, matching the column default, so a row written here and a row
+		// written by the database agree. Nobody reaches Telegram without
+		// linking a chat, proving it, and then saying so: three deliberate
+		// steps for a channel that pushes to somebody's phone.
+		FindingChannel: ChannelEmail,
 	}
 }
 
@@ -130,6 +147,12 @@ func (p Preferences) Normalise() (Preferences, error) {
 		return Preferences{}, fmt.Errorf("quiet hours need both a start and an end, or neither")
 	}
 	out.QuietHoursStart, out.QuietHoursEnd = start, end
+
+	channel, err := normaliseChannel(strings.TrimSpace(out.FindingChannel))
+	if err != nil {
+		return Preferences{}, err
+	}
+	out.FindingChannel = channel
 
 	out.Email = strings.TrimSpace(out.Email)
 	if out.Email != "" && !strings.Contains(out.Email, "@") {

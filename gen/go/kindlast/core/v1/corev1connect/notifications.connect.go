@@ -42,6 +42,18 @@ const (
 	// NotificationServiceGetNotificationCapabilitiesProcedure is the fully-qualified name of the
 	// NotificationService's GetNotificationCapabilities RPC.
 	NotificationServiceGetNotificationCapabilitiesProcedure = "/kindlast.core.v1.NotificationService/GetNotificationCapabilities"
+	// NotificationServiceListLinkedChannelsProcedure is the fully-qualified name of the
+	// NotificationService's ListLinkedChannels RPC.
+	NotificationServiceListLinkedChannelsProcedure = "/kindlast.core.v1.NotificationService/ListLinkedChannels"
+	// NotificationServiceLinkTelegramChatProcedure is the fully-qualified name of the
+	// NotificationService's LinkTelegramChat RPC.
+	NotificationServiceLinkTelegramChatProcedure = "/kindlast.core.v1.NotificationService/LinkTelegramChat"
+	// NotificationServiceVerifyTelegramChatProcedure is the fully-qualified name of the
+	// NotificationService's VerifyTelegramChat RPC.
+	NotificationServiceVerifyTelegramChatProcedure = "/kindlast.core.v1.NotificationService/VerifyTelegramChat"
+	// NotificationServiceUnlinkTelegramChatProcedure is the fully-qualified name of the
+	// NotificationService's UnlinkTelegramChat RPC.
+	NotificationServiceUnlinkTelegramChatProcedure = "/kindlast.core.v1.NotificationService/UnlinkTelegramChat"
 )
 
 // NotificationServiceClient is a client for the kindlast.core.v1.NotificationService service.
@@ -73,6 +85,52 @@ type NotificationServiceClient interface {
 	// submit mail. A self-hoster with no SMTP has no channels at all, and saying
 	// so plainly is better than listing one that will queue forever.
 	GetNotificationCapabilities(context.Context, *connect.Request[v1.GetNotificationCapabilitiesRequest]) (*connect.Response[v1.GetNotificationCapabilitiesResponse], error)
+	// The caller's own linked channels in the active organisation (ENT-263).
+	//
+	// No user id here either, and for a sharper reason than the preferences
+	// RPCs: a linked chat is somebody's messaging identity, so an RPC that could
+	// name a colleague would be an endpoint for enumerating which of your
+	// co-workers can be reached on Telegram and at which chat. The policy pins
+	// `user_id` to the caller and there is nowhere to pass another.
+	//
+	// The bot token is not here and is in no message in this file. It is an
+	// operator secret read from core-api's configuration by the dispatcher, and
+	// an RPC a browser can call is the last place it should be reachable from.
+	ListLinkedChannels(context.Context, *connect.Request[v1.ListLinkedChannelsRequest]) (*connect.Response[v1.ListLinkedChannelsResponse], error)
+	// Claim a Telegram chat and send a code to it.
+	//
+	// Claiming is not linking. This records the chat id the caller supplied and
+	// queues a short-lived code to it through the same outbox every other
+	// message goes through; nothing else is delivered to the chat until the code
+	// comes back through VerifyTelegramChat. Until then the dispatcher treats
+	// the chat as if it were not there.
+	//
+	// Calling it again replaces the claim, resets the attempt budget, and
+	// un-verifies whatever was verified before. That last part is deliberate:
+	// somebody relinking because they lost access to the old chat should stop
+	// receiving compliance notifications there at the moment they say so, not
+	// when they finish proving the new one.
+	LinkTelegramChat(context.Context, *connect.Request[v1.LinkTelegramChatRequest]) (*connect.Response[v1.LinkTelegramChatResponse], error)
+	// Prove the caller holds the chat, by typing back the code that arrived in
+	// it.
+	//
+	// Expired, already spent, wrong, and never issued are one answer, for the
+	// reason `redeem_capability_token` gives: telling them apart makes this an
+	// oracle for which chats have a code outstanding, and none of the four is
+	// actionable differently. Running out of attempts is the one exception,
+	// because "start again" is not the right advice when starting again will
+	// fail the same way.
+	VerifyTelegramChat(context.Context, *connect.Request[v1.VerifyTelegramChatRequest]) (*connect.Response[v1.VerifyTelegramChatResponse], error)
+	// Unlink the caller's Telegram chat.
+	//
+	// The row is deleted rather than flagged, so future notifications go to the
+	// remaining channel or nowhere and never to the unlinked chat. A flag would
+	// leave a row every future query had to remember to filter.
+	//
+	// The channel preference is deliberately left alone. Somebody unlinking in
+	// order to link a different chat has said what they want, and quietly
+	// resetting them to email would undo a setting they never touched.
+	UnlinkTelegramChat(context.Context, *connect.Request[v1.UnlinkTelegramChatRequest]) (*connect.Response[v1.UnlinkTelegramChatResponse], error)
 }
 
 // NewNotificationServiceClient constructs a client for the kindlast.core.v1.NotificationService
@@ -104,6 +162,30 @@ func NewNotificationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(notificationServiceMethods.ByName("GetNotificationCapabilities")),
 			connect.WithClientOptions(opts...),
 		),
+		listLinkedChannels: connect.NewClient[v1.ListLinkedChannelsRequest, v1.ListLinkedChannelsResponse](
+			httpClient,
+			baseURL+NotificationServiceListLinkedChannelsProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("ListLinkedChannels")),
+			connect.WithClientOptions(opts...),
+		),
+		linkTelegramChat: connect.NewClient[v1.LinkTelegramChatRequest, v1.LinkTelegramChatResponse](
+			httpClient,
+			baseURL+NotificationServiceLinkTelegramChatProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("LinkTelegramChat")),
+			connect.WithClientOptions(opts...),
+		),
+		verifyTelegramChat: connect.NewClient[v1.VerifyTelegramChatRequest, v1.VerifyTelegramChatResponse](
+			httpClient,
+			baseURL+NotificationServiceVerifyTelegramChatProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("VerifyTelegramChat")),
+			connect.WithClientOptions(opts...),
+		),
+		unlinkTelegramChat: connect.NewClient[v1.UnlinkTelegramChatRequest, v1.UnlinkTelegramChatResponse](
+			httpClient,
+			baseURL+NotificationServiceUnlinkTelegramChatProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("UnlinkTelegramChat")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -112,6 +194,10 @@ type notificationServiceClient struct {
 	getNotificationPreferences    *connect.Client[v1.GetNotificationPreferencesRequest, v1.GetNotificationPreferencesResponse]
 	updateNotificationPreferences *connect.Client[v1.UpdateNotificationPreferencesRequest, v1.UpdateNotificationPreferencesResponse]
 	getNotificationCapabilities   *connect.Client[v1.GetNotificationCapabilitiesRequest, v1.GetNotificationCapabilitiesResponse]
+	listLinkedChannels            *connect.Client[v1.ListLinkedChannelsRequest, v1.ListLinkedChannelsResponse]
+	linkTelegramChat              *connect.Client[v1.LinkTelegramChatRequest, v1.LinkTelegramChatResponse]
+	verifyTelegramChat            *connect.Client[v1.VerifyTelegramChatRequest, v1.VerifyTelegramChatResponse]
+	unlinkTelegramChat            *connect.Client[v1.UnlinkTelegramChatRequest, v1.UnlinkTelegramChatResponse]
 }
 
 // GetNotificationPreferences calls kindlast.core.v1.NotificationService.GetNotificationPreferences.
@@ -129,6 +215,26 @@ func (c *notificationServiceClient) UpdateNotificationPreferences(ctx context.Co
 // kindlast.core.v1.NotificationService.GetNotificationCapabilities.
 func (c *notificationServiceClient) GetNotificationCapabilities(ctx context.Context, req *connect.Request[v1.GetNotificationCapabilitiesRequest]) (*connect.Response[v1.GetNotificationCapabilitiesResponse], error) {
 	return c.getNotificationCapabilities.CallUnary(ctx, req)
+}
+
+// ListLinkedChannels calls kindlast.core.v1.NotificationService.ListLinkedChannels.
+func (c *notificationServiceClient) ListLinkedChannels(ctx context.Context, req *connect.Request[v1.ListLinkedChannelsRequest]) (*connect.Response[v1.ListLinkedChannelsResponse], error) {
+	return c.listLinkedChannels.CallUnary(ctx, req)
+}
+
+// LinkTelegramChat calls kindlast.core.v1.NotificationService.LinkTelegramChat.
+func (c *notificationServiceClient) LinkTelegramChat(ctx context.Context, req *connect.Request[v1.LinkTelegramChatRequest]) (*connect.Response[v1.LinkTelegramChatResponse], error) {
+	return c.linkTelegramChat.CallUnary(ctx, req)
+}
+
+// VerifyTelegramChat calls kindlast.core.v1.NotificationService.VerifyTelegramChat.
+func (c *notificationServiceClient) VerifyTelegramChat(ctx context.Context, req *connect.Request[v1.VerifyTelegramChatRequest]) (*connect.Response[v1.VerifyTelegramChatResponse], error) {
+	return c.verifyTelegramChat.CallUnary(ctx, req)
+}
+
+// UnlinkTelegramChat calls kindlast.core.v1.NotificationService.UnlinkTelegramChat.
+func (c *notificationServiceClient) UnlinkTelegramChat(ctx context.Context, req *connect.Request[v1.UnlinkTelegramChatRequest]) (*connect.Response[v1.UnlinkTelegramChatResponse], error) {
+	return c.unlinkTelegramChat.CallUnary(ctx, req)
 }
 
 // NotificationServiceHandler is an implementation of the kindlast.core.v1.NotificationService
@@ -161,6 +267,52 @@ type NotificationServiceHandler interface {
 	// submit mail. A self-hoster with no SMTP has no channels at all, and saying
 	// so plainly is better than listing one that will queue forever.
 	GetNotificationCapabilities(context.Context, *connect.Request[v1.GetNotificationCapabilitiesRequest]) (*connect.Response[v1.GetNotificationCapabilitiesResponse], error)
+	// The caller's own linked channels in the active organisation (ENT-263).
+	//
+	// No user id here either, and for a sharper reason than the preferences
+	// RPCs: a linked chat is somebody's messaging identity, so an RPC that could
+	// name a colleague would be an endpoint for enumerating which of your
+	// co-workers can be reached on Telegram and at which chat. The policy pins
+	// `user_id` to the caller and there is nowhere to pass another.
+	//
+	// The bot token is not here and is in no message in this file. It is an
+	// operator secret read from core-api's configuration by the dispatcher, and
+	// an RPC a browser can call is the last place it should be reachable from.
+	ListLinkedChannels(context.Context, *connect.Request[v1.ListLinkedChannelsRequest]) (*connect.Response[v1.ListLinkedChannelsResponse], error)
+	// Claim a Telegram chat and send a code to it.
+	//
+	// Claiming is not linking. This records the chat id the caller supplied and
+	// queues a short-lived code to it through the same outbox every other
+	// message goes through; nothing else is delivered to the chat until the code
+	// comes back through VerifyTelegramChat. Until then the dispatcher treats
+	// the chat as if it were not there.
+	//
+	// Calling it again replaces the claim, resets the attempt budget, and
+	// un-verifies whatever was verified before. That last part is deliberate:
+	// somebody relinking because they lost access to the old chat should stop
+	// receiving compliance notifications there at the moment they say so, not
+	// when they finish proving the new one.
+	LinkTelegramChat(context.Context, *connect.Request[v1.LinkTelegramChatRequest]) (*connect.Response[v1.LinkTelegramChatResponse], error)
+	// Prove the caller holds the chat, by typing back the code that arrived in
+	// it.
+	//
+	// Expired, already spent, wrong, and never issued are one answer, for the
+	// reason `redeem_capability_token` gives: telling them apart makes this an
+	// oracle for which chats have a code outstanding, and none of the four is
+	// actionable differently. Running out of attempts is the one exception,
+	// because "start again" is not the right advice when starting again will
+	// fail the same way.
+	VerifyTelegramChat(context.Context, *connect.Request[v1.VerifyTelegramChatRequest]) (*connect.Response[v1.VerifyTelegramChatResponse], error)
+	// Unlink the caller's Telegram chat.
+	//
+	// The row is deleted rather than flagged, so future notifications go to the
+	// remaining channel or nowhere and never to the unlinked chat. A flag would
+	// leave a row every future query had to remember to filter.
+	//
+	// The channel preference is deliberately left alone. Somebody unlinking in
+	// order to link a different chat has said what they want, and quietly
+	// resetting them to email would undo a setting they never touched.
+	UnlinkTelegramChat(context.Context, *connect.Request[v1.UnlinkTelegramChatRequest]) (*connect.Response[v1.UnlinkTelegramChatResponse], error)
 }
 
 // NewNotificationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -188,6 +340,30 @@ func NewNotificationServiceHandler(svc NotificationServiceHandler, opts ...conne
 		connect.WithSchema(notificationServiceMethods.ByName("GetNotificationCapabilities")),
 		connect.WithHandlerOptions(opts...),
 	)
+	notificationServiceListLinkedChannelsHandler := connect.NewUnaryHandler(
+		NotificationServiceListLinkedChannelsProcedure,
+		svc.ListLinkedChannels,
+		connect.WithSchema(notificationServiceMethods.ByName("ListLinkedChannels")),
+		connect.WithHandlerOptions(opts...),
+	)
+	notificationServiceLinkTelegramChatHandler := connect.NewUnaryHandler(
+		NotificationServiceLinkTelegramChatProcedure,
+		svc.LinkTelegramChat,
+		connect.WithSchema(notificationServiceMethods.ByName("LinkTelegramChat")),
+		connect.WithHandlerOptions(opts...),
+	)
+	notificationServiceVerifyTelegramChatHandler := connect.NewUnaryHandler(
+		NotificationServiceVerifyTelegramChatProcedure,
+		svc.VerifyTelegramChat,
+		connect.WithSchema(notificationServiceMethods.ByName("VerifyTelegramChat")),
+		connect.WithHandlerOptions(opts...),
+	)
+	notificationServiceUnlinkTelegramChatHandler := connect.NewUnaryHandler(
+		NotificationServiceUnlinkTelegramChatProcedure,
+		svc.UnlinkTelegramChat,
+		connect.WithSchema(notificationServiceMethods.ByName("UnlinkTelegramChat")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.core.v1.NotificationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NotificationServiceGetNotificationPreferencesProcedure:
@@ -196,6 +372,14 @@ func NewNotificationServiceHandler(svc NotificationServiceHandler, opts ...conne
 			notificationServiceUpdateNotificationPreferencesHandler.ServeHTTP(w, r)
 		case NotificationServiceGetNotificationCapabilitiesProcedure:
 			notificationServiceGetNotificationCapabilitiesHandler.ServeHTTP(w, r)
+		case NotificationServiceListLinkedChannelsProcedure:
+			notificationServiceListLinkedChannelsHandler.ServeHTTP(w, r)
+		case NotificationServiceLinkTelegramChatProcedure:
+			notificationServiceLinkTelegramChatHandler.ServeHTTP(w, r)
+		case NotificationServiceVerifyTelegramChatProcedure:
+			notificationServiceVerifyTelegramChatHandler.ServeHTTP(w, r)
+		case NotificationServiceUnlinkTelegramChatProcedure:
+			notificationServiceUnlinkTelegramChatHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -215,4 +399,20 @@ func (UnimplementedNotificationServiceHandler) UpdateNotificationPreferences(con
 
 func (UnimplementedNotificationServiceHandler) GetNotificationCapabilities(context.Context, *connect.Request[v1.GetNotificationCapabilitiesRequest]) (*connect.Response[v1.GetNotificationCapabilitiesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.NotificationService.GetNotificationCapabilities is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) ListLinkedChannels(context.Context, *connect.Request[v1.ListLinkedChannelsRequest]) (*connect.Response[v1.ListLinkedChannelsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.NotificationService.ListLinkedChannels is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) LinkTelegramChat(context.Context, *connect.Request[v1.LinkTelegramChatRequest]) (*connect.Response[v1.LinkTelegramChatResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.NotificationService.LinkTelegramChat is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) VerifyTelegramChat(context.Context, *connect.Request[v1.VerifyTelegramChatRequest]) (*connect.Response[v1.VerifyTelegramChatResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.NotificationService.VerifyTelegramChat is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) UnlinkTelegramChat(context.Context, *connect.Request[v1.UnlinkTelegramChatRequest]) (*connect.Response[v1.UnlinkTelegramChatResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.NotificationService.UnlinkTelegramChat is not implemented"))
 }
