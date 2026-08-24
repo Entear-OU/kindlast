@@ -589,6 +589,20 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.WatcherService.RaiseSignal": {
 			Method: "POST", Path: "/internal/v1/signals",
 		},
+		// The Hands' surface (ENT-261): what approving a finding will do, and
+		// the plan it prepares. Both are custom actions rather than resources,
+		// because neither creates one: the first runs an agent and the second
+		// writes a proposal onto a finding that already exists.
+		//
+		// NEITHER PATH APPROVES ANYTHING, and the absence is the point of the
+		// whole surface. Approving is `/api/v1/findings/{finding_id}:approve`
+		// on `findings:act`, which only a human's token carries.
+		"kindlast.platform.v1.HandsService.ExplainApproval": {
+			Method: "POST", Path: "/internal/v1/hands:explain",
+		},
+		"kindlast.platform.v1.HandsService.PrepareRecord": {
+			Method: "POST", Path: "/internal/v1/hands:prepare",
+		},
 
 		// Writing the corpus (ENT-207). Also on /internal/v1, and it has to be:
 		// a request from the console that could change the law would make the

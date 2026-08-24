@@ -61,6 +61,8 @@ from __future__ import annotations
 from typing import Protocol
 
 from kindlast.platform.v1 import (
+    hands_connect,
+    hands_pb2,
     ingest_connect,
     ingest_pb2,
     watcher_connect,
@@ -98,6 +100,7 @@ class CoreAPI:
         self._tokens = tokens
         self._ingest = ingest_connect.IngestServiceClientSync(base_url)
         self._watcher = watcher_connect.WatcherServiceClientSync(base_url)
+        self._hands = hands_connect.HandsServiceClientSync(base_url)
 
     def record_run(self, org_id: str, run: AgentRun) -> str:
         """Store the run, and treat a failure here as serious.
@@ -193,3 +196,65 @@ class CoreAPI:
             ) from exc
 
         return response.signal_id, response.raised
+
+    def prepare_record(
+        self, org_id: str, finding_id: str, plan: dict[str, object]
+    ) -> tuple[int, int]:
+        """Record what the Hands prepared for one finding: its one tool
+        (ENT-261).
+
+        # WHAT THIS ADDS TO WHAT THIS SERVICE CAN REACH, WHICH IS THE QUESTION
+
+        One write, onto a finding, of a plan a person reads before deciding and
+        of the payload the Executor would use if they approve. It adds no way
+        to approve anything: `FindingsService.ApproveFinding` is `findings:act`
+        and is not on this client, is not on this principal's scopes, and reads
+        its approver from a session GUC this service does not have. It adds no
+        way to create a register entry: that is `ExecutorService.ExecuteJob`,
+        acting on a job row written inside the approving transaction (00036),
+        and this client cannot write one.
+
+        Everything that decides whether this call is allowed happens on the far
+        side, and this client cannot ask core-api to skip any of it: the field
+        names are checked against the register the finding's action type names,
+        every value must name a fact the organisation holds, and the whole call
+        is refused once an approval has been enqueued.
+
+        NO ORGANISATION HEADER, for the reason `record_run` gives: this caller
+        holds no session, and the organisation is the one core-api named when
+        it built the request this worker was handed.
+
+        Returns `(filled, left)`: how many columns the finding's plan now
+        fills, and how many it leaves for a person. Both halves, because a
+        model told only how much it filled has been told the flattering half.
+        """
+        request = hands_pb2.PrepareRecordRequest(
+            org_id=org_id,
+            finding_id=finding_id,
+            explanation=str(plan.get("explanation") or ""),
+            fields=[
+                hands_pb2.PreparedField(
+                    name=str(f.get("name") or ""),
+                    values=[str(v) for v in f.get("values") or []],
+                    from_fact=str(f.get("from_fact") or ""),
+                )
+                for f in plan.get("fields") or []  # type: ignore[union-attr]
+            ],
+            left_for_you=[
+                hands_pb2.LeftForYou(
+                    name=str(item.get("name") or ""),
+                    why=str(item.get("why") or ""),
+                )
+                for item in plan.get("left_for_you") or []  # type: ignore[union-attr]
+            ],
+        )
+        try:
+            response = self._hands.prepare_record(
+                request, headers={"Authorization": f"Bearer {self._tokens.get()}"}
+            )
+        except Exception as exc:
+            raise CoreAPIError(
+                f"recording the prepared plan: {exc}", code=code_of(exc)
+            ) from exc
+
+        return response.filled, response.left

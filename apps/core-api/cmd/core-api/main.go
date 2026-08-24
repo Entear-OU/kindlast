@@ -34,6 +34,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/conversation"
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
 	executorservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/executor"
+	handsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/hands"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	integrationsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/integrations"
 	modelchoiceservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelchoice"
@@ -364,7 +365,13 @@ func run(logger *slog.Logger) error {
 		// executes as the approver. Same typed-nil guard as the rest.
 		ExecutorJobs: executorJobsDependency(outbox),
 		// The agentic Watcher's surface (ENT-258), on the producer pool.
-		Watcher:        watcherDependency(outbox),
+		Watcher: watcherDependency(outbox),
+		// The Hands' surface (ENT-261), on the same producer pool and behind
+		// the same typed-nil guard. The explainer is the same Intelligence
+		// client the narrator uses: one client, two RPCs, so a deployment
+		// cannot end up able to narrate and unable to explain.
+		HandsApprovals: handsDependency(outbox),
+		Explainer:      explainerDependency(cfg.IntelligenceURL, intelligenceCredentials),
 		Executions:     store,
 		Channels:       channels,
 		BillingEnabled: cfg.BillingEnabled,
@@ -681,6 +688,32 @@ func watcherDependency(store *postgres.AgentStore) watcherservice.Producer {
 		return nil
 	}
 	return store
+}
+
+// The same typed-nil guard, for the Hands' surface (ENT-261).
+func handsDependency(store *postgres.AgentStore) handsservice.Approvals {
+	if store == nil {
+		return nil
+	}
+	return store
+}
+
+// The Intelligence client again, typed as what the Hands needs of it
+// (ENT-261).
+//
+// Built from the same URL and the same credential as `drafterDependency`, so a
+// deployment cannot narrate and fail to explain. A separate function rather
+// than one returning both, because §21.6 puts an interface where it is used
+// and the two callers need different halves of the client.
+func explainerDependency(baseURL string, tokens *oidc.ClientCredentials) handsservice.Explainer {
+	if baseURL == "" || tokens == nil {
+		return nil
+	}
+	return platformv1connect.NewIntelligenceServiceClient(
+		&http.Client{
+			Timeout:   10 * time.Minute,
+			Transport: &oidc.Bearer{Source: tokens},
+		}, baseURL)
 }
 
 func agentRunsDependency(store *postgres.AgentStore) ingest.RunRecorder {

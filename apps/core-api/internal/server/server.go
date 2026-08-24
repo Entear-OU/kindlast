@@ -21,6 +21,7 @@ import (
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
 	executorservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/executor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/findings"
+	handsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/hands"
 	ingestservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	memoryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/memory"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
@@ -98,6 +99,25 @@ type Dependencies struct {
 	// producer pool. Registered with Producer, because they are the same pool
 	// and the same supported absence.
 	Watcher watcherservice.Producer
+
+	// HandsApprovals is what the Hands reads about one finding's approval, and
+	// the plan it writes back (ENT-261), on the producer pool.
+	//
+	// Nil when this deployment runs no agents, and then HandsService is not
+	// registered at all. Registered independently of Explainer below, for the
+	// reason NarrativeService is: a deployment with no model should answer
+	// "this deployment runs no Intelligence" rather than 404, because a 404
+	// makes "no model here" and "wrong URL" the same symptom.
+	//
+	// Prefixed because `Approvals` below is the act-from-email path, which is a
+	// human approving from their inbox and is the one thing the Hands must
+	// never be confusable with.
+	HandsApprovals handsservice.Approvals
+
+	// Explainer is Intelligence, when this deployment has one (ENT-261). Nil
+	// is supported and is the ordinary state behind the model compose profile.
+	Explainer handsservice.Explainer
+
 	// Channels is every channel DeliveryService can send on (ENT-263). An
 	// empty or nil router is the supported state before KINDLAST_SMTP_ADDR and
 	// KINDLAST_TELEGRAM_BOT_TOKEN are set: the rows queue, the list and the
@@ -439,6 +459,20 @@ func New(deps Dependencies) (http.Handler, error) {
 			executorservice.New(deps.ExecutorJobs, deps.Executions), internal))
 	}
 
+	// The Hands (ENT-261). What approving a finding will do, and the record it
+	// prepares. On the producer pool and the internal chain, like the Watcher.
+	//
+	// NOTHING HERE APPROVES, AND THAT IS WHY IT IS SAFE ON `internal:ingest`.
+	// Approving is `findings:act`, which only a human's token carries, and the
+	// record itself is created by ExecutorService from a job row that exists
+	// only because a human approved (00036).
+	if deps.HandsApprovals != nil {
+		mux.Handle(platformv1connect.NewHandsServiceHandler(
+			handsservice.New(deps.HandsApprovals, deps.Explainer, deps.Logger,
+				handsservice.WithModelRoute(handsRouterOrNil(deps.ModelRouter))),
+			internal))
+	}
+
 	// Writing the corpus (ENT-207). On the same shorter chain, for the same
 	// reason plus one of its own: the corpus has no `org_id` because it is the
 	// same law for every customer, so there is no organisation for a tenancy
@@ -681,6 +715,14 @@ func conversationRouterOrNil(r *modelroute.Resolver) conversationservice.Router 
 // would call a method on a nil pointer. One helper per interface rather than
 // generics, because the trap is easier to see written out than parameterised.
 func watcherRouterOrNil(r *modelroute.Resolver) watcherservice.ModelRoute {
+	if r == nil {
+		return nil
+	}
+	return r
+}
+
+// handsRouterOrNil is the same helper again, for the Hands (ENT-261).
+func handsRouterOrNil(r *modelroute.Resolver) handsservice.ModelRoute {
 	if r == nil {
 		return nil
 	}

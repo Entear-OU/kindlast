@@ -127,6 +127,11 @@ func Services() []protoreflect.ServiceDescriptor {
 		// WatcherService (ENT-258). What an agentic Watcher reads, and the
 		// one thing it may write: a signal, never a finding.
 		platformv1.File_kindlast_platform_v1_watcher_proto,
+		// HandsService (ENT-261). What approving a finding will do, and the
+		// record it prepares. On `internal:ingest`, and deliberately not on
+		// anything that approves: the Hands explains and prepares, and the
+		// decision stays a human's.
+		platformv1.File_kindlast_platform_v1_hands_proto,
 	}
 
 	var services []protoreflect.ServiceDescriptor

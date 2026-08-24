@@ -4,6 +4,7 @@ package kindlast.platform.v1;
 
 import "google/api/annotations.proto";
 import "kindlast/options/v1/scope.proto";
+import "kindlast/platform/v1/hands.proto";
 import "kindlast/platform/v1/watcher.proto";
 
 // The Intelligence service: the agent harness, as an RPC surface (ENT-218,
@@ -163,6 +164,36 @@ service IntelligenceService {
     option (kindlast.options.v1.required_scope) = "internal:intelligence";
     option (google.api.http) = {
       post: "/internal/v1/findings:answer"
+      body: "*"
+    };
+  }
+
+  // Runs the Hands over one finding: explain what approving it will do, and
+  // prepare the record it would create (ENT-261, §26.5).
+  //
+  // # THE THIRD SKILL, AND THE FIRST WHOSE JOB IS TO NOT DECIDE
+  //
+  // The Analyst is given everything and answers. The Watcher decides what is
+  // worth raising. This one is shown a decision a person is about to make and
+  // its whole job is to make that decision better informed without making any
+  // part of it.
+  //
+  // That is a property of the surface rather than of the prompt. The skill's
+  // allow-list holds one tool, `HandsService.PrepareRecord`, which writes a
+  // proposal onto a finding. There is no RPC anywhere this service can reach
+  // that approves a finding, and none that creates an entry in a register:
+  // approving is `findings:act`, which only a human's token carries, and
+  // creating is `ExecutorService.ExecuteJob`, which acts on an
+  // `executor_jobs` row that exists only because a human approved (00036).
+  // A model asking for either is refused against the allow-list, recorded as
+  // refused, and the run ends.
+  //
+  // Like DraftNarrative and Watch, a refusal is a 200 with `outcome:
+  // REFUSED`. See DraftNarrative's comment for why.
+  rpc ExplainApproval(ExplainApprovalRequest) returns (ExplainApprovalResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:intelligence";
+    option (google.api.http) = {
+      post: "/internal/v1/approvals:explain"
       body: "*"
     };
   }
@@ -540,4 +571,71 @@ enum AnswerOutcome {
   ANSWER_OUTCOME_REFUSED = 2;
   // Something went wrong that was nobody's policy.
   ANSWER_OUTCOME_FAILED = 3;
+}
+
+// ExplainApprovalRequest is one finding's approval, as core-api assembled it.
+//
+// Caller-assembled for the reason §26.2 gives and WatchRequest repeats:
+// fetching the context is not a decision, so it happens in Go where the
+// tenancy GUCs and the corpus already are, and the run stays a pure function
+// of its inputs.
+message ExplainApprovalRequest {
+  // The organisation this run is for. Carried in the message because this
+  // caller holds no session; used to record the run and to name the
+  // organisation on the one tool this skill may call, never to decide what
+  // may be read.
+  string org_id = 1;
+
+  // The finding, the register an approval would write to, its columns, and
+  // what this organisation is believed to be.
+  //
+  // The whole message rather than its fields copied across, so there is one
+  // definition of what a Hands run sees. A second copy would drift the first
+  // time a field is added to one and not the other, and what would go wrong
+  // is a model quietly reasoning without something core-api thought it had
+  // been given.
+  ApprovalContext context = 2;
+
+  // Which model this run is recorded against (ENT-236, §26.6): names only,
+  // for the run record. Absent means the deployment's own model. Identical in
+  // meaning and in what it must never carry to DraftNarrativeRequest's field
+  // of the same name.
+  ModelEndpoint model_endpoint = 3;
+}
+
+message ExplainApprovalResponse {
+  ExplainOutcome outcome = 1;
+
+  // Why, when the outcome was not success. For a human to read.
+  string outcome_detail = 2;
+
+  // What approving will do, in this organisation's terms. Empty unless the
+  // outcome is SUCCEEDED, for the reason DraftNarrativeResponse withholds a
+  // refused narrative.
+  string explanation = 3;
+
+  // The plan, as it was accepted: what the run filled and from which fact,
+  // and what it left for a person.
+  //
+  // BOTH HALVES, AND THE SECOND IS THE ONE THAT MATTERS. A response listing
+  // only what was filled would let a caller render a record that reads as
+  // complete, which is the failure this agent exists to fix: today an
+  // approved ROPA finding produces a row saying "Not recorded" in every
+  // column, which is useless but honest, and a half-filled row presented as
+  // finished would be worse than either.
+  repeated PreparedField prepared = 4;
+  repeated LeftForYou left_for_you = 5;
+
+  // The `agent_runs` row this produced. Always set on a 200, for the reason
+  // DraftNarrativeResponse gives.
+  string agent_run_id = 6;
+}
+
+enum ExplainOutcome {
+  EXPLAIN_OUTCOME_UNSPECIFIED = 0;
+  EXPLAIN_OUTCOME_SUCCEEDED = 1;
+  // A guardrail stopped it. Not a kind of failure; see the RPC's comment.
+  EXPLAIN_OUTCOME_REFUSED = 2;
+  // Something went wrong that was nobody's policy.
+  EXPLAIN_OUTCOME_FAILED = 3;
 }

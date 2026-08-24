@@ -188,6 +188,60 @@ func (AnswerOutcome) EnumDescriptor() ([]byte, []int) {
 	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{2}
 }
 
+type ExplainOutcome int32
+
+const (
+	ExplainOutcome_EXPLAIN_OUTCOME_UNSPECIFIED ExplainOutcome = 0
+	ExplainOutcome_EXPLAIN_OUTCOME_SUCCEEDED   ExplainOutcome = 1
+	// A guardrail stopped it. Not a kind of failure; see the RPC's comment.
+	ExplainOutcome_EXPLAIN_OUTCOME_REFUSED ExplainOutcome = 2
+	// Something went wrong that was nobody's policy.
+	ExplainOutcome_EXPLAIN_OUTCOME_FAILED ExplainOutcome = 3
+)
+
+// Enum value maps for ExplainOutcome.
+var (
+	ExplainOutcome_name = map[int32]string{
+		0: "EXPLAIN_OUTCOME_UNSPECIFIED",
+		1: "EXPLAIN_OUTCOME_SUCCEEDED",
+		2: "EXPLAIN_OUTCOME_REFUSED",
+		3: "EXPLAIN_OUTCOME_FAILED",
+	}
+	ExplainOutcome_value = map[string]int32{
+		"EXPLAIN_OUTCOME_UNSPECIFIED": 0,
+		"EXPLAIN_OUTCOME_SUCCEEDED":   1,
+		"EXPLAIN_OUTCOME_REFUSED":     2,
+		"EXPLAIN_OUTCOME_FAILED":      3,
+	}
+)
+
+func (x ExplainOutcome) Enum() *ExplainOutcome {
+	p := new(ExplainOutcome)
+	*p = x
+	return p
+}
+
+func (x ExplainOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExplainOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_kindlast_platform_v1_intelligence_proto_enumTypes[3].Descriptor()
+}
+
+func (ExplainOutcome) Type() protoreflect.EnumType {
+	return &file_kindlast_platform_v1_intelligence_proto_enumTypes[3]
+}
+
+func (x ExplainOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExplainOutcome.Descriptor instead.
+func (ExplainOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{3}
+}
+
 type DraftNarrativeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The organisation this run is for.
@@ -1309,11 +1363,192 @@ func (x *RunProvenance) GetOutputTokens() int32 {
 	return 0
 }
 
+// ExplainApprovalRequest is one finding's approval, as core-api assembled it.
+//
+// Caller-assembled for the reason §26.2 gives and WatchRequest repeats:
+// fetching the context is not a decision, so it happens in Go where the
+// tenancy GUCs and the corpus already are, and the run stays a pure function
+// of its inputs.
+type ExplainApprovalRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The organisation this run is for. Carried in the message because this
+	// caller holds no session; used to record the run and to name the
+	// organisation on the one tool this skill may call, never to decide what
+	// may be read.
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// The finding, the register an approval would write to, its columns, and
+	// what this organisation is believed to be.
+	//
+	// The whole message rather than its fields copied across, so there is one
+	// definition of what a Hands run sees. A second copy would drift the first
+	// time a field is added to one and not the other, and what would go wrong
+	// is a model quietly reasoning without something core-api thought it had
+	// been given.
+	Context *ApprovalContext `protobuf:"bytes,2,opt,name=context,proto3" json:"context,omitempty"`
+	// Which model this run is recorded against (ENT-236, §26.6): names only,
+	// for the run record. Absent means the deployment's own model. Identical in
+	// meaning and in what it must never carry to DraftNarrativeRequest's field
+	// of the same name.
+	ModelEndpoint *ModelEndpoint `protobuf:"bytes,3,opt,name=model_endpoint,json=modelEndpoint,proto3" json:"model_endpoint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExplainApprovalRequest) Reset() {
+	*x = ExplainApprovalRequest{}
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExplainApprovalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExplainApprovalRequest) ProtoMessage() {}
+
+func (x *ExplainApprovalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExplainApprovalRequest.ProtoReflect.Descriptor instead.
+func (*ExplainApprovalRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ExplainApprovalRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *ExplainApprovalRequest) GetContext() *ApprovalContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *ExplainApprovalRequest) GetModelEndpoint() *ModelEndpoint {
+	if x != nil {
+		return x.ModelEndpoint
+	}
+	return nil
+}
+
+type ExplainApprovalResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Outcome ExplainOutcome         `protobuf:"varint,1,opt,name=outcome,proto3,enum=kindlast.platform.v1.ExplainOutcome" json:"outcome,omitempty"`
+	// Why, when the outcome was not success. For a human to read.
+	OutcomeDetail string `protobuf:"bytes,2,opt,name=outcome_detail,json=outcomeDetail,proto3" json:"outcome_detail,omitempty"`
+	// What approving will do, in this organisation's terms. Empty unless the
+	// outcome is SUCCEEDED, for the reason DraftNarrativeResponse withholds a
+	// refused narrative.
+	Explanation string `protobuf:"bytes,3,opt,name=explanation,proto3" json:"explanation,omitempty"`
+	// The plan, as it was accepted: what the run filled and from which fact,
+	// and what it left for a person.
+	//
+	// BOTH HALVES, AND THE SECOND IS THE ONE THAT MATTERS. A response listing
+	// only what was filled would let a caller render a record that reads as
+	// complete, which is the failure this agent exists to fix: today an
+	// approved ROPA finding produces a row saying "Not recorded" in every
+	// column, which is useless but honest, and a half-filled row presented as
+	// finished would be worse than either.
+	Prepared   []*PreparedField `protobuf:"bytes,4,rep,name=prepared,proto3" json:"prepared,omitempty"`
+	LeftForYou []*LeftForYou    `protobuf:"bytes,5,rep,name=left_for_you,json=leftForYou,proto3" json:"left_for_you,omitempty"`
+	// The `agent_runs` row this produced. Always set on a 200, for the reason
+	// DraftNarrativeResponse gives.
+	AgentRunId    string `protobuf:"bytes,6,opt,name=agent_run_id,json=agentRunId,proto3" json:"agent_run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExplainApprovalResponse) Reset() {
+	*x = ExplainApprovalResponse{}
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExplainApprovalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExplainApprovalResponse) ProtoMessage() {}
+
+func (x *ExplainApprovalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_intelligence_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExplainApprovalResponse.ProtoReflect.Descriptor instead.
+func (*ExplainApprovalResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_intelligence_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ExplainApprovalResponse) GetOutcome() ExplainOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return ExplainOutcome_EXPLAIN_OUTCOME_UNSPECIFIED
+}
+
+func (x *ExplainApprovalResponse) GetOutcomeDetail() string {
+	if x != nil {
+		return x.OutcomeDetail
+	}
+	return ""
+}
+
+func (x *ExplainApprovalResponse) GetExplanation() string {
+	if x != nil {
+		return x.Explanation
+	}
+	return ""
+}
+
+func (x *ExplainApprovalResponse) GetPrepared() []*PreparedField {
+	if x != nil {
+		return x.Prepared
+	}
+	return nil
+}
+
+func (x *ExplainApprovalResponse) GetLeftForYou() []*LeftForYou {
+	if x != nil {
+		return x.LeftForYou
+	}
+	return nil
+}
+
+func (x *ExplainApprovalResponse) GetAgentRunId() string {
+	if x != nil {
+		return x.AgentRunId
+	}
+	return ""
+}
+
 var File_kindlast_platform_v1_intelligence_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\n" +
-	"'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\x1a\"kindlast/platform/v1/watcher.proto\"\xad\x02\n" +
+	"'kindlast/platform/v1/intelligence.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\x1a kindlast/platform/v1/hands.proto\x1a\"kindlast/platform/v1/watcher.proto\"\xad\x02\n" +
 	"\x15DraftNarrativeRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x16\n" +
 	"\x06signal\x18\x02 \x01(\tR\x06signal\x12I\n" +
@@ -1389,7 +1624,20 @@ const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\rmodel_version\x18\x04 \x01(\tR\fmodelVersion\x12\x1a\n" +
 	"\bprovider\x18\x05 \x01(\tR\bprovider\x12!\n" +
 	"\finput_tokens\x18\x06 \x01(\x05R\vinputTokens\x12#\n" +
-	"\routput_tokens\x18\a \x01(\x05R\foutputTokens*\x7f\n" +
+	"\routput_tokens\x18\a \x01(\x05R\foutputTokens\"\xbc\x01\n" +
+	"\x16ExplainApprovalRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12?\n" +
+	"\acontext\x18\x02 \x01(\v2%.kindlast.platform.v1.ApprovalContextR\acontext\x12J\n" +
+	"\x0emodel_endpoint\x18\x03 \x01(\v2#.kindlast.platform.v1.ModelEndpointR\rmodelEndpoint\"\xc9\x02\n" +
+	"\x17ExplainApprovalResponse\x12>\n" +
+	"\aoutcome\x18\x01 \x01(\x0e2$.kindlast.platform.v1.ExplainOutcomeR\aoutcome\x12%\n" +
+	"\x0eoutcome_detail\x18\x02 \x01(\tR\routcomeDetail\x12 \n" +
+	"\vexplanation\x18\x03 \x01(\tR\vexplanation\x12?\n" +
+	"\bprepared\x18\x04 \x03(\v2#.kindlast.platform.v1.PreparedFieldR\bprepared\x12B\n" +
+	"\fleft_for_you\x18\x05 \x03(\v2 .kindlast.platform.v1.LeftForYouR\n" +
+	"leftForYou\x12 \n" +
+	"\fagent_run_id\x18\x06 \x01(\tR\n" +
+	"agentRunId*\x7f\n" +
 	"\fDraftOutcome\x12\x1d\n" +
 	"\x19DRAFT_OUTCOME_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17DRAFT_OUTCOME_SUCCEEDED\x10\x01\x12\x19\n" +
@@ -1404,11 +1652,17 @@ const file_kindlast_platform_v1_intelligence_proto_rawDesc = "" +
 	"\x1aANSWER_OUTCOME_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18ANSWER_OUTCOME_SUCCEEDED\x10\x01\x12\x1a\n" +
 	"\x16ANSWER_OUTCOME_REFUSED\x10\x02\x12\x19\n" +
-	"\x15ANSWER_OUTCOME_FAILED\x10\x032\x9d\x04\n" +
+	"\x15ANSWER_OUTCOME_FAILED\x10\x03*\x89\x01\n" +
+	"\x0eExplainOutcome\x12\x1f\n" +
+	"\x1bEXPLAIN_OUTCOME_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19EXPLAIN_OUTCOME_SUCCEEDED\x10\x01\x12\x1b\n" +
+	"\x17EXPLAIN_OUTCOME_REFUSED\x10\x02\x12\x1a\n" +
+	"\x16EXPLAIN_OUTCOME_FAILED\x10\x032\xd2\x05\n" +
 	"\x13IntelligenceService\x12\xae\x01\n" +
 	"\x0eDraftNarrative\x12+.kindlast.platform.v1.DraftNarrativeRequest\x1a,.kindlast.platform.v1.DraftNarrativeResponse\"A\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/internal/v1/narratives:draft\x12\x8f\x01\n" +
 	"\x05Watch\x12\".kindlast.platform.v1.WatchRequest\x1a#.kindlast.platform.v1.WatchResponse\"=\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/internal/v1/sweeps:watch\x12\xc2\x01\n" +
-	"\x15AnswerFindingQuestion\x122.kindlast.platform.v1.AnswerFindingQuestionRequest\x1a3.kindlast.platform.v1.AnswerFindingQuestionResponse\"@\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/internal/v1/findings:answerB\xe5\x01\n" +
+	"\x15AnswerFindingQuestion\x122.kindlast.platform.v1.AnswerFindingQuestionRequest\x1a3.kindlast.platform.v1.AnswerFindingQuestionResponse\"@\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/internal/v1/findings:answer\x12\xb2\x01\n" +
+	"\x0fExplainApproval\x12,.kindlast.platform.v1.ExplainApprovalRequest\x1a-.kindlast.platform.v1.ExplainApprovalResponse\"B\x8a\xb5\x18\x15internal:intelligence\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/internal/v1/approvals:explainB\xe5\x01\n" +
 	"\x18com.kindlast.platform.v1B\x11IntelligenceProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
 var (
@@ -1423,52 +1677,65 @@ func file_kindlast_platform_v1_intelligence_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_intelligence_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_intelligence_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_kindlast_platform_v1_intelligence_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_kindlast_platform_v1_intelligence_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_kindlast_platform_v1_intelligence_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_kindlast_platform_v1_intelligence_proto_goTypes = []any{
 	(DraftOutcome)(0),                     // 0: kindlast.platform.v1.DraftOutcome
 	(WatchOutcome)(0),                     // 1: kindlast.platform.v1.WatchOutcome
 	(AnswerOutcome)(0),                    // 2: kindlast.platform.v1.AnswerOutcome
-	(*DraftNarrativeRequest)(nil),         // 3: kindlast.platform.v1.DraftNarrativeRequest
-	(*ModelEndpoint)(nil),                 // 4: kindlast.platform.v1.ModelEndpoint
-	(*ObligationContext)(nil),             // 5: kindlast.platform.v1.ObligationContext
-	(*DraftNarrativeResponse)(nil),        // 6: kindlast.platform.v1.DraftNarrativeResponse
-	(*RejectedCitation)(nil),              // 7: kindlast.platform.v1.RejectedCitation
-	(*WatchRequest)(nil),                  // 8: kindlast.platform.v1.WatchRequest
-	(*WatchResponse)(nil),                 // 9: kindlast.platform.v1.WatchResponse
-	(*RaisedSignal)(nil),                  // 10: kindlast.platform.v1.RaisedSignal
-	(*AnswerFindingQuestionRequest)(nil),  // 11: kindlast.platform.v1.AnswerFindingQuestionRequest
-	(*FindingContext)(nil),                // 12: kindlast.platform.v1.FindingContext
-	(*AnswerFindingQuestionResponse)(nil), // 13: kindlast.platform.v1.AnswerFindingQuestionResponse
-	(*RunProvenance)(nil),                 // 14: kindlast.platform.v1.RunProvenance
-	(*WatcherContextResponse)(nil),        // 15: kindlast.platform.v1.WatcherContextResponse
+	(ExplainOutcome)(0),                   // 3: kindlast.platform.v1.ExplainOutcome
+	(*DraftNarrativeRequest)(nil),         // 4: kindlast.platform.v1.DraftNarrativeRequest
+	(*ModelEndpoint)(nil),                 // 5: kindlast.platform.v1.ModelEndpoint
+	(*ObligationContext)(nil),             // 6: kindlast.platform.v1.ObligationContext
+	(*DraftNarrativeResponse)(nil),        // 7: kindlast.platform.v1.DraftNarrativeResponse
+	(*RejectedCitation)(nil),              // 8: kindlast.platform.v1.RejectedCitation
+	(*WatchRequest)(nil),                  // 9: kindlast.platform.v1.WatchRequest
+	(*WatchResponse)(nil),                 // 10: kindlast.platform.v1.WatchResponse
+	(*RaisedSignal)(nil),                  // 11: kindlast.platform.v1.RaisedSignal
+	(*AnswerFindingQuestionRequest)(nil),  // 12: kindlast.platform.v1.AnswerFindingQuestionRequest
+	(*FindingContext)(nil),                // 13: kindlast.platform.v1.FindingContext
+	(*AnswerFindingQuestionResponse)(nil), // 14: kindlast.platform.v1.AnswerFindingQuestionResponse
+	(*RunProvenance)(nil),                 // 15: kindlast.platform.v1.RunProvenance
+	(*ExplainApprovalRequest)(nil),        // 16: kindlast.platform.v1.ExplainApprovalRequest
+	(*ExplainApprovalResponse)(nil),       // 17: kindlast.platform.v1.ExplainApprovalResponse
+	(*WatcherContextResponse)(nil),        // 18: kindlast.platform.v1.WatcherContextResponse
+	(*ApprovalContext)(nil),               // 19: kindlast.platform.v1.ApprovalContext
+	(*PreparedField)(nil),                 // 20: kindlast.platform.v1.PreparedField
+	(*LeftForYou)(nil),                    // 21: kindlast.platform.v1.LeftForYou
 }
 var file_kindlast_platform_v1_intelligence_proto_depIdxs = []int32{
-	5,  // 0: kindlast.platform.v1.DraftNarrativeRequest.obligations:type_name -> kindlast.platform.v1.ObligationContext
-	4,  // 1: kindlast.platform.v1.DraftNarrativeRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
+	6,  // 0: kindlast.platform.v1.DraftNarrativeRequest.obligations:type_name -> kindlast.platform.v1.ObligationContext
+	5,  // 1: kindlast.platform.v1.DraftNarrativeRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
 	0,  // 2: kindlast.platform.v1.DraftNarrativeResponse.outcome:type_name -> kindlast.platform.v1.DraftOutcome
-	7,  // 3: kindlast.platform.v1.DraftNarrativeResponse.rejected_citations:type_name -> kindlast.platform.v1.RejectedCitation
-	15, // 4: kindlast.platform.v1.WatchRequest.context:type_name -> kindlast.platform.v1.WatcherContextResponse
-	4,  // 5: kindlast.platform.v1.WatchRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
+	8,  // 3: kindlast.platform.v1.DraftNarrativeResponse.rejected_citations:type_name -> kindlast.platform.v1.RejectedCitation
+	18, // 4: kindlast.platform.v1.WatchRequest.context:type_name -> kindlast.platform.v1.WatcherContextResponse
+	5,  // 5: kindlast.platform.v1.WatchRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
 	1,  // 6: kindlast.platform.v1.WatchResponse.outcome:type_name -> kindlast.platform.v1.WatchOutcome
-	10, // 7: kindlast.platform.v1.WatchResponse.signals:type_name -> kindlast.platform.v1.RaisedSignal
-	12, // 8: kindlast.platform.v1.AnswerFindingQuestionRequest.finding:type_name -> kindlast.platform.v1.FindingContext
-	5,  // 9: kindlast.platform.v1.AnswerFindingQuestionRequest.obligations:type_name -> kindlast.platform.v1.ObligationContext
-	4,  // 10: kindlast.platform.v1.AnswerFindingQuestionRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
+	11, // 7: kindlast.platform.v1.WatchResponse.signals:type_name -> kindlast.platform.v1.RaisedSignal
+	13, // 8: kindlast.platform.v1.AnswerFindingQuestionRequest.finding:type_name -> kindlast.platform.v1.FindingContext
+	6,  // 9: kindlast.platform.v1.AnswerFindingQuestionRequest.obligations:type_name -> kindlast.platform.v1.ObligationContext
+	5,  // 10: kindlast.platform.v1.AnswerFindingQuestionRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
 	2,  // 11: kindlast.platform.v1.AnswerFindingQuestionResponse.outcome:type_name -> kindlast.platform.v1.AnswerOutcome
-	7,  // 12: kindlast.platform.v1.AnswerFindingQuestionResponse.rejected_citations:type_name -> kindlast.platform.v1.RejectedCitation
-	14, // 13: kindlast.platform.v1.AnswerFindingQuestionResponse.provenance:type_name -> kindlast.platform.v1.RunProvenance
-	3,  // 14: kindlast.platform.v1.IntelligenceService.DraftNarrative:input_type -> kindlast.platform.v1.DraftNarrativeRequest
-	8,  // 15: kindlast.platform.v1.IntelligenceService.Watch:input_type -> kindlast.platform.v1.WatchRequest
-	11, // 16: kindlast.platform.v1.IntelligenceService.AnswerFindingQuestion:input_type -> kindlast.platform.v1.AnswerFindingQuestionRequest
-	6,  // 17: kindlast.platform.v1.IntelligenceService.DraftNarrative:output_type -> kindlast.platform.v1.DraftNarrativeResponse
-	9,  // 18: kindlast.platform.v1.IntelligenceService.Watch:output_type -> kindlast.platform.v1.WatchResponse
-	13, // 19: kindlast.platform.v1.IntelligenceService.AnswerFindingQuestion:output_type -> kindlast.platform.v1.AnswerFindingQuestionResponse
-	17, // [17:20] is the sub-list for method output_type
-	14, // [14:17] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	8,  // 12: kindlast.platform.v1.AnswerFindingQuestionResponse.rejected_citations:type_name -> kindlast.platform.v1.RejectedCitation
+	15, // 13: kindlast.platform.v1.AnswerFindingQuestionResponse.provenance:type_name -> kindlast.platform.v1.RunProvenance
+	19, // 14: kindlast.platform.v1.ExplainApprovalRequest.context:type_name -> kindlast.platform.v1.ApprovalContext
+	5,  // 15: kindlast.platform.v1.ExplainApprovalRequest.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
+	3,  // 16: kindlast.platform.v1.ExplainApprovalResponse.outcome:type_name -> kindlast.platform.v1.ExplainOutcome
+	20, // 17: kindlast.platform.v1.ExplainApprovalResponse.prepared:type_name -> kindlast.platform.v1.PreparedField
+	21, // 18: kindlast.platform.v1.ExplainApprovalResponse.left_for_you:type_name -> kindlast.platform.v1.LeftForYou
+	4,  // 19: kindlast.platform.v1.IntelligenceService.DraftNarrative:input_type -> kindlast.platform.v1.DraftNarrativeRequest
+	9,  // 20: kindlast.platform.v1.IntelligenceService.Watch:input_type -> kindlast.platform.v1.WatchRequest
+	12, // 21: kindlast.platform.v1.IntelligenceService.AnswerFindingQuestion:input_type -> kindlast.platform.v1.AnswerFindingQuestionRequest
+	16, // 22: kindlast.platform.v1.IntelligenceService.ExplainApproval:input_type -> kindlast.platform.v1.ExplainApprovalRequest
+	7,  // 23: kindlast.platform.v1.IntelligenceService.DraftNarrative:output_type -> kindlast.platform.v1.DraftNarrativeResponse
+	10, // 24: kindlast.platform.v1.IntelligenceService.Watch:output_type -> kindlast.platform.v1.WatchResponse
+	14, // 25: kindlast.platform.v1.IntelligenceService.AnswerFindingQuestion:output_type -> kindlast.platform.v1.AnswerFindingQuestionResponse
+	17, // 26: kindlast.platform.v1.IntelligenceService.ExplainApproval:output_type -> kindlast.platform.v1.ExplainApprovalResponse
+	23, // [23:27] is the sub-list for method output_type
+	19, // [19:23] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_intelligence_proto_init() }
@@ -1476,14 +1743,15 @@ func file_kindlast_platform_v1_intelligence_proto_init() {
 	if File_kindlast_platform_v1_intelligence_proto != nil {
 		return
 	}
+	file_kindlast_platform_v1_hands_proto_init()
 	file_kindlast_platform_v1_watcher_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_intelligence_proto_rawDesc), len(file_kindlast_platform_v1_intelligence_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   12,
+			NumEnums:      4,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
