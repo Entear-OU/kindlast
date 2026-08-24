@@ -31,6 +31,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/conversation"
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
 	executorservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/executor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
@@ -390,6 +391,10 @@ func run(logger *slog.Logger) error {
 		// which is supported rather than broken (ENT-245).
 		Narratives: narrativesDependency(outbox),
 		Drafter:    drafterDependency(cfg.IntelligenceURL, intelligenceCredentials),
+		// The same service, asked a question by a person rather than by a job
+		// (ENT-270). Nil under the same conditions, and then the handler says
+		// this deployment has no model rather than failing.
+		Answerer: answererDependency(cfg.IntelligenceURL, intelligenceCredentials),
 		// An organisation's own provider, honoured by the narration job
 		// (ENT-236). Absent unless all of the agent pool, a sealing key and a
 		// permitted provider list are present, because honouring a choice
@@ -705,6 +710,36 @@ func drafterDependency(baseURL string, tokens *oidc.ClientCredentials) narrative
 	if baseURL == "" || tokens == nil {
 		return nil
 	}
+	return intelligenceClient(baseURL, tokens)
+}
+
+// The same client, for the question a person asks about a finding (ENT-270).
+//
+// A second function rather than one returning `any`, so each caller's
+// dependency is typed as the half of Intelligence it actually calls. Nil under
+// exactly the same conditions and for exactly the same reasons: see above.
+//
+// ONE DIFFERENCE WORTH NAMING, AND IT IS THE TIMEOUT. The ten minutes below is
+// right for a narration nobody is watching and wrong for a person waiting in
+// front of a page, but the timeout is not what should decide this: the
+// harness's wall clock refuses a run that took too long and records it as a
+// refusal a customer can read, where a client timeout leaves a run finishing in
+// the background with nobody to hand it to. So the budget stays the decider and
+// this stays generous, which is the same reasoning ENT-238 wrote down for the
+// narration client.
+func answererDependency(baseURL string, tokens *oidc.ClientCredentials) conversation.Answerer {
+	if baseURL == "" || tokens == nil {
+		return nil
+	}
+	return intelligenceClient(baseURL, tokens)
+}
+
+// intelligenceClient is the one construction both dependencies above share, so
+// a change to the transport or the token source cannot reach one caller and
+// miss the other. The bearer token is the whole point of it: ENT-245 shipped
+// this client without one and every call failed with "a bearer token is
+// required", and nothing but the live stack could see it.
+func intelligenceClient(baseURL string, tokens *oidc.ClientCredentials) platformv1connect.IntelligenceServiceClient {
 	return platformv1connect.NewIntelligenceServiceClient(
 		&http.Client{
 			Timeout:   10 * time.Minute,

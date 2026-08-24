@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
+import { AskAnalyst } from '@/components/agents/ask-analyst'
 import { ActControls } from '@/components/feed/act-controls'
 import { FindingNarrative } from '@/components/feed/finding-card'
 import { SeverityBadge, StatusLabel } from '@/components/feed/severity'
@@ -12,6 +13,7 @@ import { getFinding } from '@/lib/findings/client'
 import { effortSentence } from '@/lib/findings/effort'
 
 import { approve, reject, snooze } from '../actions'
+import { ask } from './actions'
 
 /**
  * The section this page is, for the tab strip (ENT-269). The organisation
@@ -203,6 +205,15 @@ export default async function FindingPage({
           Rejected: {finding.rejectionReason}
         </p>
       ) : null}
+
+      {/* The rail's first real conversation (ENT-270).
+          BELOW THE REGULATION AND BELOW THE DECISION, deliberately. The quoted
+          provision is the thing a person can check us against and the decision
+          is what they came to make; a chat box above either would put the
+          model's words where the law's are, which is the ENT-164 mistake at
+          page scale. It is also why the Analyst is forbidden to state the law
+          here: the passage above already does, and a person wrote it. */}
+      <AskAnalyst slug={slug} findingId={finding.findingId} action={ask} />
     </div>
   )
 }

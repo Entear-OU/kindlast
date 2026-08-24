@@ -36,8 +36,9 @@ from .auth.verifier import Verifier
 from .coreapi import CoreAPI, CoreAPIError
 from .harness.budget import Budget
 from .harness.citations import CitationValidator, OfferedObligations
+from .harness.converse import answer_question
 from .harness.model import Completer
-from .harness.run import Outcome, draft_narrative
+from .harness.run import AgentRun, Outcome, draft_narrative
 from .harness.watch import watch
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,14 @@ _WATCH_OUTCOMES = {
     Outcome.SUCCEEDED: intelligence_pb2.WATCH_OUTCOME_SUCCEEDED,
     Outcome.REFUSED: intelligence_pb2.WATCH_OUTCOME_REFUSED,
     Outcome.FAILED: intelligence_pb2.WATCH_OUTCOME_FAILED,
+}
+
+# And a third, for the conversation surface (ENT-270). Written out for the same
+# reason: three explicit maps cost three lines each and cannot silently default.
+_ANSWER_OUTCOMES = {
+    Outcome.SUCCEEDED: intelligence_pb2.ANSWER_OUTCOME_SUCCEEDED,
+    Outcome.REFUSED: intelligence_pb2.ANSWER_OUTCOME_REFUSED,
+    Outcome.FAILED: intelligence_pb2.ANSWER_OUTCOME_FAILED,
 }
 
 
@@ -273,6 +282,106 @@ class IntelligenceService:
             agent_run_id=agent_run_id,
         )
 
+    def answer_finding_question(
+        self,
+        request: intelligence_pb2.AnswerFindingQuestionRequest,
+        ctx: RequestContext,
+    ) -> intelligence_pb2.AnswerFindingQuestionResponse:
+        """The RPC: authorise, then answer.
+
+        # NO TEMPORAL ACTIVITY BESIDE THIS ONE, DELIBERATELY
+
+        `draft_narrative` and `watch` each have a pure sibling the worker calls
+        directly, because their callers are the engine on a queue. This has no
+        such caller and should not grow one: a person typed the question and is
+        watching the page. Putting it on a queue would buy retries for a run
+        whose asker has already reloaded, and would write what a customer typed
+        into a workflow history, which is a second place their words live for
+        no benefit they asked for.
+
+        So the wall clock is the bound, and a run that outlasts it is refused
+        with a sentence rather than retried.
+        """
+        self._authorise(ctx)
+
+        if not request.org_id:
+            raise ConnectError(Code.INVALID_ARGUMENT, "org_id is required")
+        if not request.HasField("finding"):
+            raise ConnectError(Code.INVALID_ARGUMENT, "finding is required")
+
+        obligations = [
+            {"slug": o.slug, "title": o.title, "summary": o.summary}
+            for o in request.obligations
+        ]
+        if not obligations:
+            # Refused rather than attempted, exactly as `draft` refuses. A run
+            # with nothing to cite can only answer citing nothing, and the
+            # useful answer to "why would the Analyst not explain this" is that
+            # it was asked with no context rather than that the model was coy.
+            raise ConnectError(
+                Code.INVALID_ARGUMENT,
+                "at least one obligation is required: a run with nothing to "
+                "cite cannot produce a citable answer",
+            )
+
+        model, model_name, model_version, provider = self._model_for(
+            request.org_id, request.model_endpoint
+        )
+
+        # A BLANK OR OVERLONG QUESTION IS NOT REFUSED HERE, and that is on
+        # purpose. The harness refuses it and records the run, so the person who
+        # asked gets a sentence and a record rather than a transport error with
+        # nothing behind it. INVALID_ARGUMENT above is reserved for a caller
+        # that built the request wrongly, which is a different audience.
+        run = answer_question(
+            question=request.question,
+            finding={
+                "detected": request.finding.detected,
+                "proposed_action": request.finding.proposed_action,
+                "severity": request.finding.severity,
+                "narrative": request.finding.narrative,
+            },
+            obligations=obligations,
+            model=model,
+            validator=CitationValidator(OfferedObligations(obligations)),
+            model_name=model_name,
+            model_version=model_version,
+            provider=provider,
+            budget=self._budget_template.renew() if self._budget_template else None,
+        )
+
+        # Recorded before the response is built, and a failure here is fatal,
+        # for the reason `draft` gives at length. It is sharper here than
+        # anywhere: this answer goes straight onto a person's screen, and §26
+        # requires that a run leaves a record a customer can read. An answer
+        # with no record behind it is the unprovenanced claim this service
+        # exists not to produce, delivered to the one person most likely to
+        # act on it.
+        try:
+            agent_run_id = self._core_api.record_run(request.org_id, run)
+        except CoreAPIError as exc:
+            logger.error("recording the answer run failed: %s", exc)
+            raise ConnectError(
+                Code.INTERNAL,
+                "the run completed but could not be recorded, so it is being "
+                "reported as failed rather than returned unprovenanced",
+            ) from exc
+
+        return intelligence_pb2.AnswerFindingQuestionResponse(
+            outcome=_ANSWER_OUTCOMES[run.outcome],
+            # Empty unless it succeeded. See DraftNarrativeResponse: a caller
+            # handed prose plus a note is a caller that shows the prose.
+            answer=run.narrative,
+            outcome_detail=run.outcome_detail,
+            resolved_citations=run.resolved_citations,
+            rejected_citations=[
+                intelligence_pb2.RejectedCitation(slug=r["slug"], reason=r["reason"])
+                for r in run.rejected_citations
+            ],
+            agent_run_id=agent_run_id,
+            provenance=_provenance(run),
+        )
+
     def _model_for(
         self, org_id: str, endpoint: intelligence_pb2.ModelEndpoint
     ) -> tuple[Completer, str, str, str]:
@@ -349,6 +458,25 @@ class IntelligenceService:
         except VerificationError as exc:
             logger.warning("refusing a token: %s", exc)
             raise ConnectError(Code.UNAUTHENTICATED, "the token was refused") from exc
+
+
+def _provenance(run: AgentRun) -> intelligence_pb2.RunProvenance:
+    """The part of the `agent_runs` row a person reads, from the run itself.
+
+    Taken from the same object that was just recorded, so the response and the
+    row cannot describe different runs. It exists at all because `agent_runs`
+    has no read path: a caller handed only an id would have nothing to resolve
+    it against, and "how this was produced" would be a heading over a uuid.
+    """
+    return intelligence_pb2.RunProvenance(
+        skill=run.skill,
+        skill_version=run.skill_version,
+        model=run.model,
+        model_version=run.model_version,
+        provider=run.provider,
+        input_tokens=run.input_tokens,
+        output_tokens=run.output_tokens,
+    )
 
 
 def _first_header(ctx: RequestContext, name: str) -> str | None:

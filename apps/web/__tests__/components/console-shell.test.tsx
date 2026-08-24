@@ -228,7 +228,7 @@ describe('the agent rail (ENT-222)', () => {
   // What survives here is the property this test was protecting: the rail says
   // something about running, per agent, in both layouts.
   it('carries a status for every agent, in both layouts', () => {
-    render(
+    const { container } = render(
       <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
         <div>child</div>
       </ConsoleShell>,
@@ -239,26 +239,44 @@ describe('the agent rail (ENT-222)', () => {
     //
     // Sourced from the catalogue rather than retyped, so a status whose
     // wording changes does not need this file edited to stay meaningful.
+    //
+    // Scoped to the pipeline lists rather than to the whole shell, because the
+    // card at the foot of each rail carries status lines of its own now
+    // (ENT-270) and they are about chat, call and walkthrough rather than about
+    // an agent. Counting both would make this assertion drift every time
+    // either half changed, which is the opposite of what it is for.
+    const pipelines = [...container.querySelectorAll('aside ol')]
+    expect(pipelines).toHaveLength(2)
+
     const labels = [
       ...new Set(AGENTS.map((agent) => STATUS_LABEL[agent.status])),
     ]
-    const rendered = labels.reduce(
-      (total, label) => total + screen.getAllByText(label).length,
+    const rendered = pipelines.reduce(
+      (total, pipeline) =>
+        total +
+        labels.reduce(
+          (found, label) =>
+            found + within(pipeline as HTMLElement).getAllByText(label).length,
+          0,
+        ),
       0,
     )
     expect(rendered).toBe(8)
   })
 
-  it('does not render call, chat or video as controls', () => {
+  it('offers chat and not call or walkthrough, in both layouts', () => {
     render(
       <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
         <div>child</div>
       </ConsoleShell>,
     )
-    // Announced, not offered. There is no conversational agent behind any of
-    // them yet, and a person who pressed one would wait for an answer that is
+    // Chat exists now (ENT-270) and is a link, once per layout. Call and
+    // walkthrough are still announced rather than offered: nothing is behind
+    // either, and a person who pressed one would wait for an answer that is
     // not coming.
-    for (const label of ['Chat', 'Call', 'Walkthrough']) {
+    expect(screen.getAllByRole('link', { name: /Chat/ })).toHaveLength(2)
+
+    for (const label of ['Call', 'Walkthrough']) {
       expect(screen.getAllByText(label)).toHaveLength(2)
       expect(screen.queryByRole('button', { name: label })).toBeNull()
       expect(screen.queryByRole('link', { name: label })).toBeNull()

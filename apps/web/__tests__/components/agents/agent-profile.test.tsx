@@ -19,22 +19,36 @@ import { agentBySlug } from '@/lib/agents/catalog'
  * to test a tenancy decision.
  */
 describe('an agent profile (ENT-232)', () => {
-  it('shows the skill and its version, because a run records both', () => {
+  it('shows every skill and its version, because a run records both', () => {
+    // EVERY skill, not the first. The Analyst has two since ENT-270 and they
+    // carry different versions, so showing one would put a version on this page
+    // that no run of the other ever recorded. Walked from the catalogue rather
+    // than named here, so a third skill is covered the day it is added.
     const analyst = agentBySlug('analyst')!
     render(<AgentProfile agent={analyst} />)
 
-    expect(screen.getByText(analyst.skill!.name)).toBeInTheDocument()
-    expect(
-      screen.getByText(new RegExp(analyst.skill!.version)),
-    ).toBeInTheDocument()
+    expect(analyst.skills!.length).toBeGreaterThan(1)
+    for (const skill of analyst.skills!) {
+      expect(screen.getByText(skill.name)).toBeInTheDocument()
+      expect(
+        screen.getAllByText(new RegExp(skill.version)).length,
+      ).toBeGreaterThan(0)
+    }
   })
 
   it('says the Analyst may call no tools, rather than saying nothing', () => {
     // An empty allow-list is a statement: this skill is given what it needs and
     // then answers. Rendering nothing where the list would be reads as "we did
-    // not check", which is the opposite claim.
-    render(<AgentProfile agent={agentBySlug('analyst')!} />)
-    expect(screen.getByTestId('tool-allow-list')).toHaveTextContent(/no tools/i)
+    // not check", which is the opposite claim. One list per skill, because the
+    // claim is about a skill and not about an agent.
+    const analyst = agentBySlug('analyst')!
+    render(<AgentProfile agent={analyst} />)
+
+    const lists = screen.getAllByTestId('tool-allow-list')
+    expect(lists).toHaveLength(analyst.skills!.length)
+    for (const list of lists) {
+      expect(list).toHaveTextContent(/no tools/i)
+    }
   })
 
   it('shows no tool list for an agent that has no skill', () => {

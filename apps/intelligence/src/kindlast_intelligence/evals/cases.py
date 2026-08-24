@@ -43,6 +43,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..harness.run import Outcome
+from ..skills import analyst, conversation
 
 # Every control the golden set covers, by the name a case refers to it by.
 #
@@ -80,6 +81,19 @@ GUARDRAILS: tuple[str, ...] = (
     # which is why they read less tidily than the rest of this set.
     "claim_critic",
 )
+
+# The skills a case can be replayed through, by the name the skill declares.
+#
+# TAKEN FROM THE SKILLS RATHER THAN SPELLED OUT, so a rename moves both at once
+# and a case naming a skill that no longer exists is a load error rather than a
+# silent fallback to the narrative.
+#
+# There are two because ENT-270 opened a second way into the ring: the narrative
+# is drafted for somebody, the answer is asked for by somebody. They share every
+# control and differ in what is untrusted, which is exactly the kind of
+# difference a golden set exists to keep honest. One set of cases covering only
+# the older path would have read as coverage of both.
+SKILLS: tuple[str, ...] = (analyst.NAME, conversation.NAME)
 
 
 class TierResponse(BaseModel):
@@ -125,7 +139,34 @@ class GoldenCase(BaseModel):
     owasp: list[str] = Field(min_length=1)
     why: str
 
-    signal: str
+    # Which skill replays this case. Defaulted rather than required because
+    # every case written before ENT-270 is a narrative, and writing it out on
+    # all of them would be noise where the interesting cases are the few that
+    # say something else.
+    skill: str = analyst.NAME
+
+    # WHAT AN ORGANISATION TYPED ABOUT ITSELF, for a narrative case.
+    #
+    # Empty on a conversation case, and the pair below is empty on a narrative
+    # one. `_check` refuses a case that fills the wrong side, because a case
+    # carrying a signal that no run reads is a case that tests nothing while
+    # looking exactly like one that does.
+    signal: str = ""
+
+    # WHAT A PERSON TYPED, for a conversation case (ENT-270).
+    #
+    # A separate field from `signal` rather than a reused one, because they are
+    # different channels with different provenance: a signal came out of a
+    # profile filled in weeks ago, a question was composed a second ago by
+    # somebody watching the screen. Both are untrusted, and `untrusted` below is
+    # what the gate checks the fence against.
+    question: str = ""
+    # The finding the question is about, as the console shows it. Untrusted for
+    # the same reason: a finding's text is partly derived from what a customer
+    # wrote, so an injection planted during onboarding arrives through here
+    # rather than through the question.
+    finding: dict[str, str] = Field(default_factory=dict)
+
     obligations: list[dict[str, str]] = Field(min_length=1)
 
     # Limit overrides for the cases whose whole subject is a limit. Empty for
@@ -136,6 +177,20 @@ class GoldenCase(BaseModel):
     queued_seconds_ago: float = Field(default=0.0, ge=0)
 
     tiers: dict[str, TierResponse]
+
+    @property
+    def untrusted(self) -> list[str]:
+        """Every piece of text a customer supplied for this case.
+
+        The gate asserts that each of these reached a user message and none of
+        them reached the system prompt, which is the whole of LLM01 as this
+        harness holds it. Derived from the case rather than declared beside it,
+        so a case that grows a second untrusted channel cannot grow one the
+        fence check does not know about.
+        """
+        if self.skill == conversation.NAME:
+            return [self.question, *(v for v in self.finding.values() if v.strip())]
+        return [self.signal]
 
     @property
     def offered(self) -> set[str]:
@@ -178,6 +233,41 @@ def _check(case: GoldenCase, path: Path) -> None:
             f"{path.name}: case {case.id!r} names guardrail {case.guardrail!r}, "
             f"which is not in the registry {list(GUARDRAILS)}"
         )
+
+    if case.skill not in SKILLS:
+        raise ValueError(
+            f"{path.name}: case {case.id!r} names skill {case.skill!r}, which "
+            f"is not one this suite can replay {list(SKILLS)}"
+        )
+
+    # A CASE FILLING THE WRONG SIDE IS REFUSED RATHER THAN IGNORED.
+    #
+    # The run reads one of the two, so a conversation case carrying a signal
+    # would replay with the signal unread: the injection it was written around
+    # would never reach a prompt, the case would pass, and the file would read
+    # like coverage of something nothing ran.
+    if case.skill == conversation.NAME:
+        if not case.question.strip():
+            raise ValueError(
+                f"{path.name}: case {case.id!r} replays {conversation.NAME} and "
+                "has no question, so there is nothing for the run to answer"
+            )
+        if case.signal:
+            raise ValueError(
+                f"{path.name}: case {case.id!r} replays {conversation.NAME} and "
+                "carries a signal, which no conversation run reads"
+            )
+    else:
+        if not case.signal.strip():
+            raise ValueError(
+                f"{path.name}: case {case.id!r} replays {case.skill} and has no "
+                "signal, so the run has nothing to narrate"
+            )
+        if case.question or case.finding:
+            raise ValueError(
+                f"{path.name}: case {case.id!r} replays {case.skill} and carries "
+                "a question or a finding, neither of which a narration reads"
+            )
 
     keys = set(case.tiers)
     if keys == {"any"}:

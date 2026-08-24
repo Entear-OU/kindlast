@@ -30,7 +30,7 @@ from kindlast_intelligence.harness.citations import (
     CitationValidator,
     ValidationResult,
 )
-from kindlast_intelligence.skills import analyst
+from kindlast_intelligence.skills import analyst, conversation
 
 
 @pytest.fixture(scope="module")
@@ -219,6 +219,62 @@ def test_the_gate_fails_when_customer_text_reaches_the_system_prompt(
         return messages
 
     monkeypatch.setattr(analyst, "build_messages", leaky)
+
+    report = run_suite(golden)
+
+    assert any("prompt_injection" in failure for failure in report.failures)
+
+
+# --- The conversation surface, which is the second thing the ring guards -----
+
+
+def test_the_golden_set_covers_the_skill_a_person_types_into(golden):
+    """ENT-270's third acceptance criterion, as a gate rather than a unit test.
+
+    `test_conversation.py` proves the fencing by reading what `build_messages`
+    built, which is a claim about a function. This suite replays a recorded
+    model response through the real `answer_question`, which is a claim about
+    the run, and it is the one CI fails on.
+
+    It matters that this is asserted rather than assumed. The gate walks
+    whatever is in the golden directory, so a conversation case being deleted,
+    or never landing, leaves every check below passing over narrative cases
+    alone while reading as coverage of both.
+    """
+    answering = [case for case in golden if case.skill == conversation.NAME]
+
+    assert answering, (
+        "no case replays the conversation skill, so the surface a person types "
+        "into is guarded by nothing this gate can see"
+    )
+    assert any(case.guardrail == "prompt_injection" for case in answering), (
+        "the conversation surface has no injection case, and it is the surface "
+        "where the injection is composed by a person rather than inherited "
+        "from a profile"
+    )
+
+
+def test_the_gate_fails_when_a_question_reaches_the_system_prompt(
+    golden, monkeypatch
+):
+    """LLM01 again, on the channel ENT-270 opened.
+
+    The narrative's version of this breaks the one untrusted channel a drafting
+    run has. A conversation has two, and the second is the one somebody would
+    actually reach for: a question is composed freely, a second ago, by a person
+    who can watch what it does. Breaking the fence here is the same mistake in
+    the place it would be most tempting to make it, because concatenating the
+    question into the system prompt is what "give the model the question
+    properly" looks like when written carelessly.
+    """
+    original = conversation.build_messages
+
+    def leaky(question: str, finding, obligations):
+        messages = original(question, finding, obligations)
+        messages[0]["content"] += f"\n\nThey asked: {question}"
+        return messages
+
+    monkeypatch.setattr(conversation, "build_messages", leaky)
 
     report = run_suite(golden)
 

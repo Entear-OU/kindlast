@@ -115,6 +115,57 @@ service IntelligenceService {
       body: "*"
     };
   }
+
+  // Answer one question a person asked about one finding (ENT-270).
+  //
+  // # THE FIRST RUN A PERSON STARTS RATHER THAN A SCHEDULE
+  //
+  // The two RPCs above run because a sweep or a job asked. This one runs
+  // because somebody typed a question and is sitting in front of the answer,
+  // and that changes exactly two things.
+  //
+  // The first is what the run is given. A narration is handed the sweep's own
+  // words about a finding; this is handed those words AND a sentence the
+  // customer wrote a second ago. Both are data, both arrive fenced inside user
+  // messages, and neither is ever concatenated into the system prompt. The
+  // second channel is the one worth naming separately: a question is the only
+  // input to this service a person composes freely, so it is the one somebody
+  // would reach for to try to reprogram the Analyst. The controls that make
+  // that fail are the same ones the narrative already has, which is the reason
+  // this RPC exists here rather than as a new service with its own ring.
+  //
+  // The second is what a wait means. A narration that sat in a queue too long
+  // is refused because its asker has probably given up; that reasoning applies
+  // harder here, because the asker is definitely still there and definitely
+  // still waiting.
+  //
+  // # IT EXPLAINS APPLICABILITY AND WILL NOT STATE THE LAW
+  //
+  // The same split ENT-248 made for the narrative, enforced by the same claim
+  // critic, for the same measured reason: two live runs on the 2B tier stated
+  // the law backwards beside a citation that resolved correctly, which is the
+  // failure a customer checking the citation cannot detect. A question that
+  // invites a statement of law therefore earns a refusal, and the reader is
+  // shown the obligation's authored summary instead. That is a worse-feeling
+  // chat and a better product, and the alternative is a compliance assistant
+  // that answers "what does Article 30 require" from what a 4B remembers.
+  //
+  // # NOTHING IS STORED BUT THE RUN
+  //
+  // No transcript, no thread, no conversation table. The answer goes back to
+  // the caller and the `agent_runs` row is the only thing this leaves behind,
+  // which is deliberate for a first version: a stored conversation is a second
+  // place a customer's words live and a second thing to reason about under
+  // retention, and neither is needed to answer one question about one finding.
+  //
+  // Like the two RPCs above, a refusal is a 200 with `outcome: REFUSED`.
+  rpc AnswerFindingQuestion(AnswerFindingQuestionRequest) returns (AnswerFindingQuestionResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:intelligence";
+    option (google.api.http) = {
+      post: "/internal/v1/findings:answer"
+      body: "*"
+    };
+  }
 }
 
 message DraftNarrativeRequest {
@@ -367,4 +418,126 @@ enum WatchOutcome {
   WATCH_OUTCOME_REFUSED = 2;
   // Something went wrong that was nobody's policy.
   WATCH_OUTCOME_FAILED = 3;
+}
+
+message AnswerFindingQuestionRequest {
+  // The organisation this run is for. Used to record the run and to bind the
+  // completion to the right tenant, never to decide what may be read: core-api
+  // has already read the finding through the asker's own session and RLS, and
+  // this service reads nothing.
+  string org_id = 1;
+
+  // What the person typed, verbatim.
+  //
+  // THE ONLY INPUT TO THIS SERVICE A PERSON COMPOSES FREELY, and therefore the
+  // one that is most obviously an instruction if anything here is treated as
+  // one. It reaches the model in its own fenced user message and never in the
+  // system prompt. Nothing about that rests on the prompt asking: what holds
+  // is that the answer is checked by the citation validator against the
+  // obligations this run was offered, and by the claim critic, before a word
+  // of it goes back.
+  //
+  // Length is bounded by the harness rather than by a proto constraint, so a
+  // question that is too long is a recorded refusal a customer can read rather
+  // than a parse error somewhere in the transport.
+  string question = 2;
+
+  // The finding the question is about, in the words the person is looking at.
+  //
+  // Data as well, and from the same direction: a finding's text is partly
+  // derived from a compliance profile a customer filled in, so an injection
+  // planted during onboarding reaches this run through here rather than
+  // through `question`. Both channels are fenced, because closing one and
+  // leaving the other open closes nothing.
+  FindingContext finding = 3;
+
+  // The obligations this run may cite, and the ONLY ones it may cite.
+  //
+  // In practice exactly one, the obligation the finding was raised against,
+  // which is the strongest form of the check for the reason
+  // DraftNarrativeRequest gives at length: a citation to an article that
+  // genuinely exists and was never offered is still a fabrication.
+  repeated ObligationContext obligations = 4;
+
+  // Which model this run is recorded against (ENT-236, §26.6): names only, for
+  // the run record. Absent means the deployment's own model. Identical in
+  // meaning, and in what it must never carry, to DraftNarrativeRequest's field
+  // of the same name.
+  ModelEndpoint model_endpoint = 5;
+}
+
+// FindingContext is one finding as the person asking is seeing it.
+//
+// The fields the console renders and nothing else. Not the citation label and
+// not the obligation summary: those reach the model through ObligationContext,
+// where they are corpus rows a person wrote rather than text derived from a
+// profile, and that difference is which side of the fence they belong on.
+message FindingContext {
+  // The sweep's own sentence, which the console shows as the heading.
+  string detected = 1;
+  string proposed_action = 2;
+  string severity = 3;
+  // What the Analyst wrote about this finding earlier, if it wrote anything.
+  // Empty is ordinary: narration is a separate job and Intelligence is
+  // optional, so most findings carry none.
+  string narrative = 4;
+}
+
+message AnswerFindingQuestionResponse {
+  AnswerOutcome outcome = 1;
+
+  // Empty unless it succeeded, for the reason DraftNarrativeResponse gives: a
+  // caller handed prose plus a warning is a caller that eventually shows the
+  // prose.
+  string answer = 2;
+
+  // Why, when the outcome was not success. Written for the person who asked,
+  // because unlike a narration this refusal happens while somebody is waiting
+  // in front of it.
+  string outcome_detail = 3;
+
+  repeated string resolved_citations = 4;
+  repeated RejectedCitation rejected_citations = 5;
+
+  // The `agent_runs` row this produced. Always set on a 200.
+  string agent_run_id = 6;
+
+  // What that row says about how the answer was produced.
+  //
+  // CARRIED BACK RATHER THAN LEFT TO BE READ, and that is a limitation being
+  // worked around rather than a design. `agent_runs` has a write path and no
+  // read path, so a caller holding only the id has nothing to ask. Until there
+  // is one, the run reports its own provenance in the same response, so "how
+  // this was produced" can be shown to the person who asked instead of being
+  // an id they cannot resolve.
+  RunProvenance provenance = 7;
+}
+
+// RunProvenance is the part of an `agent_runs` row a person reads.
+//
+// The same values this run wrote through `IngestService.RecordAgentRun`, taken
+// from the same record in the same call, so the two cannot describe different
+// runs.
+message RunProvenance {
+  string skill = 1;
+  string skill_version = 2;
+  string model = 3;
+  string model_version = 4;
+  // Who served it: `instance` for the deployment's own endpoint, otherwise the
+  // organisation's chosen provider. A different question from `model`, and the
+  // one a sub-processor record needs.
+  string provider = 5;
+  int32 input_tokens = 6;
+  int32 output_tokens = 7;
+}
+
+enum AnswerOutcome {
+  ANSWER_OUTCOME_UNSPECIFIED = 0;
+  ANSWER_OUTCOME_SUCCEEDED = 1;
+  // A guardrail stopped it: a budget spent, a question longer than the harness
+  // accepts, a citation that did not resolve, an answer that stated the law.
+  // Not a kind of failure.
+  ANSWER_OUTCOME_REFUSED = 2;
+  // Something went wrong that was nobody's policy.
+  ANSWER_OUTCOME_FAILED = 3;
 }

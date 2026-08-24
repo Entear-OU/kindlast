@@ -34,6 +34,12 @@ func Services() []protoreflect.ServiceDescriptor {
 		// checked now, and the day a handler is added it cannot arrive
 		// undeclared.
 		corev1.File_kindlast_core_v1_records_proto,
+		// ConversationService (ENT-270). Asking the Analyst about one finding,
+		// on `agents:ask`. A separate scope from `findings:read` because
+		// reading a finding and running a model over it are separately
+		// dangerous, which is the same reasoning that keeps `findings:read` and
+		// `findings:act` apart.
+		corev1.File_kindlast_core_v1_conversation_proto,
 		// NotificationService (ENT-209). Its three RPCs carry
 		// `notifications:read` and `notifications:write`, which were already in
 		// HumanScopes and in the Zitadel seed before anything used them.

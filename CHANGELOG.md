@@ -1051,6 +1051,38 @@ what they have to do about it, which no commit subject knows.
   The refusal is unchanged and still lives in the database, which is where the
   authority belongs; this only makes it predictable.
 
+- **You can ask the Analyst why a finding applies to you** (ENT-270). The agent
+  rail has ended in a card promising chat, call and a walkthrough since the
+  console shell was built, over three icons that did nothing. The first of the
+  three is real: on any finding, a box asks the Analyst a question about that
+  finding, and the answer comes back with the record of the run that produced
+  it, so "how this was produced" is something to read rather than a heading
+  over nothing.
+
+  It answers about your organisation and refuses to state the law, which is a
+  deliberate limit rather than a gap. The provision is quoted on the same page,
+  from the corpus, written by a person, and a small model asked to restate it
+  gets it wrong in ways a reader checking the citation cannot see. An answer
+  that states the law anyway is refused, and so is one citing anything but the
+  obligation the finding was raised against, whatever the question asked for.
+
+  A refusal is drawn as a refusal rather than as a fault, because it is the
+  guardrail working, and it carries its run so you can check it.
+
+  **Operators:** nothing new to configure. A deployment running without the
+  model profile says so in the panel and nothing about the finding is missing
+  without it. The new RPC is `ConversationService.AskAboutFinding`, bound at
+  `POST /api/v1/findings/{finding_id}:ask` and carrying a new human scope,
+  `agents:ask`, which every signed-in member holds and which no identity
+  provider has to grant. It is separate from `findings:read` because reading a
+  finding and running a model over it are separately dangerous: one discloses,
+  the other spends a budget and sends your own words to whichever provider you
+  chose.
+
+  Call and Walkthrough now say they are not built yet, in the same words the
+  agents page uses for the Messenger and the Hands, rather than sharing one
+  sentence with something that works.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,

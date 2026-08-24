@@ -6,6 +6,45 @@ import { AGENTS, STATUS_LABEL } from '@/lib/agents/catalog'
 import { orgPath } from '@/lib/auth/org'
 
 /**
+ * The three ways of talking to an agent, and which of them exists (ENT-270).
+ *
+ * Chat does, and it is not a chat window: the Analyst answers about one
+ * finding, because a finding names exactly one obligation and offering the run
+ * that obligation and nothing else is what lets a citation to anything else be
+ * refused. A conversation with no subject would have nothing to check against,
+ * so the link goes to the feed, where a subject is.
+ *
+ * The other two are drawn with the same status vocabulary the agents page uses
+ * for the Messenger and the Hands, rather than with a second phrase meaning the
+ * same thing. That was already the lesson one level up this file: the rail said
+ * one sentence about four agents, and it was wrong the moment one of them
+ * moved.
+ */
+const WAYS_TO_TALK = [
+  {
+    icon: MessageSquare,
+    label: 'Chat',
+    status: 'working' as const,
+    // What it can be asked, in a person's words. Not "conversational agent":
+    // the useful thing to know is that it answers about one finding and not
+    // about anything else you might type at it.
+    detail: 'Ask why a finding applies to you, on the finding itself.',
+  },
+  {
+    icon: Phone,
+    label: 'Call',
+    status: 'not-built' as const,
+    detail: 'Speaking to an agent would need a voice path that does not exist.',
+  },
+  {
+    icon: Video,
+    label: 'Walkthrough',
+    status: 'not-built' as const,
+    detail: 'Being walked through a record would need one too.',
+  },
+]
+
+/**
  * The agent rail (ENT-222, made per-agent and addressable by ENT-232).
  *
  * The four agents, in the order work flows through them, drawn as the pipeline
@@ -35,14 +74,16 @@ import { orgPath } from '@/lib/auth/org'
  * it is allowed to touch, which are the two questions somebody has when they
  * find out an agent has been reading their compliance record.
  *
- * WHY THE CONTROLS ARE NOT BUTTONS
+ * WHY THE THREE CONTROLS ARE NOT ONE CLAIM ANY MORE
  *
- * Call, chat and video are the direction (ENT-222) and none of them exist:
- * there is no conversational agent behind any of the four. Rendering them as
- * controls would be the failure ENT-202 named, a control that silently does
- * nothing being worse than one visibly absent, and worse here because a person
- * would sit waiting for an answer that is not coming. They are drawn as what
- * they are: an announcement of what this rail becomes.
+ * Call, chat and video were the direction (ENT-222), none of them existed, and
+ * the card said so about all three at once. Chat exists now (ENT-270) and the
+ * other two are not close, so a single sentence about the three would be the
+ * same failure the per-agent status above was written to fix: a placeholder
+ * reading like a feature because it shares a line with one.
+ *
+ * Each carries its own state, in the same words the agents page uses, and only
+ * the one that goes somewhere is a link. See `WAYS_TO_TALK`.
  */
 
 /**
@@ -130,21 +171,35 @@ export function AgentRail({
 
       <div className="mt-auto rounded-lg border border-border/60 bg-muted/40 p-4">
         <p className="text-[13px] font-medium text-foreground">
-          Talking to them is coming
+          Talking to them
         </p>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          You will be able to ask any of them what they found and why, in
-          writing or out loud, and watch them walk you through it.
-        </p>
-        <ul className="mt-3 flex items-center gap-3 text-muted-foreground/70">
-          {[
-            { icon: MessageSquare, label: 'Chat' },
-            { icon: Phone, label: 'Call' },
-            { icon: Video, label: 'Walkthrough' },
-          ].map(({ icon: Icon, label }) => (
-            <li key={label} className="flex items-center gap-1.5 text-xs">
-              <Icon aria-hidden="true" className="size-3.5" />
-              {label}
+        <ul className="mt-3 space-y-3">
+          {WAYS_TO_TALK.map(({ icon: Icon, label, status, detail }) => (
+            <li key={label} className="text-xs">
+              <p className="flex items-center gap-1.5 text-foreground">
+                <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+                {/* A link only for the one that goes somewhere. The other two
+                    stay text for the ENT-202 reason: a control that silently
+                    does nothing is worse than one visibly absent, and worse
+                    here because a person would sit waiting for an answer. */}
+                {status === 'working' ? (
+                  <Link
+                    href={orgPath(orgSlug, '/feed')}
+                    className="underline-offset-4 hover:underline"
+                  >
+                    {label}
+                  </Link>
+                ) : (
+                  label
+                )}
+              </p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-muted-foreground/80">
+                <AgentStatusDot status={status} />
+                {STATUS_LABEL[status]}
+              </p>
+              <p className="mt-0.5 leading-relaxed text-muted-foreground">
+                {detail}
+              </p>
             </li>
           ))}
         </ul>

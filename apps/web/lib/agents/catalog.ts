@@ -96,8 +96,22 @@ export interface Agent {
   effects: string
   /** What is missing. Absent only for an agent with nothing missing. */
   remaining?: string
-  /** Absent unless a skill exists. Never an empty object standing in for one. */
-  skill?: AgentSkill
+  /**
+   * Every skill this agent runs, or nothing.
+   *
+   * A LIST BECAUSE THE ANALYST HAS TWO NOW (ENT-270), and singular is what it
+   * would have become at the first agent that grew a second one anyway. The
+   * Analyst narrates a finding on a job and answers a question about one in the
+   * console, and those are two modules, two versions and two rows in
+   * `agent_runs`. Collapsing them into whichever came first would put a version
+   * number on this page that no run of the other skill ever recorded.
+   *
+   * Absent rather than empty when there is no skill at all. An empty tool list
+   * is a statement the Analyst makes on purpose; an empty SKILL list would
+   * claim a guardrail with nothing behind it, which is the Messenger's case and
+   * the opposite claim.
+   */
+  skills?: readonly AgentSkill[]
 }
 
 /**
@@ -137,41 +151,63 @@ export const AGENTS: readonly Agent[] = [
     // left.
     remaining:
       'The console cannot yet show you the runs it has made, so you can see what it raised but not how it decided.',
-    skill: {
-      module: 'watcher',
-      name: 'watcher.sweep',
-      version: '1.0.0',
-      // ONE TOOL, AND THE PAGE SHOWS IT FOR THE REASON THE LIST EXISTS.
-      //
-      // A reader looking at "what can this thing do to my data" gets the whole
-      // answer: it can raise a signal, and there is nothing here that writes a
-      // finding, changes a record or sends anything. That is the separation
-      // the product rests on, and showing the list is how a customer checks it
-      // rather than taking our word for it.
-      tools: ['raise_signal'],
-    },
+    skills: [
+      {
+        module: 'watcher',
+        name: 'watcher.sweep',
+        version: '1.0.0',
+        // ONE TOOL, AND THE PAGE SHOWS IT FOR THE REASON THE LIST EXISTS.
+        //
+        // A reader looking at "what can this thing do to my data" gets the whole
+        // answer: it can raise a signal, and there is nothing here that writes a
+        // finding, changes a record or sends anything. That is the separation
+        // the product rests on, and showing the list is how a customer checks it
+        // rather than taking our word for it.
+        tools: ['raise_signal'],
+      },
+    ],
   },
   {
     slug: 'analyst',
     name: 'The Analyst',
-    does: 'Explains why a finding applies to you, beside the article it cites.',
+    does: 'Explains why a finding applies to you, beside the article it cites, and answers what you ask about it.',
     status: 'working',
-    runs: 'When something asks it for a narrative. Nothing asks it on a schedule yet.',
+    runs: 'On the sweep, to explain a new finding, and whenever you ask it a question about one.',
     effects:
       'Records how it worked, and nothing else. What it drafts comes back for something else to store, so it cannot write a finding itself.',
     // The write path exists (`RecordAgentRun`); the read path does not, so the
     // console has nothing to ask for. Proposed in the ENT-232 PR body.
-    remaining: 'The console cannot yet show you the runs it has made.',
-    skill: {
-      module: 'analyst',
-      name: 'analyst.narrative',
-      // 2.0.0 is ENT-248: the output split, so the skill explains applicability
-      // to this organisation and no longer states the law. A major bump because
-      // the field a caller reads was renamed, and because a run recorded under
-      // 1.0.0 was answering a materially different question.
-      version: '2.0.0',
-      tools: [],
-    },
+    //
+    // ENT-270 narrowed this without closing it. An answer to a question carries
+    // its own run back in the same response, so "how this was produced" is
+    // showable for the exchange you just had. Every earlier run is still
+    // unreachable, which is what this sentence is still about.
+    remaining:
+      'The console can show you the run behind an answer it just gave you, and cannot yet show you any run it made before that.',
+    skills: [
+      {
+        module: 'analyst',
+        name: 'analyst.narrative',
+        // 2.0.0 is ENT-248: the output split, so the skill explains applicability
+        // to this organisation and no longer states the law. A major bump because
+        // the field a caller reads was renamed, and because a run recorded under
+        // 1.0.0 was answering a materially different question.
+        version: '2.0.0',
+        tools: [],
+      },
+      {
+        // ENT-270. The rail's first real conversation: one question about one
+        // finding, offered that finding's obligation and nothing else, so an
+        // answer citing any other article is refused even when the article
+        // exists. A separate module rather than a mode of the one above, because
+        // it is asked a different question and its answers are recorded under a
+        // different name.
+        module: 'conversation',
+        name: 'analyst.answer',
+        version: '1.0.0',
+        tools: [],
+      },
+    ],
   },
   {
     slug: 'messenger',
