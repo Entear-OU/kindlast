@@ -323,7 +323,20 @@ services:
       # The image ships the `temporal` CLI, so the server probes itself the way
       # core-api and workers do, and dependents wait on a server that answers
       # rather than a process that started.
-      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      #
+      # IT ASKS ABOUT THE NAMESPACE, NOT ABOUT THE CLUSTER, AND THAT IS THE FIX
+      #
+      # This was `operator cluster health`, which passes the moment the server
+      # answers. Registering `default` is a LATER step of the same boot, so
+      # there is a window where this reports healthy and the namespace does not
+      # exist. `workers` then starts against a dependency compose has declared
+      # ready and fails, and the error names workers rather than Temporal.
+      #
+      # `namespace describe` closes it and does not weaken anything, because it
+      # needs the server to answer before it can describe anything: it is the
+      # old check plus the thing the old check was missing. See ENT-275, where
+      # this took a whole stack down and presented as a workers bug.
+      test: ["CMD", "temporal", "operator", "namespace", "describe", "--namespace", "default", "--address", "temporal:7233"]
       interval: 3s
       timeout: 5s
       retries: 40

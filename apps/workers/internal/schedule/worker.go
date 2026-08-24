@@ -8,6 +8,8 @@ import (
 	"time"
 
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
+	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/worker"
@@ -53,12 +55,31 @@ type Worker struct {
 	worker worker.Worker
 }
 
-// Connect dials the engine, retrying until it answers or the context ends.
+// Connect dials the engine and waits for the namespace, retrying until both
+// are there or the context ends.
 //
 // Retried for the same reason core-api retries OIDC discovery: `temporal` and
 // `workers` start together, and losing that race is ordinary rather than
 // exceptional. The compose file orders them, but a compose file is one
 // deployment and the binary should not depend on it.
+//
+// # THE NAMESPACE IS WAITED FOR SEPARATELY, BECAUSE DIALLING DOES NOT PROVE IT
+//
+// A dial succeeds against a server that is answering, and registering the
+// namespace is a later step in the same boot. So there is a window where the
+// server is up, `DialContext` returns a working client, and `default` does not
+// exist yet. Nothing here noticed: `Connect` returned, and the failure surfaced
+// in `Start` as a schedule that could not be created, which reads as a bug in
+// the schedules rather than as a dependency that was not ready.
+//
+// That window is what took a whole stack down (ENT-275). It is narrow on an
+// idle machine and wide on a loaded one, which is the worst shape a race can
+// have: it does not reproduce where anybody is looking.
+//
+// `DescribeNamespace` is the cheapest question that distinguishes the two, and
+// a `NamespaceNotFound` is treated as "not yet" rather than as an error,
+// because on first boot it always is. Any other error is a real one and ends
+// the attempt.
 func Connect(ctx context.Context, opts Options) (client.Client, error) {
 	const attempts = 30
 	var lastErr error
@@ -69,17 +90,40 @@ func Connect(ctx context.Context, opts Options) (client.Client, error) {
 			Logger:    slogAdapter{opts.Logger},
 		})
 		if err == nil {
-			return c, nil
+			_, err = c.WorkflowService().DescribeNamespace(ctx,
+				&workflowservice.DescribeNamespaceRequest{Namespace: opts.Namespace})
+			if err == nil {
+				return c, nil
+			}
+
+			// The client holds a connection, and this attempt is not keeping
+			// it. Closing here rather than deferring, because the loop may run
+			// thirty times and thirty leaked connections to a server that is
+			// still booting is its own problem.
+			c.Close()
+
+			var missing *serviceerror.NamespaceNotFound
+			if !errors.As(err, &missing) {
+				return nil, fmt.Errorf(
+					"schedule: temporal at %s refused a question about namespace %q: %w",
+					opts.Addr, opts.Namespace, err)
+			}
+			opts.Logger.Info("waiting for the temporal namespace",
+				"addr", opts.Addr, "namespace", opts.Namespace, "attempt", attempt)
+		} else {
+			opts.Logger.Info("waiting for temporal", "addr", opts.Addr, "attempt", attempt, "error", err)
 		}
 		lastErr = err
-		opts.Logger.Info("waiting for temporal", "addr", opts.Addr, "attempt", attempt, "error", err)
+
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-time.After(2 * time.Second):
 		}
 	}
-	return nil, fmt.Errorf("schedule: temporal at %s did not answer after %d attempts: %w", opts.Addr, attempts, lastErr)
+	return nil, fmt.Errorf(
+		"schedule: temporal at %s did not answer with namespace %q after %d attempts: %w",
+		opts.Addr, opts.Namespace, attempts, lastErr)
 }
 
 // Start registers the workflows and activities, starts polling the task
