@@ -119,7 +119,33 @@ class ToolDispatcher:
             )
             raise ToolRefused(tool, self._allowed)
 
-        result = implementation(**arguments)
+        # A TOOL THAT RAISES IS STILL A TOOL CALL THAT HAPPENED (ENT-277).
+        #
+        # This used to be a bare call followed by the append below, so anything
+        # the implementation raised skipped the record entirely. The two
+        # refusals above were written down and the one that actually reached
+        # the outside world was not, which is precisely backwards: a call that
+        # was refused is the one a customer most needs to see, and a citation
+        # this run tried to fabricate or a signal core-api rejected left no
+        # trace of having been attempted.
+        #
+        # Re-raised unchanged, because deciding what a refusal MEANS is the
+        # runner's job (see `watch`) and this class only records that it
+        # happened. Swallowing it here would turn a refusal into a success with
+        # a sad note attached.
+        try:
+            result = implementation(**arguments)
+        except Exception as exc:
+            self.calls.append(
+                ToolCall(
+                    tool=tool,
+                    arguments=arguments,
+                    refused=True,
+                    result_summary=_summarise(f"{type(exc).__name__}: {exc}"),
+                )
+            )
+            raise
+
         self.calls.append(
             ToolCall(tool=tool, arguments=arguments, result_summary=_summarise(result))
         )

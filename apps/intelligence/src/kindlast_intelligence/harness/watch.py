@@ -40,6 +40,7 @@ from ..skills.watcher import Step
 from .budget import Budget, BudgetExhausted
 from .citations import Citation, CitationValidator
 from .model import Completer, ModelError
+from .remote import CoreAPIError
 from .run import AgentRun, Outcome, ToolCall, call_model, finish_run
 from .tools import ToolDispatcher, ToolRefused
 
@@ -175,6 +176,30 @@ def watch(
         # ran out of model calls is REFUSED and reports both, because the
         # signals are written and saying otherwise would misdescribe the run.
         run.outcome = Outcome.REFUSED
+        run.outcome_detail = str(exc)
+        return _record_calls(run, dispatcher), raised
+
+    except CoreAPIError as exc:
+        # CORE-API SAYING NO IS AN OUTCOME, NOT AN ESCAPE (ENT-277).
+        #
+        # This clause did not exist, and the omission was the worst kind: a
+        # `CoreAPIError` matched none of the handlers above, so it left `watch`
+        # entirely and took the whole RPC with it. No `agent_runs` row was
+        # written, which is the one result the harness must never produce.
+        # Every run leaves a record a customer can read, and a run that
+        # vanished is a run they cannot ask about.
+        #
+        # It was found by the comparison gate: a model produced a `kind`
+        # outside the vocabulary, core-api refused it with `invalid_argument`
+        # exactly as designed, and the refusal became a 500 with no record of
+        # what had been asked.
+        #
+        # Which outcome it is comes from the code rather than from the message.
+        # The far side applying a rule is a refusal and belongs with the
+        # clauses above it; the far side failing to answer is a failure. See
+        # `CoreAPIError.refused`, which defaults an unclassified error to
+        # failure rather than flattering the run.
+        run.outcome = Outcome.REFUSED if exc.refused else Outcome.FAILED
         run.outcome_detail = str(exc)
         return _record_calls(run, dispatcher), raised
 
