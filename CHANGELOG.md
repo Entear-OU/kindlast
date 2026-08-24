@@ -983,6 +983,54 @@ what they have to do about it, which no commit subject knows.
   every page it visits sits behind the compliance-profile gate, so a brand-new
   fixture user never reaches one. Unblocking it needs a fixture that arrives
   already profiled.
+- **Onboarding is the readiness assessment now, and `/readiness` is gone**
+  (ENT-254). Two question flows existed and overlapped: thirteen tapped
+  questions on the public marketing page, which asked good questions and
+  recorded nothing, and about eleven typed ones inside the product, which fed
+  the Watcher. Asking a customer both was the problem. There is one set now,
+  eleven questions, every answer a tap, and it lives at
+  `/o/{slug}/onboarding` behind an account.
+
+  **Answers are saved as they are given.** The confirmation step is gone: a
+  fact is written the moment its question is answered, with `source =
+  'onboarding'`, through the same close-then-insert path a correction takes, so
+  it is visible and correctable on the memory page immediately. The
+  `compliance_profiles` row the Watcher reads is still written once, by the
+  answer that finishes the interview, so a half-finished interview produces no
+  findings and every authenticated route goes on routing that person back into
+  it. Skipping every question finishes nothing and writes no profile, because a
+  profile of defaults nobody stated is worse than no profile.
+
+  **The corpus is on screen while you answer.** The fifteen obligations
+  Kindlast holds are beside the questions and each one resolves as the answer
+  that decides it arrives, in three states: matched, set aside, and still open.
+  Every statement of law shown is a corpus row quoted byte for byte, with its
+  citation and a link to the official text; everything written about your
+  organisation is written from your own answers and asserts nothing legal.
+
+  **What a self-hoster and an integrator have to know.** `/readiness` now
+  returns 404 and is out of the sitemap; the marketing site's calls to action
+  point at sign-up, with copy that no longer promises an account-free
+  assessment. `AnswerQuestion` writes the fact, so a client no longer has to
+  call `ConfirmProfile`; that RPC still exists, still works, and now finishes
+  an interview early rather than being the only fact writer, and confirming an
+  already-completed session enqueues no second sweep. Every list question
+  carries `options`, a closed set of tokens the answer must come from, and a
+  `basis` naming the corpus obligation to quote; an answer outside the set is
+  refused with a sentence naming what was offered. Six questions were dropped
+  and none of their fact keys were removed from the vocabulary, so anything
+  already recorded is untouched and all of it is still writable from the memory
+  page: `industry`, `data_subjects`, `eu_jurisdictions` and `staff_count`,
+  which nothing reads, and the readiness page's two questions about a written
+  subject-access process and a breach plan, which have no fact key to be
+  recorded under. Four questions were added, all of them read by the Watcher
+  and none of them previously asked: lawful bases, high-risk processing,
+  large-scale monitoring, and whether any AI falls inside the AI Act's
+  high-risk list.
+
+  **An organisation that finished onboarding before this upgrade is
+  unaffected.** Its facts, its profile and its findings stand, and the
+  questions it was never asked can be answered on the memory page.
 
 ### Changed
 

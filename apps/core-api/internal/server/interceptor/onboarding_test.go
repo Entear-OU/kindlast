@@ -107,22 +107,24 @@ func onboarder(
 	return m
 }
 
-// answerText is what a person types for each question.
+// answerText is what a person taps for each question.
 //
 // Written out rather than generated, because the point is that these are the
-// words somebody said and the assertions below are about what they became.
+// answers somebody gave and the assertions below are about what they became.
+// Since ENT-254 a list answer is the comma-joined tokens of the options the
+// question offered, and anything else is refused.
 var answerText = map[corev1.ProfileFactKey]string{
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_INDUSTRY:              "we run a small bakery",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_DATA_CATEGORIES:       "names, email addresses",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_DATA_SUBJECTS:         "customers, staff",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_EU_JURISDICTIONS:      "Ireland, Spain",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_AI_SYSTEMS:            "none",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_VENDOR_LIST:           "Stripe, Hetzner",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU:  "yes",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_TRANSFER_DESTINATIONS: "United States (Stripe)",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_HAS_DPO:               "no",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_HAS_ROPA:              "unsure",
-	corev1.ProfileFactKey_PROFILE_FACT_KEY_STAFF_COUNT:           "9",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_DATA_CATEGORIES:        "contact_details,payment",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_LAWFUL_BASES:           "consent,contract",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_VENDOR_LIST:            "hosting,payments",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_TRANSFERS_OUTSIDE_EU:   "yes",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_TRANSFER_DESTINATIONS:  "united_states",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_HIGH_RISK_PROCESSING:   "no",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_LARGE_SCALE_MONITORING: "no",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_HAS_ROPA:               "unsure",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_HAS_DPO:                "no",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_AI_SYSTEMS:             "assistants",
+	corev1.ProfileFactKey_PROFILE_FACT_KEY_HIGH_RISK_AI_SYSTEM:    "no",
 }
 
 func TestAPersonJustProvisionedCanCompleteOnboarding(t *testing.T) {
@@ -158,7 +160,17 @@ func TestAPersonJustProvisionedCanCompleteOnboarding(t *testing.T) {
 		t.Fatal("the interview opened with no question")
 	}
 
-	// Answer whatever is asked, until nothing is.
+	// Every question offers exactly what the server accepts. A console
+	// rendering its own list would produce answers refused at the wire, and
+	// this is the only place both halves are on screen at once (ENT-254).
+	if question := state.GetNextQuestion(); question.GetShape() == corev1.AnswerShape_ANSWER_SHAPE_LIST &&
+		len(question.GetOptions()) == 0 {
+		t.Fatal("a list question arrived with nothing to pick from")
+	}
+
+	// Answer whatever is asked, until nothing is, checking after the first one
+	// that the answer was believed rather than parked.
+	first := true
 	for state.GetNextQuestion() != nil {
 		key := state.GetNextQuestion().GetKey()
 		text, known := answerText[key]
@@ -173,45 +185,50 @@ func TestAPersonJustProvisionedCanCompleteOnboarding(t *testing.T) {
 			t.Fatalf("answering %v with %q: %v", key, text, err)
 		}
 		state = answered.Msg.GetState()
+
+		if first {
+			// ENT-254: SAVED AS IT WAS GIVEN. One answer in, and the fact is
+			// already in the organisation memory, read through the service the
+			// console's memory page uses.
+			saved, err := memory.ListProfileFacts(t.Context(),
+				withHeaders(connect.NewRequest(&corev1.ListProfileFactsRequest{}), me.headers))
+			if err != nil {
+				t.Fatalf("reading the memory after one answer: %v", err)
+			}
+			if len(saved.Msg.GetFacts()) != 1 {
+				t.Fatalf("%d facts after one answer, want 1: an answer is believed as it is given",
+					len(saved.Msg.GetFacts()))
+			}
+			// And the profile the Watcher reads is NOT there yet, so a
+			// half-described organisation produces no findings and every
+			// authenticated route goes on routing this person back here.
+			if state.GetProfileExists() {
+				t.Fatal("a compliance profile existed after one answer of eleven")
+			}
+			first = false
+		}
 	}
 
 	if !state.GetReadyToConfirm() {
-		t.Fatal("every question is answered and the interview is not ready to confirm")
+		t.Fatal("every question is answered and the interview does not think so")
 	}
-	// NOTHING IS BELIEVED YET, which is the criterion ENT-212 asks for and the
-	// reason confirmation is a separate call rather than a screen.
-	if state.GetProfileExists() {
-		t.Fatal("a profile existed before anybody confirmed one")
+	// AND THE LAST ANSWER FINISHED IT, with no confirmation call. That is the
+	// whole of ENT-254's "no separate confirmation step": there is no screen to
+	// skip past because there is no screen.
+	if !state.GetProfileExists() {
+		t.Fatal("the last answer did not write the compliance profile")
 	}
-	facts, err := memory.ListProfileFacts(t.Context(),
-		withHeaders(connect.NewRequest(&corev1.ListProfileFactsRequest{}), me.headers))
-	if err != nil {
-		t.Fatalf("reading the profile before confirmation: %v", err)
-	}
-	if len(facts.Msg.GetFacts()) != 0 {
-		t.Fatalf("%d facts were recorded before anybody confirmed them",
-			len(facts.Msg.GetFacts()))
-	}
-
-	confirmed, err := onboarding.ConfirmProfile(t.Context(),
-		withHeaders(connect.NewRequest(&corev1.ConfirmProfileRequest{}), me.headers))
-	if err != nil {
-		t.Fatalf("confirming: %v", err)
-	}
-	if confirmed.Msg.GetProfileId() == "" {
-		t.Fatal("confirming produced no compliance profile")
-	}
-	if !confirmed.Msg.GetState().GetProfileExists() {
-		t.Fatal("the profile was written and the state says there is none")
+	if state.GetStatus() != "completed" {
+		t.Fatalf("the interview is %q after its last answer, want completed", state.GetStatus())
 	}
 
 	// AND THEY ARRIVED IN THE ORGANISATION MEMORY, not in a parallel profile.
 	// This is the read the console's memory page makes, through a different
-	// service, and it is the whole claim of the change.
-	facts, err = memory.ListProfileFacts(t.Context(),
+	// service, and it is the whole claim of ENT-212.
+	facts, err := memory.ListProfileFacts(t.Context(),
 		withHeaders(connect.NewRequest(&corev1.ListProfileFactsRequest{}), me.headers))
 	if err != nil {
-		t.Fatalf("reading the profile after confirmation: %v", err)
+		t.Fatalf("reading the profile after the interview: %v", err)
 	}
 	byKey := map[corev1.ProfileFactKey]*corev1.ProfileFact{}
 	for _, fact := range facts.Msg.GetFacts() {
@@ -227,10 +244,10 @@ func TestAPersonJustProvisionedCanCompleteOnboarding(t *testing.T) {
 		t.Fatalf("%d facts recorded, want %d", len(byKey), len(answerText))
 	}
 
-	jurisdictions := byKey[corev1.ProfileFactKey_PROFILE_FACT_KEY_EU_JURISDICTIONS]
-	if got := jurisdictions.GetValue().GetList().GetValues(); len(got) != 2 ||
-		got[0] != "Ireland" || got[1] != "Spain" {
-		t.Fatalf("%q became %v", answerText[corev1.ProfileFactKey_PROFILE_FACT_KEY_EU_JURISDICTIONS], got)
+	bases := byKey[corev1.ProfileFactKey_PROFILE_FACT_KEY_LAWFUL_BASES]
+	if got := bases.GetValue().GetList().GetValues(); len(got) != 2 ||
+		got[0] != "consent" || got[1] != "contract" {
+		t.Fatalf("%q became %v", answerText[corev1.ProfileFactKey_PROFILE_FACT_KEY_LAWFUL_BASES], got)
 	}
 	// Unsure survives as unsure rather than collapsing to no, which is a
 	// different claim about the same organisation and a different set of
@@ -238,9 +255,6 @@ func TestAPersonJustProvisionedCanCompleteOnboarding(t *testing.T) {
 	if byKey[corev1.ProfileFactKey_PROFILE_FACT_KEY_HAS_ROPA].GetValue().GetTriState() !=
 		corev1.TriState_TRI_STATE_UNSURE {
 		t.Fatal("an unsure answer did not survive as unsure")
-	}
-	if byKey[corev1.ProfileFactKey_PROFILE_FACT_KEY_STAFF_COUNT].GetValue().GetNumber() != 9 {
-		t.Fatal("the staff count did not arrive as a number")
 	}
 }
 
@@ -254,16 +268,18 @@ func TestAnAnswerTheProductCannotReadIsRefusedRatherThanInterpreted(t *testing.T
 		t.Fatalf("starting onboarding: %v", err)
 	}
 
-	// THE REFUSAL THE WHOLE DESIGN RESTS ON. The legacy extraction prompt told a
-	// model that "if they gave a range, take the midpoint", which is a headcount
-	// nobody stated deciding whether a threshold obligation applies.
+	// THE REFUSAL THE WHOLE DESIGN RESTS ON. Since ENT-254 every list answer is
+	// a token out of a closed set, and both evaluators that decide which
+	// obligations apply match on those tokens. A value outside the set would be
+	// a fact nothing will ever match, which is an obligation quietly ceasing to
+	// apply, and that is the failure ENT-246 spent a whole issue undoing.
 	_, err := onboarding.AnswerQuestion(t.Context(),
 		withHeaders(connect.NewRequest(&corev1.AnswerQuestionRequest{
-			Key:    corev1.ProfileFactKey_PROFILE_FACT_KEY_STAFF_COUNT,
-			Answer: "about fifty, maybe sixty",
+			Key:    corev1.ProfileFactKey_PROFILE_FACT_KEY_VENDOR_LIST,
+			Answer: "Stripe and a few others, I would have to check",
 		}), me.headers))
 	if err == nil {
-		t.Fatal("prose was accepted as a staff count")
+		t.Fatal("prose was accepted where a closed set of tokens is offered")
 	}
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("refused with %v, want invalid_argument: a bad answer is the "+
@@ -298,8 +314,8 @@ func TestSkippingAQuestionLeavesTheFactAbsentRatherThanGuessed(t *testing.T) {
 		key := state.GetNextQuestion().GetKey()
 		request := &corev1.AnswerQuestionRequest{Key: key}
 		// Skip everything except the one fact this test then looks for.
-		if key == corev1.ProfileFactKey_PROFILE_FACT_KEY_INDUSTRY {
-			request.Answer = "we run a small bakery"
+		if key == corev1.ProfileFactKey_PROFILE_FACT_KEY_HAS_ROPA {
+			request.Answer = "yes"
 		} else {
 			request.Skip = true
 			skipped++
@@ -315,11 +331,6 @@ func TestSkippingAQuestionLeavesTheFactAbsentRatherThanGuessed(t *testing.T) {
 		t.Fatal("nothing was skipped, so this test proves nothing")
 	}
 
-	if _, err := onboarding.ConfirmProfile(t.Context(),
-		withHeaders(connect.NewRequest(&corev1.ConfirmProfileRequest{}), me.headers)); err != nil {
-		t.Fatalf("confirming: %v", err)
-	}
-
 	facts, err := memory.ListProfileFacts(t.Context(),
 		withHeaders(connect.NewRequest(&corev1.ListProfileFactsRequest{}), me.headers))
 	if err != nil {
@@ -331,8 +342,49 @@ func TestSkippingAQuestionLeavesTheFactAbsentRatherThanGuessed(t *testing.T) {
 	if len(facts.Msg.GetFacts()) != 1 {
 		t.Fatalf("%d facts recorded after ten skips, want 1", len(facts.Msg.GetFacts()))
 	}
-	if facts.Msg.GetFacts()[0].GetKey() != corev1.ProfileFactKey_PROFILE_FACT_KEY_INDUSTRY {
+	if facts.Msg.GetFacts()[0].GetKey() != corev1.ProfileFactKey_PROFILE_FACT_KEY_HAS_ROPA {
 		t.Fatalf("the one recorded fact is %v", facts.Msg.GetFacts()[0].GetKey())
+	}
+}
+
+func TestSkippingEverythingWritesNoProfileToReasonFrom(t *testing.T) {
+	// The interview a person walked out of. Ten skips leave no fact, and a
+	// compliance profile built from a script's worth of defaults nobody stated
+	// would have the Watcher produce findings the customer never gave it
+	// grounds for. So the last skip finishes nothing: `profile_exists` stays
+	// false and every authenticated route goes on routing them back here.
+	auth := newAuthServer(t)
+	sessions, onboarding, memory := buildOnboardingChain(t, auth)
+	me := onboarder(t, auth, sessions, "dara")
+
+	started, err := onboarding.StartOnboarding(t.Context(),
+		withHeaders(connect.NewRequest(&corev1.StartOnboardingRequest{}), me.headers))
+	if err != nil {
+		t.Fatalf("starting onboarding: %v", err)
+	}
+
+	state := started.Msg.GetState()
+	for state.GetNextQuestion() != nil {
+		answered, err := onboarding.AnswerQuestion(t.Context(),
+			withHeaders(connect.NewRequest(&corev1.AnswerQuestionRequest{
+				Key: state.GetNextQuestion().GetKey(), Skip: true,
+			}), me.headers))
+		if err != nil {
+			t.Fatalf("skipping: %v", err)
+		}
+		state = answered.Msg.GetState()
+	}
+
+	if state.GetProfileExists() {
+		t.Fatal("skipping every question produced a compliance profile")
+	}
+	facts, err := memory.ListProfileFacts(t.Context(),
+		withHeaders(connect.NewRequest(&corev1.ListProfileFactsRequest{}), me.headers))
+	if err != nil {
+		t.Fatalf("reading the profile: %v", err)
+	}
+	if len(facts.Msg.GetFacts()) != 0 {
+		t.Fatalf("%d facts recorded after skipping everything", len(facts.Msg.GetFacts()))
 	}
 }
 
@@ -351,7 +403,7 @@ func TestOneOrganisationsAnswersAreInvisibleToAnother(t *testing.T) {
 	if _, err := onboarding.AnswerQuestion(t.Context(),
 		withHeaders(connect.NewRequest(&corev1.AnswerQuestionRequest{
 			Key:    started.Msg.GetState().GetNextQuestion().GetKey(),
-			Answer: "we run a small bakery",
+			Answer: answerText[started.Msg.GetState().GetNextQuestion().GetKey()],
 		}), ada.headers)); err != nil {
 		t.Fatalf("answering as Ada: %v", err)
 	}
@@ -451,13 +503,11 @@ func TestConfirmingOnboardingThroughTheRealChainLeavesASweepForTheWorker(t *test
 		next = answered.Msg.GetState()
 	}
 
-	confirmed, err := onboardingClient.ConfirmProfile(t.Context(),
-		withHeaders(connect.NewRequest(&corev1.ConfirmProfileRequest{}), me.headers))
-	if err != nil {
-		t.Fatalf("confirming through the real chain: %v", err)
-	}
-	if confirmed.Msg.GetProfileId() == "" {
-		t.Fatal("confirming through the real chain produced no profile")
+	// No confirmation call, because ENT-254 removed the step: the last answer
+	// wrote the profile and left the trigger. That is the property this test
+	// now carries end to end.
+	if !next.GetProfileExists() {
+		t.Fatal("the last answer through the real chain produced no profile")
 	}
 
 	// What the relay asks, on the agent pool, across the same connection

@@ -34,12 +34,37 @@ export type AnswerShape =
   | 'ANSWER_SHAPE_TRI_STATE'
   | 'ANSWER_SHAPE_NUMBER'
 
+/**
+ * One answer a list question offers (ENT-254).
+ *
+ * Declared by core-api and rendered here, never the other way round. A console
+ * that offered a token of its own would produce an answer the server refuses,
+ * which is the safe direction for that disagreement to fail in: the alternative
+ * is a fact the applicability rules will silently never match.
+ */
+export interface QuestionOption {
+  value?: string
+  label?: string
+  /** Picking this clears every other choice. */
+  exclusive?: boolean
+}
+
 export interface Question {
   key?: ProfileFactKey
   prompt?: string
   shape?: AnswerShape
   choices?: string[]
   help?: string
+  /** For a list question, the closed set to pick from. Empty for a tri-state. */
+  options?: QuestionOption[]
+  /**
+   * The corpus obligation to quote when somebody asks why we want to know.
+   *
+   * A slug, and the console renders that obligation's `summary` unedited. The
+   * statement of law comes from the corpus row byte for byte (ENT-248), so
+   * nothing on this side ever writes one.
+   */
+  basis?: string
 }
 
 export interface OnboardingTurn {

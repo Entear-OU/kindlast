@@ -37,26 +37,30 @@ func TestTheInterviewCoversEverythingTheWatcherReads(t *testing.T) {
 	// column takes its default forever and the organisation is quietly told a
 	// set of obligations that was never about them.
 	//
-	// NOT ENT-246'S FOUR, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.
+	// ENT-246'S FOUR ARE HERE NOW, AND THAT IS THE POINT OF ENT-254.
 	// `high_risk_processing`, `high_risk_ai_system`, `large_scale_monitoring`
 	// and `lawful_bases` are read straight out of `org_profile_facts`, and an
-	// absent one means the obligation does not apply, which is the direction
-	// ENT-246 chose deliberately. Adding them here would mean asking a founder
-	// four questions that are legal tests rather than facts about their
-	// business ("is your processing likely to result in a high risk to the
-	// rights and freedoms of natural persons"), and a wrong answer either
-	// asserts an expensive Data Protection Impact Assessment or hides one.
-	// Phrasing those so a non-lawyer can answer them correctly is a product
-	// problem that deserves its own review, not four lines appended to a
-	// script. They are answerable today on the memory page.
+	// absent one changes which obligations a customer is shown. This interview
+	// left them out because asking them in prose would have meant a founder
+	// typing an answer to a legal test. The readiness assessment had already
+	// solved that: each one is a tapped tri-state whose justification is the
+	// corpus row quoted underneath it, so the person can read what the question
+	// is about before answering it.
+	//
+	// `staff_count` is deliberately NOT here. ENT-246 deleted `employees_min`
+	// from the vocabulary so nobody encodes Article 30(5) as a number, which
+	// left nothing reading the figure. See the package comment.
 	needed := []string{
 		memory.KeyAISystems,
 		memory.KeyTransfersOutsideEU,
 		memory.KeyTransferDestination,
-		memory.KeyStaffCount,
 		memory.KeyVendorList,
 		memory.KeyHasROPA,
 		memory.KeyHasDPO,
+		memory.KeyHighRiskProcessing,
+		memory.KeyHighRiskAISystem,
+		memory.KeyLargeScaleMonitoring,
+		memory.KeyLawfulBases,
 	}
 
 	asked := map[string]bool{}
@@ -79,6 +83,10 @@ func TestParsingAnAnswer(t *testing.T) {
 		refused bool
 	}{
 		{
+			// Text and free-text lists are no longer asked by the interview
+			// (ENT-254), and `Parse` still applies their shape, because it is
+			// the one place a fact's shape is applied and the memory surface
+			// writes through the same vocabulary.
 			name:   "text is kept as typed",
 			key:    memory.KeyIndustry,
 			answer: "  we sell scheduling software to dentists ",
@@ -99,13 +107,24 @@ func TestParsingAnAnswer(t *testing.T) {
 		{
 			// The limitation, asserted rather than left to be discovered.
 			// Splitting on a bare " and " would read better here and would
-			// turn "Marks and Spencer" into two processors on the question
-			// two lines up the script. A clumsy item somebody can see and fix
-			// beats an invented one.
+			// turn "Marks and Spencer" into two items. A clumsy item somebody
+			// can see and fix beats an invented one.
 			name:   "a bare and is not a separator, because company names contain it",
+			key:    memory.KeyDataSubjects,
+			answer: "Customers, Marks and Spencer",
+			want:   `["Customers","Marks and Spencer"]`,
+		},
+		{
+			name:   "a tapped list keeps the tokens it was offered",
 			key:    memory.KeyVendorList,
-			answer: "Stripe, Marks and Spencer",
-			want:   `["Stripe","Marks and Spencer"]`,
+			answer: "hosting, payments",
+			want:   `["hosting","payments"]`,
+		},
+		{
+			name:   "the same chip twice is transport rather than meaning",
+			key:    memory.KeyVendorList,
+			answer: "hosting, hosting",
+			want:   `["hosting"]`,
 		},
 		{
 			name:   "yes is yes",
@@ -154,6 +173,12 @@ func TestParsingAnAnswer(t *testing.T) {
 			name:    "a list of nothing but separators is refused",
 			key:     memory.KeyDataCategories,
 			answer:  " , ; , ",
+			refused: true,
+		},
+		{
+			name:    "a lawful basis outside Article 6(1) is refused",
+			key:     memory.KeyLawfulBases,
+			answer:  "because_we_felt_like_it",
 			refused: true,
 		},
 		{
@@ -211,8 +236,8 @@ func TestTheInterviewWalksForwardAndStops(t *testing.T) {
 	if !more {
 		t.Fatal("an empty interview has no first question")
 	}
-	if first.Key != memory.KeyIndustry {
-		t.Fatalf("the interview opens with %q, want %q", first.Key, memory.KeyIndustry)
+	if first.Key != memory.KeyDataCategories {
+		t.Fatalf("the interview opens with %q, want %q", first.Key, memory.KeyDataCategories)
 	}
 
 	// Answer everything applicable, saying nothing leaves the EU so the
@@ -243,12 +268,12 @@ func TestTheInterviewWalksForwardAndStops(t *testing.T) {
 }
 
 func TestASkipCountsAsAnsweredRatherThanBeingAskedAgain(t *testing.T) {
-	answers := onboarding.Answers{memory.KeyIndustry: {Skipped: true}}
+	answers := onboarding.Answers{memory.KeyDataCategories: {Skipped: true}}
 	next, more := onboarding.NextQuestion(answers)
 	if !more {
 		t.Fatal("skipping the first question ended the interview")
 	}
-	if next.Key == memory.KeyIndustry {
+	if next.Key == memory.KeyDataCategories {
 		t.Fatal("a skipped question was asked again")
 	}
 }

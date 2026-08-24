@@ -27,7 +27,7 @@ from kindlast.core.v1 import memory_pb2 as kindlast_dot_core_dot_v1_dot_memory__
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!kindlast/core/v1/onboarding.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1dkindlast/core/v1/memory.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xb9\x01\n\x08Question\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x16\n\x06prompt\x18\x02 \x01(\tR\x06prompt\x12\x33\n\x05shape\x18\x03 \x01(\x0e\x32\x1d.kindlast.core.v1.AnswerShapeR\x05shape\x12\x18\n\x07\x63hoices\x18\x04 \x03(\tR\x07\x63hoices\x12\x12\n\x04help\x18\x05 \x01(\tR\x04help\"\x8d\x02\n\x0eOnboardingTurn\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04role\x18\x02 \x01(\tR\x04role\x12\x18\n\x07\x63ontent\x18\x03 \x01(\tR\x07\x63ontent\x12\x32\n\x03key\x18\x04 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x31\n\x05value\x18\x05 \x01(\x0b\x32\x1b.kindlast.core.v1.FactValueR\x05value\x12\x18\n\x07skipped\x18\x06 \x01(\x08R\x07skipped\x12\x1d\n\ncreated_at\x18\x07 \x01(\tR\tcreatedAt\x12\x1d\n\ncreated_by\x18\x08 \x01(\tR\tcreatedBy\"\xa7\x03\n\x0fOnboardingState\x12\x1d\n\nsession_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status\x12@\n\ntranscript\x18\x03 \x03(\x0b\x32 .kindlast.core.v1.OnboardingTurnR\ntranscript\x12?\n\rnext_question\x18\x04 \x01(\x0b\x32\x1a.kindlast.core.v1.QuestionR\x0cnextQuestion\x12\x31\n\x05\x64raft\x18\x05 \x03(\x0b\x32\x1b.kindlast.core.v1.DraftFactR\x05\x64raft\x12(\n\x10ready_to_confirm\x18\x06 \x01(\x08R\x0ereadyToConfirm\x12%\n\x0eprofile_exists\x18\x07 \x01(\x08R\rprofileExists\x12\'\n\x0ftotal_questions\x18\x08 \x01(\x05R\x0etotalQuestions\x12-\n\x12\x61nswered_questions\x18\t \x01(\x05R\x11\x61nsweredQuestions\"\x8a\x01\n\tDraftFact\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x31\n\x05value\x18\x02 \x01(\x0b\x32\x1b.kindlast.core.v1.FactValueR\x05value\x12\x16\n\x06\x61nswer\x18\x03 \x01(\tR\x06\x61nswer\"\x1d\n\x1bGetOnboardingSessionRequest\"W\n\x1cGetOnboardingSessionResponse\x12\x37\n\x05state\x18\x01 \x01(\x0b\x32!.kindlast.core.v1.OnboardingStateR\x05state\"\x18\n\x16StartOnboardingRequest\"l\n\x17StartOnboardingResponse\x12\x37\n\x05state\x18\x01 \x01(\x0b\x32!.kindlast.core.v1.OnboardingStateR\x05state\x12\x18\n\x07\x63reated\x18\x02 \x01(\x08R\x07\x63reated\"w\n\x15\x41nswerQuestionRequest\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x16\n\x06\x61nswer\x18\x02 \x01(\tR\x06\x61nswer\x12\x12\n\x04skip\x18\x03 \x01(\x08R\x04skip\"Q\n\x16\x41nswerQuestionResponse\x12\x37\n\x05state\x18\x01 \x01(\x0b\x32!.kindlast.core.v1.OnboardingStateR\x05state\"\x17\n\x15\x43onfirmProfileRequest\"\xa5\x01\n\x16\x43onfirmProfileResponse\x12\x37\n\x05state\x18\x01 \x01(\x0b\x32!.kindlast.core.v1.OnboardingStateR\x05state\x12\x1d\n\nprofile_id\x18\x02 \x01(\tR\tprofileId\x12\x33\n\x05\x66\x61\x63ts\x18\x03 \x03(\x0b\x32\x1d.kindlast.core.v1.ProfileFactR\x05\x66\x61\x63ts*\x8e\x01\n\x0b\x41nswerShape\x12\x1c\n\x18\x41NSWER_SHAPE_UNSPECIFIED\x10\x00\x12\x15\n\x11\x41NSWER_SHAPE_TEXT\x10\x01\x12\x15\n\x11\x41NSWER_SHAPE_LIST\x10\x02\x12\x1a\n\x16\x41NSWER_SHAPE_TRI_STATE\x10\x03\x12\x17\n\x13\x41NSWER_SHAPE_NUMBER\x10\x04\x32\xb6\x05\n\x11OnboardingService\x12\xac\x01\n\x14GetOnboardingSession\x12-.kindlast.core.v1.GetOnboardingSessionRequest\x1a..kindlast.core.v1.GetOnboardingSessionResponse\"5\x8a\xb5\x18\x0fonboarding:read\x82\xd3\xe4\x93\x02\x1c\x12\x1a/api/v1/onboarding/session\x12\xa7\x01\n\x0fStartOnboarding\x12(.kindlast.core.v1.StartOnboardingRequest\x1a).kindlast.core.v1.StartOnboardingResponse\"?\x8a\xb5\x18\x10onboarding:write\x82\xd3\xe4\x93\x02%\" /api/v1/onboarding/session:start:\x01*\x12\x9e\x01\n\x0e\x41nswerQuestion\x12\'.kindlast.core.v1.AnswerQuestionRequest\x1a(.kindlast.core.v1.AnswerQuestionResponse\"9\x8a\xb5\x18\x10onboarding:write\x82\xd3\xe4\x93\x02\x1f\"\x1a/api/v1/onboarding/answers:\x01*\x12\xa6\x01\n\x0e\x43onfirmProfile\x12\'.kindlast.core.v1.ConfirmProfileRequest\x1a(.kindlast.core.v1.ConfirmProfileResponse\"A\x8a\xb5\x18\x10onboarding:write\x82\xd3\xe4\x93\x02\'\"\"/api/v1/onboarding/session:confirm:\x01*B\xc7\x01\n\x14\x63om.kindlast.core.v1B\x0fOnboardingProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!kindlast/core/v1/onboarding.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1dkindlast/core/v1/memory.proto\x1a\x1fkindlast/options/v1/scope.proto\"Z\n\x0eQuestionOption\x12\x14\n\x05value\x18\x01 \x01(\tR\x05value\x12\x14\n\x05label\x18\x02 \x01(\tR\x05label\x12\x1c\n\texclusive\x18\x03 \x01(\x08R\texclusive\"\x8b\x02\n\x08Question\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x16\n\x06prompt\x18\x02 \x01(\tR\x06prompt\x12\x33\n\x05shape\x18\x03 \x01(\x0e\x32\x1d.kindlast.core.v1.AnswerShapeR\x05shape\x12\x18\n\x07\x63hoices\x18\x04 \x03(\tR\x07\x63hoices\x12\x12\n\x04help\x18\x05 \x01(\tR\x04help\x12:\n\x07options\x18\x06 \x03(\x0b\x32 .kindlast.core.v1.QuestionOptionR\x07options\x12\x14\n\x05\x62\x61sis\x18\x07 \x01(\tR\x05\x62\x61sis\"\x8d\x02\n\x0eOnboardingTurn\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04role\x18\x02 \x01(\tR\x04role\x12\x18\n\x07\x63ontent\x18\x03 \x01(\tR\x07\x63ontent\x12\x32\n\x03key\x18\x04 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x31\n\x05value\x18\x05 \x01(\x0b\x32\x1b.kindlast.core.v1.FactValueR\x05value\x12\x18\n\x07skipped\x18\x06 \x01(\x08R\x07skipped\x12\x1d\n\ncreated_at\x18\x07 \x01(\tR\tcreatedAt\x12\x1d\n\ncreated_by\x18\x08 \x01(\tR\tcreatedBy\"\xa7\x03\n\x0fOnboardingState\x12\x1d\n\nsession_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status\x12@\n\ntranscript\x18\x03 \x03(\x0b\x32 .kindlast.core.v1.OnboardingTurnR\ntranscript\x12?\n\rnext_question\x18\x04 \x01(\x0b\x32\x1a.kindlast.core.v1.QuestionR\x0cnextQuestion\x12\x31\n\x05\x64raft\x18\x05 \x03(\x0b\x32\x1b.kindlast.core.v1.DraftFactR\x05\x64raft\x12(\n\x10ready_to_confirm\x18\x06 \x01(\x08R\x0ereadyToConfirm\x12%\n\x0eprofile_exists\x18\x07 \x01(\x08R\rprofileExists\x12\'\n\x0ftotal_questions\x18\x08 \x01(\x05R\x0etotalQuestions\x12-\n\x12\x61nswered_questions\x18\t \x01(\x05R\x11\x61nsweredQuestions\"\x8a\x01\n\tDraftFact\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x31\n\x05value\x18\x02 \x01(\x0b\x32\x1b.kindlast.core.v1.FactValueR\x05value\x12\x16\n\x06\x61nswer\x18\x03 \x01(\tR\x06\x61nswer\"\x1d\n\x1bGetOnboardingSessionRequest\"W\n\x1cGetOnboardingSessionResponse\x12\x37\n\x05state\x18\x01 \x01(\x0b\x32!.kindlast.core.v1.OnboardingStateR\x05state\"\x18\n\x16StartOnboardingRequest\"l\n\x17StartOnboardingResponse\x12\x37\n\x05state\x18\x01 \x01(\x0b\x32!.kindlast.core.v1.OnboardingStateR\x05state\x12\x18\n\x07\x63reated\x18\x02 \x01(\x08R\x07\x63reated\"w\n\x15\x41nswerQuestionRequest\x12\x32\n\x03key\x18\x01 \x01(\x0e\x32 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x16\n\x06\x61nswer\x18\x02 \x01(\tR\x06\x61nswer\x12\x12\n\x04skip\x18\x03 \x01(\x08R\x04skip\"Q\n\x16\x41nswerQuestionResponse\x12\x37\n\x05state\x18\x01 \x01(\x0b\x32!.kindlast.core.v1.OnboardingStateR\x05state\"\x17\n\x15\x43onfirmProfileRequest\"\xa5\x01\n\x16\x43onfirmProfileResponse\x12\x37\n\x05state\x18\x01 \x01(\x0b\x32!.kindlast.core.v1.OnboardingStateR\x05state\x12\x1d\n\nprofile_id\x18\x02 \x01(\tR\tprofileId\x12\x33\n\x05\x66\x61\x63ts\x18\x03 \x03(\x0b\x32\x1d.kindlast.core.v1.ProfileFactR\x05\x66\x61\x63ts*\x8e\x01\n\x0b\x41nswerShape\x12\x1c\n\x18\x41NSWER_SHAPE_UNSPECIFIED\x10\x00\x12\x15\n\x11\x41NSWER_SHAPE_TEXT\x10\x01\x12\x15\n\x11\x41NSWER_SHAPE_LIST\x10\x02\x12\x1a\n\x16\x41NSWER_SHAPE_TRI_STATE\x10\x03\x12\x17\n\x13\x41NSWER_SHAPE_NUMBER\x10\x04\x32\xb6\x05\n\x11OnboardingService\x12\xac\x01\n\x14GetOnboardingSession\x12-.kindlast.core.v1.GetOnboardingSessionRequest\x1a..kindlast.core.v1.GetOnboardingSessionResponse\"5\x8a\xb5\x18\x0fonboarding:read\x82\xd3\xe4\x93\x02\x1c\x12\x1a/api/v1/onboarding/session\x12\xa7\x01\n\x0fStartOnboarding\x12(.kindlast.core.v1.StartOnboardingRequest\x1a).kindlast.core.v1.StartOnboardingResponse\"?\x8a\xb5\x18\x10onboarding:write\x82\xd3\xe4\x93\x02%\" /api/v1/onboarding/session:start:\x01*\x12\x9e\x01\n\x0e\x41nswerQuestion\x12\'.kindlast.core.v1.AnswerQuestionRequest\x1a(.kindlast.core.v1.AnswerQuestionResponse\"9\x8a\xb5\x18\x10onboarding:write\x82\xd3\xe4\x93\x02\x1f\"\x1a/api/v1/onboarding/answers:\x01*\x12\xa6\x01\n\x0e\x43onfirmProfile\x12\'.kindlast.core.v1.ConfirmProfileRequest\x1a(.kindlast.core.v1.ConfirmProfileResponse\"A\x8a\xb5\x18\x10onboarding:write\x82\xd3\xe4\x93\x02\'\"\"/api/v1/onboarding/session:confirm:\x01*B\xc7\x01\n\x14\x63om.kindlast.core.v1B\x0fOnboardingProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -43,32 +43,34 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_ONBOARDINGSERVICE'].methods_by_name['AnswerQuestion']._serialized_options = b'\212\265\030\020onboarding:write\202\323\344\223\002\037\"\032/api/v1/onboarding/answers:\001*'
   _globals['_ONBOARDINGSERVICE'].methods_by_name['ConfirmProfile']._loaded_options = None
   _globals['_ONBOARDINGSERVICE'].methods_by_name['ConfirmProfile']._serialized_options = b'\212\265\030\020onboarding:write\202\323\344\223\002\'\"\"/api/v1/onboarding/session:confirm:\001*'
-  _globals['_ANSWERSHAPE']._serialized_start=1830
-  _globals['_ANSWERSHAPE']._serialized_end=1972
-  _globals['_QUESTION']._serialized_start=150
-  _globals['_QUESTION']._serialized_end=335
-  _globals['_ONBOARDINGTURN']._serialized_start=338
-  _globals['_ONBOARDINGTURN']._serialized_end=607
-  _globals['_ONBOARDINGSTATE']._serialized_start=610
-  _globals['_ONBOARDINGSTATE']._serialized_end=1033
-  _globals['_DRAFTFACT']._serialized_start=1036
-  _globals['_DRAFTFACT']._serialized_end=1174
-  _globals['_GETONBOARDINGSESSIONREQUEST']._serialized_start=1176
-  _globals['_GETONBOARDINGSESSIONREQUEST']._serialized_end=1205
-  _globals['_GETONBOARDINGSESSIONRESPONSE']._serialized_start=1207
-  _globals['_GETONBOARDINGSESSIONRESPONSE']._serialized_end=1294
-  _globals['_STARTONBOARDINGREQUEST']._serialized_start=1296
-  _globals['_STARTONBOARDINGREQUEST']._serialized_end=1320
-  _globals['_STARTONBOARDINGRESPONSE']._serialized_start=1322
-  _globals['_STARTONBOARDINGRESPONSE']._serialized_end=1430
-  _globals['_ANSWERQUESTIONREQUEST']._serialized_start=1432
-  _globals['_ANSWERQUESTIONREQUEST']._serialized_end=1551
-  _globals['_ANSWERQUESTIONRESPONSE']._serialized_start=1553
-  _globals['_ANSWERQUESTIONRESPONSE']._serialized_end=1634
-  _globals['_CONFIRMPROFILEREQUEST']._serialized_start=1636
-  _globals['_CONFIRMPROFILEREQUEST']._serialized_end=1659
-  _globals['_CONFIRMPROFILERESPONSE']._serialized_start=1662
-  _globals['_CONFIRMPROFILERESPONSE']._serialized_end=1827
-  _globals['_ONBOARDINGSERVICE']._serialized_start=1975
-  _globals['_ONBOARDINGSERVICE']._serialized_end=2669
+  _globals['_ANSWERSHAPE']._serialized_start=2004
+  _globals['_ANSWERSHAPE']._serialized_end=2146
+  _globals['_QUESTIONOPTION']._serialized_start=149
+  _globals['_QUESTIONOPTION']._serialized_end=239
+  _globals['_QUESTION']._serialized_start=242
+  _globals['_QUESTION']._serialized_end=509
+  _globals['_ONBOARDINGTURN']._serialized_start=512
+  _globals['_ONBOARDINGTURN']._serialized_end=781
+  _globals['_ONBOARDINGSTATE']._serialized_start=784
+  _globals['_ONBOARDINGSTATE']._serialized_end=1207
+  _globals['_DRAFTFACT']._serialized_start=1210
+  _globals['_DRAFTFACT']._serialized_end=1348
+  _globals['_GETONBOARDINGSESSIONREQUEST']._serialized_start=1350
+  _globals['_GETONBOARDINGSESSIONREQUEST']._serialized_end=1379
+  _globals['_GETONBOARDINGSESSIONRESPONSE']._serialized_start=1381
+  _globals['_GETONBOARDINGSESSIONRESPONSE']._serialized_end=1468
+  _globals['_STARTONBOARDINGREQUEST']._serialized_start=1470
+  _globals['_STARTONBOARDINGREQUEST']._serialized_end=1494
+  _globals['_STARTONBOARDINGRESPONSE']._serialized_start=1496
+  _globals['_STARTONBOARDINGRESPONSE']._serialized_end=1604
+  _globals['_ANSWERQUESTIONREQUEST']._serialized_start=1606
+  _globals['_ANSWERQUESTIONREQUEST']._serialized_end=1725
+  _globals['_ANSWERQUESTIONRESPONSE']._serialized_start=1727
+  _globals['_ANSWERQUESTIONRESPONSE']._serialized_end=1808
+  _globals['_CONFIRMPROFILEREQUEST']._serialized_start=1810
+  _globals['_CONFIRMPROFILEREQUEST']._serialized_end=1833
+  _globals['_CONFIRMPROFILERESPONSE']._serialized_start=1836
+  _globals['_CONFIRMPROFILERESPONSE']._serialized_end=2001
+  _globals['_ONBOARDINGSERVICE']._serialized_start=2149
+  _globals['_ONBOARDINGSERVICE']._serialized_end=2843
 # @@protoc_insertion_point(module_scope)

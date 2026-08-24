@@ -1,35 +1,38 @@
 import { describe, expect, it } from 'vitest'
 
-import { OBLIGATIONS } from '@/lib/readiness/corpus'
+import { OBLIGATIONS } from '@/lib/onboarding/corpus'
 import {
   assess,
   gapSatisfied,
   ledger,
   ledgerCounts,
   obligationApplies,
-} from '@/lib/readiness/evaluate'
-import {
-  SCRIPT,
-  UNSURE,
-  applicableQuestions,
-  emptyAnswers,
-  optionsFor,
-  type Answers,
-} from '@/lib/readiness/script'
+} from '@/lib/onboarding/evaluate'
+import { UNSURE, answersFrom, type Answers } from '@/lib/onboarding/answers'
 
 /**
- * ENT-189. The readiness assessment decides which obligations reach a visitor,
- * and it has to decide it the same way the product does.
+ * ENT-189, ENT-254. The assessment decides which obligations reach an
+ * organisation, and it has to decide it the same way the product does.
  *
  * These tests are written against the semantics of `watcher_obligation_applies`
  * and `watcher_gap_satisfied` (db/migrations/00001 and 00023), not against
  * whatever this module happens to do. Where the two would disagree the test is
- * on the database's side, because a marketing page that answers differently
- * from the product is a promise the product breaks on day one.
+ * on the database's side, because a column that resolves an obligation while
+ * somebody is answering is a promise about what the Watcher will say an hour
+ * later.
+ *
+ * WHAT MOVED OUT OF THIS FILE. The question set, its options and its branching
+ * were `lib/readiness/script.ts` and are core-api's since ENT-254, so the tests
+ * that walked them are in
+ * `apps/core-api/internal/domain/onboarding/script_test.go`. Two of them are
+ * worth knowing by name because their absence here would look like a gap: the
+ * one asserting the interview asks about every fact these rules read, and the
+ * one asserting a question's `basis` resolves to an obligation the corpus
+ * holds.
  */
 
-/** A visitor who has answered nothing. */
-const NOTHING: Answers = emptyAnswers()
+/** An organisation that has answered nothing. */
+const NOTHING: Answers = {}
 
 /** A small European SaaS, answered plausibly. */
 function typicalStartup(): Answers {
@@ -43,8 +46,6 @@ function typicalStartup(): Answers {
     large_scale_monitoring: 'no',
     has_ropa: 'no',
     has_dpo: 'no',
-    dsar_process: 'no',
-    breach_plan: 'unsure',
     ai_systems: ['assistants'],
     high_risk_ai_system: 'no',
   }
@@ -279,17 +280,19 @@ describe('assess', () => {
     expect(ropa?.gaps).toEqual([])
   })
 
-  it('carries a self-reported answer without turning it into a Kindlast gap', () => {
-    // "No written DSAR process" is the visitor's own words about their own
-    // readiness. The corpus raises no `requires` token for Articles 12 to 22,
-    // so presenting it as a finding would be Kindlast asserting something the
-    // Watcher never said.
+  it('raises no gap on an obligation the corpus attaches no token to', () => {
+    // Articles 12 to 22 reach everybody and carry no `requires` token, so
+    // there is nothing here for the Watcher to raise. `/readiness` filled that
+    // space with the visitor's own answer about their DSAR process, carefully
+    // marked as theirs rather than ours; ENT-254 dropped the question because
+    // it had no fact key to be written under. What must not change is that the
+    // space stays empty rather than acquiring a finding nobody made.
     const result = assess(typicalStartup())
     const dsar = result.applies.find(
       (a) => a.obligation.slug === 'gdpr-arts-12-22-data-subject-rights',
     )
+    expect(dsar).toBeDefined()
     expect(dsar?.gaps).toEqual([])
-    expect(dsar?.selfChecks?.[0]?.answer).toBe('no')
   })
 
   it('narrows everything away for a visitor who answered no to everything', () => {
@@ -303,8 +306,6 @@ describe('assess', () => {
       large_scale_monitoring: 'no',
       has_ropa: 'yes',
       has_dpo: 'yes',
-      dsar_process: 'yes',
-      breach_plan: 'yes',
       ai_systems: ['none'],
       high_risk_ai_system: 'no',
     }
@@ -324,88 +325,75 @@ describe('assess', () => {
   })
 })
 
-describe('the script', () => {
-  it('offers every lawful basis the corpus narrows on', () => {
-    // A spelling mismatch here is Article 7 silently never applying to anybody,
-    // which is the exact failure `domain/memory`'s closed vocabulary exists to
-    // prevent. The corpus is the side that must be matched.
-    const narrowed = OBLIGATIONS.map(
-      (o) => o.appliesWhen?.lawful_basis_includes,
-    ).filter((b): b is string => typeof b === 'string')
-    expect(narrowed.length).toBeGreaterThan(0)
-
-    const offered = new Set(optionsFor('lawful_bases').map((o) => o.value))
-    for (const basis of narrowed) {
-      expect(offered.has(basis)).toBe(true)
-    }
+describe('the answer sheet, read out of the interview state', () => {
+  it('reads a tri-state fact back as the answer that was given', () => {
+    const sheet = answersFrom({
+      draft: [
+        {
+          key: 'PROFILE_FACT_KEY_HAS_ROPA',
+          value: { triState: 'TRI_STATE_UNSURE' },
+        },
+      ],
+    })
+    expect(sheet.has_ropa).toBe('unsure')
   })
 
-  it('asks about every fact its own rules read', () => {
-    // The mirror of the vocabulary guard in `corpus_vocabulary_test.go`: a
-    // threshold nobody asks about is an obligation that silently stops
-    // reaching anybody.
-    const asked = new Set(SCRIPT.map((q) => q.key))
-    for (const key of [
-      'transfers_outside_eu',
-      'transfer_destinations',
-      'high_risk_processing',
-      'high_risk_ai_system',
-      'large_scale_monitoring',
-      'has_dpo',
-      'has_ropa',
-      'vendor_list',
-      'lawful_bases',
-      'ai_systems',
-    ]) {
-      expect(asked.has(key)).toBe(true)
-    }
+  it('reads a list fact back as its tokens', () => {
+    const sheet = answersFrom({
+      draft: [
+        {
+          key: 'PROFILE_FACT_KEY_VENDOR_LIST',
+          value: { list: { values: ['hosting', 'payments'] } },
+        },
+      ],
+    })
+    expect(sheet.vendor_list).toEqual(['hosting', 'payments'])
   })
 
-  it('drops the destination question once nothing leaves the EU', () => {
-    const keys = applicableQuestions({
-      ...NOTHING,
-      transfers_outside_eu: 'no',
-    }).map((q) => q.key)
-    expect(keys).not.toContain('transfer_destinations')
+  it('reads "none of these" back as the empty list, which is an answer', () => {
+    // The server records `none` as `[]`, because both evaluators decide "is
+    // any AI in use" by asking whether the list holds anything. A sheet that
+    // turned it back into a token would reopen every AI Act obligation for an
+    // organisation that just said it runs none.
+    const sheet = answersFrom({
+      draft: [
+        {
+          key: 'PROFILE_FACT_KEY_AI_SYSTEMS',
+          value: { list: { values: [] } },
+        },
+      ],
+    })
+    expect(sheet.ai_systems).toEqual([])
+    expect(
+      ledger(sheet).find(
+        (r) => r.obligation.slug === 'ai-act-art-50-transparency',
+      )?.state,
+    ).toBe('narrowed')
   })
 
-  it('keeps the destination question when the visitor is unsure', () => {
-    // Only a definite no removes it. "We do not know whether anything leaves"
-    // is not the same claim as "nothing does".
-    const keys = applicableQuestions({
-      ...NOTHING,
-      transfers_outside_eu: 'unsure',
-    }).map((q) => q.key)
-    expect(keys).toContain('transfer_destinations')
+  it('leaves a skipped question absent rather than guessing at it', () => {
+    // A skip records no fact, so there is no draft entry, so the sheet has no
+    // key. The corpus column then shows the obligation as still open, which is
+    // the honest reading: nothing was recorded, so nothing was decided.
+    const sheet = answersFrom({ draft: [] })
+    expect(sheet.has_ropa).toBeUndefined()
+    expect(
+      ledger(sheet).find((r) => r.obligation.slug === 'gdpr-art-35-dpia')
+        ?.state,
+    ).toBe('pending')
   })
 
-  it('drops the AI risk question once there is no AI', () => {
-    const keys = applicableQuestions({ ...NOTHING, ai_systems: ['none'] }).map(
-      (q) => q.key,
-    )
-    expect(keys).not.toContain('high_risk_ai_system')
-  })
-
-  it('every question names an answer shape the UI can render', () => {
-    for (const question of SCRIPT) {
-      expect(['tri', 'multi']).toContain(question.kind)
-      if (question.kind === 'multi') {
-        expect(question.options.length).toBeGreaterThan(1)
-      }
-    }
-  })
-
-  it('every basis a question cites resolves to a corpus obligation', () => {
-    const slugs = new Set(OBLIGATIONS.map((o) => o.slug))
-    for (const question of SCRIPT) {
-      if (question.basis) expect(slugs.has(question.basis)).toBe(true)
-    }
+  it('reads an empty state as an empty sheet rather than throwing', () => {
+    // What `GetOnboardingSession` answers for an organisation that has never
+    // started: Connect omits a proto3 field at its zero value, so there is no
+    // `draft` key at all.
+    expect(answersFrom({})).toEqual({})
   })
 })
 
 describe('ledger', () => {
   it('opens with the obligations nothing could narrow, and the rest pending', () => {
-    const rows = ledger(emptyAnswers())
+    const rows = ledger(NOTHING)
     const counts = ledgerCounts(rows)
     expect(counts.narrowed).toBe(0)
     expect(counts.applies).toBeGreaterThan(0)
@@ -416,7 +404,7 @@ describe('ledger', () => {
   it('never reports an obligation as narrowed before its question is asked', () => {
     // The page's claim is that it did not guess, and showing an unanswered
     // obligation as decided either way breaks it.
-    for (const row of ledger(emptyAnswers())) {
+    for (const row of ledger(NOTHING)) {
       expect(row.state).not.toBe('narrowed')
     }
   })

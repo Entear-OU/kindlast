@@ -16,21 +16,34 @@ describe('Hero', () => {
     expect(screen.getByText(/GDPR and EU AI Act/i)).toBeInTheDocument()
   })
 
-  it('makes the readiness check the primary call to action', () => {
+  it('makes signing up the primary call to action', () => {
     // ENT-190 removed the waitlist and left the repository as the only ask,
-    // because there was nothing to sign up for. ENT-189 added something a
-    // visitor can actually do without signing up for anything, so it leads and
-    // the repository stays beside it.
+    // because there was nothing to sign up for. ENT-189 added an assessment
+    // needing no account and it took the slot. ENT-254 moved that assessment
+    // inside the product, so the slot leads where the assessment now is.
     render(<Hero />)
-    const cta = screen.getByRole('link', { name: /check where you stand/i })
-    expect(cta).toHaveAttribute('href', '/readiness')
+    const cta = screen.getByRole('link', {
+      name: /find out what applies to you/i,
+    })
+    expect(cta).toHaveAttribute('href', '/auth/signup')
   })
 
-  it('promises no account and no transmission next to that button', () => {
-    // The claim is the reason somebody clicks it, and it is only true because
-    // the assessment has no server side at all.
-    render(<Hero />)
-    expect(screen.getByText(/never leave the page/i)).toBeInTheDocument()
+  it('promises nothing this button cannot deliver', () => {
+    // THE FAILURE THIS CATCHES HAS A NAME. The line under the button used to
+    // say "no account, and your answers never leave the page", which was true
+    // of `/readiness` and is the opposite of true here: the assessment is
+    // behind a sign-up and every answer is written down. A call to action that
+    // promises an account-free assessment now sends somebody to a registration
+    // form they did not agree to.
+    const { container } = render(<Hero />)
+    const copy = container.textContent ?? ''
+    expect(copy).not.toMatch(/no account/i)
+    expect(copy).not.toMatch(/never leave the page/i)
+  })
+
+  it('does not link to the assessment that is no longer public', () => {
+    const { container } = render(<Hero />)
+    expect(container.innerHTML).not.toMatch(/href="\/readiness"/)
   })
 
   it('keeps the repository as the second ask', () => {

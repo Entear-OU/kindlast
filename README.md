@@ -83,7 +83,7 @@ Kindlast is in active development. Being straight about what exists:
 | Organisation memory: what we believe, correctable, with its history | Built |
 | Integrations gateway: customer-supplied MCP endpoints, egress allow-list | Built |
 | Bring your own model provider, as a recorded compliance event | Built |
-| Public readiness assessment, no account needed | Built |
+| Onboarding: the readiness assessment, answers saved as they are given | Built |
 | Watcher: continuous regulatory monitoring | Partial |
 | Executor: automated record updates | Partial |
 | Durable workflows for long-running agent work | Planned |
@@ -217,7 +217,8 @@ apps/web/app/
 apps/web/lib/
 ├── auth/               # OIDC client, PKCE, Redis sessions, the core-api client
 ├── email/              # Swappable email provider seam
-├── readiness/          # The public assessment: corpus bundled, no server side
+├── onboarding/         # The readiness assessment: corpus bundled, evaluated
+                        #   live in the browser against core-api's answers
 └── websearch/          # URL-fetch provider seam. No caller today (ENT-240)
 
 apps/core-api/          # Go. The only writer to the domain schema

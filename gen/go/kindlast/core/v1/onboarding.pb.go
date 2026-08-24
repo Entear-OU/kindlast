@@ -85,6 +85,80 @@ func (AnswerShape) EnumDescriptor() ([]byte, []int) {
 	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{0}
 }
 
+// One answer a list question offers (ENT-254).
+//
+// The closed vocabulary travels to the client so the console renders exactly
+// the tokens the server accepts. It is not a rendering convenience: an answer
+// outside this set is refused by `Parse`, and both evaluators that decide which
+// obligations apply match on these tokens rather than on prose, so a console
+// inventing one produces a fact nothing will ever match.
+type QuestionOption struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// What is stored, and what the applicability rules are matched against.
+	Value string `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	// How it reads to the person answering. Plain English, and never a statement
+	// of what the law requires: the law is quoted from the corpus row `basis`
+	// names, unedited (ENT-248).
+	Label string `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	// Picking this clears every other choice. "Nobody outside the company
+	// touches it" and "I could not say" are each a complete answer, and neither
+	// combines with naming a supplier.
+	Exclusive     bool `protobuf:"varint,3,opt,name=exclusive,proto3" json:"exclusive,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QuestionOption) Reset() {
+	*x = QuestionOption{}
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuestionOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuestionOption) ProtoMessage() {}
+
+func (x *QuestionOption) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuestionOption.ProtoReflect.Descriptor instead.
+func (*QuestionOption) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *QuestionOption) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *QuestionOption) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *QuestionOption) GetExclusive() bool {
+	if x != nil {
+		return x.Exclusive
+	}
+	return false
+}
+
 // One question, as the person is asked it.
 type Question struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -100,14 +174,30 @@ type Question struct {
 	// For a tri-state, the three answers. Empty otherwise.
 	Choices []string `protobuf:"bytes,4,rep,name=choices,proto3" json:"choices,omitempty"`
 	// A sentence under the question, when one helps. Never a legal term.
-	Help          string `protobuf:"bytes,5,opt,name=help,proto3" json:"help,omitempty"`
+	Help string `protobuf:"bytes,5,opt,name=help,proto3" json:"help,omitempty"`
+	// The answers a list question offers (ENT-254). Empty for a tri-state, whose
+	// three answers are `choices` above.
+	//
+	// A list question with options is answered by tapping and the values are sent
+	// back comma separated, which is why no new request field was needed: the
+	// answer is still a string and the server still decides what it means.
+	Options []*QuestionOption `protobuf:"bytes,6,rep,name=options,proto3" json:"options,omitempty"`
+	// The corpus obligation to quote when somebody asks why we want to know.
+	//
+	// A slug rather than a sentence, deliberately. ENT-248's ruling is that the
+	// statement of law comes from a corpus row byte for byte, because the
+	// narrator was observed citing Article 30 correctly and stating the law
+	// wrongly beside it, and a citation validator cannot catch that. The console
+	// renders this obligation's `summary` unedited; nothing on the wire here is
+	// a claim about what any of it requires.
+	Basis         string `protobuf:"bytes,7,opt,name=basis,proto3" json:"basis,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Question) Reset() {
 	*x = Question{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[0]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -119,7 +209,7 @@ func (x *Question) String() string {
 func (*Question) ProtoMessage() {}
 
 func (x *Question) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[0]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -132,7 +222,7 @@ func (x *Question) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Question.ProtoReflect.Descriptor instead.
 func (*Question) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{0}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Question) GetKey() ProfileFactKey {
@@ -170,6 +260,20 @@ func (x *Question) GetHelp() string {
 	return ""
 }
 
+func (x *Question) GetOptions() []*QuestionOption {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *Question) GetBasis() string {
+	if x != nil {
+		return x.Basis
+	}
+	return ""
+}
+
 // One turn, as it is stored.
 type OnboardingTurn struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -199,7 +303,7 @@ type OnboardingTurn struct {
 
 func (x *OnboardingTurn) Reset() {
 	*x = OnboardingTurn{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[1]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -211,7 +315,7 @@ func (x *OnboardingTurn) String() string {
 func (*OnboardingTurn) ProtoMessage() {}
 
 func (x *OnboardingTurn) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[1]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -224,7 +328,7 @@ func (x *OnboardingTurn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnboardingTurn.ProtoReflect.Descriptor instead.
 func (*OnboardingTurn) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{1}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *OnboardingTurn) GetId() string {
@@ -299,15 +403,18 @@ type OnboardingState struct {
 	// What to ask next. Absent once every applicable question has an answer or a
 	// skip.
 	NextQuestion *Question `protobuf:"bytes,4,opt,name=next_question,json=nextQuestion,proto3" json:"next_question,omitempty"`
-	// What would be recorded if the person confirmed now, as typed values.
+	// What has been recorded so far, as typed values.
 	//
-	// Derived from the answers rather than stored, so it cannot drift from them,
-	// and shown before anything is written because that is the whole of the
-	// confirmation step.
+	// Derived from the answers rather than stored, so it cannot drift from them.
+	// Before ENT-254 this was the confirmation screen's contents; it is now the
+	// answer sheet the console evaluates the corpus against, so a person can see
+	// which obligations their answers have opened while they are still answering.
 	Draft []*DraftFact `protobuf:"bytes,5,rep,name=draft,proto3" json:"draft,omitempty"`
-	// True when there is nothing left to ask. A person may confirm before this,
-	// and the facts they skipped are simply absent; the flag is what a console
-	// uses to decide whether to nudge.
+	// True when there is nothing left to ask.
+	//
+	// Named for the step that no longer exists, and kept because renaming a field
+	// is a breaking change for a property that has not changed: it still means
+	// "every applicable question has an answer or a skip".
 	ReadyToConfirm bool `protobuf:"varint,6,opt,name=ready_to_confirm,json=readyToConfirm,proto3" json:"ready_to_confirm,omitempty"`
 	// Whether this organisation has a compliance profile at all.
 	//
@@ -325,7 +432,7 @@ type OnboardingState struct {
 
 func (x *OnboardingState) Reset() {
 	*x = OnboardingState{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[2]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -337,7 +444,7 @@ func (x *OnboardingState) String() string {
 func (*OnboardingState) ProtoMessage() {}
 
 func (x *OnboardingState) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[2]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -350,7 +457,7 @@ func (x *OnboardingState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnboardingState.ProtoReflect.Descriptor instead.
 func (*OnboardingState) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{2}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *OnboardingState) GetSessionId() string {
@@ -421,9 +528,9 @@ type DraftFact struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Key   ProfileFactKey         `protobuf:"varint,1,opt,name=key,proto3,enum=kindlast.core.v1.ProfileFactKey" json:"key,omitempty"`
 	Value *FactValue             `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	// Verbatim, what the person typed to produce it. Shown next to the parsed
-	// value on the confirmation screen, because "we read this as a list of three
-	// countries" is checkable and "United Kingdom, Ireland, Spain" alone is not.
+	// Verbatim, what the person answered to produce it. Shown next to the parsed
+	// value, because "we read this as two processors" is checkable and the list
+	// on its own is not.
 	Answer        string `protobuf:"bytes,3,opt,name=answer,proto3" json:"answer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -431,7 +538,7 @@ type DraftFact struct {
 
 func (x *DraftFact) Reset() {
 	*x = DraftFact{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[3]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -443,7 +550,7 @@ func (x *DraftFact) String() string {
 func (*DraftFact) ProtoMessage() {}
 
 func (x *DraftFact) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[3]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -456,7 +563,7 @@ func (x *DraftFact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DraftFact.ProtoReflect.Descriptor instead.
 func (*DraftFact) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{3}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DraftFact) GetKey() ProfileFactKey {
@@ -488,7 +595,7 @@ type GetOnboardingSessionRequest struct {
 
 func (x *GetOnboardingSessionRequest) Reset() {
 	*x = GetOnboardingSessionRequest{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[4]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -500,7 +607,7 @@ func (x *GetOnboardingSessionRequest) String() string {
 func (*GetOnboardingSessionRequest) ProtoMessage() {}
 
 func (x *GetOnboardingSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[4]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -513,7 +620,7 @@ func (x *GetOnboardingSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOnboardingSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetOnboardingSessionRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{4}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{5}
 }
 
 type GetOnboardingSessionResponse struct {
@@ -525,7 +632,7 @@ type GetOnboardingSessionResponse struct {
 
 func (x *GetOnboardingSessionResponse) Reset() {
 	*x = GetOnboardingSessionResponse{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[5]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -537,7 +644,7 @@ func (x *GetOnboardingSessionResponse) String() string {
 func (*GetOnboardingSessionResponse) ProtoMessage() {}
 
 func (x *GetOnboardingSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[5]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -550,7 +657,7 @@ func (x *GetOnboardingSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOnboardingSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetOnboardingSessionResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{5}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetOnboardingSessionResponse) GetState() *OnboardingState {
@@ -568,7 +675,7 @@ type StartOnboardingRequest struct {
 
 func (x *StartOnboardingRequest) Reset() {
 	*x = StartOnboardingRequest{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[6]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -580,7 +687,7 @@ func (x *StartOnboardingRequest) String() string {
 func (*StartOnboardingRequest) ProtoMessage() {}
 
 func (x *StartOnboardingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[6]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -593,7 +700,7 @@ func (x *StartOnboardingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartOnboardingRequest.ProtoReflect.Descriptor instead.
 func (*StartOnboardingRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{6}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{7}
 }
 
 type StartOnboardingResponse struct {
@@ -607,7 +714,7 @@ type StartOnboardingResponse struct {
 
 func (x *StartOnboardingResponse) Reset() {
 	*x = StartOnboardingResponse{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[7]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -619,7 +726,7 @@ func (x *StartOnboardingResponse) String() string {
 func (*StartOnboardingResponse) ProtoMessage() {}
 
 func (x *StartOnboardingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[7]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -632,7 +739,7 @@ func (x *StartOnboardingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartOnboardingResponse.ProtoReflect.Descriptor instead.
 func (*StartOnboardingResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{7}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *StartOnboardingResponse) GetState() *OnboardingState {
@@ -668,7 +775,7 @@ type AnswerQuestionRequest struct {
 
 func (x *AnswerQuestionRequest) Reset() {
 	*x = AnswerQuestionRequest{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[8]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -680,7 +787,7 @@ func (x *AnswerQuestionRequest) String() string {
 func (*AnswerQuestionRequest) ProtoMessage() {}
 
 func (x *AnswerQuestionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[8]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -693,7 +800,7 @@ func (x *AnswerQuestionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerQuestionRequest.ProtoReflect.Descriptor instead.
 func (*AnswerQuestionRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{8}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AnswerQuestionRequest) GetKey() ProfileFactKey {
@@ -726,7 +833,7 @@ type AnswerQuestionResponse struct {
 
 func (x *AnswerQuestionResponse) Reset() {
 	*x = AnswerQuestionResponse{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[9]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -738,7 +845,7 @@ func (x *AnswerQuestionResponse) String() string {
 func (*AnswerQuestionResponse) ProtoMessage() {}
 
 func (x *AnswerQuestionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[9]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -751,7 +858,7 @@ func (x *AnswerQuestionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerQuestionResponse.ProtoReflect.Descriptor instead.
 func (*AnswerQuestionResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{9}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AnswerQuestionResponse) GetState() *OnboardingState {
@@ -769,7 +876,7 @@ type ConfirmProfileRequest struct {
 
 func (x *ConfirmProfileRequest) Reset() {
 	*x = ConfirmProfileRequest{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[10]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -781,7 +888,7 @@ func (x *ConfirmProfileRequest) String() string {
 func (*ConfirmProfileRequest) ProtoMessage() {}
 
 func (x *ConfirmProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[10]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -794,7 +901,7 @@ func (x *ConfirmProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmProfileRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmProfileRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{10}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{11}
 }
 
 type ConfirmProfileResponse struct {
@@ -811,7 +918,7 @@ type ConfirmProfileResponse struct {
 
 func (x *ConfirmProfileResponse) Reset() {
 	*x = ConfirmProfileResponse{}
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[11]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -823,7 +930,7 @@ func (x *ConfirmProfileResponse) String() string {
 func (*ConfirmProfileResponse) ProtoMessage() {}
 
 func (x *ConfirmProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[11]
+	mi := &file_kindlast_core_v1_onboarding_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -836,7 +943,7 @@ func (x *ConfirmProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmProfileResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmProfileResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{11}
+	return file_kindlast_core_v1_onboarding_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ConfirmProfileResponse) GetState() *OnboardingState {
@@ -864,13 +971,19 @@ var File_kindlast_core_v1_onboarding_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_onboarding_proto_rawDesc = "" +
 	"\n" +
-	"!kindlast/core/v1/onboarding.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1dkindlast/core/v1/memory.proto\x1a\x1fkindlast/options/v1/scope.proto\"\xb9\x01\n" +
+	"!kindlast/core/v1/onboarding.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1dkindlast/core/v1/memory.proto\x1a\x1fkindlast/options/v1/scope.proto\"Z\n" +
+	"\x0eQuestionOption\x12\x14\n" +
+	"\x05value\x18\x01 \x01(\tR\x05value\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1c\n" +
+	"\texclusive\x18\x03 \x01(\bR\texclusive\"\x8b\x02\n" +
 	"\bQuestion\x122\n" +
 	"\x03key\x18\x01 \x01(\x0e2 .kindlast.core.v1.ProfileFactKeyR\x03key\x12\x16\n" +
 	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x123\n" +
 	"\x05shape\x18\x03 \x01(\x0e2\x1d.kindlast.core.v1.AnswerShapeR\x05shape\x12\x18\n" +
 	"\achoices\x18\x04 \x03(\tR\achoices\x12\x12\n" +
-	"\x04help\x18\x05 \x01(\tR\x04help\"\x8d\x02\n" +
+	"\x04help\x18\x05 \x01(\tR\x04help\x12:\n" +
+	"\aoptions\x18\x06 \x03(\v2 .kindlast.core.v1.QuestionOptionR\aoptions\x12\x14\n" +
+	"\x05basis\x18\a \x01(\tR\x05basis\"\x8d\x02\n" +
 	"\x0eOnboardingTurn\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x18\n" +
@@ -944,54 +1057,56 @@ func file_kindlast_core_v1_onboarding_proto_rawDescGZIP() []byte {
 }
 
 var file_kindlast_core_v1_onboarding_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kindlast_core_v1_onboarding_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_kindlast_core_v1_onboarding_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_kindlast_core_v1_onboarding_proto_goTypes = []any{
 	(AnswerShape)(0),                     // 0: kindlast.core.v1.AnswerShape
-	(*Question)(nil),                     // 1: kindlast.core.v1.Question
-	(*OnboardingTurn)(nil),               // 2: kindlast.core.v1.OnboardingTurn
-	(*OnboardingState)(nil),              // 3: kindlast.core.v1.OnboardingState
-	(*DraftFact)(nil),                    // 4: kindlast.core.v1.DraftFact
-	(*GetOnboardingSessionRequest)(nil),  // 5: kindlast.core.v1.GetOnboardingSessionRequest
-	(*GetOnboardingSessionResponse)(nil), // 6: kindlast.core.v1.GetOnboardingSessionResponse
-	(*StartOnboardingRequest)(nil),       // 7: kindlast.core.v1.StartOnboardingRequest
-	(*StartOnboardingResponse)(nil),      // 8: kindlast.core.v1.StartOnboardingResponse
-	(*AnswerQuestionRequest)(nil),        // 9: kindlast.core.v1.AnswerQuestionRequest
-	(*AnswerQuestionResponse)(nil),       // 10: kindlast.core.v1.AnswerQuestionResponse
-	(*ConfirmProfileRequest)(nil),        // 11: kindlast.core.v1.ConfirmProfileRequest
-	(*ConfirmProfileResponse)(nil),       // 12: kindlast.core.v1.ConfirmProfileResponse
-	(ProfileFactKey)(0),                  // 13: kindlast.core.v1.ProfileFactKey
-	(*FactValue)(nil),                    // 14: kindlast.core.v1.FactValue
-	(*ProfileFact)(nil),                  // 15: kindlast.core.v1.ProfileFact
+	(*QuestionOption)(nil),               // 1: kindlast.core.v1.QuestionOption
+	(*Question)(nil),                     // 2: kindlast.core.v1.Question
+	(*OnboardingTurn)(nil),               // 3: kindlast.core.v1.OnboardingTurn
+	(*OnboardingState)(nil),              // 4: kindlast.core.v1.OnboardingState
+	(*DraftFact)(nil),                    // 5: kindlast.core.v1.DraftFact
+	(*GetOnboardingSessionRequest)(nil),  // 6: kindlast.core.v1.GetOnboardingSessionRequest
+	(*GetOnboardingSessionResponse)(nil), // 7: kindlast.core.v1.GetOnboardingSessionResponse
+	(*StartOnboardingRequest)(nil),       // 8: kindlast.core.v1.StartOnboardingRequest
+	(*StartOnboardingResponse)(nil),      // 9: kindlast.core.v1.StartOnboardingResponse
+	(*AnswerQuestionRequest)(nil),        // 10: kindlast.core.v1.AnswerQuestionRequest
+	(*AnswerQuestionResponse)(nil),       // 11: kindlast.core.v1.AnswerQuestionResponse
+	(*ConfirmProfileRequest)(nil),        // 12: kindlast.core.v1.ConfirmProfileRequest
+	(*ConfirmProfileResponse)(nil),       // 13: kindlast.core.v1.ConfirmProfileResponse
+	(ProfileFactKey)(0),                  // 14: kindlast.core.v1.ProfileFactKey
+	(*FactValue)(nil),                    // 15: kindlast.core.v1.FactValue
+	(*ProfileFact)(nil),                  // 16: kindlast.core.v1.ProfileFact
 }
 var file_kindlast_core_v1_onboarding_proto_depIdxs = []int32{
-	13, // 0: kindlast.core.v1.Question.key:type_name -> kindlast.core.v1.ProfileFactKey
+	14, // 0: kindlast.core.v1.Question.key:type_name -> kindlast.core.v1.ProfileFactKey
 	0,  // 1: kindlast.core.v1.Question.shape:type_name -> kindlast.core.v1.AnswerShape
-	13, // 2: kindlast.core.v1.OnboardingTurn.key:type_name -> kindlast.core.v1.ProfileFactKey
-	14, // 3: kindlast.core.v1.OnboardingTurn.value:type_name -> kindlast.core.v1.FactValue
-	2,  // 4: kindlast.core.v1.OnboardingState.transcript:type_name -> kindlast.core.v1.OnboardingTurn
-	1,  // 5: kindlast.core.v1.OnboardingState.next_question:type_name -> kindlast.core.v1.Question
-	4,  // 6: kindlast.core.v1.OnboardingState.draft:type_name -> kindlast.core.v1.DraftFact
-	13, // 7: kindlast.core.v1.DraftFact.key:type_name -> kindlast.core.v1.ProfileFactKey
-	14, // 8: kindlast.core.v1.DraftFact.value:type_name -> kindlast.core.v1.FactValue
-	3,  // 9: kindlast.core.v1.GetOnboardingSessionResponse.state:type_name -> kindlast.core.v1.OnboardingState
-	3,  // 10: kindlast.core.v1.StartOnboardingResponse.state:type_name -> kindlast.core.v1.OnboardingState
-	13, // 11: kindlast.core.v1.AnswerQuestionRequest.key:type_name -> kindlast.core.v1.ProfileFactKey
-	3,  // 12: kindlast.core.v1.AnswerQuestionResponse.state:type_name -> kindlast.core.v1.OnboardingState
-	3,  // 13: kindlast.core.v1.ConfirmProfileResponse.state:type_name -> kindlast.core.v1.OnboardingState
-	15, // 14: kindlast.core.v1.ConfirmProfileResponse.facts:type_name -> kindlast.core.v1.ProfileFact
-	5,  // 15: kindlast.core.v1.OnboardingService.GetOnboardingSession:input_type -> kindlast.core.v1.GetOnboardingSessionRequest
-	7,  // 16: kindlast.core.v1.OnboardingService.StartOnboarding:input_type -> kindlast.core.v1.StartOnboardingRequest
-	9,  // 17: kindlast.core.v1.OnboardingService.AnswerQuestion:input_type -> kindlast.core.v1.AnswerQuestionRequest
-	11, // 18: kindlast.core.v1.OnboardingService.ConfirmProfile:input_type -> kindlast.core.v1.ConfirmProfileRequest
-	6,  // 19: kindlast.core.v1.OnboardingService.GetOnboardingSession:output_type -> kindlast.core.v1.GetOnboardingSessionResponse
-	8,  // 20: kindlast.core.v1.OnboardingService.StartOnboarding:output_type -> kindlast.core.v1.StartOnboardingResponse
-	10, // 21: kindlast.core.v1.OnboardingService.AnswerQuestion:output_type -> kindlast.core.v1.AnswerQuestionResponse
-	12, // 22: kindlast.core.v1.OnboardingService.ConfirmProfile:output_type -> kindlast.core.v1.ConfirmProfileResponse
-	19, // [19:23] is the sub-list for method output_type
-	15, // [15:19] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	1,  // 2: kindlast.core.v1.Question.options:type_name -> kindlast.core.v1.QuestionOption
+	14, // 3: kindlast.core.v1.OnboardingTurn.key:type_name -> kindlast.core.v1.ProfileFactKey
+	15, // 4: kindlast.core.v1.OnboardingTurn.value:type_name -> kindlast.core.v1.FactValue
+	3,  // 5: kindlast.core.v1.OnboardingState.transcript:type_name -> kindlast.core.v1.OnboardingTurn
+	2,  // 6: kindlast.core.v1.OnboardingState.next_question:type_name -> kindlast.core.v1.Question
+	5,  // 7: kindlast.core.v1.OnboardingState.draft:type_name -> kindlast.core.v1.DraftFact
+	14, // 8: kindlast.core.v1.DraftFact.key:type_name -> kindlast.core.v1.ProfileFactKey
+	15, // 9: kindlast.core.v1.DraftFact.value:type_name -> kindlast.core.v1.FactValue
+	4,  // 10: kindlast.core.v1.GetOnboardingSessionResponse.state:type_name -> kindlast.core.v1.OnboardingState
+	4,  // 11: kindlast.core.v1.StartOnboardingResponse.state:type_name -> kindlast.core.v1.OnboardingState
+	14, // 12: kindlast.core.v1.AnswerQuestionRequest.key:type_name -> kindlast.core.v1.ProfileFactKey
+	4,  // 13: kindlast.core.v1.AnswerQuestionResponse.state:type_name -> kindlast.core.v1.OnboardingState
+	4,  // 14: kindlast.core.v1.ConfirmProfileResponse.state:type_name -> kindlast.core.v1.OnboardingState
+	16, // 15: kindlast.core.v1.ConfirmProfileResponse.facts:type_name -> kindlast.core.v1.ProfileFact
+	6,  // 16: kindlast.core.v1.OnboardingService.GetOnboardingSession:input_type -> kindlast.core.v1.GetOnboardingSessionRequest
+	8,  // 17: kindlast.core.v1.OnboardingService.StartOnboarding:input_type -> kindlast.core.v1.StartOnboardingRequest
+	10, // 18: kindlast.core.v1.OnboardingService.AnswerQuestion:input_type -> kindlast.core.v1.AnswerQuestionRequest
+	12, // 19: kindlast.core.v1.OnboardingService.ConfirmProfile:input_type -> kindlast.core.v1.ConfirmProfileRequest
+	7,  // 20: kindlast.core.v1.OnboardingService.GetOnboardingSession:output_type -> kindlast.core.v1.GetOnboardingSessionResponse
+	9,  // 21: kindlast.core.v1.OnboardingService.StartOnboarding:output_type -> kindlast.core.v1.StartOnboardingResponse
+	11, // 22: kindlast.core.v1.OnboardingService.AnswerQuestion:output_type -> kindlast.core.v1.AnswerQuestionResponse
+	13, // 23: kindlast.core.v1.OnboardingService.ConfirmProfile:output_type -> kindlast.core.v1.ConfirmProfileResponse
+	20, // [20:24] is the sub-list for method output_type
+	16, // [16:20] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_core_v1_onboarding_proto_init() }
@@ -1006,7 +1121,7 @@ func file_kindlast_core_v1_onboarding_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_core_v1_onboarding_proto_rawDesc), len(file_kindlast_core_v1_onboarding_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

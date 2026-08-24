@@ -1,20 +1,23 @@
-import { citationLabel } from '@/lib/readiness/corpus'
-import { ledgerCounts, type LedgerRow } from '@/lib/readiness/evaluate'
+import { citationLabel } from '@/lib/onboarding/corpus'
+import { ledgerCounts, type LedgerRow } from '@/lib/onboarding/evaluate'
 
 /**
- * The corpus, narrowing as the visitor answers (ENT-189).
+ * The corpus, narrowing as the answers arrive (ENT-189, ENT-254).
  *
  * # WHY THE PROGRESS INDICATOR IS THE CORPUS ITSELF
  *
- * "Question 4 of 13" tells a visitor how much longer this will take, which is
+ * "Question 4 of 11" tells somebody how much longer this will take, which is
  * the least interesting thing on the page. What the product actually does is
  * take a body of regulation and narrow it against what it knows about one
  * organisation, and that is invisible in every other way of showing it. So the
  * fifteen obligations are on screen from the first question, and each one
  * resolves as the answer that decides it arrives.
  *
- * It is the Watcher, demonstrated rather than described, on the page whose job
- * is to make somebody believe the Watcher exists.
+ * It is the Watcher, demonstrated rather than described, on the first screen a
+ * customer sees. ENT-254 moved this out of the marketing site and into
+ * onboarding for exactly that reason: the surface that makes somebody believe
+ * the Watcher exists is worth more where they are about to rely on it than
+ * where they were deciding whether to sign up.
  *
  * # THREE STATES, AND THE THIRD ONE IS THE HONEST PART
  *
@@ -32,17 +35,12 @@ import { ledgerCounts, type LedgerRow } from '@/lib/readiness/evaluate'
  * a screen reader. Colour is the fourth cue rather than the only one.
  */
 
-const TEAL = '#00C9A7'
-const TEAL_INK = '#00796B'
-const INK = '#0D1B2A'
-
 function Marker({ state }: { state: LedgerRow['state'] }) {
   if (state === 'applies') {
     return (
       <span
         aria-hidden="true"
-        className="mt-[7px] block h-[9px] w-[9px] shrink-0"
-        style={{ backgroundColor: TEAL }}
+        className="mt-[7px] block h-[9px] w-[9px] shrink-0 bg-primary"
       />
     )
   }
@@ -50,16 +48,14 @@ function Marker({ state }: { state: LedgerRow['state'] }) {
     return (
       <span
         aria-hidden="true"
-        className="mt-[7px] block h-[9px] w-[9px] shrink-0 border"
-        style={{ borderColor: 'rgba(13,27,42,0.28)' }}
+        className="mt-[7px] block h-[9px] w-[9px] shrink-0 border border-muted-foreground/60"
       />
     )
   }
   return (
     <span
       aria-hidden="true"
-      className="mt-[11px] block h-px w-[9px] shrink-0"
-      style={{ backgroundColor: 'rgba(13,27,42,0.28)' }}
+      className="mt-[11px] block h-px w-[9px] shrink-0 bg-muted-foreground/60"
     />
   )
 }
@@ -89,10 +85,9 @@ export function LedgerSummary({
   return (
     <p
       aria-live="polite"
-      className={`font-mono text-[11px] font-medium uppercase tracking-[0.14em] ${className ?? ''}`}
-      style={{ color: 'rgba(13,27,42,0.45)' }}
+      className={`font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground ${className ?? ''}`}
     >
-      <span style={{ color: TEAL_INK }}>{counts.applies} matched</span> &middot;{' '}
+      <span className="text-primary">{counts.applies} matched</span> &middot;{' '}
       {counts.narrowed} set aside &middot; {counts.pending} still open
     </p>
   )
@@ -106,41 +101,30 @@ export function Ledger({ rows }: { rows: readonly LedgerRow[] }) {
       aria-label="The obligations Kindlast holds, and where each one stands"
       className="lg:sticky lg:top-[94px]"
     >
-      <p
-        className="font-mono text-[11px] font-medium uppercase tracking-[0.2em]"
-        style={{ color: 'rgba(13,27,42,0.35)' }}
-      >
+      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
         The corpus &middot; {rows.length} obligations
       </p>
 
-      <ol
-        className="mt-5 border-t"
-        style={{ borderColor: 'rgba(13,27,42,0.1)' }}
-      >
+      <ol className="mt-5 border-t border-border">
         {rows.map((row) => {
           const dim = row.state !== 'applies'
           return (
             <li
               key={row.obligation.slug}
-              className="flex gap-3 border-b py-2.5 transition-opacity duration-300 motion-reduce:transition-none"
-              style={{
-                borderColor: 'rgba(13,27,42,0.06)',
-                opacity: dim ? 0.42 : 1,
-              }}
+              className="flex gap-3 border-b border-border/60 py-2.5 transition-opacity duration-300 motion-reduce:transition-none"
+              style={{ opacity: dim ? 0.42 : 1 }}
             >
               <Marker state={row.state} />
               <div className="min-w-0">
                 <p
                   data-citation="true"
-                  className="font-mono text-[10px] font-medium uppercase tracking-[0.14em]"
-                  style={{ color: 'rgba(13,27,42,0.45)' }}
+                  className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
                 >
                   {citationLabel(row.obligation.citation)}
                 </p>
                 <p
                   data-corpus="true"
-                  className="mt-0.5 text-[13px] font-semibold leading-[1.35] tracking-[-0.01em]"
-                  style={{ color: INK }}
+                  className="mt-0.5 text-[13px] font-semibold leading-[1.35] tracking-[-0.01em] text-foreground"
                 >
                   {row.obligation.title}
                 </p>
@@ -156,8 +140,7 @@ export function Ledger({ rows }: { rows: readonly LedgerRow[] }) {
           announcing the same change is worse than one. */}
       <p
         aria-hidden="true"
-        className="mt-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em]"
-        style={{ color: 'rgba(13,27,42,0.45)' }}
+        className="mt-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
       >
         {counts.applies} matched &middot; {counts.narrowed} set aside &middot;{' '}
         {counts.pending} still open

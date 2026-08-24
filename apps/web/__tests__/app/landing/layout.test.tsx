@@ -43,17 +43,29 @@ describe('PublicLayout', () => {
     expect(container.innerHTML).not.toMatch(/href="#/)
   })
 
-  it('makes the readiness check the header call to action', () => {
+  it('makes signing up the header call to action', () => {
     // ENT-190 put the repository in this slot because the site had nothing to
-    // do but read. ENT-189 gave it something: an assessment that needs no
-    // account, so it takes the pill.
+    // do but read. ENT-189 gave it an assessment that needed no account.
+    // ENT-254 moved the assessment inside the product, so the pill points at
+    // the sign-up it now sits behind.
     render(
       <PublicLayout>
         <p>page body</p>
       </PublicLayout>,
     )
-    const cta = screen.getByRole('link', { name: /check where you stand/i })
-    expect(cta).toHaveAttribute('href', '/readiness')
+    const cta = screen.getByRole('link', { name: /get started/i })
+    expect(cta).toHaveAttribute('href', '/auth/signup')
+  })
+
+  it('links nowhere that no longer resolves', () => {
+    // `/readiness` is gone, and a header linking to it would put a 404 in the
+    // one place every marketing page shares.
+    const { container } = render(
+      <PublicLayout>
+        <p>page body</p>
+      </PublicLayout>,
+    )
+    expect(container.innerHTML).not.toMatch(/href="\/readiness"/)
   })
 
   it('still reaches the repository, as the icon beside it', () => {

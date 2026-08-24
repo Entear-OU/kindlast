@@ -67,14 +67,30 @@ type OnboardingServiceClient interface {
 	// The key travels in the request rather than being inferred from position,
 	// because a person may go back and change an earlier answer and because a
 	// retry must not be able to attach an answer to a different question than the
-	// one it was typed under.
-	AnswerQuestion(context.Context, *connect.Request[v1.AnswerQuestionRequest]) (*connect.Response[v1.AnswerQuestionResponse], error)
-	// Record what was said as what the organisation believes.
+	// one it was given under.
 	//
-	// This is the only call in this service that writes a fact. Until it is made,
-	// the interview is a conversation and nothing else, which is how "the person
-	// sees and confirms the profile before it drives anything" is enforced rather
-	// than promised.
+	// THIS WRITES THE FACT (ENT-254). The answer is parsed into the key's
+	// declared kind, refused with a sentence when it does not fit, and recorded
+	// through the same close-then-insert path a human correction takes, with
+	// `source = 'onboarding'`. A skip records nothing at all: the fact stays
+	// absent rather than being guessed, which is what "left empty rather than
+	// guessed" means when it is a property of the code instead of an instruction
+	// in a prompt.
+	//
+	// Answering the last applicable question also finishes the session and writes
+	// the compliance profile, so there is nothing further for the person to do.
+	AnswerQuestion(context.Context, *connect.Request[v1.AnswerQuestionRequest]) (*connect.Response[v1.AnswerQuestionResponse], error)
+	// Finish the interview with what has been answered so far.
+	//
+	// Since ENT-254 this is no longer where a fact is first written: every answer
+	// is already recorded by the call that gave it. What is left is finishing,
+	// which is a real thing to want: somebody who has answered enough and would
+	// rather stop than skip five more questions one at a time. It writes the
+	// compliance profile from every fact currently believed, marks the session
+	// completed, and enqueues the sweep that produces the first findings.
+	//
+	// Answering the last applicable question does the same thing without this
+	// call, which is why the console has no confirm button.
 	//
 	// Idempotent: confirming twice records the same values, and a value equal to
 	// what is already believed writes no history row.
@@ -167,14 +183,30 @@ type OnboardingServiceHandler interface {
 	// The key travels in the request rather than being inferred from position,
 	// because a person may go back and change an earlier answer and because a
 	// retry must not be able to attach an answer to a different question than the
-	// one it was typed under.
-	AnswerQuestion(context.Context, *connect.Request[v1.AnswerQuestionRequest]) (*connect.Response[v1.AnswerQuestionResponse], error)
-	// Record what was said as what the organisation believes.
+	// one it was given under.
 	//
-	// This is the only call in this service that writes a fact. Until it is made,
-	// the interview is a conversation and nothing else, which is how "the person
-	// sees and confirms the profile before it drives anything" is enforced rather
-	// than promised.
+	// THIS WRITES THE FACT (ENT-254). The answer is parsed into the key's
+	// declared kind, refused with a sentence when it does not fit, and recorded
+	// through the same close-then-insert path a human correction takes, with
+	// `source = 'onboarding'`. A skip records nothing at all: the fact stays
+	// absent rather than being guessed, which is what "left empty rather than
+	// guessed" means when it is a property of the code instead of an instruction
+	// in a prompt.
+	//
+	// Answering the last applicable question also finishes the session and writes
+	// the compliance profile, so there is nothing further for the person to do.
+	AnswerQuestion(context.Context, *connect.Request[v1.AnswerQuestionRequest]) (*connect.Response[v1.AnswerQuestionResponse], error)
+	// Finish the interview with what has been answered so far.
+	//
+	// Since ENT-254 this is no longer where a fact is first written: every answer
+	// is already recorded by the call that gave it. What is left is finishing,
+	// which is a real thing to want: somebody who has answered enough and would
+	// rather stop than skip five more questions one at a time. It writes the
+	// compliance profile from every fact currently believed, marks the session
+	// completed, and enqueues the sweep that produces the first findings.
+	//
+	// Answering the last applicable question does the same thing without this
+	// call, which is why the console has no confirm button.
 	//
 	// Idempotent: confirming twice records the same values, and a value equal to
 	// what is already believed writes no history row.

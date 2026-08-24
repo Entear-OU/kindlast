@@ -1,13 +1,21 @@
 /**
- * Which obligations reach this visitor, and why (ENT-189).
+ * Which obligations reach this organisation, and why (ENT-189, ENT-254).
  *
  * # THIS IS A PORT, AND FIDELITY MATTERS MORE THAN IMPROVEMENT
  *
  * `watcher_obligation_applies` and `watcher_gap_satisfied` (db/migrations/00001
- * and 00023) decide this in the product. This module decides it on a marketing
- * page for a visitor with no account, no organisation and no database row, and
- * the two have to agree, because a prospect who signs up after reading this and
- * sees a different answer has been told two things by the same company.
+ * and 00023) decide this in the product, in plpgsql, on the compliance profile.
+ * This module decides it in the browser, live, while the interview is still
+ * being answered and before the profile row exists. The two have to agree,
+ * because the corpus column narrowing beside the questions is a promise about
+ * what the Watcher will say an hour later, and a person who watches an
+ * obligation open and then never sees it again has been told two things by the
+ * same product.
+ *
+ * That constraint is what forced ENT-254's other decisions. Every answer is a
+ * token out of a closed set because these rules match tokens; "unsure" is
+ * offered where a non-empty list is what both sides read and withheld where
+ * only one of them would drop it.
  *
  * So where a rule here looks wrong, it is deliberately the rule the database
  * runs, and the comment says so. The one worth noticing on review is the
@@ -17,7 +25,7 @@
  * `large_scale_monitoring` go through `watcher_fact_affirms`, which counts
  * "unsure" as affirming. That is not a transcription error; it is two functions
  * written three migrations apart, and closing it belongs to whoever moves the
- * evaluator into Go under ENT-225, not to a marketing page.
+ * evaluator into Go under ENT-225.
  *
  * # THE TWO HALVES OF WHAT COMES OUT, AND WHY THEY ARE SEPARATE
  *
@@ -31,28 +39,37 @@
  *     nothing about what the law requires. `corpus.test.ts` runs every one of
  *     them past the same detector the code critic uses.
  *
- * # A GAP IS NOT A SELF-REPORTED WEAKNESS, AND THEY RENDER DIFFERENTLY
+ * # THE SELF-CHECKS ARE GONE, AND THE ARGUMENT IS WORTH KEEPING
  *
- * `gaps` are the corpus's `requires` tokens the answers did not satisfy, which
- * is exactly what the Watcher would raise as a finding. `selfChecks` are the
- * visitor's own answers to questions the corpus attaches no token to (a written
- * DSAR process, a breach plan). Presenting the second as a Kindlast finding
- * would be asserting something the Watcher never said, which is the same
- * mistake as fabricating an obligation, one step smaller.
+ * `/readiness` also asked two questions the corpus attaches no gap token to: is
+ * there a written process for a subject access request, and is there a plan for
+ * the hours after a breach. It reported them back as the visitor's own words,
+ * carefully styled so they could not be read as something Kindlast had found,
+ * because presenting a self-reported weakness as a finding is the same mistake
+ * as fabricating an obligation, one step smaller.
+ *
+ * ENT-254 dropped both questions rather than porting them, and the reason is
+ * that the surface changed underneath them. That page recorded nothing, so a
+ * question with nowhere to store its answer cost nothing to ask. This one
+ * writes every answer down as it is given, and there is no fact key for either
+ * of them: the answer would have gone into the transcript and stopped there,
+ * visible once and never again. A question whose answer is written nowhere is
+ * one this interview cannot ask honestly.
+ *
+ * If a regulation pack ever raises a `dsar_process` or `breach_plan` token,
+ * they come back as ordinary questions with ordinary facts behind them.
  */
 import type { GapToken, Obligation } from './corpus'
 import { OBLIGATIONS } from './corpus'
 import {
   NONE,
   UNSURE,
+  lawfulBasisLabel,
   named,
   picked,
-  optionLabel,
-  questionFor,
   tri,
   type Answers,
-  type TriState,
-} from './script'
+} from './answers'
 
 /**
  * One clause of an obligation's applicability, with the sentence to show
@@ -68,13 +85,6 @@ interface Condition {
   readonly whenUnmet: string
 }
 
-/** A question the visitor answered about their own readiness, carried through. */
-export interface SelfCheck {
-  readonly key: string
-  readonly prompt: string
-  readonly answer: TriState | undefined
-}
-
 export interface AppliedObligation {
   readonly obligation: Obligation
   /** Why it reached this visitor, said in terms of what they answered. */
@@ -83,8 +93,6 @@ export interface AppliedObligation {
   readonly gaps: readonly GapToken[]
   /** One sentence per gap, again from the answers. */
   readonly gapNotes: readonly string[]
-  /** The visitor's own words about their readiness. Never a Kindlast finding. */
-  readonly selfChecks: readonly SelfCheck[]
 }
 
 export interface NarrowedObligation {
@@ -100,20 +108,6 @@ export interface Assessment {
   readonly total: number
   /** Applying obligations with at least one corpus gap. */
   readonly withGaps: number
-}
-
-/**
- * The questions whose answers are the visitor's own readiness rather than an
- * input to applicability.
- *
- * `gdpr-art-34-breach-communication` shares `breach_plan` with Article 33 on
- * purpose: one plan answers both, and showing the visitor the same answer twice
- * beside two different corpus rows is more useful than picking one.
- */
-const SELF_CHECKS: Readonly<Record<string, readonly string[]>> = {
-  'gdpr-arts-12-22-data-subject-rights': ['dsar_process'],
-  'gdpr-art-33-breach-notification': ['breach_plan'],
-  'gdpr-art-34-breach-communication': ['breach_plan'],
 }
 
 /** yes or unsure. `watcher_fact_affirms`: absent is not affirmed, and neither is no. */
@@ -135,7 +129,7 @@ function said(answers: Answers, key: string, claim: string): Condition {
     whenUnmet:
       value === 'no'
         ? `You said it is not the case that ${claim}.`
-        : `Nobody asked you whether ${claim}, so there are no grounds to raise it.`,
+        : `Nothing you have told us says whether ${claim}, so there are no grounds to raise it.`,
   }
 }
 
@@ -162,7 +156,7 @@ function conditions(obligation: Obligation, answers: Answers): Condition[] {
         : 'You said AI is in use.',
       whenUnmet:
         ai.length === 0
-          ? 'Nobody asked you what AI is in use.'
+          ? 'Nothing you have told us says what AI is in use.'
           : 'You said no AI is in use.',
     })
   }
@@ -182,7 +176,7 @@ function conditions(obligation: Obligation, answers: Answers): Condition[] {
           ? 'You said you do not know whether personal information leaves the EU or the EEA, and Kindlast opens this one only on a definite yes.'
           : value === 'no'
             ? 'You said nothing leaves the EU or the EEA.'
-            : 'Nobody asked you whether anything leaves the EU or the EEA.',
+            : 'Nothing you have told us says whether anything leaves the EU or the EEA.',
     })
   }
 
@@ -219,7 +213,7 @@ function conditions(obligation: Obligation, answers: Answers): Condition[] {
   if (when.lawful_basis_includes) {
     const bases = named(answers, 'lawful_bases')
     const basis = when.lawful_basis_includes
-    const label = optionLabel('lawful_bases', basis)
+    const label = lawfulBasisLabel(basis)
     out.push({
       met: bases.includes(basis),
       reads: 'lawful_bases',
@@ -239,7 +233,7 @@ function conditions(obligation: Obligation, answers: Answers): Condition[] {
         : 'You named other companies that handle personal information for you.',
       whenUnmet:
         vendors.length === 0
-          ? 'Nobody asked you who handles personal information for you.'
+          ? 'Nothing you have told us says who handles personal information for you.'
           : 'You said nobody outside the company touches it.',
     })
   }
@@ -315,15 +309,6 @@ function gapNote(token: GapToken, answers: Answers): string {
   }
 }
 
-/** The self-reported answers to carry onto an obligation's card. */
-function selfChecksFor(slug: string, answers: Answers): SelfCheck[] {
-  return (SELF_CHECKS[slug] ?? []).map((key) => ({
-    key,
-    prompt: questionFor(key)?.prompt ?? key,
-    answer: tri(answers, key),
-  }))
-}
-
 /**
  * Run the whole corpus against one answer sheet.
  *
@@ -362,7 +347,6 @@ export function assess(answers: Answers): Assessment {
       because,
       gaps,
       gapNotes: gaps.map((token) => gapNote(token, answers)),
-      selfChecks: selfChecksFor(obligation.slug, answers),
     })
   }
 
