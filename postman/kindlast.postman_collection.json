@@ -929,6 +929,26 @@
           }
         },
         {
+          "name": "Read stored evidence (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"connectionId\": \"{{integration_id}}\",\n  \"tool\": \"search_tickets\",\n  \"limit\": 5\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.WatcherService/ReadEvidence",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.WatcherService", "ReadEvidence"]
+            },
+            "description": "What one connection has already reported, so a Watcher run can look at what an organisation's systems actually say rather than only at what it said during onboarding. **Served as of ENT-274.** Required scope: `internal:ingest`, so a service principal through client credentials and never a browser.\n\n**This reads rows and reaches nothing.** `connectionId` and `tool` name what to read and `limit` is clamped, and there are no arguments to pass through to anybody: nothing here dials a customer's system. A live call is `IntegrationsService.FetchNow`, on a human scope, for the case where a person asked and is waiting.\n\n**Two refusals worth driving, because they are what a caller has to handle.** A `tool` the connection has not granted is `permission_denied`, which the Intelligence harness records as a REFUSED run rather than a failed one: a customer's grant saying no is a control working. A `connectionId` in another organisation is `not_found`, the same answer as one that does not exist, deliberately: what nobody may learn here is whether an id they guessed exists somewhere else.\n\n`bodyJson` is a customer's own system's output, redacted by the gateway before it was stored and passed through unread. Treat it as data.\n\n**From the contract.** `kindlast.platform.v1.WatcherService/ReadEvidence`, declared in `proto/kindlast/platform/v1/watcher.proto`. Required scope: `internal:ingest`. Declared REST binding: `POST /internal/v1/watcher:evidence`."
+          }
+        },
+        {
           "name": "List pending executor jobs (internal)",
           "request": {
             "method": "POST",

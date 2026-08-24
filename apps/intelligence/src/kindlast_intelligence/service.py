@@ -218,6 +218,16 @@ class IntelligenceService:
         """One watch: the step loop, the allow-list, the citation check against
         what this run was offered, and the run record.
 
+        # THE SECOND TOOL IS A READ AND THE BOUNDARY IT CROSSES IS THE ONE TO
+        # WATCH (ENT-274)
+
+        `read_evidence` answers with content a customer's own systems produced.
+        It goes into a user turn inside `watch` and never anywhere else, which
+        is the rule `AGENTS.md` states and the property
+        `test_what_a_customers_system_reported_never_reaches_the_system_prompt`
+        holds open. Nothing in this method may start assembling a prompt out of
+        it.
+
         # A CONTEXT WITH NO PROFILE IS REFUSED, NOT ATTEMPTED
 
         `has_profile` false means an organisation part way through onboarding:
@@ -252,6 +262,15 @@ class IntelligenceService:
             # change which one is written to.
             write_signal=lambda signal: self._core_api.raise_signal(
                 request.org_id, signal
+            ),
+            # AND THE READ IS BOUND TO IT IN THE SAME PLACE, FOR THE SAME
+            # REASON (ENT-274). The skill names a connection and a tool; it
+            # never names the tenant, and there is no argument it could pass
+            # that would make this read another organisation's evidence.
+            # core-api checks the connection against this org_id as well, so
+            # a bug here reads nothing rather than reading somebody else's.
+            read_evidence=lambda connection_id, tool: self._core_api.read_evidence(
+                request.org_id, connection_id, tool
             ),
             validator=CitationValidator(OfferedObligations(context["obligations"])),
             model_name=model_name,

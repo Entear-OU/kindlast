@@ -59,6 +59,19 @@ func (r *recordingWatcher) WatcherContextFor(_ context.Context, orgID string) (p
 	}, nil
 }
 
+func (r *recordingWatcher) EvidenceFor(
+	_ context.Context, orgID, connectionID, tool string, _ int,
+) (string, []postgres.StoredObservation, error) {
+	r.orgs = append(r.orgs, orgID)
+	if r.err != nil {
+		return "", nil, r.err
+	}
+	return "The helpdesk", []postgres.StoredObservation{{
+		EvidenceID: "e1", ConnectionID: connectionID, Tool: tool,
+		BodyJSON: `{"open":4}`,
+	}}, nil
+}
+
 func (r *recordingWatcher) RaiseSignal(_ context.Context, orgID string, signal postgres.Signal) (string, bool, error) {
 	r.orgs = append(r.orgs, orgID)
 	if r.err != nil {

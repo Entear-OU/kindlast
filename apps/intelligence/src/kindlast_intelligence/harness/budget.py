@@ -1,6 +1,6 @@
 """Per-run budgets, and refusing when one is spent (§26.3, ENT-218, ENT-238).
 
-Six limits, not four. The design names token budget, model calls, tool calls
+Seven limits, not four. The design names token budget, model calls, tool calls
 and recursion; all four are cost controls, and they are the right ones when
 inference is somebody else's API and concurrency is their problem.
 
@@ -8,6 +8,10 @@ ENT-235 made inference local, which changes what is scarce. One `llama-server`
 serves one or two requests at a time, so a run can sit inside every token limit
 and still hold a slot for eleven minutes while another tenant waits. Hence wall
 clock, and hence queue wait beside it.
+
+ENT-274 added the seventh, and it is the only one that is not about cost at
+all. `max_evidence_reads` bounds how much of a customer's own systems' output a
+run may pull into the conversation it is reasoning in. See the field.
 
 # TIME WAITED AND TIME WORKED ARE TWO BUDGETS, NOT ONE
 
@@ -69,6 +73,22 @@ class Budget(BaseModel):
     max_total_tokens: int = Field(default=8_000, gt=0)
     max_model_calls: int = Field(default=6, gt=0)
     max_tool_calls: int = Field(default=12, gt=0)
+    # HOW MANY TIMES ONE RUN MAY LOOK AT WHAT A CUSTOMER'S SYSTEM REPORTED
+    # (ENT-274).
+    #
+    # A separate limit from `max_tool_calls`, and the reason is not arithmetic.
+    # Every other tool this harness has spends only our own resources; this one
+    # pulls text somebody else wrote into the conversation the model is
+    # reasoning in. That is the one cost a token budget cannot control in time,
+    # because the tokens are already in the context by the moment it fires.
+    #
+    # Three. Enough to compare two or three connections against each other,
+    # which is the whole reason an agent rather than a detector is looking;
+    # fewer than `max_model_calls`, so a run that spends every read still has a
+    # call left to say what it concluded; and small enough that a compromised
+    # or merely chatty endpoint cannot make third-party text the majority of
+    # what the model is looking at.
+    max_evidence_reads: int = Field(default=3, gt=0)
     max_depth: int = Field(default=4, gt=0)
     # Sized for a 4B on CPU answering a handful of times rather than for a
     # hosted API. On local inference this is the limit that actually fires.
@@ -85,6 +105,7 @@ class Budget(BaseModel):
     total_tokens: int = Field(default=0, ge=0)
     model_calls: int = Field(default=0, ge=0)
     tool_calls: int = Field(default=0, ge=0)
+    evidence_reads: int = Field(default=0, ge=0)
     # How long this run waited before the work started. Measured once at
     # admission and then kept, rather than recomputed, so the number in the
     # record is the number the limit was checked against.
@@ -109,6 +130,7 @@ class Budget(BaseModel):
         "max_total_tokens",
         "max_model_calls",
         "max_tool_calls",
+        "max_evidence_reads",
         "max_depth",
         "max_seconds",
         "max_queue_seconds",
@@ -177,6 +199,21 @@ class Budget(BaseModel):
                 "tool_calls", f"{self.tool_calls} of {self.max_tool_calls} used"
             )
         self.tool_calls += 1
+
+    def spend_evidence_read(self) -> None:
+        """Charged before the read happens, like every other limit here.
+
+        Not folded into `spend_tool_call`: a read is BOTH, so it costs one of
+        each. A run that spent its reads has not spent its tool calls and can
+        still raise what it concluded, which is the behaviour that makes the
+        limit a bound on third-party text rather than a bound on the run.
+        """
+        if self.evidence_reads >= self.max_evidence_reads:
+            raise BudgetExhausted(
+                "evidence_reads",
+                f"{self.evidence_reads} of {self.max_evidence_reads} used",
+            )
+        self.evidence_reads += 1
 
     def enter_depth(self, depth: int) -> None:
         if depth > self.max_depth:

@@ -156,15 +156,24 @@ export const AGENTS: readonly Agent[] = [
       {
         module: 'watcher',
         name: 'watcher.sweep',
-        version: '1.0.0',
-        // ONE TOOL, AND THE PAGE SHOWS IT FOR THE REASON THE LIST EXISTS.
+        // 1.1.0 is ENT-274: `read_evidence` joined the allow-list. A minor
+        // bump because the skill answers the same question and was given more
+        // to answer it from, and `agent_runs` records which version answered,
+        // so a run from before this saw less than a run after it.
+        version: '1.1.0',
+        // TWO TOOLS, AND THE PAGE SHOWS THEM FOR THE REASON THE LIST EXISTS.
         //
         // A reader looking at "what can this thing do to my data" gets the whole
-        // answer: it can raise a signal, and there is nothing here that writes a
+        // answer: it can read what one of your connected tools already reported,
+        // and it can raise a signal. There is nothing here that writes a
         // finding, changes a record or sends anything. That is the separation
         // the product rests on, and showing the list is how a customer checks it
         // rather than taking our word for it.
-        tools: ['raise_signal'],
+        //
+        // `read_evidence` reads observations a fetch already deposited. It
+        // cannot cause a fetch, so nothing here dials a customer's systems
+        // (ENT-279 is where that decision lives, and it is not taken).
+        tools: ['raise_signal', 'read_evidence'],
       },
     ],
   },

@@ -3561,6 +3561,73 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /internal/v1/watcher:evidence:
+        post:
+            tags:
+                - WatcherService
+            description: |-
+                What one connection has already reported, so the Watcher can look at it
+                 rather than only at the fact that it exists (ENT-274).
+
+                 # WHY A READ AND NOT A FETCH
+
+                 The obvious shape is "call the customer's tool now, through the gateway".
+                 It is not this, and the reason is a grant rather than an appetite.
+
+                 Dialling a customer's system needs their credential opened, and the
+                 producer role this whole service runs on is granted a COLUMN-LIMITED
+                 select on `integrations` that deliberately omits `credential_ciphertext`
+                 (00025). That omission is argued in the migration and it is right: the
+                 role that runs model output should not be able to reach the one value
+                 whose loss is a breach notification. Widening it to give an agent a live
+                 fetch is a security decision that deserves its own review rather than a
+                 line inside a feature.
+
+                 The shape of a sweep says the same thing from the other end. The watch
+                 activity has a twenty minute timeout and retries up to three times, and
+                 nobody is sitting in front of it. A synchronous call to a customer's slow
+                 endpoint inside that loop would hold a sweep slot on somebody else's
+                 latency and could dial their system three times for one sweep.
+                 `IntegrationsService.FetchNow` exists for the case where a person asked
+                 and is waiting, which is exactly the case this is not.
+
+                 So a fetch deposits, and a watch reads what was deposited. Both halves
+                 already write the same two rows through the same door.
+
+                 # WHAT IT ENFORCES, WHICH IS NOT WHAT THE CALLER ENFORCES
+
+                 The harness checks the connection against the context the run was SHOWN,
+                 which catches a model naming something it was never offered. This checks
+                 the connection belongs to the organisation and the tool is GRANTED on it,
+                 which is the invariant: no run reads through a tool the customer has not
+                 granted, whatever the caller believes. They refuse different things and
+                 both are wanted, the same way a citation is checked twice.
+
+                 Refusing an ungranted tool matters more than it looks. A grant is the
+                 customer's statement of what Kindlast may look at, and a stored row is
+                 still something they may withdraw permission to reason over. The console
+                 showing them the row is a person reading their own data; an agent reading
+                 it is the thing they granted or did not.
+            operationId: WatcherService_ReadEvidence
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReadEvidenceRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReadEvidenceResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
 components:
     schemas:
         AcceptInvitationResponse:
@@ -7523,6 +7590,54 @@ components:
                         False when the signal already existed and this run touched it rather than
                          created it. See WatchResponse.signals for why both are reported.
             description: RaisedSignal is one signal this run put through RaiseSignal.
+        ReadEvidenceRequest:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                connectionId:
+                    type: string
+                    description: |-
+                        Which connection to read, by the id `WatcherContext` gave. A connection
+                         outside this organisation reads nothing rather than erroring, because
+                         that is what the producer role's policies do and a handler that turned it
+                         into a different answer would be describing tenancy rather than obeying
+                         it.
+                tool:
+                    type: string
+                    description: |-
+                        Which of that connection's tools the observations were produced by.
+                         Required, and refused when the connection has not granted it.
+
+                         NOT OPTIONAL, DELIBERATELY. "Everything this connection ever said" is a
+                         convenient default and the wrong one: a grant is per tool, so an
+                         unfiltered read would let one granted tool carry back what an ungranted
+                         one deposited before the grant was withdrawn.
+                limit:
+                    type: integer
+                    description: |-
+                        How many observations, newest first. Clamped by the handler; zero means
+                         its default. The caller asks for what it can use rather than for
+                         everything, because everything is a customer's whole history and a run
+                         reads it into a model's context.
+                    format: int32
+        ReadEvidenceResponse:
+            type: object
+            properties:
+                observations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/StoredObservation'
+                    description: |-
+                        Newest first, and superseded rows are left out: a Watcher asks what a
+                         system says now, and an observation something later replaced is not that.
+                connectionName:
+                    type: string
+                    description: |-
+                        The connection's display name, so a caller can say where something came
+                         from without a second read. Empty when the connection is not this
+                         organisation's, which is the same answer as no observations and for the
+                         same reason: the producer role saw no rows.
         Recital:
             type: object
             properties:
@@ -8086,6 +8201,46 @@ components:
                         $ref: '#/components/schemas/GoogleProtobufAny'
                     description: A list of messages that carry the error details.  There is a common set of message types for APIs to use.
             description: 'The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).'
+        StoredObservation:
+            type: object
+            properties:
+                evidenceId:
+                    type: string
+                connectionId:
+                    type: string
+                tool:
+                    type: string
+                    description: |-
+                        The tool it came from, without the `integration.` prefix the stored kind
+                         carries. The caller asked in tool names and is answered in them.
+                observedAt:
+                    type: string
+                    description: |-
+                        When it was true at the source, and when we learned it. Both, because the
+                         gap between them is how stale an observation is and a Watcher deciding
+                         whether something has changed needs to know.
+                    format: date-time
+                fetchedAt:
+                    type: string
+                    format: date-time
+                bodyJson:
+                    type: string
+            description: |-
+                One thing a customer's own system reported, as it was stored.
+
+                 # `body_json` IS A STRING AND WILL STAY ONE
+
+                 The same argument `CallToolResponse.content_json` and
+                 `IngestEvidenceRequest.content_json` make, and it matters most here because
+                 this is the message that ends up in front of a model. It is third-party
+                 content. A typed message invites code that branches on a customer's data,
+                 and a field a customer controls that some handler reads as an instruction is
+                 the whole failure this product's design is arranged to avoid.
+
+                 It was redacted by the gateway before it was ever stored. Nothing here
+                 redacts again, for the reason `IngestEvidence` gives: a second
+                 implementation is free to disagree with the first, and the one that ran is
+                 the one that decided.
         StringList:
             type: object
             properties:
@@ -9527,7 +9682,8 @@ tags:
          does both in one transaction, for an operator who wants one call.
     - name: WatcherService
       description: |-
-        What an agentic Watcher reads, and the one thing it may write (ENT-258).
+        What an agentic Watcher reads, and the one thing it may write (ENT-258,
+         ENT-274).
 
          # WHY THIS EXISTS AT ALL
 
@@ -9561,3 +9717,10 @@ tags:
          separation is the product's central claim, so the surface enforces it by not
          having the other RPC: there is no way to write a finding here, on purpose,
          and a Watcher that wanted to would have to be given a different service.
+
+         ENT-274 added a second READ, not a second write. `ReadEvidence` lets a run
+         look at what an organisation's connected systems have already reported,
+         which is the difference between a Watcher deciding from what a customer said
+         during onboarding and one deciding from what their systems actually do. It
+         reaches no customer system: see the RPC for why a live fetch is somebody
+         else's change.

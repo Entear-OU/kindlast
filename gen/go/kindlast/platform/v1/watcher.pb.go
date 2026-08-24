@@ -703,6 +703,252 @@ func (x *RaiseSignalRequest) GetMetadataJson() string {
 	return ""
 }
 
+type ReadEvidenceRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	OrgId string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// Which connection to read, by the id `WatcherContext` gave. A connection
+	// outside this organisation reads nothing rather than erroring, because
+	// that is what the producer role's policies do and a handler that turned it
+	// into a different answer would be describing tenancy rather than obeying
+	// it.
+	ConnectionId string `protobuf:"bytes,2,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	// Which of that connection's tools the observations were produced by.
+	// Required, and refused when the connection has not granted it.
+	//
+	// NOT OPTIONAL, DELIBERATELY. "Everything this connection ever said" is a
+	// convenient default and the wrong one: a grant is per tool, so an
+	// unfiltered read would let one granted tool carry back what an ungranted
+	// one deposited before the grant was withdrawn.
+	Tool string `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
+	// How many observations, newest first. Clamped by the handler; zero means
+	// its default. The caller asks for what it can use rather than for
+	// everything, because everything is a customer's whole history and a run
+	// reads it into a model's context.
+	Limit         int32 `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReadEvidenceRequest) Reset() {
+	*x = ReadEvidenceRequest{}
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReadEvidenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadEvidenceRequest) ProtoMessage() {}
+
+func (x *ReadEvidenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadEvidenceRequest.ProtoReflect.Descriptor instead.
+func (*ReadEvidenceRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ReadEvidenceRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *ReadEvidenceRequest) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *ReadEvidenceRequest) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *ReadEvidenceRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+// One thing a customer's own system reported, as it was stored.
+//
+// # `body_json` IS A STRING AND WILL STAY ONE
+//
+// The same argument `CallToolResponse.content_json` and
+// `IngestEvidenceRequest.content_json` make, and it matters most here because
+// this is the message that ends up in front of a model. It is third-party
+// content. A typed message invites code that branches on a customer's data,
+// and a field a customer controls that some handler reads as an instruction is
+// the whole failure this product's design is arranged to avoid.
+//
+// It was redacted by the gateway before it was ever stored. Nothing here
+// redacts again, for the reason `IngestEvidence` gives: a second
+// implementation is free to disagree with the first, and the one that ran is
+// the one that decided.
+type StoredObservation struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	EvidenceId   string                 `protobuf:"bytes,1,opt,name=evidence_id,json=evidenceId,proto3" json:"evidence_id,omitempty"`
+	ConnectionId string                 `protobuf:"bytes,2,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	// The tool it came from, without the `integration.` prefix the stored kind
+	// carries. The caller asked in tool names and is answered in them.
+	Tool string `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
+	// When it was true at the source, and when we learned it. Both, because the
+	// gap between them is how stale an observation is and a Watcher deciding
+	// whether something has changed needs to know.
+	ObservedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	FetchedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=fetched_at,json=fetchedAt,proto3" json:"fetched_at,omitempty"`
+	BodyJson      string                 `protobuf:"bytes,6,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StoredObservation) Reset() {
+	*x = StoredObservation{}
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StoredObservation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StoredObservation) ProtoMessage() {}
+
+func (x *StoredObservation) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StoredObservation.ProtoReflect.Descriptor instead.
+func (*StoredObservation) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *StoredObservation) GetEvidenceId() string {
+	if x != nil {
+		return x.EvidenceId
+	}
+	return ""
+}
+
+func (x *StoredObservation) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *StoredObservation) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *StoredObservation) GetObservedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return nil
+}
+
+func (x *StoredObservation) GetFetchedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FetchedAt
+	}
+	return nil
+}
+
+func (x *StoredObservation) GetBodyJson() string {
+	if x != nil {
+		return x.BodyJson
+	}
+	return ""
+}
+
+type ReadEvidenceResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Newest first, and superseded rows are left out: a Watcher asks what a
+	// system says now, and an observation something later replaced is not that.
+	Observations []*StoredObservation `protobuf:"bytes,1,rep,name=observations,proto3" json:"observations,omitempty"`
+	// The connection's display name, so a caller can say where something came
+	// from without a second read. Empty when the connection is not this
+	// organisation's, which is the same answer as no observations and for the
+	// same reason: the producer role saw no rows.
+	ConnectionName string `protobuf:"bytes,2,opt,name=connection_name,json=connectionName,proto3" json:"connection_name,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ReadEvidenceResponse) Reset() {
+	*x = ReadEvidenceResponse{}
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReadEvidenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadEvidenceResponse) ProtoMessage() {}
+
+func (x *ReadEvidenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadEvidenceResponse.ProtoReflect.Descriptor instead.
+func (*ReadEvidenceResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ReadEvidenceResponse) GetObservations() []*StoredObservation {
+	if x != nil {
+		return x.Observations
+	}
+	return nil
+}
+
+func (x *ReadEvidenceResponse) GetConnectionName() string {
+	if x != nil {
+		return x.ConnectionName
+	}
+	return ""
+}
+
 type RaiseSignalResponse struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	SignalId string                 `protobuf:"bytes,1,opt,name=signal_id,json=signalId,proto3" json:"signal_id,omitempty"`
@@ -716,7 +962,7 @@ type RaiseSignalResponse struct {
 
 func (x *RaiseSignalResponse) Reset() {
 	*x = RaiseSignalResponse{}
-	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[7]
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -728,7 +974,7 @@ func (x *RaiseSignalResponse) String() string {
 func (*RaiseSignalResponse) ProtoMessage() {}
 
 func (x *RaiseSignalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[7]
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -741,7 +987,7 @@ func (x *RaiseSignalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaiseSignalResponse.ProtoReflect.Descriptor instead.
 func (*RaiseSignalResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{7}
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RaiseSignalResponse) GetSignalId() string {
@@ -788,7 +1034,7 @@ type CitableObligation struct {
 
 func (x *CitableObligation) Reset() {
 	*x = CitableObligation{}
-	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[8]
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -800,7 +1046,7 @@ func (x *CitableObligation) String() string {
 func (*CitableObligation) ProtoMessage() {}
 
 func (x *CitableObligation) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[8]
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -813,7 +1059,7 @@ func (x *CitableObligation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CitableObligation.ProtoReflect.Descriptor instead.
 func (*CitableObligation) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{8}
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CitableObligation) GetSlug() string {
@@ -893,17 +1139,36 @@ const file_kindlast_platform_v1_watcher_proto_rawDesc = "" +
 	"\x06detail\x18\x05 \x01(\tR\x06detail\x12\x1a\n" +
 	"\bseverity\x18\x06 \x01(\tR\bseverity\x12'\n" +
 	"\x0fobligation_slug\x18\a \x01(\tR\x0eobligationSlug\x12#\n" +
-	"\rmetadata_json\x18\b \x01(\tR\fmetadataJson\"J\n" +
+	"\rmetadata_json\x18\b \x01(\tR\fmetadataJson\"{\n" +
+	"\x13ReadEvidenceRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12#\n" +
+	"\rconnection_id\x18\x02 \x01(\tR\fconnectionId\x12\x12\n" +
+	"\x04tool\x18\x03 \x01(\tR\x04tool\x12\x14\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\"\x82\x02\n" +
+	"\x11StoredObservation\x12\x1f\n" +
+	"\vevidence_id\x18\x01 \x01(\tR\n" +
+	"evidenceId\x12#\n" +
+	"\rconnection_id\x18\x02 \x01(\tR\fconnectionId\x12\x12\n" +
+	"\x04tool\x18\x03 \x01(\tR\x04tool\x12;\n" +
+	"\vobserved_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"observedAt\x129\n" +
+	"\n" +
+	"fetched_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tfetchedAt\x12\x1b\n" +
+	"\tbody_json\x18\x06 \x01(\tR\bbodyJson\"\x8c\x01\n" +
+	"\x14ReadEvidenceResponse\x12K\n" +
+	"\fobservations\x18\x01 \x03(\v2'.kindlast.platform.v1.StoredObservationR\fobservations\x12'\n" +
+	"\x0fconnection_name\x18\x02 \x01(\tR\x0econnectionName\"J\n" +
 	"\x13RaiseSignalResponse\x12\x1b\n" +
 	"\tsignal_id\x18\x01 \x01(\tR\bsignalId\x12\x16\n" +
 	"\x06raised\x18\x02 \x01(\bR\x06raised\"W\n" +
 	"\x11CitableObligation\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
-	"\asummary\x18\x03 \x01(\tR\asummary2\xd3\x02\n" +
+	"\asummary\x18\x03 \x01(\tR\asummary2\xf8\x03\n" +
 	"\x0eWatcherService\x12\xa7\x01\n" +
 	"\x0eWatcherContext\x12+.kindlast.platform.v1.WatcherContextRequest\x1a,.kindlast.platform.v1.WatcherContextResponse\":\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/internal/v1/watcher:context\x12\x96\x01\n" +
-	"\vRaiseSignal\x12(.kindlast.platform.v1.RaiseSignalRequest\x1a).kindlast.platform.v1.RaiseSignalResponse\"2\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/internal/v1/signalsB\xe0\x01\n" +
+	"\vRaiseSignal\x12(.kindlast.platform.v1.RaiseSignalRequest\x1a).kindlast.platform.v1.RaiseSignalResponse\"2\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/internal/v1/signals\x12\xa2\x01\n" +
+	"\fReadEvidence\x12).kindlast.platform.v1.ReadEvidenceRequest\x1a*.kindlast.platform.v1.ReadEvidenceResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/internal/v1/watcher:evidenceB\xe0\x01\n" +
 	"\x18com.kindlast.platform.v1B\fWatcherProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
 var (
@@ -918,7 +1183,7 @@ func file_kindlast_platform_v1_watcher_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_watcher_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_watcher_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_kindlast_platform_v1_watcher_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_kindlast_platform_v1_watcher_proto_goTypes = []any{
 	(*WatcherContextRequest)(nil),  // 0: kindlast.platform.v1.WatcherContextRequest
 	(*WatcherContextResponse)(nil), // 1: kindlast.platform.v1.WatcherContextResponse
@@ -927,28 +1192,36 @@ var file_kindlast_platform_v1_watcher_proto_goTypes = []any{
 	(*ConnectionTool)(nil),         // 4: kindlast.platform.v1.ConnectionTool
 	(*OpenSignal)(nil),             // 5: kindlast.platform.v1.OpenSignal
 	(*RaiseSignalRequest)(nil),     // 6: kindlast.platform.v1.RaiseSignalRequest
-	(*RaiseSignalResponse)(nil),    // 7: kindlast.platform.v1.RaiseSignalResponse
-	(*CitableObligation)(nil),      // 8: kindlast.platform.v1.CitableObligation
-	(*timestamppb.Timestamp)(nil),  // 9: google.protobuf.Timestamp
+	(*ReadEvidenceRequest)(nil),    // 7: kindlast.platform.v1.ReadEvidenceRequest
+	(*StoredObservation)(nil),      // 8: kindlast.platform.v1.StoredObservation
+	(*ReadEvidenceResponse)(nil),   // 9: kindlast.platform.v1.ReadEvidenceResponse
+	(*RaiseSignalResponse)(nil),    // 10: kindlast.platform.v1.RaiseSignalResponse
+	(*CitableObligation)(nil),      // 11: kindlast.platform.v1.CitableObligation
+	(*timestamppb.Timestamp)(nil),  // 12: google.protobuf.Timestamp
 }
 var file_kindlast_platform_v1_watcher_proto_depIdxs = []int32{
 	2,  // 0: kindlast.platform.v1.WatcherContextResponse.facts:type_name -> kindlast.platform.v1.ProfileFact
 	3,  // 1: kindlast.platform.v1.WatcherContextResponse.connections:type_name -> kindlast.platform.v1.WatchedConnection
 	5,  // 2: kindlast.platform.v1.WatcherContextResponse.open_signals:type_name -> kindlast.platform.v1.OpenSignal
-	9,  // 3: kindlast.platform.v1.WatcherContextResponse.last_swept_at:type_name -> google.protobuf.Timestamp
-	8,  // 4: kindlast.platform.v1.WatcherContextResponse.obligations:type_name -> kindlast.platform.v1.CitableObligation
-	9,  // 5: kindlast.platform.v1.ProfileFact.valid_from:type_name -> google.protobuf.Timestamp
+	12, // 3: kindlast.platform.v1.WatcherContextResponse.last_swept_at:type_name -> google.protobuf.Timestamp
+	11, // 4: kindlast.platform.v1.WatcherContextResponse.obligations:type_name -> kindlast.platform.v1.CitableObligation
+	12, // 5: kindlast.platform.v1.ProfileFact.valid_from:type_name -> google.protobuf.Timestamp
 	4,  // 6: kindlast.platform.v1.WatchedConnection.tools:type_name -> kindlast.platform.v1.ConnectionTool
-	9,  // 7: kindlast.platform.v1.OpenSignal.updated_at:type_name -> google.protobuf.Timestamp
-	0,  // 8: kindlast.platform.v1.WatcherService.WatcherContext:input_type -> kindlast.platform.v1.WatcherContextRequest
-	6,  // 9: kindlast.platform.v1.WatcherService.RaiseSignal:input_type -> kindlast.platform.v1.RaiseSignalRequest
-	1,  // 10: kindlast.platform.v1.WatcherService.WatcherContext:output_type -> kindlast.platform.v1.WatcherContextResponse
-	7,  // 11: kindlast.platform.v1.WatcherService.RaiseSignal:output_type -> kindlast.platform.v1.RaiseSignalResponse
-	10, // [10:12] is the sub-list for method output_type
-	8,  // [8:10] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	12, // 7: kindlast.platform.v1.OpenSignal.updated_at:type_name -> google.protobuf.Timestamp
+	12, // 8: kindlast.platform.v1.StoredObservation.observed_at:type_name -> google.protobuf.Timestamp
+	12, // 9: kindlast.platform.v1.StoredObservation.fetched_at:type_name -> google.protobuf.Timestamp
+	8,  // 10: kindlast.platform.v1.ReadEvidenceResponse.observations:type_name -> kindlast.platform.v1.StoredObservation
+	0,  // 11: kindlast.platform.v1.WatcherService.WatcherContext:input_type -> kindlast.platform.v1.WatcherContextRequest
+	6,  // 12: kindlast.platform.v1.WatcherService.RaiseSignal:input_type -> kindlast.platform.v1.RaiseSignalRequest
+	7,  // 13: kindlast.platform.v1.WatcherService.ReadEvidence:input_type -> kindlast.platform.v1.ReadEvidenceRequest
+	1,  // 14: kindlast.platform.v1.WatcherService.WatcherContext:output_type -> kindlast.platform.v1.WatcherContextResponse
+	10, // 15: kindlast.platform.v1.WatcherService.RaiseSignal:output_type -> kindlast.platform.v1.RaiseSignalResponse
+	9,  // 16: kindlast.platform.v1.WatcherService.ReadEvidence:output_type -> kindlast.platform.v1.ReadEvidenceResponse
+	14, // [14:17] is the sub-list for method output_type
+	11, // [11:14] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_watcher_proto_init() }
@@ -962,7 +1235,7 @@ func file_kindlast_platform_v1_watcher_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_watcher_proto_rawDesc), len(file_kindlast_platform_v1_watcher_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

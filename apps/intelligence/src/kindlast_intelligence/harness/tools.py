@@ -47,6 +47,34 @@ class ToolRefused(Exception):
         self.allowed = allowed
 
 
+class ToolDeclined(Exception):
+    """The far side said no to THIS call, rather than to this run's authority.
+
+    # THE SECOND KIND OF NO, ADDED WITH THE SECOND TOOL (ENT-274)
+
+    `ToolRefused` is about what the skill may do at all: an unlisted tool, or
+    one nobody wired. It ends the run, because a model that can probe the
+    allow-list has been handed a way to negotiate with its own guardrail.
+
+    This one is different in the only way that matters. The model asked for
+    something that genuinely exists and that a policy declines: a customer has
+    not granted that tool on that connection. Ending the run there would mean
+    one wrong guess costs the customer their whole sweep, for a reason they
+    would have to read a record to discover. And there is nothing to probe:
+    the grants are in the context the model was already shown, so "not that
+    one" is information rather than a hint towards a way in.
+
+    So it is recorded as a refusal, because that is what it was, and the reason
+    goes back to the model as the tool's result so the loop can act on it. The
+    dispatcher is what performs both halves; a tool chooses which no it is
+    raising by choosing which exception to raise.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 class ToolCall(BaseModel):
     """One invocation, as the record stores it."""
 
@@ -93,7 +121,17 @@ class ToolDispatcher:
         self._budget = budget
         self.calls: list[ToolCall] = []
 
-    def dispatch(self, tool: str, **arguments: object) -> str:
+    def dispatch(self, tool: str, /, **arguments: object) -> str:
+        # POSITIONAL ONLY, AND THE SLASH IS LOAD-BEARING (ENT-274).
+        #
+        # A tool's own arguments arrive as keywords, and a tool whose argument
+        # is named `tool` is not a strange thing to want: `read_evidence` takes
+        # a connection and the tool on it to read. Without the slash that
+        # collides with this method's own parameter and Python raises
+        # "multiple values for argument 'tool'", which reads as a harness bug
+        # rather than as a name clash and is invisible until somebody adds
+        # exactly that argument.
+
         # Allow-list BEFORE the budget, so a forbidden tool does not consume a
         # call the skill was entitled to. Refusing and charging for it would
         # let a model exhaust a well-behaved run's budget by asking for things
@@ -135,6 +173,20 @@ class ToolDispatcher:
         # a sad note attached.
         try:
             result = implementation(**arguments)
+        except ToolDeclined as exc:
+            # RECORDED AS A REFUSAL AND NOT RE-RAISED (ENT-274). See
+            # `ToolDeclined` for why this one no does not end the run. The
+            # reason becomes the tool's result, so the loop feeds it back and
+            # the model is told what its own customer's grant says.
+            self.calls.append(
+                ToolCall(
+                    tool=tool,
+                    arguments=arguments,
+                    refused=True,
+                    result_summary=_summarise(f"refused: {exc.reason}"),
+                )
+            )
+            return f"refused: {exc.reason}"
         except Exception as exc:
             self.calls.append(
                 ToolCall(

@@ -21,7 +21,7 @@ from wsgiref.util import setup_testing_defaults
 import pytest
 from conftest import TEST_AUDIENCE, AuthServer
 from connectrpc.errors import ConnectError
-from kindlast.platform.v1 import intelligence_connect, intelligence_pb2
+from kindlast.platform.v1 import intelligence_connect, intelligence_pb2, watcher_pb2
 
 from kindlast_intelligence.auth.jwks import KeySet, discover
 from kindlast_intelligence.auth.verifier import Verifier
@@ -455,3 +455,116 @@ def test_a_blank_question_is_a_recorded_refusal_rather_than_an_error(auth_server
     assert response.outcome == intelligence_pb2.ANSWER_OUTCOME_REFUSED
     assert response.agent_run_id
     assert len(core_api.recorded) == 1
+
+
+# --------------------------------------------------------------------------
+# The Watcher's read, bound to one organisation (ENT-274)
+
+
+class WatchingCoreAPI(FakeCoreAPI):
+    """A core-api that answers a read and remembers what it was asked."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.reads: list[tuple[str, str, str]] = []
+
+    def read_evidence(self, org_id, connection_id, tool, limit=0):
+        self.reads.append((org_id, connection_id, tool))
+        return [
+            {
+                "evidence_id": "e1",
+                "connection_id": connection_id,
+                "tool": tool,
+                "observed_at": "2026-08-21T09:00:00",
+                "fetched_at": "2026-08-21T09:00:05",
+                "body_json": '{"open_access_requests": 4}',
+            }
+        ]
+
+    def raise_signal(self, org_id, signal):
+        return "22222222-2222-4222-8222-222222222222", True
+
+
+class SteppingModel:
+    """Answers with a scripted sequence, one reply per call."""
+
+    def __init__(self, *replies) -> None:
+        self._replies = [json.dumps(r) for r in replies]
+        self.seen: list[list[dict[str, str]]] = []
+
+    def complete(self, messages, schema=None, max_tokens=800, temperature=0.7):
+        self.seen.append(list(messages))
+        return Completion(
+            content=self._replies.pop(0),
+            input_tokens=100,
+            cached_input_tokens=0,
+            output_tokens=40,
+            finish_reason="stop",
+        )
+
+
+def a_watch_request(org_id: str) -> intelligence_pb2.WatchRequest:
+    return intelligence_pb2.WatchRequest(
+        org_id=org_id,
+        context=watcher_pb2.WatcherContextResponse(
+            has_profile=True,
+            connections=[
+                watcher_pb2.WatchedConnection(
+                    connection_id="c1", kind="mcp", display_name="The helpdesk",
+                    status="active",
+                    tools=[watcher_pb2.ConnectionTool(
+                        name="search_tickets", description="Search the helpdesk",
+                        write_capable=False, granted=True,
+                    )],
+                )
+            ],
+            intelligence_available=True,
+            model_provider="instance",
+            model_name="Qwen3.5-2B-Q4_K_M",
+        ),
+    )
+
+
+def test_a_read_is_bound_to_the_organisation_the_request_named(auth_server):
+    """THE TENANCY HALF OF ENT-274, ASSERTED WHERE THE BINDING HAPPENS.
+
+    A model names a connection and a tool. It never names a tenant, and there
+    is no argument it could pass that would change which organisation's
+    evidence is read: the id comes from the request core-api built, and this is
+    the line that puts it there. core-api checks the connection against the
+    same id, so a bug here reads nothing rather than reading somebody else's.
+    """
+    core_api = WatchingCoreAPI()
+    service = a_service(auth_server, model=SteppingModel(
+        {"action": "read_evidence", "reason": "look at the helpdesk",
+         "evidence": {"connection_id": "c1", "tool": "search_tickets"}},
+        {"action": "done", "reason": "nothing worth raising"},
+    ), core_api=core_api)
+
+    org = "6d1cfa32-1c3d-4dd8-9c1e-6bb3a5c3f0f1"
+    response = service.run_watch(a_watch_request(org))
+
+    assert response.outcome == intelligence_pb2.WATCH_OUTCOME_SUCCEEDED
+    assert core_api.reads == [(org, "c1", "search_tickets")]
+
+
+def test_what_the_read_returned_reaches_the_model_only_as_a_user_turn(auth_server):
+    """The same boundary the harness tests hold, asserted once through the
+    service, because this is the path a real run takes and the two halves had
+    never met anywhere else."""
+    core_api = WatchingCoreAPI()
+    model = SteppingModel(
+        {"action": "read_evidence", "reason": "look",
+         "evidence": {"connection_id": "c1", "tool": "search_tickets"}},
+        {"action": "done", "reason": "done"},
+    )
+    service = a_service(auth_server, model=model, core_api=core_api)
+
+    service.run_watch(a_watch_request("6d1cfa32-1c3d-4dd8-9c1e-6bb3a5c3f0f1"))
+
+    after = model.seen[1]
+    assert any("open_access_requests" in m["content"] for m in after
+               if m["role"] == "user")
+    for message in after:
+        if message["role"] == "system":
+            assert "open_access_requests" not in message["content"]

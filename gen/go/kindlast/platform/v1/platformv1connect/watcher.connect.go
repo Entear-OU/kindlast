@@ -39,6 +39,9 @@ const (
 	// WatcherServiceRaiseSignalProcedure is the fully-qualified name of the WatcherService's
 	// RaiseSignal RPC.
 	WatcherServiceRaiseSignalProcedure = "/kindlast.platform.v1.WatcherService/RaiseSignal"
+	// WatcherServiceReadEvidenceProcedure is the fully-qualified name of the WatcherService's
+	// ReadEvidence RPC.
+	WatcherServiceReadEvidenceProcedure = "/kindlast.platform.v1.WatcherService/ReadEvidence"
 )
 
 // WatcherServiceClient is a client for the kindlast.platform.v1.WatcherService service.
@@ -59,6 +62,49 @@ type WatcherServiceClient interface {
 	// it afresh, which is deliberate: somebody dismissing a signal is saying
 	// "not now", not "never tell me again".
 	RaiseSignal(context.Context, *connect.Request[v1.RaiseSignalRequest]) (*connect.Response[v1.RaiseSignalResponse], error)
+	// What one connection has already reported, so the Watcher can look at it
+	// rather than only at the fact that it exists (ENT-274).
+	//
+	// # WHY A READ AND NOT A FETCH
+	//
+	// The obvious shape is "call the customer's tool now, through the gateway".
+	// It is not this, and the reason is a grant rather than an appetite.
+	//
+	// Dialling a customer's system needs their credential opened, and the
+	// producer role this whole service runs on is granted a COLUMN-LIMITED
+	// select on `integrations` that deliberately omits `credential_ciphertext`
+	// (00025). That omission is argued in the migration and it is right: the
+	// role that runs model output should not be able to reach the one value
+	// whose loss is a breach notification. Widening it to give an agent a live
+	// fetch is a security decision that deserves its own review rather than a
+	// line inside a feature.
+	//
+	// The shape of a sweep says the same thing from the other end. The watch
+	// activity has a twenty minute timeout and retries up to three times, and
+	// nobody is sitting in front of it. A synchronous call to a customer's slow
+	// endpoint inside that loop would hold a sweep slot on somebody else's
+	// latency and could dial their system three times for one sweep.
+	// `IntegrationsService.FetchNow` exists for the case where a person asked
+	// and is waiting, which is exactly the case this is not.
+	//
+	// So a fetch deposits, and a watch reads what was deposited. Both halves
+	// already write the same two rows through the same door.
+	//
+	// # WHAT IT ENFORCES, WHICH IS NOT WHAT THE CALLER ENFORCES
+	//
+	// The harness checks the connection against the context the run was SHOWN,
+	// which catches a model naming something it was never offered. This checks
+	// the connection belongs to the organisation and the tool is GRANTED on it,
+	// which is the invariant: no run reads through a tool the customer has not
+	// granted, whatever the caller believes. They refuse different things and
+	// both are wanted, the same way a citation is checked twice.
+	//
+	// Refusing an ungranted tool matters more than it looks. A grant is the
+	// customer's statement of what Kindlast may look at, and a stored row is
+	// still something they may withdraw permission to reason over. The console
+	// showing them the row is a person reading their own data; an agent reading
+	// it is the thing they granted or did not.
+	ReadEvidence(context.Context, *connect.Request[v1.ReadEvidenceRequest]) (*connect.Response[v1.ReadEvidenceResponse], error)
 }
 
 // NewWatcherServiceClient constructs a client for the kindlast.platform.v1.WatcherService service.
@@ -84,6 +130,12 @@ func NewWatcherServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(watcherServiceMethods.ByName("RaiseSignal")),
 			connect.WithClientOptions(opts...),
 		),
+		readEvidence: connect.NewClient[v1.ReadEvidenceRequest, v1.ReadEvidenceResponse](
+			httpClient,
+			baseURL+WatcherServiceReadEvidenceProcedure,
+			connect.WithSchema(watcherServiceMethods.ByName("ReadEvidence")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -91,6 +143,7 @@ func NewWatcherServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 type watcherServiceClient struct {
 	watcherContext *connect.Client[v1.WatcherContextRequest, v1.WatcherContextResponse]
 	raiseSignal    *connect.Client[v1.RaiseSignalRequest, v1.RaiseSignalResponse]
+	readEvidence   *connect.Client[v1.ReadEvidenceRequest, v1.ReadEvidenceResponse]
 }
 
 // WatcherContext calls kindlast.platform.v1.WatcherService.WatcherContext.
@@ -101,6 +154,11 @@ func (c *watcherServiceClient) WatcherContext(ctx context.Context, req *connect.
 // RaiseSignal calls kindlast.platform.v1.WatcherService.RaiseSignal.
 func (c *watcherServiceClient) RaiseSignal(ctx context.Context, req *connect.Request[v1.RaiseSignalRequest]) (*connect.Response[v1.RaiseSignalResponse], error) {
 	return c.raiseSignal.CallUnary(ctx, req)
+}
+
+// ReadEvidence calls kindlast.platform.v1.WatcherService.ReadEvidence.
+func (c *watcherServiceClient) ReadEvidence(ctx context.Context, req *connect.Request[v1.ReadEvidenceRequest]) (*connect.Response[v1.ReadEvidenceResponse], error) {
+	return c.readEvidence.CallUnary(ctx, req)
 }
 
 // WatcherServiceHandler is an implementation of the kindlast.platform.v1.WatcherService service.
@@ -121,6 +179,49 @@ type WatcherServiceHandler interface {
 	// it afresh, which is deliberate: somebody dismissing a signal is saying
 	// "not now", not "never tell me again".
 	RaiseSignal(context.Context, *connect.Request[v1.RaiseSignalRequest]) (*connect.Response[v1.RaiseSignalResponse], error)
+	// What one connection has already reported, so the Watcher can look at it
+	// rather than only at the fact that it exists (ENT-274).
+	//
+	// # WHY A READ AND NOT A FETCH
+	//
+	// The obvious shape is "call the customer's tool now, through the gateway".
+	// It is not this, and the reason is a grant rather than an appetite.
+	//
+	// Dialling a customer's system needs their credential opened, and the
+	// producer role this whole service runs on is granted a COLUMN-LIMITED
+	// select on `integrations` that deliberately omits `credential_ciphertext`
+	// (00025). That omission is argued in the migration and it is right: the
+	// role that runs model output should not be able to reach the one value
+	// whose loss is a breach notification. Widening it to give an agent a live
+	// fetch is a security decision that deserves its own review rather than a
+	// line inside a feature.
+	//
+	// The shape of a sweep says the same thing from the other end. The watch
+	// activity has a twenty minute timeout and retries up to three times, and
+	// nobody is sitting in front of it. A synchronous call to a customer's slow
+	// endpoint inside that loop would hold a sweep slot on somebody else's
+	// latency and could dial their system three times for one sweep.
+	// `IntegrationsService.FetchNow` exists for the case where a person asked
+	// and is waiting, which is exactly the case this is not.
+	//
+	// So a fetch deposits, and a watch reads what was deposited. Both halves
+	// already write the same two rows through the same door.
+	//
+	// # WHAT IT ENFORCES, WHICH IS NOT WHAT THE CALLER ENFORCES
+	//
+	// The harness checks the connection against the context the run was SHOWN,
+	// which catches a model naming something it was never offered. This checks
+	// the connection belongs to the organisation and the tool is GRANTED on it,
+	// which is the invariant: no run reads through a tool the customer has not
+	// granted, whatever the caller believes. They refuse different things and
+	// both are wanted, the same way a citation is checked twice.
+	//
+	// Refusing an ungranted tool matters more than it looks. A grant is the
+	// customer's statement of what Kindlast may look at, and a stored row is
+	// still something they may withdraw permission to reason over. The console
+	// showing them the row is a person reading their own data; an agent reading
+	// it is the thing they granted or did not.
+	ReadEvidence(context.Context, *connect.Request[v1.ReadEvidenceRequest]) (*connect.Response[v1.ReadEvidenceResponse], error)
 }
 
 // NewWatcherServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -142,12 +243,20 @@ func NewWatcherServiceHandler(svc WatcherServiceHandler, opts ...connect.Handler
 		connect.WithSchema(watcherServiceMethods.ByName("RaiseSignal")),
 		connect.WithHandlerOptions(opts...),
 	)
+	watcherServiceReadEvidenceHandler := connect.NewUnaryHandler(
+		WatcherServiceReadEvidenceProcedure,
+		svc.ReadEvidence,
+		connect.WithSchema(watcherServiceMethods.ByName("ReadEvidence")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.WatcherService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case WatcherServiceWatcherContextProcedure:
 			watcherServiceWatcherContextHandler.ServeHTTP(w, r)
 		case WatcherServiceRaiseSignalProcedure:
 			watcherServiceRaiseSignalHandler.ServeHTTP(w, r)
+		case WatcherServiceReadEvidenceProcedure:
+			watcherServiceReadEvidenceHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -163,4 +272,8 @@ func (UnimplementedWatcherServiceHandler) WatcherContext(context.Context, *conne
 
 func (UnimplementedWatcherServiceHandler) RaiseSignal(context.Context, *connect.Request[v1.RaiseSignalRequest]) (*connect.Response[v1.RaiseSignalResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.WatcherService.RaiseSignal is not implemented"))
+}
+
+func (UnimplementedWatcherServiceHandler) ReadEvidence(context.Context, *connect.Request[v1.ReadEvidenceRequest]) (*connect.Response[v1.ReadEvidenceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.WatcherService.ReadEvidence is not implemented"))
 }

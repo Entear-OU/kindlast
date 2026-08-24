@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -29,6 +30,11 @@ import (
 type Producer interface {
 	WatcherContextFor(ctx context.Context, orgID string) (postgres.WatcherContext, error)
 	RaiseSignal(ctx context.Context, orgID string, signal postgres.Signal) (string, bool, error)
+	// EvidenceFor reads what one connection has already reported through one
+	// of its granted tools (ENT-274). A read and nothing more: there is
+	// deliberately no method here that reaches a customer's system, and the
+	// RPC's own comment says what it would take to add one.
+	EvidenceFor(ctx context.Context, orgID, connectionID, tool string, limit int) (string, []postgres.StoredObservation, error)
 }
 
 // ModelRoute resolves which model serves one organisation, declared here for
@@ -177,6 +183,82 @@ func (s *Service) RaiseSignal(
 	return connect.NewResponse(&platformv1.RaiseSignalResponse{
 		SignalId: id, Raised: raised,
 	}), nil
+}
+
+// ReadEvidence answers with what one connection has already reported (ENT-274).
+//
+// # THE HANDLER DECIDES NOTHING ABOUT THE CONTENT AND MUST NOT START
+//
+// It names a connection and a tool, checks the grant, and returns rows. It
+// does not parse the body, branch on it, summarise it or truncate it, and the
+// response carries it as a string for the reason every other third-party
+// payload on this surface is one: this is content on its way in front of a
+// model, and a handler that read it would be a handler a customer's system can
+// steer.
+//
+// Bounding what a run may look at is the harness's job and is done there,
+// where the budget is. What is bounded HERE is only how many rows one call may
+// return, because that is a property of the query rather than of a run.
+//
+// # REFUSING IS THE INTERESTING PATH
+//
+// A tool the connection has not granted is `permission_denied`, which the
+// Python harness maps onto a refusal rather than a failure: a customer's grant
+// saying no is a control working. An unknown connection is `not_found`, and it
+// is the same answer for a connection belonging to somebody else, because the
+// producer role saw no rows either way and what a caller must never learn here
+// is whether an id it guessed exists in another organisation.
+func (s *Service) ReadEvidence(
+	ctx context.Context,
+	req *connect.Request[platformv1.ReadEvidenceRequest],
+) (*connect.Response[platformv1.ReadEvidenceResponse], error) {
+	if _, ok := interceptor.ClaimsFrom(ctx); !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			errors.New("handler reached with no verified identity"))
+	}
+	if req.Msg.GetOrgId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("org_id is required"))
+	}
+	if req.Msg.GetConnectionId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("connection_id is required"))
+	}
+	tool := strings.TrimSpace(req.Msg.GetTool())
+	if tool == "" {
+		// Not defaulted to "everything this connection ever said". A grant is
+		// per tool, so an unfiltered read would let one granted tool carry
+		// back what an ungranted one deposited before its grant was withdrawn.
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("tool is required: a grant is per tool, so there is no "+
+				"reading a connection without naming one"))
+	}
+
+	name, observations, err := s.producer.EvidenceFor(
+		ctx, req.Msg.GetOrgId(), req.Msg.GetConnectionId(), tool, int(req.Msg.GetLimit()))
+	switch {
+	case errors.Is(err, postgres.ErrBadOrganisation):
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, postgres.ErrNoConnection):
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, postgres.ErrToolNotGranted):
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	case err != nil:
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	res := &platformv1.ReadEvidenceResponse{ConnectionName: name}
+	for _, o := range observations {
+		res.Observations = append(res.Observations, &platformv1.StoredObservation{
+			EvidenceId:   o.EvidenceID,
+			ConnectionId: o.ConnectionID,
+			Tool:         o.Tool,
+			ObservedAt:   timestamppb.New(o.ObservedAt),
+			FetchedAt:    timestamppb.New(o.FetchedAt),
+			BodyJson:     o.BodyJSON,
+		})
+	}
+	return connect.NewResponse(res), nil
 }
 
 // route fills in which model would serve a run over this context.
