@@ -97,7 +97,11 @@ func assertMounted(
 	t.Helper()
 
 	path := "/" + string(service.FullName()) + "/" + string(method.Name())
-	request := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}"))
+	// `NewRequestWithContext` rather than `NewRequest`, because `noctx` refuses
+	// the latter and CI lints every module. Same rule that caught `net.Listen`
+	// in ENT-275: a call with no context is one nothing can cancel.
+	request := httptest.NewRequestWithContext(
+		t.Context(), http.MethodPost, path, strings.NewReader("{}"))
 	request.Header.Set("Content-Type", "application/json")
 
 	recorder := httptest.NewRecorder()
