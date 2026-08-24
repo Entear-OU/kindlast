@@ -26,6 +26,18 @@ class NotificationService(Protocol):
     async def get_notification_capabilities(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.GetNotificationCapabilitiesRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.GetNotificationCapabilitiesResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def list_linked_channels(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def link_telegram_chat(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def verify_telegram_chat(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
+    async def unlink_telegram_chat(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class NotificationServiceASGIApplication(ConnectASGIApplication[NotificationService]):
     def __init__(self, service: NotificationService | AsyncGenerator[NotificationService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -61,6 +73,46 @@ class NotificationServiceASGIApplication(ConnectASGIApplication[NotificationServ
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.get_notification_capabilities,
+                ),
+                "/kindlast.core.v1.NotificationService/ListLinkedChannels": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ListLinkedChannels",
+                        service_name="kindlast.core.v1.NotificationService",
+                        input=kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsRequest,
+                        output=kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.list_linked_channels,
+                ),
+                "/kindlast.core.v1.NotificationService/LinkTelegramChat": Endpoint.unary(
+                    method=MethodInfo(
+                        name="LinkTelegramChat",
+                        service_name="kindlast.core.v1.NotificationService",
+                        input=kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatRequest,
+                        output=kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.link_telegram_chat,
+                ),
+                "/kindlast.core.v1.NotificationService/VerifyTelegramChat": Endpoint.unary(
+                    method=MethodInfo(
+                        name="VerifyTelegramChat",
+                        service_name="kindlast.core.v1.NotificationService",
+                        input=kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatRequest,
+                        output=kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.verify_telegram_chat,
+                ),
+                "/kindlast.core.v1.NotificationService/UnlinkTelegramChat": Endpoint.unary(
+                    method=MethodInfo(
+                        name="UnlinkTelegramChat",
+                        service_name="kindlast.core.v1.NotificationService",
+                        input=kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatRequest,
+                        output=kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.unlink_telegram_chat,
                 ),
             },
             interceptors=interceptors,
@@ -135,6 +187,86 @@ class NotificationServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def list_linked_channels(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListLinkedChannels",
+                service_name="kindlast.core.v1.NotificationService",
+                input=kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsRequest,
+                output=kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def link_telegram_chat(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="LinkTelegramChat",
+                service_name="kindlast.core.v1.NotificationService",
+                input=kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatRequest,
+                output=kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def verify_telegram_chat(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="VerifyTelegramChat",
+                service_name="kindlast.core.v1.NotificationService",
+                input=kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatRequest,
+                output=kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def unlink_telegram_chat(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="UnlinkTelegramChat",
+                service_name="kindlast.core.v1.NotificationService",
+                input=kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatRequest,
+                output=kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class NotificationServiceSync(Protocol):
     def get_notification_preferences(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.GetNotificationPreferencesRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.GetNotificationPreferencesResponse:
@@ -142,6 +274,14 @@ class NotificationServiceSync(Protocol):
     def update_notification_preferences(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.UpdateNotificationPreferencesRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.UpdateNotificationPreferencesResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def get_notification_capabilities(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.GetNotificationCapabilitiesRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.GetNotificationCapabilitiesResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def list_linked_channels(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def link_telegram_chat(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def verify_telegram_chat(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def unlink_telegram_chat(self, request: kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -178,6 +318,46 @@ class NotificationServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.get_notification_capabilities,
+                ),
+                "/kindlast.core.v1.NotificationService/ListLinkedChannels": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ListLinkedChannels",
+                        service_name="kindlast.core.v1.NotificationService",
+                        input=kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsRequest,
+                        output=kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.list_linked_channels,
+                ),
+                "/kindlast.core.v1.NotificationService/LinkTelegramChat": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="LinkTelegramChat",
+                        service_name="kindlast.core.v1.NotificationService",
+                        input=kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatRequest,
+                        output=kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.link_telegram_chat,
+                ),
+                "/kindlast.core.v1.NotificationService/VerifyTelegramChat": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="VerifyTelegramChat",
+                        service_name="kindlast.core.v1.NotificationService",
+                        input=kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatRequest,
+                        output=kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.verify_telegram_chat,
+                ),
+                "/kindlast.core.v1.NotificationService/UnlinkTelegramChat": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="UnlinkTelegramChat",
+                        service_name="kindlast.core.v1.NotificationService",
+                        input=kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatRequest,
+                        output=kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.unlink_telegram_chat,
                 ),
             },
             interceptors=interceptors,
@@ -246,6 +426,86 @@ class NotificationServiceClientSync(ConnectClientSync):
                 service_name="kindlast.core.v1.NotificationService",
                 input=kindlast_dot_core_dot_v1_dot_notifications__pb2.GetNotificationCapabilitiesRequest,
                 output=kindlast_dot_core_dot_v1_dot_notifications__pb2.GetNotificationCapabilitiesResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def list_linked_channels(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListLinkedChannels",
+                service_name="kindlast.core.v1.NotificationService",
+                input=kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsRequest,
+                output=kindlast_dot_core_dot_v1_dot_notifications__pb2.ListLinkedChannelsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def link_telegram_chat(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="LinkTelegramChat",
+                service_name="kindlast.core.v1.NotificationService",
+                input=kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatRequest,
+                output=kindlast_dot_core_dot_v1_dot_notifications__pb2.LinkTelegramChatResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def verify_telegram_chat(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="VerifyTelegramChat",
+                service_name="kindlast.core.v1.NotificationService",
+                input=kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatRequest,
+                output=kindlast_dot_core_dot_v1_dot_notifications__pb2.VerifyTelegramChatResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def unlink_telegram_chat(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="UnlinkTelegramChat",
+                service_name="kindlast.core.v1.NotificationService",
+                input=kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatRequest,
+                output=kindlast_dot_core_dot_v1_dot_notifications__pb2.UnlinkTelegramChatResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

@@ -3,6 +3,7 @@ syntax = "proto3";
 package kindlast.core.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 import "kindlast/options/v1/scope.proto";
 
 // Notification preferences and the channels a deployment actually has
@@ -72,6 +73,78 @@ service NotificationService {
     option (kindlast.options.v1.required_scope) = "notifications:read";
     option (google.api.http) = {get: "/api/v1/notification-capabilities"};
   }
+
+  // The caller's own linked channels in the active organisation (ENT-263).
+  //
+  // No user id here either, and for a sharper reason than the preferences
+  // RPCs: a linked chat is somebody's messaging identity, so an RPC that could
+  // name a colleague would be an endpoint for enumerating which of your
+  // co-workers can be reached on Telegram and at which chat. The policy pins
+  // `user_id` to the caller and there is nowhere to pass another.
+  //
+  // The bot token is not here and is in no message in this file. It is an
+  // operator secret read from core-api's configuration by the dispatcher, and
+  // an RPC a browser can call is the last place it should be reachable from.
+  rpc ListLinkedChannels(ListLinkedChannelsRequest)
+      returns (ListLinkedChannelsResponse) {
+    option (kindlast.options.v1.required_scope) = "notifications:read";
+    option (google.api.http) = {get: "/api/v1/notification-channels"};
+  }
+
+  // Claim a Telegram chat and send a code to it.
+  //
+  // Claiming is not linking. This records the chat id the caller supplied and
+  // queues a short-lived code to it through the same outbox every other
+  // message goes through; nothing else is delivered to the chat until the code
+  // comes back through VerifyTelegramChat. Until then the dispatcher treats
+  // the chat as if it were not there.
+  //
+  // Calling it again replaces the claim, resets the attempt budget, and
+  // un-verifies whatever was verified before. That last part is deliberate:
+  // somebody relinking because they lost access to the old chat should stop
+  // receiving compliance notifications there at the moment they say so, not
+  // when they finish proving the new one.
+  rpc LinkTelegramChat(LinkTelegramChatRequest)
+      returns (LinkTelegramChatResponse) {
+    option (kindlast.options.v1.required_scope) = "notifications:write";
+    option (google.api.http) = {
+      post: "/api/v1/notification-channels/telegram"
+      body: "*"
+    };
+  }
+
+  // Prove the caller holds the chat, by typing back the code that arrived in
+  // it.
+  //
+  // Expired, already spent, wrong, and never issued are one answer, for the
+  // reason `redeem_capability_token` gives: telling them apart makes this an
+  // oracle for which chats have a code outstanding, and none of the four is
+  // actionable differently. Running out of attempts is the one exception,
+  // because "start again" is not the right advice when starting again will
+  // fail the same way.
+  rpc VerifyTelegramChat(VerifyTelegramChatRequest)
+      returns (VerifyTelegramChatResponse) {
+    option (kindlast.options.v1.required_scope) = "notifications:write";
+    option (google.api.http) = {
+      post: "/api/v1/notification-channels/telegram:verify"
+      body: "*"
+    };
+  }
+
+  // Unlink the caller's Telegram chat.
+  //
+  // The row is deleted rather than flagged, so future notifications go to the
+  // remaining channel or nowhere and never to the unlinked chat. A flag would
+  // leave a row every future query had to remember to filter.
+  //
+  // The channel preference is deliberately left alone. Somebody unlinking in
+  // order to link a different chat has said what they want, and quietly
+  // resetting them to email would undo a setting they never touched.
+  rpc UnlinkTelegramChat(UnlinkTelegramChatRequest)
+      returns (UnlinkTelegramChatResponse) {
+    option (kindlast.options.v1.required_scope) = "notifications:write";
+    option (google.api.http) = {delete: "/api/v1/notification-channels/telegram"};
+  }
 }
 
 message GetNotificationPreferencesRequest {}
@@ -122,6 +195,20 @@ message NotificationPreferences {
   // during quiet hours is one nobody can trust with a statutory clock.
   string quiet_hours_start = 6;
   string quiet_hours_end = 7;
+
+  // Where a finding notification goes for this person: `email` or `telegram`
+  // (ENT-263). Empty reads as email.
+  //
+  // One field, and what it does not do is the point. The severity floor and the
+  // quiet window above stay channel-independent, because they say when somebody
+  // wants to be interrupted rather than how. Per-channel copies would let a
+  // person set a quiet window on email, forget the one on Telegram, and be
+  // woken at four in the morning by a product that had been told twice not to.
+  //
+  // Choosing `telegram` without a verified chat is accepted here and refused at
+  // the dispatch path, which sends by email instead and records why. The
+  // settings surface is not the place that decides whether a chat is provable.
+  string finding_channel = 8;
 }
 
 message GetNotificationCapabilitiesRequest {}
@@ -142,4 +229,82 @@ message NotificationChannel {
   // Plain-language reason when it is not available, for the console to show.
   // Empty when it is.
   string unavailable_reason = 4;
+}
+
+message ListLinkedChannelsRequest {}
+
+message ListLinkedChannelsResponse {
+  repeated LinkedChannel channels = 1;
+}
+
+// One channel the caller has linked, or is part way through linking.
+//
+// WHAT IS NOT HERE
+//
+// The verification code, in any form. It is minted, hashed and compared inside
+// the store and never leaves it, so there is no field on this message that
+// could carry it and no handler that could fill one in by accident. The
+// deployment's bot token is not here either, for the reason the service comment
+// gives: it is an operator secret, and this message is one a browser reads.
+message LinkedChannel {
+  // Stable identifier, `telegram` today. Matches NotificationChannel.id and the
+  // check constraint on the table, so a console can line the two up.
+  string kind = 1;
+
+  // The chat the caller claimed. Their own, always: the policy pins the row to
+  // `app.current_user_id`, so this can never describe a colleague.
+  string chat_id = 2;
+
+  // Whether they proved they hold it. The dispatch path refuses an unverified
+  // chat, so this is the difference between a setting that works and one that
+  // silently falls back to email.
+  bool verified = 3;
+
+  // When the outstanding verification code expires. Unset when the channel is
+  // verified or has no code, which the check constraint makes the same two
+  // states rather than three.
+  google.protobuf.Timestamp code_expires_at = 4;
+
+  // When the claim was first made. Not when it was verified: a console showing
+  // "linked since" wants the moment the person started, and the verification
+  // moment is the sort of detail that reads as noise on a settings page.
+  google.protobuf.Timestamp linked_at = 5;
+}
+
+message LinkTelegramChatRequest {
+  // The numeric chat id the person reads out of the bot, as a string.
+  //
+  // Supplied by the caller rather than discovered, which is what lets this
+  // whole flow exist with no inbound path: nothing the product runs ever reads
+  // a message somebody typed into a chat. The claim means nothing until the
+  // code that lands in the chat is typed back, so an id somebody guessed at
+  // buys them a message the recipient can ignore and nothing else.
+  string chat_id = 1;
+}
+
+message LinkTelegramChatResponse {
+  // When the code stops working. Returned so the console can say "expires in
+  // nine minutes" rather than leaving somebody to find out by typing it.
+  google.protobuf.Timestamp code_expires_at = 1;
+}
+
+message VerifyTelegramChatRequest {
+  // The code that arrived in the chat.
+  string code = 1;
+}
+
+message VerifyTelegramChatResponse {
+  // True when the chat is now verified. A refusal is an error rather than a
+  // false here, because the reason matters to the console and an unread boolean
+  // is how a failed verification renders as a success.
+  bool verified = 1;
+}
+
+message UnlinkTelegramChatRequest {}
+
+message UnlinkTelegramChatResponse {
+  // False when there was nothing linked. Not an error: unlinking twice is the
+  // same outcome as unlinking once, and a console that refreshed in another tab
+  // should not be told it did something wrong.
+  bool unlinked = 1;
 }

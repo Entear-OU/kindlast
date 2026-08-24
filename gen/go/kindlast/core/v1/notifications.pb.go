@@ -11,6 +11,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -222,8 +223,21 @@ type NotificationPreferences struct {
 	// during quiet hours is one nobody can trust with a statutory clock.
 	QuietHoursStart string `protobuf:"bytes,6,opt,name=quiet_hours_start,json=quietHoursStart,proto3" json:"quiet_hours_start,omitempty"`
 	QuietHoursEnd   string `protobuf:"bytes,7,opt,name=quiet_hours_end,json=quietHoursEnd,proto3" json:"quiet_hours_end,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Where a finding notification goes for this person: `email` or `telegram`
+	// (ENT-263). Empty reads as email.
+	//
+	// One field, and what it does not do is the point. The severity floor and the
+	// quiet window above stay channel-independent, because they say when somebody
+	// wants to be interrupted rather than how. Per-channel copies would let a
+	// person set a quiet window on email, forget the one on Telegram, and be
+	// woken at four in the morning by a product that had been told twice not to.
+	//
+	// Choosing `telegram` without a verified chat is accepted here and refused at
+	// the dispatch path, which sends by email instead and records why. The
+	// settings surface is not the place that decides whether a chat is provable.
+	FindingChannel string `protobuf:"bytes,8,opt,name=finding_channel,json=findingChannel,proto3" json:"finding_channel,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *NotificationPreferences) Reset() {
@@ -301,6 +315,13 @@ func (x *NotificationPreferences) GetQuietHoursStart() string {
 func (x *NotificationPreferences) GetQuietHoursEnd() string {
 	if x != nil {
 		return x.QuietHoursEnd
+	}
+	return ""
+}
+
+func (x *NotificationPreferences) GetFindingChannel() string {
+	if x != nil {
+		return x.FindingChannel
 	}
 	return ""
 }
@@ -460,18 +481,468 @@ func (x *NotificationChannel) GetUnavailableReason() string {
 	return ""
 }
 
+type ListLinkedChannelsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListLinkedChannelsRequest) Reset() {
+	*x = ListLinkedChannelsRequest{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListLinkedChannelsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListLinkedChannelsRequest) ProtoMessage() {}
+
+func (x *ListLinkedChannelsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListLinkedChannelsRequest.ProtoReflect.Descriptor instead.
+func (*ListLinkedChannelsRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{8}
+}
+
+type ListLinkedChannelsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channels      []*LinkedChannel       `protobuf:"bytes,1,rep,name=channels,proto3" json:"channels,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListLinkedChannelsResponse) Reset() {
+	*x = ListLinkedChannelsResponse{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListLinkedChannelsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListLinkedChannelsResponse) ProtoMessage() {}
+
+func (x *ListLinkedChannelsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListLinkedChannelsResponse.ProtoReflect.Descriptor instead.
+func (*ListLinkedChannelsResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListLinkedChannelsResponse) GetChannels() []*LinkedChannel {
+	if x != nil {
+		return x.Channels
+	}
+	return nil
+}
+
+// One channel the caller has linked, or is part way through linking.
+//
+// # WHAT IS NOT HERE
+//
+// The verification code, in any form. It is minted, hashed and compared inside
+// the store and never leaves it, so there is no field on this message that
+// could carry it and no handler that could fill one in by accident. The
+// deployment's bot token is not here either, for the reason the service comment
+// gives: it is an operator secret, and this message is one a browser reads.
+type LinkedChannel struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Stable identifier, `telegram` today. Matches NotificationChannel.id and the
+	// check constraint on the table, so a console can line the two up.
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// The chat the caller claimed. Their own, always: the policy pins the row to
+	// `app.current_user_id`, so this can never describe a colleague.
+	ChatId string `protobuf:"bytes,2,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
+	// Whether they proved they hold it. The dispatch path refuses an unverified
+	// chat, so this is the difference between a setting that works and one that
+	// silently falls back to email.
+	Verified bool `protobuf:"varint,3,opt,name=verified,proto3" json:"verified,omitempty"`
+	// When the outstanding verification code expires. Unset when the channel is
+	// verified or has no code, which the check constraint makes the same two
+	// states rather than three.
+	CodeExpiresAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=code_expires_at,json=codeExpiresAt,proto3" json:"code_expires_at,omitempty"`
+	// When the claim was first made. Not when it was verified: a console showing
+	// "linked since" wants the moment the person started, and the verification
+	// moment is the sort of detail that reads as noise on a settings page.
+	LinkedAt      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=linked_at,json=linkedAt,proto3" json:"linked_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkedChannel) Reset() {
+	*x = LinkedChannel{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkedChannel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkedChannel) ProtoMessage() {}
+
+func (x *LinkedChannel) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkedChannel.ProtoReflect.Descriptor instead.
+func (*LinkedChannel) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LinkedChannel) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *LinkedChannel) GetChatId() string {
+	if x != nil {
+		return x.ChatId
+	}
+	return ""
+}
+
+func (x *LinkedChannel) GetVerified() bool {
+	if x != nil {
+		return x.Verified
+	}
+	return false
+}
+
+func (x *LinkedChannel) GetCodeExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CodeExpiresAt
+	}
+	return nil
+}
+
+func (x *LinkedChannel) GetLinkedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LinkedAt
+	}
+	return nil
+}
+
+type LinkTelegramChatRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The numeric chat id the person reads out of the bot, as a string.
+	//
+	// Supplied by the caller rather than discovered, which is what lets this
+	// whole flow exist with no inbound path: nothing the product runs ever reads
+	// a message somebody typed into a chat. The claim means nothing until the
+	// code that lands in the chat is typed back, so an id somebody guessed at
+	// buys them a message the recipient can ignore and nothing else.
+	ChatId        string `protobuf:"bytes,1,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkTelegramChatRequest) Reset() {
+	*x = LinkTelegramChatRequest{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkTelegramChatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkTelegramChatRequest) ProtoMessage() {}
+
+func (x *LinkTelegramChatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkTelegramChatRequest.ProtoReflect.Descriptor instead.
+func (*LinkTelegramChatRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *LinkTelegramChatRequest) GetChatId() string {
+	if x != nil {
+		return x.ChatId
+	}
+	return ""
+}
+
+type LinkTelegramChatResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// When the code stops working. Returned so the console can say "expires in
+	// nine minutes" rather than leaving somebody to find out by typing it.
+	CodeExpiresAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=code_expires_at,json=codeExpiresAt,proto3" json:"code_expires_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkTelegramChatResponse) Reset() {
+	*x = LinkTelegramChatResponse{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkTelegramChatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkTelegramChatResponse) ProtoMessage() {}
+
+func (x *LinkTelegramChatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkTelegramChatResponse.ProtoReflect.Descriptor instead.
+func (*LinkTelegramChatResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *LinkTelegramChatResponse) GetCodeExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CodeExpiresAt
+	}
+	return nil
+}
+
+type VerifyTelegramChatRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The code that arrived in the chat.
+	Code          string `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyTelegramChatRequest) Reset() {
+	*x = VerifyTelegramChatRequest{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyTelegramChatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyTelegramChatRequest) ProtoMessage() {}
+
+func (x *VerifyTelegramChatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyTelegramChatRequest.ProtoReflect.Descriptor instead.
+func (*VerifyTelegramChatRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *VerifyTelegramChatRequest) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+type VerifyTelegramChatResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True when the chat is now verified. A refusal is an error rather than a
+	// false here, because the reason matters to the console and an unread boolean
+	// is how a failed verification renders as a success.
+	Verified      bool `protobuf:"varint,1,opt,name=verified,proto3" json:"verified,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyTelegramChatResponse) Reset() {
+	*x = VerifyTelegramChatResponse{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyTelegramChatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyTelegramChatResponse) ProtoMessage() {}
+
+func (x *VerifyTelegramChatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyTelegramChatResponse.ProtoReflect.Descriptor instead.
+func (*VerifyTelegramChatResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *VerifyTelegramChatResponse) GetVerified() bool {
+	if x != nil {
+		return x.Verified
+	}
+	return false
+}
+
+type UnlinkTelegramChatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlinkTelegramChatRequest) Reset() {
+	*x = UnlinkTelegramChatRequest{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlinkTelegramChatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlinkTelegramChatRequest) ProtoMessage() {}
+
+func (x *UnlinkTelegramChatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlinkTelegramChatRequest.ProtoReflect.Descriptor instead.
+func (*UnlinkTelegramChatRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{15}
+}
+
+type UnlinkTelegramChatResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// False when there was nothing linked. Not an error: unlinking twice is the
+	// same outcome as unlinking once, and a console that refreshed in another tab
+	// should not be told it did something wrong.
+	Unlinked      bool `protobuf:"varint,1,opt,name=unlinked,proto3" json:"unlinked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlinkTelegramChatResponse) Reset() {
+	*x = UnlinkTelegramChatResponse{}
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlinkTelegramChatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlinkTelegramChatResponse) ProtoMessage() {}
+
+func (x *UnlinkTelegramChatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_notifications_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlinkTelegramChatResponse.ProtoReflect.Descriptor instead.
+func (*UnlinkTelegramChatResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_notifications_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *UnlinkTelegramChatResponse) GetUnlinked() bool {
+	if x != nil {
+		return x.Unlinked
+	}
+	return false
+}
+
 var File_kindlast_core_v1_notifications_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_notifications_proto_rawDesc = "" +
 	"\n" +
-	"$kindlast/core/v1/notifications.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"#\n" +
+	"$kindlast/core/v1/notifications.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"#\n" +
 	"!GetNotificationPreferencesRequest\"q\n" +
 	"\"GetNotificationPreferencesResponse\x12K\n" +
 	"\vpreferences\x18\x01 \x01(\v2).kindlast.core.v1.NotificationPreferencesR\vpreferences\"s\n" +
 	"$UpdateNotificationPreferencesRequest\x12K\n" +
 	"\vpreferences\x18\x01 \x01(\v2).kindlast.core.v1.NotificationPreferencesR\vpreferences\"t\n" +
 	"%UpdateNotificationPreferencesResponse\x12K\n" +
-	"\vpreferences\x18\x01 \x01(\v2).kindlast.core.v1.NotificationPreferencesR\vpreferences\"\xc4\x02\n" +
+	"\vpreferences\x18\x01 \x01(\v2).kindlast.core.v1.NotificationPreferencesR\vpreferences\"\xed\x02\n" +
 	"\x17NotificationPreferences\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x123\n" +
 	"\x16min_severity_for_email\x18\x02 \x01(\tR\x13minSeverityForEmail\x126\n" +
@@ -479,7 +950,8 @@ const file_kindlast_core_v1_notifications_proto_rawDesc = "" +
 	"\x17deadline_alerts_enabled\x18\x04 \x01(\bR\x15deadlineAlertsEnabled\x12\x1a\n" +
 	"\btimezone\x18\x05 \x01(\tR\btimezone\x12*\n" +
 	"\x11quiet_hours_start\x18\x06 \x01(\tR\x0fquietHoursStart\x12&\n" +
-	"\x0fquiet_hours_end\x18\a \x01(\tR\rquietHoursEnd\"$\n" +
+	"\x0fquiet_hours_end\x18\a \x01(\tR\rquietHoursEnd\x12'\n" +
+	"\x0ffinding_channel\x18\b \x01(\tR\x0efindingChannel\"$\n" +
 	"\"GetNotificationCapabilitiesRequest\"h\n" +
 	"#GetNotificationCapabilitiesResponse\x12A\n" +
 	"\bchannels\x18\x01 \x03(\v2%.kindlast.core.v1.NotificationChannelR\bchannels\"\x95\x01\n" +
@@ -487,11 +959,36 @@ const file_kindlast_core_v1_notifications_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x1c\n" +
 	"\tavailable\x18\x03 \x01(\bR\tavailable\x12-\n" +
-	"\x12unavailable_reason\x18\x04 \x01(\tR\x11unavailableReason2\x84\x05\n" +
+	"\x12unavailable_reason\x18\x04 \x01(\tR\x11unavailableReason\"\x1b\n" +
+	"\x19ListLinkedChannelsRequest\"Y\n" +
+	"\x1aListLinkedChannelsResponse\x12;\n" +
+	"\bchannels\x18\x01 \x03(\v2\x1f.kindlast.core.v1.LinkedChannelR\bchannels\"\xd5\x01\n" +
+	"\rLinkedChannel\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x17\n" +
+	"\achat_id\x18\x02 \x01(\tR\x06chatId\x12\x1a\n" +
+	"\bverified\x18\x03 \x01(\bR\bverified\x12B\n" +
+	"\x0fcode_expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\rcodeExpiresAt\x127\n" +
+	"\tlinked_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\blinkedAt\"2\n" +
+	"\x17LinkTelegramChatRequest\x12\x17\n" +
+	"\achat_id\x18\x01 \x01(\tR\x06chatId\"^\n" +
+	"\x18LinkTelegramChatResponse\x12B\n" +
+	"\x0fcode_expires_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\rcodeExpiresAt\"/\n" +
+	"\x19VerifyTelegramChatRequest\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\"8\n" +
+	"\x1aVerifyTelegramChatResponse\x12\x1a\n" +
+	"\bverified\x18\x01 \x01(\bR\bverified\"\x1b\n" +
+	"\x19UnlinkTelegramChatRequest\"8\n" +
+	"\x1aUnlinkTelegramChatResponse\x12\x1a\n" +
+	"\bunlinked\x18\x01 \x01(\bR\bunlinked2\xe5\n" +
+	"\n" +
 	"\x13NotificationService\x12\xc7\x01\n" +
 	"\x1aGetNotificationPreferences\x123.kindlast.core.v1.GetNotificationPreferencesRequest\x1a4.kindlast.core.v1.GetNotificationPreferencesResponse\">\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02\"\x12 /api/v1/notification-preferences\x12\xd4\x01\n" +
 	"\x1dUpdateNotificationPreferences\x126.kindlast.core.v1.UpdateNotificationPreferencesRequest\x1a7.kindlast.core.v1.UpdateNotificationPreferencesResponse\"B\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x02%:\x01*\x1a /api/v1/notification-preferences\x12\xcb\x01\n" +
-	"\x1bGetNotificationCapabilities\x124.kindlast.core.v1.GetNotificationCapabilitiesRequest\x1a5.kindlast.core.v1.GetNotificationCapabilitiesResponse\"?\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02#\x12!/api/v1/notification-capabilitiesB\xca\x01\n" +
+	"\x1bGetNotificationCapabilities\x124.kindlast.core.v1.GetNotificationCapabilitiesRequest\x1a5.kindlast.core.v1.GetNotificationCapabilitiesResponse\"?\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02#\x12!/api/v1/notification-capabilities\x12\xac\x01\n" +
+	"\x12ListLinkedChannels\x12+.kindlast.core.v1.ListLinkedChannelsRequest\x1a,.kindlast.core.v1.ListLinkedChannelsResponse\";\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02\x1f\x12\x1d/api/v1/notification-channels\x12\xb3\x01\n" +
+	"\x10LinkTelegramChat\x12).kindlast.core.v1.LinkTelegramChatRequest\x1a*.kindlast.core.v1.LinkTelegramChatResponse\"H\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x02+:\x01*\"&/api/v1/notification-channels/telegram\x12\xc0\x01\n" +
+	"\x12VerifyTelegramChat\x12+.kindlast.core.v1.VerifyTelegramChatRequest\x1a,.kindlast.core.v1.VerifyTelegramChatResponse\"O\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x022:\x01*\"-/api/v1/notification-channels/telegram:verify\x12\xb6\x01\n" +
+	"\x12UnlinkTelegramChat\x12+.kindlast.core.v1.UnlinkTelegramChatRequest\x1a,.kindlast.core.v1.UnlinkTelegramChatResponse\"E\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x02(*&/api/v1/notification-channels/telegramB\xca\x01\n" +
 	"\x14com.kindlast.core.v1B\x12NotificationsProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3"
 
 var (
@@ -506,7 +1003,7 @@ func file_kindlast_core_v1_notifications_proto_rawDescGZIP() []byte {
 	return file_kindlast_core_v1_notifications_proto_rawDescData
 }
 
-var file_kindlast_core_v1_notifications_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_kindlast_core_v1_notifications_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_kindlast_core_v1_notifications_proto_goTypes = []any{
 	(*GetNotificationPreferencesRequest)(nil),     // 0: kindlast.core.v1.GetNotificationPreferencesRequest
 	(*GetNotificationPreferencesResponse)(nil),    // 1: kindlast.core.v1.GetNotificationPreferencesResponse
@@ -516,23 +1013,45 @@ var file_kindlast_core_v1_notifications_proto_goTypes = []any{
 	(*GetNotificationCapabilitiesRequest)(nil),    // 5: kindlast.core.v1.GetNotificationCapabilitiesRequest
 	(*GetNotificationCapabilitiesResponse)(nil),   // 6: kindlast.core.v1.GetNotificationCapabilitiesResponse
 	(*NotificationChannel)(nil),                   // 7: kindlast.core.v1.NotificationChannel
+	(*ListLinkedChannelsRequest)(nil),             // 8: kindlast.core.v1.ListLinkedChannelsRequest
+	(*ListLinkedChannelsResponse)(nil),            // 9: kindlast.core.v1.ListLinkedChannelsResponse
+	(*LinkedChannel)(nil),                         // 10: kindlast.core.v1.LinkedChannel
+	(*LinkTelegramChatRequest)(nil),               // 11: kindlast.core.v1.LinkTelegramChatRequest
+	(*LinkTelegramChatResponse)(nil),              // 12: kindlast.core.v1.LinkTelegramChatResponse
+	(*VerifyTelegramChatRequest)(nil),             // 13: kindlast.core.v1.VerifyTelegramChatRequest
+	(*VerifyTelegramChatResponse)(nil),            // 14: kindlast.core.v1.VerifyTelegramChatResponse
+	(*UnlinkTelegramChatRequest)(nil),             // 15: kindlast.core.v1.UnlinkTelegramChatRequest
+	(*UnlinkTelegramChatResponse)(nil),            // 16: kindlast.core.v1.UnlinkTelegramChatResponse
+	(*timestamppb.Timestamp)(nil),                 // 17: google.protobuf.Timestamp
 }
 var file_kindlast_core_v1_notifications_proto_depIdxs = []int32{
-	4, // 0: kindlast.core.v1.GetNotificationPreferencesResponse.preferences:type_name -> kindlast.core.v1.NotificationPreferences
-	4, // 1: kindlast.core.v1.UpdateNotificationPreferencesRequest.preferences:type_name -> kindlast.core.v1.NotificationPreferences
-	4, // 2: kindlast.core.v1.UpdateNotificationPreferencesResponse.preferences:type_name -> kindlast.core.v1.NotificationPreferences
-	7, // 3: kindlast.core.v1.GetNotificationCapabilitiesResponse.channels:type_name -> kindlast.core.v1.NotificationChannel
-	0, // 4: kindlast.core.v1.NotificationService.GetNotificationPreferences:input_type -> kindlast.core.v1.GetNotificationPreferencesRequest
-	2, // 5: kindlast.core.v1.NotificationService.UpdateNotificationPreferences:input_type -> kindlast.core.v1.UpdateNotificationPreferencesRequest
-	5, // 6: kindlast.core.v1.NotificationService.GetNotificationCapabilities:input_type -> kindlast.core.v1.GetNotificationCapabilitiesRequest
-	1, // 7: kindlast.core.v1.NotificationService.GetNotificationPreferences:output_type -> kindlast.core.v1.GetNotificationPreferencesResponse
-	3, // 8: kindlast.core.v1.NotificationService.UpdateNotificationPreferences:output_type -> kindlast.core.v1.UpdateNotificationPreferencesResponse
-	6, // 9: kindlast.core.v1.NotificationService.GetNotificationCapabilities:output_type -> kindlast.core.v1.GetNotificationCapabilitiesResponse
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4,  // 0: kindlast.core.v1.GetNotificationPreferencesResponse.preferences:type_name -> kindlast.core.v1.NotificationPreferences
+	4,  // 1: kindlast.core.v1.UpdateNotificationPreferencesRequest.preferences:type_name -> kindlast.core.v1.NotificationPreferences
+	4,  // 2: kindlast.core.v1.UpdateNotificationPreferencesResponse.preferences:type_name -> kindlast.core.v1.NotificationPreferences
+	7,  // 3: kindlast.core.v1.GetNotificationCapabilitiesResponse.channels:type_name -> kindlast.core.v1.NotificationChannel
+	10, // 4: kindlast.core.v1.ListLinkedChannelsResponse.channels:type_name -> kindlast.core.v1.LinkedChannel
+	17, // 5: kindlast.core.v1.LinkedChannel.code_expires_at:type_name -> google.protobuf.Timestamp
+	17, // 6: kindlast.core.v1.LinkedChannel.linked_at:type_name -> google.protobuf.Timestamp
+	17, // 7: kindlast.core.v1.LinkTelegramChatResponse.code_expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 8: kindlast.core.v1.NotificationService.GetNotificationPreferences:input_type -> kindlast.core.v1.GetNotificationPreferencesRequest
+	2,  // 9: kindlast.core.v1.NotificationService.UpdateNotificationPreferences:input_type -> kindlast.core.v1.UpdateNotificationPreferencesRequest
+	5,  // 10: kindlast.core.v1.NotificationService.GetNotificationCapabilities:input_type -> kindlast.core.v1.GetNotificationCapabilitiesRequest
+	8,  // 11: kindlast.core.v1.NotificationService.ListLinkedChannels:input_type -> kindlast.core.v1.ListLinkedChannelsRequest
+	11, // 12: kindlast.core.v1.NotificationService.LinkTelegramChat:input_type -> kindlast.core.v1.LinkTelegramChatRequest
+	13, // 13: kindlast.core.v1.NotificationService.VerifyTelegramChat:input_type -> kindlast.core.v1.VerifyTelegramChatRequest
+	15, // 14: kindlast.core.v1.NotificationService.UnlinkTelegramChat:input_type -> kindlast.core.v1.UnlinkTelegramChatRequest
+	1,  // 15: kindlast.core.v1.NotificationService.GetNotificationPreferences:output_type -> kindlast.core.v1.GetNotificationPreferencesResponse
+	3,  // 16: kindlast.core.v1.NotificationService.UpdateNotificationPreferences:output_type -> kindlast.core.v1.UpdateNotificationPreferencesResponse
+	6,  // 17: kindlast.core.v1.NotificationService.GetNotificationCapabilities:output_type -> kindlast.core.v1.GetNotificationCapabilitiesResponse
+	9,  // 18: kindlast.core.v1.NotificationService.ListLinkedChannels:output_type -> kindlast.core.v1.ListLinkedChannelsResponse
+	12, // 19: kindlast.core.v1.NotificationService.LinkTelegramChat:output_type -> kindlast.core.v1.LinkTelegramChatResponse
+	14, // 20: kindlast.core.v1.NotificationService.VerifyTelegramChat:output_type -> kindlast.core.v1.VerifyTelegramChatResponse
+	16, // 21: kindlast.core.v1.NotificationService.UnlinkTelegramChat:output_type -> kindlast.core.v1.UnlinkTelegramChatResponse
+	15, // [15:22] is the sub-list for method output_type
+	8,  // [8:15] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_core_v1_notifications_proto_init() }
@@ -546,7 +1065,7 @@ func file_kindlast_core_v1_notifications_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_core_v1_notifications_proto_rawDesc), len(file_kindlast_core_v1_notifications_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

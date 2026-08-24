@@ -103,8 +103,13 @@ const (
 
 // Service implements platformv1connect.DeliveryServiceHandler.
 type Service struct {
-	outbox  Outbox
-	channel delivery.Channel
+	outbox Outbox
+	// channels is every channel this deployment can deliver on, behind the
+	// same one-Channel seam the dispatcher has always held (ENT-263). The
+	// router reads the channel each row or recipient names and hands it on, so
+	// there is still exactly one place a message leaves from and exactly one
+	// retry policy behind it.
+	channels *delivery.Router
 	// baseURL is where a browser reaches the console, for the links a
 	// notification carries. Empty refuses a notification send rather than
 	// building a link that 404s.
@@ -123,8 +128,8 @@ type Service struct {
 // the service being absent, because the rows are there and an operator asking
 // "why is mail not leaving" should get an answer that names the setting. An
 // empty base URL is the same for notifications.
-func New(outbox Outbox, channel delivery.Channel, baseURL string) *Service {
-	return &Service{outbox: outbox, channel: channel, baseURL: baseURL, now: time.Now}
+func New(outbox Outbox, channels *delivery.Router, baseURL string) *Service {
+	return &Service{outbox: outbox, channels: channels, baseURL: baseURL, now: time.Now}
 }
 
 // WithClock replaces the clock the plan reads, for tests that need to be
@@ -180,7 +185,8 @@ func isUUID(raw string) bool {
 // worth reading as one table:
 //
 //	invalid_argument      the id is not a uuid; a caller bug, never retried
-//	failed_precondition   no channel is configured; retried, the row waits
+//	failed_precondition   no channel is configured, or none for the channel
+//	                      this row names; retried, the row waits
 //	unavailable           the channel refused; retried with backoff
 //	internal              the database did; retried with backoff
 //
@@ -199,10 +205,10 @@ func (s *Service) DeliverMessage(
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("a delivery names one message; send message_id"))
 	}
-	if s.channel == nil {
+	if s.channels.Empty() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			errors.New("no mail channel is configured (KINDLAST_SMTP_ADDR is not set), "+
-				"so the message stays queued until one is"))
+			errors.New("no delivery channel is configured (neither KINDLAST_SMTP_ADDR nor "+
+				"KINDLAST_TELEGRAM_BOT_TOKEN is set), so the message stays queued until one is"))
 	}
 
 	result, err := s.outbox.DeliverMessage(ctx, req.Msg.GetMessageId(), s.send)
@@ -210,6 +216,20 @@ func (s *Service) DeliverMessage(
 	case errors.Is(err, postgres.ErrBadMessageID):
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("message_id is not a uuid"))
+	// Checked before ErrNotDelivered, which also wraps this, and the order is
+	// the whole point (ENT-263). A row addressed to a channel this deployment
+	// has not configured is not a provider that is down: no amount of backing
+	// off will make it deliverable, and reporting it as `unavailable` would
+	// leave it retrying with growing intervals for as long as the deployment
+	// lives, with the reason buried in a workflow history nobody reads.
+	//
+	// It is reachable by exactly one route, which is why the sentinel exists:
+	// an operator removing KINDLAST_TELEGRAM_BOT_TOKEN while rows addressed to
+	// Telegram are still queued. Linking a chat is refused when the channel is
+	// absent, so nothing can address one that never existed. `failed_precondition`
+	// names the setting to put back, which is the only action that helps.
+	case errors.Is(err, delivery.ErrChannelUnavailable):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, postgres.ErrNotDelivered):
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	case err != nil:
@@ -254,9 +274,13 @@ func (s *Service) ReclaimMessages(
 // The channel is given the recipient, subject and body and nothing else. It
 // deliberately does not receive the row id: a channel that knew it could update
 // the row, and then two things would be recording the outcome.
+// The row names its own channel and its own recipient, so this stayed one
+// line longer and gained no branch: adding a channel means registering an
+// adapter on the router, not editing here.
 func (s *Service) send(ctx context.Context, msg postgres.PendingMessage) error {
-	return s.channel.Send(ctx, delivery.Message{
-		To:       msg.RecipientEmail,
+	return s.channels.Send(ctx, delivery.Message{
+		Channel:  msg.Channel,
+		To:       msg.Recipient(),
 		Subject:  msg.Subject,
 		BodyText: msg.BodyText,
 		BodyHTML: msg.BodyHTML,

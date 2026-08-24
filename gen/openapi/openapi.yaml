@@ -1408,6 +1408,135 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /api/v1/notification-channels:
+        get:
+            tags:
+                - NotificationService
+            description: |-
+                The caller's own linked channels in the active organisation (ENT-263).
+
+                 No user id here either, and for a sharper reason than the preferences
+                 RPCs: a linked chat is somebody's messaging identity, so an RPC that could
+                 name a colleague would be an endpoint for enumerating which of your
+                 co-workers can be reached on Telegram and at which chat. The policy pins
+                 `user_id` to the caller and there is nowhere to pass another.
+
+                 The bot token is not here and is in no message in this file. It is an
+                 operator secret read from core-api's configuration by the dispatcher, and
+                 an RPC a browser can call is the last place it should be reachable from.
+            operationId: NotificationService_ListLinkedChannels
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListLinkedChannelsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/notification-channels/telegram:
+        post:
+            tags:
+                - NotificationService
+            description: |-
+                Claim a Telegram chat and send a code to it.
+
+                 Claiming is not linking. This records the chat id the caller supplied and
+                 queues a short-lived code to it through the same outbox every other
+                 message goes through; nothing else is delivered to the chat until the code
+                 comes back through VerifyTelegramChat. Until then the dispatcher treats
+                 the chat as if it were not there.
+
+                 Calling it again replaces the claim, resets the attempt budget, and
+                 un-verifies whatever was verified before. That last part is deliberate:
+                 somebody relinking because they lost access to the old chat should stop
+                 receiving compliance notifications there at the moment they say so, not
+                 when they finish proving the new one.
+            operationId: NotificationService_LinkTelegramChat
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LinkTelegramChatRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LinkTelegramChatResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        delete:
+            tags:
+                - NotificationService
+            description: |-
+                Unlink the caller's Telegram chat.
+
+                 The row is deleted rather than flagged, so future notifications go to the
+                 remaining channel or nowhere and never to the unlinked chat. A flag would
+                 leave a row every future query had to remember to filter.
+
+                 The channel preference is deliberately left alone. Somebody unlinking in
+                 order to link a different chat has said what they want, and quietly
+                 resetting them to email would undo a setting they never touched.
+            operationId: NotificationService_UnlinkTelegramChat
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UnlinkTelegramChatResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/notification-channels/telegram:verify:
+        post:
+            tags:
+                - NotificationService
+            description: |-
+                Prove the caller holds the chat, by typing back the code that arrived in
+                 it.
+
+                 Expired, already spent, wrong, and never issued are one answer, for the
+                 reason `redeem_capability_token` gives: telling them apart makes this an
+                 oracle for which chats have a code outstanding, and none of the four is
+                 actionable differently. Running out of attempts is the one exception,
+                 because "start again" is not the right advice when starting again will
+                 fail the same way.
+            operationId: NotificationService_VerifyTelegramChat
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/VerifyTelegramChatRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/VerifyTelegramChatResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/notification-preferences:
         get:
             tags:
@@ -5704,6 +5833,71 @@ components:
                         When the capability stops working. Returned so the console can tell the
                          inviter what they just created rather than describing it vaguely.
                     format: date-time
+        LinkTelegramChatRequest:
+            type: object
+            properties:
+                chatId:
+                    type: string
+                    description: |-
+                        The numeric chat id the person reads out of the bot, as a string.
+
+                         Supplied by the caller rather than discovered, which is what lets this
+                         whole flow exist with no inbound path: nothing the product runs ever reads
+                         a message somebody typed into a chat. The claim means nothing until the
+                         code that lands in the chat is typed back, so an id somebody guessed at
+                         buys them a message the recipient can ignore and nothing else.
+        LinkTelegramChatResponse:
+            type: object
+            properties:
+                codeExpiresAt:
+                    type: string
+                    description: |-
+                        When the code stops working. Returned so the console can say "expires in
+                         nine minutes" rather than leaving somebody to find out by typing it.
+                    format: date-time
+        LinkedChannel:
+            type: object
+            properties:
+                kind:
+                    type: string
+                    description: |-
+                        Stable identifier, `telegram` today. Matches NotificationChannel.id and the
+                         check constraint on the table, so a console can line the two up.
+                chatId:
+                    type: string
+                    description: |-
+                        The chat the caller claimed. Their own, always: the policy pins the row to
+                         `app.current_user_id`, so this can never describe a colleague.
+                verified:
+                    type: boolean
+                    description: |-
+                        Whether they proved they hold it. The dispatch path refuses an unverified
+                         chat, so this is the difference between a setting that works and one that
+                         silently falls back to email.
+                codeExpiresAt:
+                    type: string
+                    description: |-
+                        When the outstanding verification code expires. Unset when the channel is
+                         verified or has no code, which the check constraint makes the same two
+                         states rather than three.
+                    format: date-time
+                linkedAt:
+                    type: string
+                    description: |-
+                        When the claim was first made. Not when it was verified: a console showing
+                         "linked since" wants the moment the person started, and the verification
+                         moment is the sort of detail that reads as noise on a settings page.
+                    format: date-time
+            description: |-
+                One channel the caller has linked, or is part way through linking.
+
+                 WHAT IS NOT HERE
+
+                 The verification code, in any form. It is minted, hashed and compared inside
+                 the store and never leaves it, so there is no field on this message that
+                 could carry it and no handler that could fill one in by accident. The
+                 deployment's bot token is not here either, for the reason the service comment
+                 gives: it is an operator secret, and this message is one a browser reads.
         ListAiSystemsResponse:
             type: object
             properties:
@@ -5808,6 +6002,13 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/Integration'
+        ListLinkedChannelsResponse:
+            type: object
+            properties:
+                channels:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/LinkedChannel'
         ListMembersResponse:
             type: object
             properties:
@@ -6246,6 +6447,21 @@ components:
                          during quiet hours is one nobody can trust with a statutory clock.
                 quietHoursEnd:
                     type: string
+                findingChannel:
+                    type: string
+                    description: |-
+                        Where a finding notification goes for this person: `email` or `telegram`
+                         (ENT-263). Empty reads as email.
+
+                         One field, and what it does not do is the point. The severity floor and the
+                         quiet window above stay channel-independent, because they say when somebody
+                         wants to be interrupted rather than how. Per-channel copies would let a
+                         person set a quiet window on email, forget the one on Telegram, and be
+                         woken at four in the morning by a product that had been told twice not to.
+
+                         Choosing `telegram` without a verified chat is accepted here and refused at
+                         the dispatch path, which sends by email instead and records why. The
+                         settings surface is not the place that decides whether a chat is provable.
         NotifyRecipientsRequest:
             type: object
             properties:
@@ -7478,6 +7694,15 @@ components:
                  Sent per call rather than configured, because the gateway is stateless and
                  because a policy that lived here would be a second copy of what the database
                  holds, free to drift.
+        UnlinkTelegramChatResponse:
+            type: object
+            properties:
+                unlinked:
+                    type: boolean
+                    description: |-
+                        False when there was nothing linked. Not an error: unlinking twice is the
+                         same outcome as unlinking once, and a console that refreshed in another tab
+                         should not be told it did something wrong.
         UpdateAiSystemRequest:
             type: object
             properties:
@@ -7674,6 +7899,21 @@ components:
                  existed a console could list an organisation's members and not work out which
                  row was the person reading the page, which is why an owner could not leave an
                  organisation the API was perfectly willing to let them leave.
+        VerifyTelegramChatRequest:
+            type: object
+            properties:
+                code:
+                    type: string
+                    description: The code that arrived in the chat.
+        VerifyTelegramChatResponse:
+            type: object
+            properties:
+                verified:
+                    type: boolean
+                    description: |-
+                        True when the chat is now verified. A refusal is an error rather than a
+                         false here, because the reason matters to the console and an unread boolean
+                         is how a failed verification renders as a success.
         WatchRequest:
             type: object
             properties:

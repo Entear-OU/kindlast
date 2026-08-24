@@ -46,6 +46,11 @@
       "description": "Alpha Compliance GmbH, from deploy/seed/seed.sql."
     },
     {
+      "key": "telegram_chat_id",
+      "value": "",
+      "description": "The numeric id of a private chat with the deployment's bot (ENT-263). Not an @name: the product refuses one, because an @name addresses a public channel and the difference is somebody's compliance findings posted where anybody can read them.\n\nTo find yours: message the bot once from Telegram, then open https://api.telegram.org/bot<token>/getUpdates in a browser and read result[0].message.chat.id. That is an operator step. core-api never calls getUpdates or any other Bot API method that reads, because anything typed into a chat is data and never instruction, and the adapter's own test suite refuses the mention of one."
+    },
+    {
       "key": "delegation",
       "value": "",
       "description": "A delegation credential (ENT-230). Minted by core-api while serving a signed-in person's own request and returned exactly once, so there is nothing to look up: the table stores only its SHA-256 digest. There is no mint endpoint yet, and the reason is in the delegated request's description. To try the path locally, mint one against the running stack:\n\ndocker exec -i kindlast-postgres-app psql -U kindlast_migrator -d kindlast -c \"insert into act_delegations (id, org_id, user_id, acting_agent, token_hash, expires_at) values (gen_random_uuid(), 'a0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-0000000000aa', 'analyst', encode(sha256('dev-delegation'), 'hex'), now() + interval '15 minutes')\"\n\nThen set this to `dev-delegation`. That insert is the migrator writing a row the application could only write for the person in its own session, which is the boundary being demonstrated rather than avoided."
@@ -1173,7 +1178,79 @@
                 "GetNotificationCapabilities"
               ]
             },
-            "description": "Which channels this deployment can actually deliver on (§18.3). **Implemented as of ENT-209.** Required scope: `notifications:read`.\n\nExists so a console never renders a channel it cannot deliver on. Telegram, Slack and WhatsApp are in the design and are not built, and they are **absent from this response rather than listed as unavailable**: a settings page offering a switch that silently does nothing is indistinguishable from a broken integration, and generates support instead of value.\n\n`email` is present always and `available` is false on a deployment with no `KINDLAST_SMTP_ADDR`, carrying a plain-language `unavailableReason` for the console to show. Read from configuration rather than probed, because a mail server that happens to be down is not the same as a deployment that was never told where to submit mail, and only the second is worth telling a person about.\n\nDeployment-wide rather than tenant-scoped: the answer is the same for every organisation in an installation. The organisation header is still sent because the chain requires it.\n\n**From the contract.** `kindlast.core.v1.NotificationService/GetNotificationCapabilities`, declared in `proto/kindlast/core/v1/notifications.proto`. Required scope: `notifications:read`. Declared REST binding: `GET /api/v1/notification-capabilities`."
+            "description": "Which channels this deployment can actually deliver on (§18.3). **Implemented as of ENT-209.** Required scope: `notifications:read`.\n\nExists so a console never renders a channel it cannot deliver on. Slack and WhatsApp are in the design and are not built, and they are **absent from this response rather than listed as unavailable**: a settings page offering a switch that silently does nothing is indistinguishable from a broken integration, and generates support instead of value.\n\n`email` and `telegram` are both present always (ENT-263). `available` is false on a deployment with no `KINDLAST_SMTP_ADDR` and no `KINDLAST_TELEGRAM_BOT_TOKEN` respectively, carrying a plain-language `unavailableReason` for the console to show. Both are read from the same router the dispatcher sends through, so this endpoint and the delivery path cannot disagree about what exists. Read from configuration rather than probed, because a mail server that happens to be down is not the same as a deployment that was never told where to submit mail, and only the second is worth telling a person about.\n\nDeployment-wide rather than tenant-scoped: the answer is the same for every organisation in an installation. The organisation header is still sent because the chain requires it.\n\n**From the contract.** `kindlast.core.v1.NotificationService/GetNotificationCapabilities`, declared in `proto/kindlast/core/v1/notifications.proto`. Required scope: `notifications:read`. Declared REST binding: `GET /api/v1/notification-capabilities`."
+          }
+        },
+        {
+          "name": "ListLinkedChannels (NotificationService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/ListLinkedChannels",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.NotificationService", "ListLinkedChannels"]
+            },
+            "description": "The caller's own linked channels in the active organisation (ENT-263).\n\nNo user id here either, and for a sharper reason than the preferences RPCs: a linked chat is somebody's messaging identity, so an RPC that could name a colleague would be an endpoint for enumerating which of your co-workers can be reached on Telegram and at which chat. The policy pins `user_id` to the caller and there is nowhere to pass another.\n\nThe bot token is not here and is in no message in this file. It is an operator secret read from core-api's configuration by the dispatcher, and an RPC a browser can call is the last place it should be reachable from.\n\n**From the contract.** `kindlast.core.v1.NotificationService/ListLinkedChannels`, declared in `proto/kindlast/core/v1/notifications.proto`. Required scope: `notifications:read`. Declared REST binding: `GET /api/v1/notification-channels`."
+          }
+        },
+        {
+          "name": "LinkTelegramChat (NotificationService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"chatId\": \"{{telegram_chat_id}}\"\n}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/LinkTelegramChat",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.NotificationService", "LinkTelegramChat"]
+            },
+            "description": "Claim a Telegram chat and send a code to it.\n\nClaiming is not linking. This records the chat id the caller supplied and queues a short-lived code to it through the same outbox every other message goes through; nothing else is delivered to the chat until the code comes back through VerifyTelegramChat. Until then the dispatcher treats the chat as if it were not there.\n\nCalling it again replaces the claim, resets the attempt budget, and un-verifies whatever was verified before. That last part is deliberate: somebody relinking because they lost access to the old chat should stop receiving compliance notifications there at the moment they say so, not when they finish proving the new one.\n\n**Driving this against the local stack.** Three facts that are not in any specification and each cost an afternoon. First, `chatId` is the numeric id of a private chat with your bot, not an `@name`: message the bot once from Telegram, then read `result[0].message.chat.id` from `https://api.telegram.org/bot<token>/getUpdates` in a browser. The product never calls that method (see `apps/core-api/internal/delivery/inbound_test.go` for why), so this is an operator step and not a code path. Second, the code does not reach Mailpit: it goes to the chat, through `transactional_outbox` and the Temporal relay, so nothing arrives until the delivery workflow runs. Third, `KINDLAST_TELEGRAM_BOT_TOKEN` must be set on `core-api` or this is `failed_precondition` before anything is written, which is the intended answer on a deployment that has no bot rather than a fault.\n\n**From the contract.** `kindlast.core.v1.NotificationService/LinkTelegramChat`, declared in `proto/kindlast/core/v1/notifications.proto`. Required scope: `notifications:write`. Declared REST binding: `POST /api/v1/notification-channels/telegram`."
+          }
+        },
+        {
+          "name": "VerifyTelegramChat (NotificationService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"000000\"\n}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/VerifyTelegramChat",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.NotificationService", "VerifyTelegramChat"]
+            },
+            "description": "Prove the caller holds the chat, by typing back the code that arrived in it.\n\nExpired, already spent, wrong, and never issued are one answer, for the reason `redeem_capability_token` gives: telling them apart makes this an oracle for which chats have a code outstanding, and none of the four is actionable differently. Running out of attempts is the one exception, because \"start again\" is not the right advice when starting again will fail the same way.\n\nThe codes returned map as follows: `permission_denied` for the four that are one answer, `resource_exhausted` once the row's five attempts are spent (the code is destroyed with it, so link again), `invalid_argument` for an empty `code`. Six digits, ten minutes, five attempts, stored hashed.\n\n**From the contract.** `kindlast.core.v1.NotificationService/VerifyTelegramChat`, declared in `proto/kindlast/core/v1/notifications.proto`. Required scope: `notifications:write`. Declared REST binding: `POST /api/v1/notification-channels/telegram:verify`."
+          }
+        },
+        {
+          "name": "UnlinkTelegramChat (NotificationService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.NotificationService/UnlinkTelegramChat",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.NotificationService", "UnlinkTelegramChat"]
+            },
+            "description": "Unlink the caller's Telegram chat.\n\nThe row is deleted rather than flagged, so future notifications go to the remaining channel or nowhere and never to the unlinked chat. A flag would leave a row every future query had to remember to filter.\n\nThe channel preference is deliberately left alone. Somebody unlinking in order to link a different chat has said what they want, and quietly resetting them to email would undo a setting they never touched.\n\n**From the contract.** `kindlast.core.v1.NotificationService/UnlinkTelegramChat`, declared in `proto/kindlast/core/v1/notifications.proto`. Required scope: `notifications:write`. Declared REST binding: `DELETE /api/v1/notification-channels/telegram`."
           }
         },
         {

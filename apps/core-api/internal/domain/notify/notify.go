@@ -27,10 +27,21 @@ const KindInvitation = "invitation"
 
 // Message is one queued transactional message.
 type Message struct {
-	Kind           string
-	RecipientEmail string
-	Subject        string
-	BodyText       string
+	Kind string
+
+	// Channel names where this goes. Empty is email, which is what every
+	// message written before ENT-263 is and what an invitation still is.
+	Channel string
+
+	// The recipient, in the named channel's terms. Exactly one is set: the
+	// check constraint on `transactional_outbox` refuses a row with the wrong
+	// one for its channel, so a message that named the wrong field never
+	// reaches the queue rather than sitting in it undeliverable.
+	RecipientEmail  string
+	RecipientChatID string
+
+	Subject  string
+	BodyText string
 	// Optional. A text-only message is deliverable and readable everywhere; an
 	// HTML-only one is neither in a client that will not render it.
 	BodyHTML string

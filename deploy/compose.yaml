@@ -650,6 +650,28 @@ services:
       # core-api warns at boot rather than failing to start.
       KINDLAST_SMTP_ADDR: mailpit:1025
       KINDLAST_EMAIL_FROM: noreply@kindlast.localhost
+
+      # The Telegram bot the second channel sends as (ENT-263).
+      #
+      # Empty by default and passed through rather than defaulted, which is the
+      # whole of the decision: with no token there is no adapter, so the
+      # settings page reports Telegram unavailable with a reason, linking a chat
+      # is refused before anything is written, and nothing in the process can
+      # reach api.telegram.org. That is what keeps `bun run test:airgap` true of
+      # the default stack, and it is why an unset token is a supported
+      # configuration rather than a broken one.
+      #
+      # There is no Mailpit for Telegram. Unlike SMTP, the bundled stack cannot
+      # offer a local stand-in: the API host is a constant in the adapter on
+      # purpose, because an operator who could repoint it could point a
+      # deployment's bot token at a host they control. So a self-hoster who
+      # wants this sets a real token from @BotFather, and one who does not sets
+      # nothing.
+      #
+      # _FILE is preferred, and docs/self-hosting.md says why: Telegram puts the
+      # token in the URL path of every call, so it leaks through anything that
+      # records a request.
+      KINDLAST_TELEGRAM_BOT_TOKEN: ${KINDLAST_TELEGRAM_BOT_TOKEN:-}
     volumes:
       - zitadel-machinekey:/machinekey:ro
     healthcheck:

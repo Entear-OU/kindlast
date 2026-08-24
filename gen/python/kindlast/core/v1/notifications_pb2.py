@@ -23,10 +23,11 @@ _sym_db = _symbol_database.Default()
 
 
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
+from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$kindlast/core/v1/notifications.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"#\n!GetNotificationPreferencesRequest\"q\n\"GetNotificationPreferencesResponse\x12K\n\x0bpreferences\x18\x01 \x01(\x0b\x32).kindlast.core.v1.NotificationPreferencesR\x0bpreferences\"s\n$UpdateNotificationPreferencesRequest\x12K\n\x0bpreferences\x18\x01 \x01(\x0b\x32).kindlast.core.v1.NotificationPreferencesR\x0bpreferences\"t\n%UpdateNotificationPreferencesResponse\x12K\n\x0bpreferences\x18\x01 \x01(\x0b\x32).kindlast.core.v1.NotificationPreferencesR\x0bpreferences\"\xc4\x02\n\x17NotificationPreferences\x12\x14\n\x05\x65mail\x18\x01 \x01(\tR\x05\x65mail\x12\x33\n\x16min_severity_for_email\x18\x02 \x01(\tR\x13minSeverityForEmail\x12\x36\n\x17weekly_briefing_enabled\x18\x03 \x01(\x08R\x15weeklyBriefingEnabled\x12\x36\n\x17\x64\x65\x61\x64line_alerts_enabled\x18\x04 \x01(\x08R\x15\x64\x65\x61\x64lineAlertsEnabled\x12\x1a\n\x08timezone\x18\x05 \x01(\tR\x08timezone\x12*\n\x11quiet_hours_start\x18\x06 \x01(\tR\x0fquietHoursStart\x12&\n\x0fquiet_hours_end\x18\x07 \x01(\tR\rquietHoursEnd\"$\n\"GetNotificationCapabilitiesRequest\"h\n#GetNotificationCapabilitiesResponse\x12\x41\n\x08\x63hannels\x18\x01 \x03(\x0b\x32%.kindlast.core.v1.NotificationChannelR\x08\x63hannels\"\x95\x01\n\x13NotificationChannel\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12!\n\x0c\x64isplay_name\x18\x02 \x01(\tR\x0b\x64isplayName\x12\x1c\n\tavailable\x18\x03 \x01(\x08R\tavailable\x12-\n\x12unavailable_reason\x18\x04 \x01(\tR\x11unavailableReason2\x84\x05\n\x13NotificationService\x12\xc7\x01\n\x1aGetNotificationPreferences\x12\x33.kindlast.core.v1.GetNotificationPreferencesRequest\x1a\x34.kindlast.core.v1.GetNotificationPreferencesResponse\">\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02\"\x12 /api/v1/notification-preferences\x12\xd4\x01\n\x1dUpdateNotificationPreferences\x12\x36.kindlast.core.v1.UpdateNotificationPreferencesRequest\x1a\x37.kindlast.core.v1.UpdateNotificationPreferencesResponse\"B\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x02%\x1a /api/v1/notification-preferences:\x01*\x12\xcb\x01\n\x1bGetNotificationCapabilities\x12\x34.kindlast.core.v1.GetNotificationCapabilitiesRequest\x1a\x35.kindlast.core.v1.GetNotificationCapabilitiesResponse\"?\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02#\x12!/api/v1/notification-capabilitiesB\xca\x01\n\x14\x63om.kindlast.core.v1B\x12NotificationsProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$kindlast/core/v1/notifications.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"#\n!GetNotificationPreferencesRequest\"q\n\"GetNotificationPreferencesResponse\x12K\n\x0bpreferences\x18\x01 \x01(\x0b\x32).kindlast.core.v1.NotificationPreferencesR\x0bpreferences\"s\n$UpdateNotificationPreferencesRequest\x12K\n\x0bpreferences\x18\x01 \x01(\x0b\x32).kindlast.core.v1.NotificationPreferencesR\x0bpreferences\"t\n%UpdateNotificationPreferencesResponse\x12K\n\x0bpreferences\x18\x01 \x01(\x0b\x32).kindlast.core.v1.NotificationPreferencesR\x0bpreferences\"\xed\x02\n\x17NotificationPreferences\x12\x14\n\x05\x65mail\x18\x01 \x01(\tR\x05\x65mail\x12\x33\n\x16min_severity_for_email\x18\x02 \x01(\tR\x13minSeverityForEmail\x12\x36\n\x17weekly_briefing_enabled\x18\x03 \x01(\x08R\x15weeklyBriefingEnabled\x12\x36\n\x17\x64\x65\x61\x64line_alerts_enabled\x18\x04 \x01(\x08R\x15\x64\x65\x61\x64lineAlertsEnabled\x12\x1a\n\x08timezone\x18\x05 \x01(\tR\x08timezone\x12*\n\x11quiet_hours_start\x18\x06 \x01(\tR\x0fquietHoursStart\x12&\n\x0fquiet_hours_end\x18\x07 \x01(\tR\rquietHoursEnd\x12\'\n\x0f\x66inding_channel\x18\x08 \x01(\tR\x0e\x66indingChannel\"$\n\"GetNotificationCapabilitiesRequest\"h\n#GetNotificationCapabilitiesResponse\x12\x41\n\x08\x63hannels\x18\x01 \x03(\x0b\x32%.kindlast.core.v1.NotificationChannelR\x08\x63hannels\"\x95\x01\n\x13NotificationChannel\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12!\n\x0c\x64isplay_name\x18\x02 \x01(\tR\x0b\x64isplayName\x12\x1c\n\tavailable\x18\x03 \x01(\x08R\tavailable\x12-\n\x12unavailable_reason\x18\x04 \x01(\tR\x11unavailableReason\"\x1b\n\x19ListLinkedChannelsRequest\"Y\n\x1aListLinkedChannelsResponse\x12;\n\x08\x63hannels\x18\x01 \x03(\x0b\x32\x1f.kindlast.core.v1.LinkedChannelR\x08\x63hannels\"\xd5\x01\n\rLinkedChannel\x12\x12\n\x04kind\x18\x01 \x01(\tR\x04kind\x12\x17\n\x07\x63hat_id\x18\x02 \x01(\tR\x06\x63hatId\x12\x1a\n\x08verified\x18\x03 \x01(\x08R\x08verified\x12\x42\n\x0f\x63ode_expires_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\rcodeExpiresAt\x12\x37\n\tlinked_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x08linkedAt\"2\n\x17LinkTelegramChatRequest\x12\x17\n\x07\x63hat_id\x18\x01 \x01(\tR\x06\x63hatId\"^\n\x18LinkTelegramChatResponse\x12\x42\n\x0f\x63ode_expires_at\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\rcodeExpiresAt\"/\n\x19VerifyTelegramChatRequest\x12\x12\n\x04\x63ode\x18\x01 \x01(\tR\x04\x63ode\"8\n\x1aVerifyTelegramChatResponse\x12\x1a\n\x08verified\x18\x01 \x01(\x08R\x08verified\"\x1b\n\x19UnlinkTelegramChatRequest\"8\n\x1aUnlinkTelegramChatResponse\x12\x1a\n\x08unlinked\x18\x01 \x01(\x08R\x08unlinked2\xe5\n\n\x13NotificationService\x12\xc7\x01\n\x1aGetNotificationPreferences\x12\x33.kindlast.core.v1.GetNotificationPreferencesRequest\x1a\x34.kindlast.core.v1.GetNotificationPreferencesResponse\">\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02\"\x12 /api/v1/notification-preferences\x12\xd4\x01\n\x1dUpdateNotificationPreferences\x12\x36.kindlast.core.v1.UpdateNotificationPreferencesRequest\x1a\x37.kindlast.core.v1.UpdateNotificationPreferencesResponse\"B\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x02%\x1a /api/v1/notification-preferences:\x01*\x12\xcb\x01\n\x1bGetNotificationCapabilities\x12\x34.kindlast.core.v1.GetNotificationCapabilitiesRequest\x1a\x35.kindlast.core.v1.GetNotificationCapabilitiesResponse\"?\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02#\x12!/api/v1/notification-capabilities\x12\xac\x01\n\x12ListLinkedChannels\x12+.kindlast.core.v1.ListLinkedChannelsRequest\x1a,.kindlast.core.v1.ListLinkedChannelsResponse\";\x8a\xb5\x18\x12notifications:read\x82\xd3\xe4\x93\x02\x1f\x12\x1d/api/v1/notification-channels\x12\xb3\x01\n\x10LinkTelegramChat\x12).kindlast.core.v1.LinkTelegramChatRequest\x1a*.kindlast.core.v1.LinkTelegramChatResponse\"H\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x02+\"&/api/v1/notification-channels/telegram:\x01*\x12\xc0\x01\n\x12VerifyTelegramChat\x12+.kindlast.core.v1.VerifyTelegramChatRequest\x1a,.kindlast.core.v1.VerifyTelegramChatResponse\"O\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x02\x32\"-/api/v1/notification-channels/telegram:verify:\x01*\x12\xb6\x01\n\x12UnlinkTelegramChat\x12+.kindlast.core.v1.UnlinkTelegramChatRequest\x1a,.kindlast.core.v1.UnlinkTelegramChatResponse\"E\x8a\xb5\x18\x13notifications:write\x82\xd3\xe4\x93\x02(*&/api/v1/notification-channels/telegramB\xca\x01\n\x14\x63om.kindlast.core.v1B\x12NotificationsProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,22 +41,48 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_NOTIFICATIONSERVICE'].methods_by_name['UpdateNotificationPreferences']._serialized_options = b'\212\265\030\023notifications:write\202\323\344\223\002%\032 /api/v1/notification-preferences:\001*'
   _globals['_NOTIFICATIONSERVICE'].methods_by_name['GetNotificationCapabilities']._loaded_options = None
   _globals['_NOTIFICATIONSERVICE'].methods_by_name['GetNotificationCapabilities']._serialized_options = b'\212\265\030\022notifications:read\202\323\344\223\002#\022!/api/v1/notification-capabilities'
-  _globals['_GETNOTIFICATIONPREFERENCESREQUEST']._serialized_start=121
-  _globals['_GETNOTIFICATIONPREFERENCESREQUEST']._serialized_end=156
-  _globals['_GETNOTIFICATIONPREFERENCESRESPONSE']._serialized_start=158
-  _globals['_GETNOTIFICATIONPREFERENCESRESPONSE']._serialized_end=271
-  _globals['_UPDATENOTIFICATIONPREFERENCESREQUEST']._serialized_start=273
-  _globals['_UPDATENOTIFICATIONPREFERENCESREQUEST']._serialized_end=388
-  _globals['_UPDATENOTIFICATIONPREFERENCESRESPONSE']._serialized_start=390
-  _globals['_UPDATENOTIFICATIONPREFERENCESRESPONSE']._serialized_end=506
-  _globals['_NOTIFICATIONPREFERENCES']._serialized_start=509
-  _globals['_NOTIFICATIONPREFERENCES']._serialized_end=833
-  _globals['_GETNOTIFICATIONCAPABILITIESREQUEST']._serialized_start=835
-  _globals['_GETNOTIFICATIONCAPABILITIESREQUEST']._serialized_end=871
-  _globals['_GETNOTIFICATIONCAPABILITIESRESPONSE']._serialized_start=873
-  _globals['_GETNOTIFICATIONCAPABILITIESRESPONSE']._serialized_end=977
-  _globals['_NOTIFICATIONCHANNEL']._serialized_start=980
-  _globals['_NOTIFICATIONCHANNEL']._serialized_end=1129
-  _globals['_NOTIFICATIONSERVICE']._serialized_start=1132
-  _globals['_NOTIFICATIONSERVICE']._serialized_end=1776
+  _globals['_NOTIFICATIONSERVICE'].methods_by_name['ListLinkedChannels']._loaded_options = None
+  _globals['_NOTIFICATIONSERVICE'].methods_by_name['ListLinkedChannels']._serialized_options = b'\212\265\030\022notifications:read\202\323\344\223\002\037\022\035/api/v1/notification-channels'
+  _globals['_NOTIFICATIONSERVICE'].methods_by_name['LinkTelegramChat']._loaded_options = None
+  _globals['_NOTIFICATIONSERVICE'].methods_by_name['LinkTelegramChat']._serialized_options = b'\212\265\030\023notifications:write\202\323\344\223\002+\"&/api/v1/notification-channels/telegram:\001*'
+  _globals['_NOTIFICATIONSERVICE'].methods_by_name['VerifyTelegramChat']._loaded_options = None
+  _globals['_NOTIFICATIONSERVICE'].methods_by_name['VerifyTelegramChat']._serialized_options = b'\212\265\030\023notifications:write\202\323\344\223\0022\"-/api/v1/notification-channels/telegram:verify:\001*'
+  _globals['_NOTIFICATIONSERVICE'].methods_by_name['UnlinkTelegramChat']._loaded_options = None
+  _globals['_NOTIFICATIONSERVICE'].methods_by_name['UnlinkTelegramChat']._serialized_options = b'\212\265\030\023notifications:write\202\323\344\223\002(*&/api/v1/notification-channels/telegram'
+  _globals['_GETNOTIFICATIONPREFERENCESREQUEST']._serialized_start=154
+  _globals['_GETNOTIFICATIONPREFERENCESREQUEST']._serialized_end=189
+  _globals['_GETNOTIFICATIONPREFERENCESRESPONSE']._serialized_start=191
+  _globals['_GETNOTIFICATIONPREFERENCESRESPONSE']._serialized_end=304
+  _globals['_UPDATENOTIFICATIONPREFERENCESREQUEST']._serialized_start=306
+  _globals['_UPDATENOTIFICATIONPREFERENCESREQUEST']._serialized_end=421
+  _globals['_UPDATENOTIFICATIONPREFERENCESRESPONSE']._serialized_start=423
+  _globals['_UPDATENOTIFICATIONPREFERENCESRESPONSE']._serialized_end=539
+  _globals['_NOTIFICATIONPREFERENCES']._serialized_start=542
+  _globals['_NOTIFICATIONPREFERENCES']._serialized_end=907
+  _globals['_GETNOTIFICATIONCAPABILITIESREQUEST']._serialized_start=909
+  _globals['_GETNOTIFICATIONCAPABILITIESREQUEST']._serialized_end=945
+  _globals['_GETNOTIFICATIONCAPABILITIESRESPONSE']._serialized_start=947
+  _globals['_GETNOTIFICATIONCAPABILITIESRESPONSE']._serialized_end=1051
+  _globals['_NOTIFICATIONCHANNEL']._serialized_start=1054
+  _globals['_NOTIFICATIONCHANNEL']._serialized_end=1203
+  _globals['_LISTLINKEDCHANNELSREQUEST']._serialized_start=1205
+  _globals['_LISTLINKEDCHANNELSREQUEST']._serialized_end=1232
+  _globals['_LISTLINKEDCHANNELSRESPONSE']._serialized_start=1234
+  _globals['_LISTLINKEDCHANNELSRESPONSE']._serialized_end=1323
+  _globals['_LINKEDCHANNEL']._serialized_start=1326
+  _globals['_LINKEDCHANNEL']._serialized_end=1539
+  _globals['_LINKTELEGRAMCHATREQUEST']._serialized_start=1541
+  _globals['_LINKTELEGRAMCHATREQUEST']._serialized_end=1591
+  _globals['_LINKTELEGRAMCHATRESPONSE']._serialized_start=1593
+  _globals['_LINKTELEGRAMCHATRESPONSE']._serialized_end=1687
+  _globals['_VERIFYTELEGRAMCHATREQUEST']._serialized_start=1689
+  _globals['_VERIFYTELEGRAMCHATREQUEST']._serialized_end=1736
+  _globals['_VERIFYTELEGRAMCHATRESPONSE']._serialized_start=1738
+  _globals['_VERIFYTELEGRAMCHATRESPONSE']._serialized_end=1794
+  _globals['_UNLINKTELEGRAMCHATREQUEST']._serialized_start=1796
+  _globals['_UNLINKTELEGRAMCHATREQUEST']._serialized_end=1823
+  _globals['_UNLINKTELEGRAMCHATRESPONSE']._serialized_start=1825
+  _globals['_UNLINKTELEGRAMCHATRESPONSE']._serialized_end=1881
+  _globals['_NOTIFICATIONSERVICE']._serialized_start=1884
+  _globals['_NOTIFICATIONSERVICE']._serialized_end=3265
 # @@protoc_insertion_point(module_scope)

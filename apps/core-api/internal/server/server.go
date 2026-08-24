@@ -98,12 +98,18 @@ type Dependencies struct {
 	// producer pool. Registered with Producer, because they are the same pool
 	// and the same supported absence.
 	Watcher watcherservice.Producer
-	// Mail is the channel DeliveryService sends on. Nil is the supported state
-	// before KINDLAST_SMTP_ADDR is set: the rows queue, the list and the
+	// Channels is every channel DeliveryService can send on (ENT-263). An
+	// empty or nil router is the supported state before KINDLAST_SMTP_ADDR and
+	// KINDLAST_TELEGRAM_BOT_TOKEN are set: the rows queue, the list and the
 	// reclaim still answer, and a delivery is refused with a message naming
-	// the setting rather than the service being absent. Finding notifications
+	// the settings rather than the service being absent. Finding notifications
 	// also need AppBaseURL below, for the links they carry.
-	Mail delivery.Channel
+	//
+	// It is also what the capabilities endpoint reads, so a console never
+	// offers a channel this deployment cannot deliver on, and it reads the
+	// same value the dispatcher sends through rather than a parallel boolean
+	// that could disagree with it.
+	Channels *delivery.Router
 
 	// HumanClientID is the OAuth client whose tokens carry the human scope set
 	// (ENT-221). Empty leaves the scope interceptor reading granted scopes for
@@ -126,15 +132,6 @@ type Dependencies struct {
 	// is empty, because an invitation whose link cannot be built is one nobody
 	// can ever accept or repair.
 	AppBaseURL string
-
-	// SMTPConfigured decides what the notification capabilities endpoint says
-	// about the email channel (§18.3, ENT-209).
-	//
-	// Configuration rather than a probe. A mail server that happens to be down
-	// is not the same as a deployment that has never been told where to submit
-	// mail, and only the second is worth telling a person about on a settings
-	// page: the first resolves itself and the queue survives it.
-	SMTPConfigured bool
 
 	// Tokens redeems capability tokens for callers with no session (ENT-209).
 	//
@@ -321,7 +318,7 @@ func New(deps Dependencies) (http.Handler, error) {
 		chain))
 	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(), chain))
 	mux.Handle(corev1connect.NewNotificationServiceHandler(
-		notifications.New(deps.SMTPConfigured), chain))
+		notifications.New(deps.Channels), chain))
 	mux.Handle(corev1connect.NewBillingServiceHandler(
 		billingservice.New(deps.BillingWebhook != nil, deps.BillingEnabled), chain))
 	// The audit log (ENT-223). On the same chain as everything else, and with
@@ -422,7 +419,7 @@ func New(deps Dependencies) (http.Handler, error) {
 	// debug.
 	if deps.Outbox != nil {
 		mux.Handle(platformv1connect.NewDeliveryServiceHandler(
-			deliveryservice.New(deps.Outbox, deps.Mail, deps.AppBaseURL), internal))
+			deliveryservice.New(deps.Outbox, deps.Channels, deps.AppBaseURL), internal))
 	}
 
 	// The Executor (ENT-271). Two halves on two pools: the producer lists

@@ -232,6 +232,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_app` | `integrations` | insert, select, update (credential_ciphertext, credential_key_id, revoked_at, revoked_by, status) |
 | `kindlast_app` | `invitations` | delete, insert, select, update |
 | `kindlast_app` | `memberships` | delete, insert, select, update |
+| `kindlast_app` | `notification_channels` | delete, insert, select, update |
 | `kindlast_app` | `notification_outbox` | select |
 | `kindlast_app` | `notification_preferences` | insert, select, update |
 | `kindlast_app` | `obligations` | select |

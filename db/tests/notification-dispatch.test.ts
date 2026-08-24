@@ -214,6 +214,10 @@ afterAll(async () => {
     `delete from notification_preferences where org_id = any($1)`,
     [orgs],
   )
+  await migrator.query(
+    `delete from notification_channels where org_id = any($1)`,
+    [orgs],
+  )
   await migrator.query(`delete from obligations where id = $1`, [obligationID])
   await migrator.query(`delete from memberships where org_id = any($1)`, [orgs])
   await migrator.query(`delete from user_identities where user_id = any($1)`, [
@@ -387,11 +391,27 @@ describe.skipIf(!reachable)('notification_recipients', () => {
         // projection exists to close.
         'email_verified',
         'finding_severity',
+        // The channel half, added by 00044 (ENT-263), and it is the same
+        // shape of fact as `email_verified` above: what this person chose,
+        // where they can be reached on it, and whether they proved they hold
+        // it. Three raw facts and no decision, because the decision (an
+        // unverified chat is never delivered to) is `notify.RouteFor`'s and is
+        // a Go table test rather than a `where` clause nobody can break
+        // deliberately.
+        //
+        // It stays inside the narrow projection's argument. A chat id is
+        // reachability for the person this row is already about, in the
+        // organisation the outbox row already names, which is the same class
+        // of fact as their address. What would reopen the argument is
+        // returning it for anybody the notification is not for.
+        'finding_channel',
         'min_severity',
         'org_name',
         'org_slug',
         'quiet_hours_end',
         'quiet_hours_start',
+        'telegram_chat_id',
+        'telegram_verified',
         'timezone',
         'user_id',
       ].sort(),
@@ -535,5 +555,161 @@ describe.skipIf(!reachable)('capability tokens', () => {
       error?.code,
       'the table is reachable but empty rather than refused',
     ).toBe('42501')
+  })
+})
+
+/**
+ * The second channel, and the two things about it that are the schema's
+ * (ENT-263, migration 00044).
+ *
+ * The first is that a linked chat is PERSONAL WITHIN AN ORGANISATION, like
+ * notification_preferences and unlike almost everything else here. Members
+ * share an organisation and do not share a messenger account, so the policies
+ * pin `user_id` to the GUC on every command rather than only on the writes.
+ * Without that, `notification_channels` would be an endpoint for enumerating
+ * which of your colleagues can be reached on Telegram and at which chat.
+ *
+ * The second is the state machine. A pending code and a `verified_at` are the
+ * two halves of one state, and the check constraint refuses a row holding both,
+ * because such a row would let a stale code re-verify a channel somebody has
+ * already proved. That is an invariant, so it is in the database; the rule that
+ * decides whether to deliver to a chat is a decision, so it is in Go, and
+ * neither is in the other place.
+ */
+describe.skipIf(!reachable)('notification_channels', () => {
+  const chat = '987654321'
+
+  it('is readable by its owner and invisible to a colleague', async () => {
+    await setTenant(app, orgA, ada)
+    await app.query(
+      `insert into notification_channels (org_id, user_id, kind, chat_id, verified_at)
+       values ($1, $2, 'telegram', $3, now())`,
+      [orgA, ada, chat],
+    )
+
+    const mine = await app.query(
+      `select chat_id from notification_channels where kind = 'telegram'`,
+    )
+    expect(mine.rows.map((r) => r.chat_id)).toEqual([chat])
+
+    // Miko is a genuine member of the same organisation. A colleague reading
+    // zero rows is the property; a colleague reading one is a directory of
+    // everybody's messaging identity.
+    await setTenant(app, orgA, miko)
+    const theirs = await app.query(
+      `select chat_id from notification_channels where kind = 'telegram'`,
+    )
+    expect(
+      theirs.rows,
+      "a colleague could read somebody else's linked chat",
+    ).toHaveLength(0)
+
+    // And cannot delete what they cannot see, which is the same policy shape
+    // on the other command: unlinking somebody else's chat would be a way to
+    // silence a colleague's compliance notifications.
+    const deleted = await app.query(
+      `delete from notification_channels where kind = 'telegram'`,
+    )
+    expect(
+      deleted.rowCount,
+      "a colleague could unlink somebody else's chat",
+    ).toBe(0)
+
+    await setTenant(app, orgA, ada)
+    await app.query(`delete from notification_channels where kind = 'telegram'`)
+  })
+
+  it('refuses a row claiming to be verified while a code is outstanding', async () => {
+    await setTenant(app, orgA, ada)
+    const error = await refused(
+      app,
+      `insert into notification_channels
+         (org_id, user_id, kind, chat_id,
+          verification_code_hash, verification_expires_at, verified_at)
+       values ($1, $2, 'telegram', $3, 'deadbeef', now() + interval '10 minutes', now())`,
+      [orgA, ada, chat],
+    )
+    expect(
+      error,
+      'a verified channel was allowed to hold a pending code, so a kept code ' +
+        'could re-verify a chat somebody has already proved',
+    ).not.toBeNull()
+    expect(error?.code, 'refused for the wrong reason').toBe('23514')
+  })
+
+  it('refuses a code that never expires', async () => {
+    await setTenant(app, orgA, ada)
+    const error = await refused(
+      app,
+      `insert into notification_channels
+         (org_id, user_id, kind, chat_id, verification_code_hash)
+       values ($1, $2, 'telegram', $3, 'deadbeef')`,
+      [orgA, ada, chat],
+    )
+    expect(
+      error,
+      'a verification code with no expiry was accepted, which is the whole ' +
+        'point of an expiry',
+    ).not.toBeNull()
+    expect(error?.code, 'refused for the wrong reason').toBe('23514')
+  })
+
+  it('lets the dispatcher see the chat and whether it was proved, separately', async () => {
+    // The function fetches; Go decides. Returning the chat id only when
+    // `verified_at` is set would put the product rule "an unverified chat is
+    // not delivered to" in plpgsql, where it is exercisable only through a
+    // live stack and where a later reader can disagree with it without
+    // anything going red.
+    await setTenant(app, orgA, ada)
+    await app.query(
+      `insert into notification_channels (org_id, user_id, kind, chat_id)
+       values ($1, $2, 'telegram', $3)`,
+      [orgA, ada, chat],
+    )
+
+    const r = await agent.query(
+      `select telegram_chat_id, telegram_verified, finding_channel
+         from notification_recipients($1) where user_id = $2`,
+      [outboxA, ada],
+    )
+    expect(r.rows[0].telegram_chat_id).toBe(chat)
+    expect(
+      r.rows[0].telegram_verified,
+      'an unverified chat was reported as proved',
+    ).toBe(false)
+    expect(
+      r.rows[0].finding_channel,
+      'somebody who has never chosen a channel is on email',
+    ).toBe('email')
+
+    await setTenant(app, orgA, ada)
+    await app.query(`delete from notification_channels where kind = 'telegram'`)
+  })
+
+  it('reaches somebody who has a chat and no address', async () => {
+    // The address filter had to be relaxed at the same time. It read "exclude
+    // anybody with no email address", which was right when email was the only
+    // channel and silently drops somebody who deliberately chose Telegram.
+    // Miko is that person: a member who has never signed in, so no identity
+    // row and no address.
+    await setTenant(app, orgA, miko)
+    await app.query(
+      `insert into notification_channels (org_id, user_id, kind, chat_id, verified_at)
+       values ($1, $2, 'telegram', $3, now())`,
+      [orgA, miko, '112233445'],
+    )
+
+    const r = await agent.query(
+      `select telegram_chat_id, email from notification_recipients($1) where user_id = $2`,
+      [outboxA, miko],
+    )
+    expect(
+      r.rows,
+      'somebody reachable only on Telegram was dropped as having no address',
+    ).toHaveLength(1)
+    expect(r.rows[0].telegram_chat_id).toBe('112233445')
+
+    await setTenant(app, orgA, miko)
+    await app.query(`delete from notification_channels where kind = 'telegram'`)
   })
 })

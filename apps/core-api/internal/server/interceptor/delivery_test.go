@@ -187,9 +187,14 @@ func buildDeliveryChain(t *testing.T, a *authServer, channel delivery.Channel) (
 	// Noon UTC, pinned: "asleep" above is inside 11:00 to 14:00 and the
 	// other two are not in any window.
 	noon := func() time.Time { return time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) }
+	// A nil channel is a router with nothing on it, which is what a deployment
+	// that has configured neither SMTP nor a bot token has (ENT-263). The
+	// failed_precondition cases below turn on exactly that.
+	channels := delivery.NewRouter()
+	channels.Register(delivery.ChannelEmail, channel)
 	mux := http.NewServeMux()
 	mux.Handle(platformv1connect.NewDeliveryServiceHandler(
-		deliveryservice.New(outbox, channel, "http://localhost:3000").WithClock(noon), chain))
+		deliveryservice.New(outbox, channels, "http://localhost:3000").WithClock(noon), chain))
 
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)

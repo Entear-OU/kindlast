@@ -86,7 +86,9 @@ func (m *mintRecorder) ReclaimOutbox(context.Context, time.Duration, int) (postg
 }
 
 func serviceFor(store Outbox) *Service {
-	return &Service{outbox: store, channel: silentChannel{}, baseURL: "http://localhost:3000", now: time.Now}
+	channels := delivery.NewRouter()
+	channels.Register(delivery.ChannelEmail, silentChannel{})
+	return &Service{outbox: store, channels: channels, baseURL: "http://localhost:3000", now: time.Now}
 }
 
 type silentChannel struct{}
