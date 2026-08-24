@@ -61,16 +61,18 @@ describe('the agent rail (ENT-232)', () => {
     expect(pipeline).not.toBeNull()
     const list = within(pipeline!)
 
-    // The Watcher and the Analyst are skills on the harness; the Messenger and
-    // the Hands do not exist. Saying the same thing about all four is the
-    // failure this replaced, so the counts are asserted rather than the labels
-    // merely being present.
+    // The Watcher and the Analyst are skills on the harness; the Hands is a
+    // skill with no page to reach it from (ENT-261); the Messenger does not
+    // exist. Saying the same thing about all four is the failure this
+    // replaced, so the counts are asserted rather than the labels merely
+    // being present.
     expect(list.getAllByText(STATUS_LABEL['working'])).toHaveLength(2)
-    expect(list.getAllByText(STATUS_LABEL['not-built'])).toHaveLength(2)
-    // `queryAllByText`, because nothing is partly working since ENT-258 and
-    // `getAllByText` throws on none. The state is still rendered for the next
-    // agent that gets half built.
-    expect(list.queryAllByText(STATUS_LABEL['partly-working'])).toHaveLength(0)
+    expect(list.getAllByText(STATUS_LABEL['not-built'])).toHaveLength(1)
+    // Back to one since ENT-261, having been zero since ENT-258. The state was
+    // kept then on the argument that it is the honest answer for the next
+    // agent that gets half built, and this is the rail proving that was worth
+    // doing rather than the label being quietly retired.
+    expect(list.getAllByText(STATUS_LABEL['partly-working'])).toHaveLength(1)
   })
 
   it('no longer claims that nothing is scheduled', () => {

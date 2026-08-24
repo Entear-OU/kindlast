@@ -24,7 +24,8 @@
  *                  and leaves an `agent_runs` row. Nothing calls it on a
  *                  schedule.
  *   The Messenger  does not exist.
- *   The Hands      does not exist.
+ *   The Hands      runs as a skill (ENT-261): it explains what approving will
+ *                  do and prepares the record, and it cannot approve.
  *
  * # AND WHY THE UNBUILT TWO ARE HERE AT ALL
  *
@@ -227,14 +228,36 @@ export const AGENTS: readonly Agent[] = [
     slug: 'hands',
     name: 'The Hands',
     does: 'Explains what approving will do, then prepares the record.',
-    status: 'not-built',
-    runs: 'Never yet.',
+    // PARTLY WORKING, WHICH IS THE HONEST ANSWER AND NOT A HEDGE (ENT-261).
+    //
+    // The skill runs, under a budget and an allow-list, and leaves an
+    // `agent_runs` row. What does not exist is anywhere in the console to see
+    // it: no page, no way for a person to ask it anything. Calling that
+    // "working" would be the failure this file was written after, a dashboard
+    // claiming something about work nobody can look at.
+    status: 'partly-working',
+    runs: 'When something asks it to. There is no page for it yet.',
     effects:
-      'It would prepare a record only after you approved it. The approval stays yours, and it never decides.',
-    // ENT-225 phase 1 moves record creation out of plpgsql into Go, which is
-    // what turns "create the record" into a step something could prepare.
-    remaining:
-      'Creating a record is still a database function rather than a step it could prepare and show you.',
+      'It prepares a record only after you approved it. The approval stays yours, and it never decides.',
+    remaining: 'There is no page yet where you can ask it anything.',
+    skills: [
+      {
+        module: 'hands',
+        name: 'hands.prepare',
+        version: '1.0.0',
+        // ONE TOOL, AND IT IS NOT THE ONE THAT APPROVES (ENT-261).
+        //
+        // The whole claim this agent makes is "never decides", so the list a
+        // customer reads here is where they check it. `prepare_record` fills
+        // register columns from facts the organisation already recorded.
+        // Approving is `findings:act`, which only a person's token carries.
+        //
+        // The grammar deliberately lets the model ASK for `approve_finding`,
+        // so the refusal is a real event that lands in `agent_runs` rather
+        // than something made impossible to express and therefore invisible.
+        tools: ['prepare_record'],
+      },
+    ],
   },
 ]
 
