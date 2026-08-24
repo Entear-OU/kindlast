@@ -39,6 +39,9 @@ const (
 	// IntelligenceServiceWatchProcedure is the fully-qualified name of the IntelligenceService's Watch
 	// RPC.
 	IntelligenceServiceWatchProcedure = "/kindlast.platform.v1.IntelligenceService/Watch"
+	// IntelligenceServiceAnswerFindingQuestionProcedure is the fully-qualified name of the
+	// IntelligenceService's AnswerFindingQuestion RPC.
+	IntelligenceServiceAnswerFindingQuestionProcedure = "/kindlast.platform.v1.IntelligenceService/AnswerFindingQuestion"
 )
 
 // IntelligenceServiceClient is a client for the kindlast.platform.v1.IntelligenceService service.
@@ -100,6 +103,50 @@ type IntelligenceServiceClient interface {
 	// Like DraftNarrative, a refusal is a 200 with `outcome: REFUSED`. See that
 	// RPC's comment for why.
 	Watch(context.Context, *connect.Request[v1.WatchRequest]) (*connect.Response[v1.WatchResponse], error)
+	// Answer one question a person asked about one finding (ENT-270).
+	//
+	// # THE FIRST RUN A PERSON STARTS RATHER THAN A SCHEDULE
+	//
+	// The two RPCs above run because a sweep or a job asked. This one runs
+	// because somebody typed a question and is sitting in front of the answer,
+	// and that changes exactly two things.
+	//
+	// The first is what the run is given. A narration is handed the sweep's own
+	// words about a finding; this is handed those words AND a sentence the
+	// customer wrote a second ago. Both are data, both arrive fenced inside user
+	// messages, and neither is ever concatenated into the system prompt. The
+	// second channel is the one worth naming separately: a question is the only
+	// input to this service a person composes freely, so it is the one somebody
+	// would reach for to try to reprogram the Analyst. The controls that make
+	// that fail are the same ones the narrative already has, which is the reason
+	// this RPC exists here rather than as a new service with its own ring.
+	//
+	// The second is what a wait means. A narration that sat in a queue too long
+	// is refused because its asker has probably given up; that reasoning applies
+	// harder here, because the asker is definitely still there and definitely
+	// still waiting.
+	//
+	// # IT EXPLAINS APPLICABILITY AND WILL NOT STATE THE LAW
+	//
+	// The same split ENT-248 made for the narrative, enforced by the same claim
+	// critic, for the same measured reason: two live runs on the 2B tier stated
+	// the law backwards beside a citation that resolved correctly, which is the
+	// failure a customer checking the citation cannot detect. A question that
+	// invites a statement of law therefore earns a refusal, and the reader is
+	// shown the obligation's authored summary instead. That is a worse-feeling
+	// chat and a better product, and the alternative is a compliance assistant
+	// that answers "what does Article 30 require" from what a 4B remembers.
+	//
+	// # NOTHING IS STORED BUT THE RUN
+	//
+	// No transcript, no thread, no conversation table. The answer goes back to
+	// the caller and the `agent_runs` row is the only thing this leaves behind,
+	// which is deliberate for a first version: a stored conversation is a second
+	// place a customer's words live and a second thing to reason about under
+	// retention, and neither is needed to answer one question about one finding.
+	//
+	// Like the two RPCs above, a refusal is a 200 with `outcome: REFUSED`.
+	AnswerFindingQuestion(context.Context, *connect.Request[v1.AnswerFindingQuestionRequest]) (*connect.Response[v1.AnswerFindingQuestionResponse], error)
 }
 
 // NewIntelligenceServiceClient constructs a client for the kindlast.platform.v1.IntelligenceService
@@ -125,13 +172,20 @@ func NewIntelligenceServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(intelligenceServiceMethods.ByName("Watch")),
 			connect.WithClientOptions(opts...),
 		),
+		answerFindingQuestion: connect.NewClient[v1.AnswerFindingQuestionRequest, v1.AnswerFindingQuestionResponse](
+			httpClient,
+			baseURL+IntelligenceServiceAnswerFindingQuestionProcedure,
+			connect.WithSchema(intelligenceServiceMethods.ByName("AnswerFindingQuestion")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // intelligenceServiceClient implements IntelligenceServiceClient.
 type intelligenceServiceClient struct {
-	draftNarrative *connect.Client[v1.DraftNarrativeRequest, v1.DraftNarrativeResponse]
-	watch          *connect.Client[v1.WatchRequest, v1.WatchResponse]
+	draftNarrative        *connect.Client[v1.DraftNarrativeRequest, v1.DraftNarrativeResponse]
+	watch                 *connect.Client[v1.WatchRequest, v1.WatchResponse]
+	answerFindingQuestion *connect.Client[v1.AnswerFindingQuestionRequest, v1.AnswerFindingQuestionResponse]
 }
 
 // DraftNarrative calls kindlast.platform.v1.IntelligenceService.DraftNarrative.
@@ -142,6 +196,11 @@ func (c *intelligenceServiceClient) DraftNarrative(ctx context.Context, req *con
 // Watch calls kindlast.platform.v1.IntelligenceService.Watch.
 func (c *intelligenceServiceClient) Watch(ctx context.Context, req *connect.Request[v1.WatchRequest]) (*connect.Response[v1.WatchResponse], error) {
 	return c.watch.CallUnary(ctx, req)
+}
+
+// AnswerFindingQuestion calls kindlast.platform.v1.IntelligenceService.AnswerFindingQuestion.
+func (c *intelligenceServiceClient) AnswerFindingQuestion(ctx context.Context, req *connect.Request[v1.AnswerFindingQuestionRequest]) (*connect.Response[v1.AnswerFindingQuestionResponse], error) {
+	return c.answerFindingQuestion.CallUnary(ctx, req)
 }
 
 // IntelligenceServiceHandler is an implementation of the kindlast.platform.v1.IntelligenceService
@@ -204,6 +263,50 @@ type IntelligenceServiceHandler interface {
 	// Like DraftNarrative, a refusal is a 200 with `outcome: REFUSED`. See that
 	// RPC's comment for why.
 	Watch(context.Context, *connect.Request[v1.WatchRequest]) (*connect.Response[v1.WatchResponse], error)
+	// Answer one question a person asked about one finding (ENT-270).
+	//
+	// # THE FIRST RUN A PERSON STARTS RATHER THAN A SCHEDULE
+	//
+	// The two RPCs above run because a sweep or a job asked. This one runs
+	// because somebody typed a question and is sitting in front of the answer,
+	// and that changes exactly two things.
+	//
+	// The first is what the run is given. A narration is handed the sweep's own
+	// words about a finding; this is handed those words AND a sentence the
+	// customer wrote a second ago. Both are data, both arrive fenced inside user
+	// messages, and neither is ever concatenated into the system prompt. The
+	// second channel is the one worth naming separately: a question is the only
+	// input to this service a person composes freely, so it is the one somebody
+	// would reach for to try to reprogram the Analyst. The controls that make
+	// that fail are the same ones the narrative already has, which is the reason
+	// this RPC exists here rather than as a new service with its own ring.
+	//
+	// The second is what a wait means. A narration that sat in a queue too long
+	// is refused because its asker has probably given up; that reasoning applies
+	// harder here, because the asker is definitely still there and definitely
+	// still waiting.
+	//
+	// # IT EXPLAINS APPLICABILITY AND WILL NOT STATE THE LAW
+	//
+	// The same split ENT-248 made for the narrative, enforced by the same claim
+	// critic, for the same measured reason: two live runs on the 2B tier stated
+	// the law backwards beside a citation that resolved correctly, which is the
+	// failure a customer checking the citation cannot detect. A question that
+	// invites a statement of law therefore earns a refusal, and the reader is
+	// shown the obligation's authored summary instead. That is a worse-feeling
+	// chat and a better product, and the alternative is a compliance assistant
+	// that answers "what does Article 30 require" from what a 4B remembers.
+	//
+	// # NOTHING IS STORED BUT THE RUN
+	//
+	// No transcript, no thread, no conversation table. The answer goes back to
+	// the caller and the `agent_runs` row is the only thing this leaves behind,
+	// which is deliberate for a first version: a stored conversation is a second
+	// place a customer's words live and a second thing to reason about under
+	// retention, and neither is needed to answer one question about one finding.
+	//
+	// Like the two RPCs above, a refusal is a 200 with `outcome: REFUSED`.
+	AnswerFindingQuestion(context.Context, *connect.Request[v1.AnswerFindingQuestionRequest]) (*connect.Response[v1.AnswerFindingQuestionResponse], error)
 }
 
 // NewIntelligenceServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -225,12 +328,20 @@ func NewIntelligenceServiceHandler(svc IntelligenceServiceHandler, opts ...conne
 		connect.WithSchema(intelligenceServiceMethods.ByName("Watch")),
 		connect.WithHandlerOptions(opts...),
 	)
+	intelligenceServiceAnswerFindingQuestionHandler := connect.NewUnaryHandler(
+		IntelligenceServiceAnswerFindingQuestionProcedure,
+		svc.AnswerFindingQuestion,
+		connect.WithSchema(intelligenceServiceMethods.ByName("AnswerFindingQuestion")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.IntelligenceService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IntelligenceServiceDraftNarrativeProcedure:
 			intelligenceServiceDraftNarrativeHandler.ServeHTTP(w, r)
 		case IntelligenceServiceWatchProcedure:
 			intelligenceServiceWatchHandler.ServeHTTP(w, r)
+		case IntelligenceServiceAnswerFindingQuestionProcedure:
+			intelligenceServiceAnswerFindingQuestionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -246,4 +357,8 @@ func (UnimplementedIntelligenceServiceHandler) DraftNarrative(context.Context, *
 
 func (UnimplementedIntelligenceServiceHandler) Watch(context.Context, *connect.Request[v1.WatchRequest]) (*connect.Response[v1.WatchResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IntelligenceService.Watch is not implemented"))
+}
+
+func (UnimplementedIntelligenceServiceHandler) AnswerFindingQuestion(context.Context, *connect.Request[v1.AnswerFindingQuestionRequest]) (*connect.Response[v1.AnswerFindingQuestionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IntelligenceService.AnswerFindingQuestion is not implemented"))
 }

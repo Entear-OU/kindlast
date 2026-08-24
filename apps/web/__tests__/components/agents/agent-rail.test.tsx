@@ -51,20 +51,26 @@ describe('the agent rail (ENT-232)', () => {
   })
 
   it('gives each agent its own status rather than one claim for all four', () => {
-    render(<AgentRail orgSlug="acme-ltd" />)
+    const { container } = render(<AgentRail orgSlug="acme-ltd" />)
+
+    // Scoped to the pipeline, because the card at the foot carries status lines
+    // of its own since ENT-270 and those are about chat, call and walkthrough
+    // rather than about an agent. Counting both would tie this assertion to a
+    // number that moves whenever either half does.
+    const pipeline = container.querySelector('ol')
+    expect(pipeline).not.toBeNull()
+    const list = within(pipeline!)
 
     // The Watcher and the Analyst are skills on the harness; the Messenger and
     // the Hands do not exist. Saying the same thing about all four is the
     // failure this replaced, so the counts are asserted rather than the labels
     // merely being present.
-    expect(screen.getAllByText(STATUS_LABEL['working'])).toHaveLength(2)
-    expect(screen.getAllByText(STATUS_LABEL['not-built'])).toHaveLength(2)
+    expect(list.getAllByText(STATUS_LABEL['working'])).toHaveLength(2)
+    expect(list.getAllByText(STATUS_LABEL['not-built'])).toHaveLength(2)
     // `queryAllByText`, because nothing is partly working since ENT-258 and
     // `getAllByText` throws on none. The state is still rendered for the next
     // agent that gets half built.
-    expect(screen.queryAllByText(STATUS_LABEL['partly-working'])).toHaveLength(
-      0,
-    )
+    expect(list.queryAllByText(STATUS_LABEL['partly-working'])).toHaveLength(0)
   })
 
   it('no longer claims that nothing is scheduled', () => {
@@ -85,15 +91,58 @@ describe('the agent rail (ENT-232)', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('does not render call, chat or video as controls', () => {
-    // Announced, not offered (ENT-202). There is no conversational agent
-    // behind any of them, and a person who pressed one would wait for an
-    // answer that is not coming.
-    const { container } = render(<AgentRail orgSlug="acme-ltd" />)
-    for (const label of ['Chat', 'Call', 'Walkthrough']) {
-      expect(screen.getByText(label)).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: label })).toBeNull()
-      expect(within(container).queryByRole('link', { name: label })).toBeNull()
-    }
+  /**
+   * The card at the foot of the rail (ENT-270).
+   *
+   * It used to say "talking to them is coming" over three icons, and the three
+   * were drawn as text rather than controls precisely because none of them did
+   * anything (ENT-202: a control that silently does nothing is worse than one
+   * visibly absent). One of the three is now real, and the card has to stop
+   * describing all three the same way, which is the same failure the rail's
+   * per-agent status was written to fix one level up.
+   */
+  describe('talking to them (ENT-270)', () => {
+    it('offers chat as a link, because it exists now', () => {
+      render(<AgentRail orgSlug="acme-ltd" />)
+
+      // Into the feed rather than into a chat window. The Analyst answers about
+      // one finding, so a conversation has to start at a finding: a chat with
+      // no subject would have no obligation to check a citation against, which
+      // is the guardrail the whole feature rests on.
+      expect(screen.getByRole('link', { name: /Chat/ })).toHaveAttribute(
+        'href',
+        '/o/acme-ltd/feed',
+      )
+    })
+
+    it('says call and walkthrough are not built, in the words the agents page uses', () => {
+      const { container } = render(<AgentRail orgSlug="acme-ltd" />)
+
+      // The same vocabulary as the Messenger and the Hands, deliberately. A
+      // second phrase for the same state is a second thing to keep true, and
+      // ENT-232 already paid for that lesson one level up this component.
+      for (const label of ['Call', 'Walkthrough']) {
+        const row = screen.getByText(label).closest('li')
+        expect(row).not.toBeNull()
+        expect(within(row!).getByText(STATUS_LABEL['not-built'])).toBeVisible()
+      }
+
+      // Still not controls. Nothing behind either of them, so a person who
+      // pressed one would wait for an answer that is not coming.
+      for (const label of ['Call', 'Walkthrough']) {
+        expect(screen.queryByRole('button', { name: label })).toBeNull()
+        expect(
+          within(container).queryByRole('link', { name: label }),
+        ).toBeNull()
+      }
+    })
+
+    it('no longer promises that all three are coming', () => {
+      render(<AgentRail orgSlug="acme-ltd" />)
+      // The sentence this replaced described writing, speech and video as one
+      // step away. One of the three arrived and the other two are not close, so
+      // repeating it would be the placeholder reading as a feature again.
+      expect(screen.queryByText(/Talking to them is coming/)).toBeNull()
+    })
   })
 })

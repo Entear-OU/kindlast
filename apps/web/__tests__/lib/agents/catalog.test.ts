@@ -141,45 +141,61 @@ describe('what the console claims about skills (ENT-232)', () => {
       .sort()
 
     const claimed = AGENTS.flatMap((a) =>
-      a.skill ? [a.skill.module] : [],
+      (a.skills ?? []).map((s) => s.module),
     ).sort()
 
     expect(claimed).toEqual(onDisk)
   })
 
-  it('repeats the Analyst skill exactly as the skill declares it', () => {
-    const source = readFileSync(path.join(SKILLS_DIR, 'analyst.py'), 'utf8')
-    const analyst = agentBySlug('analyst')
-    expect(analyst?.skill).toBeDefined()
+  // ONE CASE PER SKILL, GENERATED FROM THE CATALOGUE ITSELF (ENT-270).
+  //
+  // It used to be two hand-written cases, one per skill, which is a shape that
+  // silently stops covering the thing it is for: adding `conversation.py` and
+  // its catalogue entry would have left the new skill's version unguarded while
+  // the suite stayed green, and the version is the field that matters most
+  // here. `agent_runs` records which version answered, so a console showing a
+  // different one is telling a customer the wrong thing about a record they may
+  // be about to check.
+  //
+  // The list this walks is proved by the two-way module check above, which is
+  // the question AGENTS.md says to ask whenever a guard reads from a list.
+  for (const agent of AGENTS) {
+    for (const skill of agent.skills ?? []) {
+      it(`repeats ${skill.name} exactly as the skill declares it`, () => {
+        const source = readFileSync(
+          path.join(SKILLS_DIR, `${skill.module}.py`),
+          'utf8',
+        )
 
-    expect(analyst?.skill?.name).toBe(pythonString(source, 'NAME'))
-    expect(analyst?.skill?.version).toBe(pythonString(source, 'VERSION'))
-    expect(analyst?.skill?.tools).toEqual(pythonTuple(source, 'ALLOWED_TOOLS'))
+        expect(skill.name).toBe(pythonString(source, 'NAME'))
+        expect(skill.version).toBe(pythonString(source, 'VERSION'))
+        // The allow-list is what a customer reads to decide what an agent can
+        // do to their data. A page claiming a narrower list than the skill
+        // actually holds would be the worst kind of wrong.
+        expect(skill.tools).toEqual(pythonTuple(source, 'ALLOWED_TOOLS'))
+      })
+    }
+  }
+
+  it('gives the Analyst both of its skills', () => {
+    // Named rather than counted, because the interesting failure is one of the
+    // two quietly disappearing: a count would pass if somebody replaced the
+    // narrative skill with the answer skill, which is exactly the drift the
+    // module check cannot see once both modules exist on disk.
+    expect(agentBySlug('analyst')?.skills?.map((s) => s.name)).toEqual([
+      'analyst.narrative',
+      'analyst.answer',
+    ])
   })
 
-  it('repeats the Watcher skill exactly as the skill declares it', () => {
-    // The same guard as the Analyst's above, and it matters more here: this is
-    // the first skill with a tool, so the list on the page is what a customer
-    // reads to decide what the agent can do to their data. A page claiming a
-    // narrower list than the allow-list actually holds would be the worst kind
-    // of wrong, and this is what stops it.
-    const source = readFileSync(path.join(SKILLS_DIR, 'watcher.py'), 'utf8')
-    const watcher = agentBySlug('watcher')
-    expect(watcher?.skill).toBeDefined()
-
-    expect(watcher?.skill?.name).toBe(pythonString(source, 'NAME'))
-    expect(watcher?.skill?.version).toBe(pythonString(source, 'VERSION'))
-    expect(watcher?.skill?.tools).toEqual(pythonTuple(source, 'ALLOWED_TOOLS'))
-  })
-
-  it('leaves the tool list absent for an agent with no skill', () => {
-    // Absent rather than empty. An empty allow-list is a statement the Analyst
-    // makes on purpose (it is given its inputs and then answers); showing the
-    // same empty list for the Messenger would claim a guardrail that has
-    // nothing behind it.
+  it('leaves the skill list absent for an agent with none', () => {
+    // Absent rather than empty. An empty TOOL list is a statement the Analyst
+    // makes on purpose (it is given its inputs and then answers); an empty
+    // SKILL list for the Messenger would claim a guardrail with nothing behind
+    // it, which is the opposite claim.
     for (const agent of AGENTS) {
-      if (agent.skill) continue
-      expect(agent.skill, `${agent.slug} claims no tool list`).toBeUndefined()
+      if (agent.skills) continue
+      expect(agent.skills, `${agent.slug} claims no skill`).toBeUndefined()
     }
   })
 })

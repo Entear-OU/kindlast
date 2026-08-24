@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Talking to the Analyst about one finding (ENT-270, §26.5).
+//
+// THE RAIL PROMISED THIS AND THREE CONTROLS DID NOTHING
+//
+// ENT-222 ended the agent rail with a card saying you would be able to ask any
+// of the four agents what they found and why, in writing or out loud, and watch
+// them walk you through it, under three icons labelled Chat, Call and
+// Walkthrough. None of the three did anything, deliberately, because there was
+// no conversational agent behind any of them. This service is the first of the
+// three becoming real, and it is one of them rather than all three on purpose:
+// call and walkthrough are a different problem and saying so is better than
+// implying they are a week away.
+//
+// WHY IT IS ONE QUESTION ABOUT ONE FINDING
+//
+// A finding is the only subject where the guardrails that make a model safe to
+// put in front of a customer are already in place. It names exactly one
+// obligation, and offering the model exactly that obligation is what lets the
+// citation validator refuse anything else, including an article that genuinely
+// exists. A general chat has no offered set, so it has no citation check, and a
+// compliance assistant with no citation check is the thing AGENTS.md calls
+// worse than nothing.
+//
+// WHAT THE PERSON TYPES IS DATA, EVERYWHERE ALONG THIS PATH
+//
+// The question is carried to Intelligence in a field, fenced into a user
+// message there, and never concatenated into a system prompt. Nothing on this
+// service inspects it for instructions or tries to strip them: the model may be
+// asked to ignore an injection and only code refuses one, so what actually
+// holds is that an answer citing anything outside the finding's own obligation
+// is refused, and an answer stating the law is refused, whatever the question
+// asked for.
+//
+// AND IT IS NOT A CHAT HISTORY
+//
+// There is no thread, no transcript and no conversation table. One question,
+// one answer, one `agent_runs` row. A stored conversation is a second place a
+// customer's words live and a second thing to answer for under retention, and
+// neither is needed to explain one finding. When multi-turn arrives it will
+// need both, and it should arrive as a decision rather than as a side effect of
+// this.
+service ConversationService {
+  // Ask the Analyst why one finding applies to your organisation.
+  //
+  // # SYNCHRONOUS, UNLIKE EVERY OTHER RUN
+  //
+  // Narration and the sweep run on a queue because nobody is waiting. Somebody
+  // is waiting for this, so it happens inside the request and the harness's
+  // wall clock is what bounds it. A deployment with no model answers
+  // `intelligence_available: false` immediately rather than holding the
+  // request open.
+  //
+  // # `agents:ask` RATHER THAN `findings:read`
+  //
+  // Reading a finding and asking a question about it are separately dangerous,
+  // which is the same reasoning that keeps `findings:read` and `findings:act`
+  // apart. Reading discloses; asking spends a model budget, sends the
+  // customer's words to whichever provider that organisation chose, and leaves
+  // a record. A token issued to render the feed should not thereby be a token
+  // that can run the Analyst in a loop at somebody else's cost.
+  //
+  // It is a human scope, and every member holds it. What bounds it is
+  // membership and RLS: the finding is read through the caller's own
+  // transaction, so a question about a finding in another organisation is the
+  // same `not_found` that reading it would be.
+  rpc AskAboutFinding(AskAboutFindingRequest) returns (AskAboutFindingResponse) {
+    option (kindlast.options.v1.required_scope) = "agents:ask";
+    option (google.api.http) = {
+      post: "/api/v1/findings/{finding_id}:ask"
+      body: "*"
+    };
+  }
+}
+
+message AskAboutFindingRequest {
+  // The finding the question is about. The organisation is never in the path:
+  // it comes from the `Kindlast-Org-Id` header like everything else on this
+  // surface, and this id is meaningless without it.
+  string finding_id = 1;
+
+  // What to ask. Refused when it is blank, and refused when it is longer than
+  // the harness will accept.
+  //
+  // Never sanitised, stripped or scanned for instructions. A filter that
+  // removed the words "ignore previous instructions" would catch the one
+  // phrasing somebody wrote it down as and would give the next reader the
+  // impression that untrusted input is being handled here rather than in the
+  // ring around the model, which is where it is actually handled.
+  string question = 2;
+}
+
+message AskAboutFindingResponse {
+  // False for a deployment running without the model profile, which is a
+  // supported deployment rather than a broken one. Distinguished from a refusal
+  // so a console can say "this deployment has no model" instead of "the
+  // Analyst would not answer", which are different sentences with different
+  // things to do about them.
+  bool intelligence_available = 1;
+
+  AnswerOutcome outcome = 2;
+
+  // Empty unless the run succeeded. A refused answer is withheld rather than
+  // returned with a caveat attached: prose plus a warning is prose that ends up
+  // on the screen.
+  string answer = 3;
+
+  // Why, when it did not succeed. Written for the person who asked.
+  string outcome_detail = 4;
+
+  // How this was produced, which §26 requires a customer to be able to read.
+  //
+  // Absent only when no run happened at all, which is the unavailable case
+  // above. A refusal has a run and a record like a success does, because "we
+  // tried and the model cited an article we never showed it" is exactly what
+  // somebody deciding whether to trust this product should be able to see.
+  AgentRunSummary run = 5;
+}
+
+// AgentRunSummary is the `agent_runs` row behind one answer, as a person reads
+// it.
+//
+// # IT IS CARRIED, NOT LINKED, AND THAT IS TEMPORARY
+//
+// `agent_runs` has a write path (`IngestService.RecordAgentRun`) and no read
+// path, so a response carrying only `agent_run_id` would hand a console an id
+// with nothing to resolve it against. Everything below is what the run itself
+// reported in the same call that recorded it, so the two cannot disagree.
+//
+// When a read path exists, this should shrink back to the id and a caller
+// should fetch the row, because a summary assembled by the thing being
+// described is weaker evidence than the record itself.
+message AgentRunSummary {
+  string agent_run_id = 1;
+  // The skill and version that answered. Versioned because a run recorded
+  // under a different version answered a materially different question.
+  string skill = 2;
+  string skill_version = 3;
+  string model = 4;
+  string model_version = 5;
+  // `instance` for the deployment's own model, otherwise the provider this
+  // organisation chose. Shown because "where did our compliance data get
+  // processed" is a question any member may ask.
+  string provider = 6;
+  // The obligation slugs the answer relies on, after the validator resolved
+  // them. Never more than the finding's own obligation, because that is the
+  // only one the run was offered.
+  repeated string resolved_citations = 7;
+}
+
+// The three ways a run ends, on the customer-facing surface.
+//
+// Its own enum rather than the platform surface's `AnswerOutcome`, and mapped
+// across explicitly in Go. Two enums cost one switch statement; sharing one
+// would put a platform type in a contract a customer's client generates from,
+// and would let a value added on one side default silently on the other.
+enum AnswerOutcome {
+  ANSWER_OUTCOME_UNSPECIFIED = 0;
+  ANSWER_OUTCOME_SUCCEEDED = 1;
+  // A guardrail stopped it. NOT a failure: §26.3 makes this what a working
+  // ring produces, and a console that rendered it as an error would be
+  // reporting the product's most important behaviour as a fault.
+  ANSWER_OUTCOME_REFUSED = 2;
+  // Something went wrong that was nobody's policy: the model was unreachable,
+  // or answered something that is not the contract.
+  ANSWER_OUTCOME_FAILED = 3;
+}

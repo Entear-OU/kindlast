@@ -15,6 +15,7 @@ import (
 	auditservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/audit"
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
 	completionservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/completion"
+	conversationservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/conversation"
 	corpusservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/corpus"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/dashboard"
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
@@ -204,6 +205,15 @@ type Dependencies struct {
 	// operator.
 	Drafter narrativeservice.Drafter
 
+	// Answerer is Intelligence again, for the question a person asks about a
+	// finding (ENT-270). In production it is the same client as Drafter, and it
+	// is a second field rather than a widened interface because the two callers
+	// need different halves of that service and §21.6 wants each dependency
+	// declared as what its user actually calls. Nil is the same supported
+	// deployment Drafter's nil is, and the handler answers
+	// `intelligence_available: false` for it.
+	Answerer conversationservice.Answerer
+
 	// ModelRouter answers where an organisation's completions go: the
 	// deployment's own model, or the provider it chose (ENT-236), with the
 	// sealed key opened only here in Go (ENT-256, part five). Two services
@@ -300,6 +310,15 @@ func New(deps Dependencies) (http.Handler, error) {
 	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(deps.AppBaseURL, deps.Profiles), chain))
 	mux.Handle(corev1connect.NewFindingsServiceHandler(findings.New(deps.BillingEnabled), chain))
 	mux.Handle(corev1connect.NewDashboardServiceHandler(dashboard.New(), chain))
+	// Asking the Analyst about one finding (ENT-270). Registered
+	// unconditionally, like FindingsService and unlike NarrativeService: a
+	// deployment with no model is supported and the handler says so in its
+	// response, and registering only when an answerer exists would make "no
+	// model here" and "wrong URL" the same 404.
+	mux.Handle(corev1connect.NewConversationServiceHandler(
+		conversationservice.New(deps.Answerer, deps.Logger,
+			conversationservice.WithRouter(conversationRouterOrNil(deps.ModelRouter))),
+		chain))
 	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(), chain))
 	mux.Handle(corev1connect.NewNotificationServiceHandler(
 		notifications.New(deps.SMTPConfigured), chain))
@@ -642,6 +661,17 @@ func New(deps Dependencies) (http.Handler, error) {
 // routerOrNil keeps a nil *Resolver out of a non-nil interface: the same
 // typed-nil trap main guards every optional dependency against.
 func routerOrNil(r *modelroute.Resolver) narrativeservice.Router {
+	if r == nil {
+		return nil
+	}
+	return r
+}
+
+// conversationRouterOrNil is routerOrNil for the conversation surface, and it
+// exists for the same reason the Watcher's does: a nil `*modelroute.Resolver`
+// assigned to an interface is not a nil interface, so a service checking
+// `router == nil` would call a method on a nil pointer.
+func conversationRouterOrNil(r *modelroute.Resolver) conversationservice.Router {
 	if r == nil {
 		return nil
 	}

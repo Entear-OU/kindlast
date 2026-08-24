@@ -93,8 +93,14 @@ def a_service(auth_server: AuthServer, model=None, core_api=None):
     )
 
 
-def call(service, request, token: str | None):
-    """Drive the real WSGI app, so the codec and routing are in the path."""
+def call(service, request, token: str | None, method: str = "DraftNarrative"):
+    """Drive the real WSGI app, so the codec and routing are in the path.
+
+    `method` names the RPC rather than the whole path, because the path is a
+    Connect detail and a caller here is choosing which RPC to exercise. It has a
+    default so the drafting tests below read as they did before there was a
+    second surface to choose between.
+    """
     app = intelligence_connect.IntelligenceServiceWSGIApplication(service)
 
     body = request.SerializeToString()
@@ -103,7 +109,7 @@ def call(service, request, token: str | None):
     environ.update(
         {
             "REQUEST_METHOD": "POST",
-            "PATH_INFO": "/kindlast.platform.v1.IntelligenceService/DraftNarrative",
+            "PATH_INFO": f"/kindlast.platform.v1.IntelligenceService/{method}",
             "CONTENT_TYPE": "application/proto",
             "CONTENT_LENGTH": str(len(body)),
             "wsgi.input": __import__("io").BytesIO(body),
@@ -296,3 +302,156 @@ def test_an_empty_signal_is_refused(auth_server):
     )
 
     assert "200" not in captured["status"]
+
+
+# --- Asking about a finding (ENT-270) ---------------------------------------
+
+
+def an_answer(citations=("gdpr-art-30-ropa",)):
+    return {
+        "answer": "You hold payroll records for your own staff, so the record "
+        "we are asking for is about that data and who else sees it.",
+        "citations": list(citations),
+        "confident": True,
+    }
+
+
+def a_question(**overrides):
+    fields = {
+        "org_id": "1961c05f-5e88-4f2f-92a1-d26600e0bcd0",
+        "question": "Why does this apply to us?",
+        "finding": intelligence_pb2.FindingContext(
+            detected="No record of processing activities exists for payroll.",
+            proposed_action="Create a record covering payroll.",
+            severity="high",
+        ),
+        "obligations": [OBLIGATION],
+    }
+    fields.update(overrides)
+    return intelligence_pb2.AnswerFindingQuestionRequest(**fields)
+
+
+def ask(service, auth_server, request=None, token: str | None = ...):
+    if token is ...:
+        token = auth_server.mint(auth_server.claims())
+    return call(
+        service,
+        request if request is not None else a_question(),
+        token=token,
+        method="AnswerFindingQuestion",
+    )
+
+
+def test_a_question_with_no_token_never_reaches_the_handler(auth_server):
+    """The same property as DraftNarrative, asserted separately.
+
+    A new RPC on a service whose authority is one `_authorise` call is exactly
+    where somebody forgets the call, and the test that walks the other RPC
+    cannot see it. ENT-245 is the version of this that shipped.
+    """
+    service = a_service(auth_server, model=FakeModel(an_answer()))
+    core_api = FakeCoreAPI()
+    service._core_api = core_api
+
+    captured, _ = ask(service, auth_server, token=None)
+
+    assert "200" not in captured["status"]
+    assert core_api.recorded == [], "the handler ran without a token"
+
+
+def test_a_human_token_cannot_ask(auth_server):
+    """A person's question reaches this service through core-api and never
+    directly. Intelligence has no tenancy GUCs, so it cannot check whether the
+    human in front of the question is entitled to the finding it is about."""
+    service = a_service(auth_server, model=FakeModel(an_answer()))
+    core_api = FakeCoreAPI()
+    service._core_api = core_api
+
+    human = auth_server.claims(
+        sub="user-subject-1", scope="findings:read agents:ask", client_id="web"
+    )
+    captured, _ = ask(service, auth_server, token=auth_server.mint(human))
+
+    assert "200" not in captured["status"]
+    assert core_api.recorded == []
+
+
+def test_an_answer_comes_back_with_the_run_that_produced_it(auth_server):
+    core_api = FakeCoreAPI()
+    service = a_service(auth_server, model=FakeModel(an_answer()), core_api=core_api)
+
+    captured, body = ask(service, auth_server)
+
+    assert "200" in captured["status"]
+    response = intelligence_pb2.AnswerFindingQuestionResponse()
+    response.ParseFromString(body)
+
+    assert response.outcome == intelligence_pb2.ANSWER_OUTCOME_SUCCEEDED
+    assert "payroll" in response.answer
+    assert response.agent_run_id
+    # The provenance is what makes "how this was produced" showable while
+    # `agent_runs` has no read path. A response carrying an id and nothing else
+    # would leave a console with a uuid under a heading.
+    assert response.provenance.skill == "analyst.answer"
+    assert response.provenance.skill_version
+    assert response.provenance.provider == "instance"
+    assert [org for org, _ in core_api.recorded] == [
+        "1961c05f-5e88-4f2f-92a1-d26600e0bcd0"
+    ]
+
+
+def test_an_answer_citing_something_it_was_not_offered_is_a_refusal_not_an_error(
+    auth_server,
+):
+    service = a_service(auth_server, model=FakeModel(an_answer(("gdpr-art-99",))))
+
+    captured, body = ask(service, auth_server)
+
+    assert "200" in captured["status"]
+    response = intelligence_pb2.AnswerFindingQuestionResponse()
+    response.ParseFromString(body)
+
+    assert response.outcome == intelligence_pb2.ANSWER_OUTCOME_REFUSED
+    assert response.answer == "", "a refused answer must not be returned"
+    # A refusal is recorded too, because "we tried and it cited an article we
+    # never showed it" is what somebody deciding whether to trust this should
+    # be able to read.
+    assert response.agent_run_id
+
+
+def test_an_answer_that_could_not_be_recorded_is_not_returned(auth_server):
+    """The sharpest version of the rule `draft` states: this answer goes
+    straight onto a person's screen, so an answer with no record behind it is
+    the unprovenanced claim delivered to the reader most likely to act on it."""
+    service = a_service(
+        auth_server, model=FakeModel(an_answer()), core_api=FakeCoreAPI(fail=True)
+    )
+
+    captured, _ = ask(service, auth_server)
+
+    assert "200" not in captured["status"]
+
+
+def test_a_question_with_no_obligations_is_refused(auth_server):
+    service = a_service(auth_server, model=FakeModel(an_answer()))
+
+    captured, _ = ask(service, auth_server, a_question(obligations=[]))
+
+    assert "200" not in captured["status"]
+
+
+def test_a_blank_question_is_a_recorded_refusal_rather_than_an_error(auth_server):
+    """The person typed nothing, or typed spaces. That is a sentence to show
+    them and a run to record, not a transport error with nothing behind it."""
+    core_api = FakeCoreAPI()
+    service = a_service(auth_server, model=FakeModel(an_answer()), core_api=core_api)
+
+    captured, body = ask(service, auth_server, a_question(question="   "))
+
+    assert "200" in captured["status"]
+    response = intelligence_pb2.AnswerFindingQuestionResponse()
+    response.ParseFromString(body)
+
+    assert response.outcome == intelligence_pb2.ANSWER_OUTCOME_REFUSED
+    assert response.agent_run_id
+    assert len(core_api.recorded) == 1

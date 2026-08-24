@@ -65,6 +65,19 @@ type Scope struct {
 // below not containing them rather than by a check somewhere that could be
 // forgotten.
 var HumanScopes = []string{
+	// Asking an agent a question about a finding (ENT-270). Every member holds
+	// it, and it is separate from `findings:read` because reading a finding and
+	// running a model over it are separately dangerous: reading discloses a
+	// compliance gap, asking spends a model budget, sends the customer's own
+	// words to whichever provider that organisation chose, and leaves a record.
+	// A credential issued to render the feed should not thereby be a credential
+	// that can run the Analyst in a loop at somebody else's cost.
+	//
+	// NOT IN THE ZITADEL SEED, AND IT DOES NOT NEED TO BE. This list REPLACES a
+	// human token's granted scopes rather than being unioned with them, which is
+	// exactly what makes it a constant that cannot silently fail to be granted.
+	// See the block above.
+	"agents:ask",
 	"audit:read",
 	"billing:manage",
 	"billing:read",

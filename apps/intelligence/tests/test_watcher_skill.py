@@ -23,7 +23,7 @@ from kindlast_intelligence.harness.model import Completion
 from kindlast_intelligence.harness.run import Outcome
 from kindlast_intelligence.harness.skill import Skill
 from kindlast_intelligence.harness.watch import watch
-from kindlast_intelligence.skills import analyst, watcher
+from kindlast_intelligence.skills import analyst, conversation, watcher
 
 OBLIGATIONS = [
     {
@@ -372,7 +372,11 @@ def test_an_empty_section_says_so_rather_than_being_omitted():
 # The skill contract
 
 
-@pytest.mark.parametrize("skill", [analyst, watcher], ids=["analyst", "watcher"])
+@pytest.mark.parametrize(
+    "skill",
+    [analyst, conversation, watcher],
+    ids=["analyst", "conversation", "watcher"],
+)
 def test_every_skill_satisfies_the_protocol(skill):
     """The protocol arrived with the second skill (see `harness/skill.py`). It
     is only worth having while both satisfy it, and a module that drifts out of

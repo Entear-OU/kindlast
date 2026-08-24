@@ -23,6 +23,9 @@ class IntelligenceService(Protocol):
     async def watch(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def answer_finding_question(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class IntelligenceServiceASGIApplication(ConnectASGIApplication[IntelligenceService]):
     def __init__(self, service: IntelligenceService | AsyncGenerator[IntelligenceService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -48,6 +51,16 @@ class IntelligenceServiceASGIApplication(ConnectASGIApplication[IntelligenceServ
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.watch,
+                ),
+                "/kindlast.platform.v1.IntelligenceService/AnswerFindingQuestion": Endpoint.unary(
+                    method=MethodInfo(
+                        name="AnswerFindingQuestion",
+                        service_name="kindlast.platform.v1.IntelligenceService",
+                        input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.answer_finding_question,
                 ),
             },
             interceptors=interceptors,
@@ -102,11 +115,33 @@ class IntelligenceServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def answer_finding_question(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="AnswerFindingQuestion",
+                service_name="kindlast.platform.v1.IntelligenceService",
+                input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest,
+                output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class IntelligenceServiceSync(Protocol):
     def draft_narrative(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def watch(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def answer_finding_question(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -133,6 +168,16 @@ class IntelligenceServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.watch,
+                ),
+                "/kindlast.platform.v1.IntelligenceService/AnswerFindingQuestion": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="AnswerFindingQuestion",
+                        service_name="kindlast.platform.v1.IntelligenceService",
+                        input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.answer_finding_question,
                 ),
             },
             interceptors=interceptors,
@@ -181,6 +226,26 @@ class IntelligenceServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.IntelligenceService",
                 input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest,
                 output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def answer_finding_question(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="AnswerFindingQuestion",
+                service_name="kindlast.platform.v1.IntelligenceService",
+                input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest,
+                output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

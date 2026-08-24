@@ -144,6 +144,15 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.FindingsService.SnoozeFinding": {
 			Method: "POST", Path: "/api/v1/findings/{finding_id}:snooze",
 		},
+		// ENT-270. A fourth colon verb on the same resource, and it belongs on
+		// the finding rather than on the agent: the subject of the question is
+		// this finding, and `/agents/analyst:ask` would be a URL naming who
+		// answers instead of what is being asked about. It is a different
+		// service because it is a different scope and a different dependency,
+		// not because it is a different resource.
+		"kindlast.core.v1.ConversationService.AskAboutFinding": {
+			Method: "POST", Path: "/api/v1/findings/{finding_id}:ask",
+		},
 		// Singular, and for the same reason UpdateOrganisation is: it
 		// addresses the dashboard of the organisation the header names, not a
 		// member of a collection of dashboards.
