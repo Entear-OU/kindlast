@@ -22,6 +22,7 @@
     "test": "bun run --cwd apps/web test",
     "test:unit": "bun run --cwd apps/web test:unit",
     "test:e2e": "bun run --cwd apps/web test:e2e",
+    "test:e2e:install": "bun run --cwd apps/web test:e2e:install",
     "test:db": "bun run --cwd db/tests test",
     "test:airgap": "./scripts/airgap-check.sh",
     "test:watch": "bun run --cwd apps/web test:watch",

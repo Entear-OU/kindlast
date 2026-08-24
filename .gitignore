@@ -98,6 +98,9 @@ go.work.sum
 # Playwright
 apps/web/test-results/
 apps/web/playwright-report/
+# The machine-readable copy scripts/e2e-check.sh reads back to prove the run
+# actually contained tests (ENT-264). Regenerated every run.
+apps/web/e2e-report.json
 apps/web/blob-report/
 
 

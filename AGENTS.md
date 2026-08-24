@@ -488,14 +488,14 @@ used a fake client and the store tests never left the database, so the two
 halves had never met. If a change introduces a call between two services, drive
 it once end to end and record what came back in the PR.
 
-Three test suites, and they are not interchangeable:
+Four test suites, and they are not interchangeable:
 
-| Suite | Needs | Covers |
-|---|---|---|
-| `test:unit` | nothing | TypeScript modules and components |
-| `test:e2e` | the compose stack | the sign-in round trip, in a real browser |
-| `test:db` | the compose stack | tenant isolation and privileges |
-| `test:airgap` | docker, and internet to block | the stack serves with no route out |
+| Suite | Needs | Covers | Run by |
+|---|---|---|---|
+| `test:unit` | nothing | TypeScript modules and components | CI, the `unit` job |
+| `test:e2e` | the compose stack and a browser | the sign-in round trip, in a real browser | CI, the `e2e` job, and nightly |
+| `test:db` | the compose stack | tenant isolation and privileges | CI, the `stack` job |
+| `test:airgap` | docker, and internet to block | the stack serves with no route out | CI, the `airgap` job |
 
 The database suite **self-skips when its stack is unreachable**, so a green
 local run does not prove it ran. CI boots the stack and fails loudly if it
@@ -504,8 +504,21 @@ if you touch CI, and give any suite you add the same treatment: the Supabase
 integration job was removed with its suite (ENT-200), and the property it
 protected outlives it.
 
-`test:e2e` is not yet a CI gate. It needs the compose stack and a browser, and
-wiring that is its own piece of work.
+`test:e2e` is a gate (ENT-264). `.github/workflows/e2e.yml` boots the compose
+stack, installs the pinned Chromium, and drives **the production console behind
+the edge** rather than `bun run dev`, because the two fail differently and it is
+the production build a self-hoster runs. `ci.yml` calls it on every pull request
+with `auth.spec.ts` and `journey.spec.ts`; `nightly.yml` calls it once a day
+against main. `surfaces.spec.ts` is in neither yet, and its header says why.
+
+It is run through `scripts/e2e-check.sh` rather than directly, and that wrapper
+is the same property in a third place: it refuses to run without being told
+which console to drive (so a job can never silently test the dev server), it
+proves the console and the identity provider answer before a browser starts,
+and afterwards it reads Playwright's JSON report and fails when the run
+contained no tests, when a spec the job named produced none, or when anything
+was skipped. Playwright exits 0 on the last two, so without it a parked
+describe or a renamed file is a green tick over nothing.
 
 ## Git strategy
 

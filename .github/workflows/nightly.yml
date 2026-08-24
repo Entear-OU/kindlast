@@ -1,0 +1,58 @@
+name: Nightly
+
+# The whole browser suite, once a day (ENT-264).
+#
+# It runs what `ci.yml` runs, against main rather than against a merge ref, and
+# that is worth a schedule even though the spec list is identical: the inputs
+# are not. This job pulls its base images by tag, so an upstream Postgres,
+# Caddy, Zitadel or Temporal that moved under a tag turns it red on a morning
+# when nobody changed anything, which is exactly the failure a pull-request run
+# can never show you.
+#
+# WHY `surfaces.spec.ts` IS NOT HERE YET, WHICH IS THE OPEN PIECE
+#
+# ENT-264 planned to run it nightly, on the reasoning that it walks the
+# console's pages and overlaps the component tests more than the other two do.
+# Wiring the gate found that it cannot pass at all: ENT-212 put a
+# compliance-profile gate under `/o/{slug}/`, every page that spec visits sits
+# behind it, and every fixture user is brand new, so all of them redirect into
+# onboarding. Making it pass needs a fixture that arrives already profiled, and
+# that means writing a `compliance_profiles` row out of band or driving an
+# eleven-question interview in a browser. Neither is a line of YAML, so it is
+# its own piece of work and this list is honest about not covering it. Adding
+# it here afterwards is a one-word change.
+#
+# WHY IT IS NOT PART OF CI
+#
+# A schedule on `ci.yml` would run every job in it nightly, including the ones
+# that are pure functions of the checked-out tree and cannot change while
+# nobody is pushing. It would also fire the auto-merge workflow, which triggers
+# on a CI run completing, against a run that has no pull request behind it.
+#
+# WHAT A RED NIGHTLY MEANS
+#
+# Almost always a real regression on main, because the inputs did not change:
+# the tree is main, the stack is built from it, and the browser is pinned. The
+# exception worth knowing before assuming otherwise is that this job pulls
+# base images by tag, so an upstream image that moved under a tag is the other
+# thing that can turn it red overnight.
+
+on:
+  schedule:
+    # 03:00 UTC, which is outside the working day in every timezone this is
+    # developed in, so a nightly run is never competing with a pull request for
+    # runners.
+    - cron: '0 3 * * *'
+  # So it can be run on demand, which is what somebody investigating a red
+  # nightly wants before they start bisecting.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Browser end to end
+    uses: ./.github/workflows/e2e.yml
+    with:
+      specs: auth.spec.ts journey.spec.ts

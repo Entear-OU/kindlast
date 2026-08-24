@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -158,7 +158,17 @@ async function psql(
     `${name}=${value}`,
   ])
 
-  const { stdout } = await run('docker', [
+  // THE STATEMENT GOES IN ON STDIN, AND IT HAS TO (ENT-264).
+  //
+  // This said `-tAc <sql>` when it was written, and with a `--set` variable in
+  // the statement that is a syntax error every time: psql does not interpolate
+  // into the string given to `-c`, it hands it to the server as it stands, and
+  // the server has no idea what `:'email'` is. `-f -` is the same statement
+  // read as a script, which is the path where variables are substituted.
+  //
+  // It went in unnoticed because nothing ran this suite. That is the whole of
+  // what ENT-264 is about, and this is the second thing wiring the gate found.
+  const child = spawn('docker', [
     'compose',
     '-f',
     COMPOSE_FILE,
@@ -175,11 +185,26 @@ async function psql(
     '-v',
     'ON_ERROR_STOP=1',
     ...settings,
-    '-tAc',
-    sql,
+    '-tA',
+    '-f',
+    '-',
   ])
 
-  return stdout.trim()
+  return new Promise<string>((resolve, reject) => {
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => (stdout += chunk))
+    child.stderr.on('data', (chunk) => (stderr += chunk))
+    child.on('error', reject)
+    child.on('close', (code) => {
+      // ON_ERROR_STOP makes psql exit non-zero on a failed statement, so a
+      // fixture that wrote nothing fails here rather than returning an empty
+      // string that a caller then reads as "no rows".
+      if (code === 0) resolve(stdout.trim())
+      else reject(new Error(`psql exited ${code}: ${stderr.trim()}`))
+    })
+    child.stdin.end(sql)
+  })
 }
 
 export async function countOrganisations(): Promise<number> {
