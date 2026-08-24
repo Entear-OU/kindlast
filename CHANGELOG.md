@@ -1129,6 +1129,70 @@ what they have to do about it, which no commit subject knows.
   and abandons an undelivered verification code after an hour rather than
   retrying one that can no longer be used.
 
+### The Hands: what approving a finding will do, and the record it prepares
+
+- **A third agent, and the first whose job is to not decide** (ENT-261).
+
+  Approving a finding whose action is `create_ropa` or `create_ai_system`
+  creates an entry in a register. Until now that entry arrived saying "Not
+  recorded" in every column and marked "Needs review", which is correct and
+  useless: the product knew the organisation's industry, its data categories
+  and its vendors, and put none of it in the record the approval created.
+
+  The Hands is the skill that closes that. Given one finding, it explains in
+  the organisation's own terms what approving will do, which register gains an
+  entry and what it will say, fills the columns the organisation's recorded
+  facts support, and says which columns it left and why. A column it could not
+  fill is listed with a reason in the second person, not omitted: a plan that
+  is silent about a column reads as a plan that finished it.
+
+  **Every value names the fact it came from, and the name is checked twice.**
+  A prepared value is a claim about where it came from, and this product's
+  worth is that a human can check a claim. So `from_fact` is required, the
+  harness refuses a key the run was not shown, and core-api refuses a key the
+  organisation does not hold. Those refuse different things: the first catches
+  a model producing a key from somewhere other than its context, the second
+  catches a key that is not a fact at all. A record filled with plausible
+  values and no provenance would have been worse than the empty one it
+  replaces.
+
+- **It cannot approve, and that is structural rather than instructed.**
+
+  The skill's tool allow-list holds exactly one entry,
+  `HandsService.PrepareRecord`, which writes a proposal onto a finding. There
+  is no RPC it can reach that approves: approving is `findings:act`, which only
+  a signed-in person's token carries, and it reads the approver from the
+  session rather than from a request field. There is no RPC it can reach that
+  creates a register entry: that is `ExecutorService.ExecuteJob`, acting on an
+  `executor_jobs` row that is written in exactly one place, inside the
+  transaction that records a human's approval.
+
+  A run asking for anything else is refused against the allow-list, the refusal
+  is written into `agent_runs` where a customer can read it, and the run ends
+  rather than being allowed to try again. The grammar deliberately permits the
+  model to ASK for `approve_finding`, because a schema that made the request
+  inexpressible would hide that it was wanted and leave nothing in the record.
+
+  A plan is also refused once the approval it was meant to inform has been
+  enqueued. After that moment the payload is the Executor's input, and a run
+  arriving late must not rewrite what somebody approved.
+
+- **A run that could not start still leaves a record.** The offered field and
+  fact sets are read defensively, because they are built before the runner's
+  error handling and anything they raised would have escaped with the whole
+  call, leaving no `agent_runs` row for a run that really happened. That is the
+  failure ENT-277 was filed for, and it is the one outcome the harness must
+  never produce.
+
+- **For self-hosters.** Two new internal RPCs, `HandsService.ExplainApproval`
+  and `HandsService.PrepareRecord`, both on `internal:ingest`, and
+  `IntelligenceService.ExplainApproval` on `internal:intelligence`. No schema
+  change and no migration: the plan and the proposed payload live in
+  `findings.metadata`, which already existed. A deployment running no
+  Intelligence answers `failed_precondition` with a reason rather than 404, so
+  the surface is present and honest about being unusable, and every finding
+  still carries exactly what it carried before.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,

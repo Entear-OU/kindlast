@@ -1,0 +1,274 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+import "kindlast/platform/v1/watcher.proto";
+
+// The Hands (ENT-261, §26.5, §3): what approving a finding will do, and the
+// record it prepares for the person who approves it.
+//
+// # THE NAME OF THE AGENT IS THE SPECIFICATION
+//
+// It explains, it prepares, it never decides. Everything on this surface is
+// arranged so that the last clause is a property of the code rather than a
+// sentence in a prompt.
+//
+// There is no RPC here that approves a finding, and there is no RPC here that
+// creates a compliance record. Those live elsewhere and are reached by
+// different principals: `FindingsService.ApproveFinding` is `findings:act` and
+// only a human's token ever carries it, and `ExecutorService.ExecuteJob` acts
+// on an `executor_jobs` row, which gains rows in exactly one place, inside the
+// transaction that writes the approval (00036). So the Hands cannot create a
+// record without an approval row, not because it is told not to, but because
+// nothing it can call has that effect.
+//
+// # WHAT IT WRITES, AND WHY THAT IS NOT THE RECORD
+//
+// `PrepareRecord` writes onto the FINDING: the plan a person reads before
+// deciding, and the proposed payload the Executor will use if they approve.
+// A proposal on a finding is not an entry in a register. It changes nothing a
+// regulator would read, it is visible beside the decision it informs, and it
+// is superseded the moment a human edits the record it became.
+//
+// The distinction is enforced rather than asserted. `PrepareRecord` is refused
+// once an `executor_jobs` row exists for the finding, which is the instant the
+// approval became true. After that the payload is the Executor's input and
+// must not move under it, and a Hands run arriving late is refused and
+// recorded rather than silently rewriting what somebody approved.
+//
+// # WHY THIS IS `internal:ingest` AND NOT A HUMAN SCOPE
+//
+// Same reason `WatcherService` is. The caller is a machine principal with no
+// session and no membership, so the organisation travels in the message and is
+// believed because `internal:ingest` is issued through client credentials and
+// never reaches a browser. Reaching for `findings:act` here would hand the
+// machine the one capability this whole design exists to keep away from it.
+service HandsService {
+  // Runs the Hands over one finding: load its context, ask Intelligence, and
+  // report what came back.
+  //
+  // The load step is here rather than in the agent for the reason §26.2 gives
+  // and `WatcherService.WatcherContext` repeats: fetching a context is not a
+  // decision, so it happens in Go where the tenancy GUCs already are, and the
+  // run stays a pure function of its inputs.
+  //
+  // A refusal is a 200 with `outcome: REFUSED`, exactly as it is on
+  // `IntelligenceService`. A guardrail stopping a run is the guardrail
+  // working, and reporting it as a transport error would put "the harness
+  // broke" in the column a customer reads to decide whether to trust the
+  // result.
+  //
+  //   invalid_argument     no org_id, no finding_id, or a finding whose
+  //                        action creates no record and so has nothing to
+  //                        prepare
+  //   failed_precondition  this deployment runs no Intelligence
+  rpc ExplainApproval(HandsExplainRequest) returns (HandsExplainResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/hands:explain"
+      body: "*"
+    };
+  }
+
+  // Records what the Hands prepared for one finding: the explanation, the
+  // fields it could fill and where each value came from, and the fields it
+  // left for a person.
+  //
+  // The Hands' one tool, and the reason the skill's allow-list is not
+  // decorative. A model asking for anything else reaches `ToolDispatcher`,
+  // is refused against the allow-list, and the refusal is recorded on the run
+  // (§26.3).
+  //
+  // # EVERY VALUE NAMES THE FACT IT CAME FROM, AND THE NAME IS CHECKED
+  //
+  // `PreparedField.from_fact` is a key in `org_profile_facts`, and a field
+  // naming a key this organisation has no fact for is refused. That is the
+  // citation validator's argument in another register: a value presented as
+  // coming from the organisation's memory that did not come from anywhere is
+  // a fabrication, and a prepared record is worth less than an empty one if a
+  // customer cannot tell which is which.
+  //
+  //   invalid_argument     an unknown field for this register, a value with
+  //                        no `from_fact`, or a `from_fact` naming a fact
+  //                        this organisation does not hold
+  //   failed_precondition  the finding has already been approved and its
+  //                        execution enqueued, so its payload is no longer a
+  //                        proposal
+  rpc PrepareRecord(PrepareRecordRequest) returns (PrepareRecordResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/hands:prepare"
+      body: "*"
+    };
+  }
+}
+
+message HandsExplainRequest {
+  string org_id = 1;
+  string finding_id = 2;
+}
+
+message HandsExplainResponse {
+  HandsOutcome outcome = 1;
+  // Why, when the outcome was not success. For a human to read.
+  string outcome_detail = 2;
+  // What approving will do, in this organisation's terms. Empty unless the
+  // outcome is SUCCEEDED, for the reason `DraftNarrative` withholds a refused
+  // narrative: a caller handed prose plus a note is a caller that shows the
+  // prose.
+  string explanation = 3;
+  // What the run filled, and what it left. Reported as well as written,
+  // because a caller that has to re-read the finding to learn what its own
+  // call did is a caller that will not bother.
+  repeated PreparedField prepared = 4;
+  repeated LeftForYou left_for_you = 5;
+  // The `agent_runs` row this produced. Always set on a 200: a run that could
+  // not be recorded is reported as an error rather than returned
+  // unprovenanced, which is the rule `DraftNarrativeResponse` states at
+  // length and ENT-277 was filed for breaking.
+  string agent_run_id = 6;
+}
+
+enum HandsOutcome {
+  HANDS_OUTCOME_UNSPECIFIED = 0;
+  HANDS_OUTCOME_SUCCEEDED = 1;
+  // A guardrail stopped it: a budget spent, a tool outside the allow-list, a
+  // field the register does not have, a value with no fact behind it. Not a
+  // kind of failure.
+  HANDS_OUTCOME_REFUSED = 2;
+  // Something went wrong that was nobody's policy.
+  HANDS_OUTCOME_FAILED = 3;
+}
+
+// ApprovalContext is everything one Hands run reasons over, for one finding.
+//
+// Assembled by core-api in one read, for the reason `WatcherContextResponse`
+// gives: the agent holds no database handle and no tenancy GUC, so it has no
+// way to decide whose finding it is entitled to and no way to be wrong about
+// it.
+message ApprovalContext {
+  // What the finding is, and what approving it would do.
+  ApprovalFinding finding = 1;
+
+  // The register an approval would add an entry to.
+  //
+  // Empty for a finding whose action is `review`, which records the decision
+  // and creates nothing. Such a finding is refused before a model is called:
+  // there is nothing to prepare, and a run that produced an explanation of a
+  // record that will not exist would be worse than no explanation at all.
+  string register = 2;
+  // The register in a person's words, e.g. "your Article 30 record of
+  // processing activities". Authored here rather than by the model, because
+  // it is a statement about what the product does and the model is not the
+  // authority on that.
+  string register_label = 3;
+
+  // The columns that entry has, and which of them an entry needs to be
+  // useful. THE ONLY FIELD NAMES A RUN MAY FILL: `PrepareRecord` refuses any
+  // other, which is what stops a model inventing a column and the plan
+  // describing a record that cannot exist.
+  repeated RegisterField fields = 4;
+
+  // What this organisation is currently believed to be (ENT-228): the open
+  // facts, newest values only. The material the Hands fills from, and the
+  // only material it may claim to have filled from.
+  repeated ProfileFact facts = 5;
+
+  // What is already proposed for this record, when an earlier run or the
+  // Analyst proposed anything. Shown so a run can add what is missing rather
+  // than restating what is there.
+  repeated PreparedField already_proposed = 6;
+}
+
+// ApprovalFinding is the finding, as the Hands is shown it.
+message ApprovalFinding {
+  string finding_id = 1;
+  // `pending`, `approved`, `rejected` or `snoozed`.
+  string status = 2;
+  string severity = 3;
+  // What the Watcher observed, in the customer's terms.
+  string detected = 4;
+  // The one specific thing to do about it.
+  string proposed_action = 5;
+  // `create_ropa`, `create_dsar`, `create_ai_system` or `review`.
+  string action_type = 6;
+  string obligation_slug = 7;
+  string obligation_title = 8;
+  // The authored statement of the law. Given to the model as material to
+  // explain FROM and never as something to restate: a model that states the
+  // law states it wrongly, which is why ENT-248 put this on the wire in the
+  // first place.
+  string obligation_summary = 9;
+  // The rendered citation, e.g. "GDPR Art. 30(1)(b)", as stored.
+  string citation_label = 10;
+}
+
+// RegisterField is one column of the record an approval would create.
+message RegisterField {
+  // The column, as the register stores it. This exact string is what
+  // `PreparedField.name` must be.
+  string name = 1;
+  // The column in a person's words, for the explanation.
+  string label = 2;
+  // Whether an entry without this reads as incomplete. Not a database
+  // constraint: a record the Executor creates is deliberately allowed to be
+  // incomplete, because "we created the row and told you what is missing" is
+  // more honest than refusing to create it.
+  bool required = 3;
+  // Whether the column holds a list. A single-valued column given two values
+  // is refused rather than joined, because joining would invent a spelling
+  // nobody chose.
+  bool list_valued = 4;
+  // What the column is for, in one line, so the model fills it with the right
+  // kind of thing rather than with whatever the name suggests.
+  string description = 5;
+}
+
+message PrepareRecordRequest {
+  string org_id = 1;
+  string finding_id = 2;
+
+  // What approving will do, in this organisation's terms. Prose a person
+  // reads before deciding.
+  string explanation = 3;
+
+  // The columns this run could fill, and where each value came from.
+  repeated PreparedField fields = 4;
+
+  // The columns it could not, and why. NOT an omission: a plan that lists
+  // three filled columns and says nothing about the fourth is a plan that
+  // reads as complete, and the whole point of this agent is that a person can
+  // see what is still theirs to do.
+  repeated LeftForYou left_for_you = 5;
+}
+
+// PreparedField is one column the Hands filled, and the fact it filled it
+// from.
+message PreparedField {
+  // Must be one of the `RegisterField.name` values the run was offered.
+  string name = 1;
+  // The value or values. A single-valued column takes exactly one; see
+  // `RegisterField.list_valued`.
+  repeated string values = 2;
+  // The `org_profile_facts` key this came from. Required, and checked against
+  // the organisation's own facts: see PrepareRecord.
+  string from_fact = 3;
+}
+
+// LeftForYou is one column the Hands did not fill, and why.
+message LeftForYou {
+  string name = 1;
+  // In a person's words, and about THIS organisation: "you have not told us
+  // how long you keep payroll records", not "retention period is required".
+  string why = 2;
+}
+
+message PrepareRecordResponse {
+  // How many columns the plan now fills, and how many it leaves. Counts
+  // rather than the plan echoed back: the caller sent the plan and the useful
+  // answer is that it was accepted.
+  int32 filled = 1;
+  int32 left = 2;
+}

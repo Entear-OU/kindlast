@@ -79,7 +79,7 @@ describe('the agent catalogue (ENT-232)', () => {
   // The honesty assertion, and the reason this file exists. ENT-161 happened
   // because a dashboard said everything was fine about work nothing had done.
   // Exactly one of the four is a working skill today; two are not built at all.
-  it('claims two working agents, not four', () => {
+  it('claims two working agents and one half built, not four', () => {
     // The Watcher joined the Analyst in ENT-258, and the count is asserted
     // rather than the absence of a count for the reason this test was written
     // for: the page used to make one claim about all four, and the failure
@@ -91,12 +91,21 @@ describe('the agent catalogue (ENT-232)', () => {
     ).toEqual(['watcher', 'analyst'])
     expect(
       AGENTS.filter((a) => a.status === 'not-built').map((a) => a.slug),
-    ).toEqual(['messenger', 'hands'])
-    // Nothing is partly working now. The state still exists and is still
-    // rendered, because it is the honest answer for the next agent that gets
-    // half built, and an unused state is cheaper than the pressure to call
-    // something finished for want of a label.
-    expect(AGENTS.filter((a) => a.status === 'partly-working')).toHaveLength(0)
+    ).toEqual(['messenger'])
+
+    // AND THE HALF-BUILT STATE IS IN USE AGAIN, FOR THE CASE IT WAS KEPT FOR.
+    //
+    // This assertion used to read `toHaveLength(0)`, with a note saying the
+    // state was kept because it is the honest answer for the next agent that
+    // gets half built. ENT-261 is that agent. Its skill runs, under a budget
+    // and an allow-list, and leaves an `agent_runs` row; there is no page in
+    // the console where anybody can see it or ask it anything.
+    //
+    // Calling that "working" is the exact failure this file exists after, so
+    // the label that costs us something is the correct one.
+    expect(
+      AGENTS.filter((a) => a.status === 'partly-working').map((a) => a.slug),
+    ).toEqual(['hands'])
   })
 
   it('says what remains for every agent that is not finished', () => {

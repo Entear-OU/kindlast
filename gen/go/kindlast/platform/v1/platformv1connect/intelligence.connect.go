@@ -42,6 +42,9 @@ const (
 	// IntelligenceServiceAnswerFindingQuestionProcedure is the fully-qualified name of the
 	// IntelligenceService's AnswerFindingQuestion RPC.
 	IntelligenceServiceAnswerFindingQuestionProcedure = "/kindlast.platform.v1.IntelligenceService/AnswerFindingQuestion"
+	// IntelligenceServiceExplainApprovalProcedure is the fully-qualified name of the
+	// IntelligenceService's ExplainApproval RPC.
+	IntelligenceServiceExplainApprovalProcedure = "/kindlast.platform.v1.IntelligenceService/ExplainApproval"
 )
 
 // IntelligenceServiceClient is a client for the kindlast.platform.v1.IntelligenceService service.
@@ -147,6 +150,29 @@ type IntelligenceServiceClient interface {
 	//
 	// Like the two RPCs above, a refusal is a 200 with `outcome: REFUSED`.
 	AnswerFindingQuestion(context.Context, *connect.Request[v1.AnswerFindingQuestionRequest]) (*connect.Response[v1.AnswerFindingQuestionResponse], error)
+	// Runs the Hands over one finding: explain what approving it will do, and
+	// prepare the record it would create (ENT-261, §26.5).
+	//
+	// # THE THIRD SKILL, AND THE FIRST WHOSE JOB IS TO NOT DECIDE
+	//
+	// The Analyst is given everything and answers. The Watcher decides what is
+	// worth raising. This one is shown a decision a person is about to make and
+	// its whole job is to make that decision better informed without making any
+	// part of it.
+	//
+	// That is a property of the surface rather than of the prompt. The skill's
+	// allow-list holds one tool, `HandsService.PrepareRecord`, which writes a
+	// proposal onto a finding. There is no RPC anywhere this service can reach
+	// that approves a finding, and none that creates an entry in a register:
+	// approving is `findings:act`, which only a human's token carries, and
+	// creating is `ExecutorService.ExecuteJob`, which acts on an
+	// `executor_jobs` row that exists only because a human approved (00036).
+	// A model asking for either is refused against the allow-list, recorded as
+	// refused, and the run ends.
+	//
+	// Like DraftNarrative and Watch, a refusal is a 200 with `outcome:
+	// REFUSED`. See DraftNarrative's comment for why.
+	ExplainApproval(context.Context, *connect.Request[v1.ExplainApprovalRequest]) (*connect.Response[v1.ExplainApprovalResponse], error)
 }
 
 // NewIntelligenceServiceClient constructs a client for the kindlast.platform.v1.IntelligenceService
@@ -178,6 +204,12 @@ func NewIntelligenceServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(intelligenceServiceMethods.ByName("AnswerFindingQuestion")),
 			connect.WithClientOptions(opts...),
 		),
+		explainApproval: connect.NewClient[v1.ExplainApprovalRequest, v1.ExplainApprovalResponse](
+			httpClient,
+			baseURL+IntelligenceServiceExplainApprovalProcedure,
+			connect.WithSchema(intelligenceServiceMethods.ByName("ExplainApproval")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -186,6 +218,7 @@ type intelligenceServiceClient struct {
 	draftNarrative        *connect.Client[v1.DraftNarrativeRequest, v1.DraftNarrativeResponse]
 	watch                 *connect.Client[v1.WatchRequest, v1.WatchResponse]
 	answerFindingQuestion *connect.Client[v1.AnswerFindingQuestionRequest, v1.AnswerFindingQuestionResponse]
+	explainApproval       *connect.Client[v1.ExplainApprovalRequest, v1.ExplainApprovalResponse]
 }
 
 // DraftNarrative calls kindlast.platform.v1.IntelligenceService.DraftNarrative.
@@ -201,6 +234,11 @@ func (c *intelligenceServiceClient) Watch(ctx context.Context, req *connect.Requ
 // AnswerFindingQuestion calls kindlast.platform.v1.IntelligenceService.AnswerFindingQuestion.
 func (c *intelligenceServiceClient) AnswerFindingQuestion(ctx context.Context, req *connect.Request[v1.AnswerFindingQuestionRequest]) (*connect.Response[v1.AnswerFindingQuestionResponse], error) {
 	return c.answerFindingQuestion.CallUnary(ctx, req)
+}
+
+// ExplainApproval calls kindlast.platform.v1.IntelligenceService.ExplainApproval.
+func (c *intelligenceServiceClient) ExplainApproval(ctx context.Context, req *connect.Request[v1.ExplainApprovalRequest]) (*connect.Response[v1.ExplainApprovalResponse], error) {
+	return c.explainApproval.CallUnary(ctx, req)
 }
 
 // IntelligenceServiceHandler is an implementation of the kindlast.platform.v1.IntelligenceService
@@ -307,6 +345,29 @@ type IntelligenceServiceHandler interface {
 	//
 	// Like the two RPCs above, a refusal is a 200 with `outcome: REFUSED`.
 	AnswerFindingQuestion(context.Context, *connect.Request[v1.AnswerFindingQuestionRequest]) (*connect.Response[v1.AnswerFindingQuestionResponse], error)
+	// Runs the Hands over one finding: explain what approving it will do, and
+	// prepare the record it would create (ENT-261, §26.5).
+	//
+	// # THE THIRD SKILL, AND THE FIRST WHOSE JOB IS TO NOT DECIDE
+	//
+	// The Analyst is given everything and answers. The Watcher decides what is
+	// worth raising. This one is shown a decision a person is about to make and
+	// its whole job is to make that decision better informed without making any
+	// part of it.
+	//
+	// That is a property of the surface rather than of the prompt. The skill's
+	// allow-list holds one tool, `HandsService.PrepareRecord`, which writes a
+	// proposal onto a finding. There is no RPC anywhere this service can reach
+	// that approves a finding, and none that creates an entry in a register:
+	// approving is `findings:act`, which only a human's token carries, and
+	// creating is `ExecutorService.ExecuteJob`, which acts on an
+	// `executor_jobs` row that exists only because a human approved (00036).
+	// A model asking for either is refused against the allow-list, recorded as
+	// refused, and the run ends.
+	//
+	// Like DraftNarrative and Watch, a refusal is a 200 with `outcome:
+	// REFUSED`. See DraftNarrative's comment for why.
+	ExplainApproval(context.Context, *connect.Request[v1.ExplainApprovalRequest]) (*connect.Response[v1.ExplainApprovalResponse], error)
 }
 
 // NewIntelligenceServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -334,6 +395,12 @@ func NewIntelligenceServiceHandler(svc IntelligenceServiceHandler, opts ...conne
 		connect.WithSchema(intelligenceServiceMethods.ByName("AnswerFindingQuestion")),
 		connect.WithHandlerOptions(opts...),
 	)
+	intelligenceServiceExplainApprovalHandler := connect.NewUnaryHandler(
+		IntelligenceServiceExplainApprovalProcedure,
+		svc.ExplainApproval,
+		connect.WithSchema(intelligenceServiceMethods.ByName("ExplainApproval")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.IntelligenceService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IntelligenceServiceDraftNarrativeProcedure:
@@ -342,6 +409,8 @@ func NewIntelligenceServiceHandler(svc IntelligenceServiceHandler, opts ...conne
 			intelligenceServiceWatchHandler.ServeHTTP(w, r)
 		case IntelligenceServiceAnswerFindingQuestionProcedure:
 			intelligenceServiceAnswerFindingQuestionHandler.ServeHTTP(w, r)
+		case IntelligenceServiceExplainApprovalProcedure:
+			intelligenceServiceExplainApprovalHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -361,4 +430,8 @@ func (UnimplementedIntelligenceServiceHandler) Watch(context.Context, *connect.R
 
 func (UnimplementedIntelligenceServiceHandler) AnswerFindingQuestion(context.Context, *connect.Request[v1.AnswerFindingQuestionRequest]) (*connect.Response[v1.AnswerFindingQuestionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IntelligenceService.AnswerFindingQuestion is not implemented"))
+}
+
+func (UnimplementedIntelligenceServiceHandler) ExplainApproval(context.Context, *connect.Request[v1.ExplainApprovalRequest]) (*connect.Response[v1.ExplainApprovalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IntelligenceService.ExplainApproval is not implemented"))
 }

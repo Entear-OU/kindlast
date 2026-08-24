@@ -29,7 +29,7 @@ from typing import Callable
 from connectrpc.errors import ConnectError
 from connectrpc.code import Code
 from connectrpc.request import RequestContext
-from kindlast.platform.v1 import intelligence_pb2, watcher_pb2
+from kindlast.platform.v1 import hands_pb2, intelligence_pb2, watcher_pb2
 
 from .auth.errors import ScopeMissing, VerificationError
 from .auth.verifier import Verifier
@@ -38,6 +38,7 @@ from .harness.budget import Budget
 from .harness.citations import CitationValidator, OfferedObligations
 from .harness.converse import answer_question
 from .harness.model import Completer
+from .harness.prepare import prepare
 from .harness.run import AgentRun, Outcome, draft_narrative
 from .harness.watch import watch
 
@@ -60,6 +61,14 @@ _WATCH_OUTCOMES = {
 
 # And a third, for the conversation surface (ENT-270). Written out for the same
 # reason: three explicit maps cost three lines each and cannot silently default.
+# And a fourth, for the Hands' surface (ENT-261). Written out like the rest:
+# four explicit maps cost four lines each and cannot silently default.
+_EXPLAIN_OUTCOMES = {
+    Outcome.SUCCEEDED: intelligence_pb2.EXPLAIN_OUTCOME_SUCCEEDED,
+    Outcome.REFUSED: intelligence_pb2.EXPLAIN_OUTCOME_REFUSED,
+    Outcome.FAILED: intelligence_pb2.EXPLAIN_OUTCOME_FAILED,
+}
+
 _ANSWER_OUTCOMES = {
     Outcome.SUCCEEDED: intelligence_pb2.ANSWER_OUTCOME_SUCCEEDED,
     Outcome.REFUSED: intelligence_pb2.ANSWER_OUTCOME_REFUSED,
@@ -278,6 +287,119 @@ class IntelligenceService:
                     raised=s.raised,
                 )
                 for s in raised
+            ],
+            agent_run_id=agent_run_id,
+        )
+
+    def explain_approval(
+        self,
+        request: intelligence_pb2.ExplainApprovalRequest,
+        ctx: RequestContext,
+    ) -> intelligence_pb2.ExplainApprovalResponse:
+        """The RPC: authorise, then run the Hands. The Temporal activity calls
+        `run_prepare` directly, for the reason `draft_narrative` gives."""
+        self._authorise(ctx)
+        return self.run_prepare(request)
+
+    def run_prepare(
+        self, request: intelligence_pb2.ExplainApprovalRequest
+    ) -> intelligence_pb2.ExplainApprovalResponse:
+        """One Hands run: the step loop, the allow-list, the check that every
+        prepared value names a fact this run was shown, and the run record.
+
+        # A FINDING WITH NO REGISTER IS REFUSED, NOT ATTEMPTED
+
+        `register` empty means a finding whose approval creates nothing, which
+        is the ordinary `review` case. There is no record to prepare and no
+        columns to fill, so a run would produce either nothing, which costs a
+        model call to learn, or a description of a record that will not exist,
+        which is worse. core-api refuses these before it gets here; this is the
+        second check, on the side that would otherwise reason about an empty
+        register.
+        """
+        if not request.org_id:
+            raise ConnectError(Code.INVALID_ARGUMENT, "org_id is required")
+        if not request.HasField("context"):
+            raise ConnectError(Code.INVALID_ARGUMENT, "context is required")
+
+        finding_id = request.context.finding.finding_id
+        if not finding_id:
+            raise ConnectError(
+                Code.INVALID_ARGUMENT,
+                "the context names no finding, so there is nothing to explain",
+            )
+        if not request.context.register or not request.context.fields:
+            raise ConnectError(
+                Code.INVALID_ARGUMENT,
+                "approving this finding creates no record, so there is nothing "
+                "to prepare and nothing to explain",
+            )
+
+        context = _approval_context(request.context)
+        model, model_name, model_version, provider = self._model_for(
+            request.org_id, request.model_endpoint
+        )
+
+        run, plan = prepare(
+            context=context,
+            model=model,
+            # THE TOOL IS BOUND TO THIS ORGANISATION AND THIS FINDING HERE,
+            # WHERE BOTH CAME FROM. The skill names a tool and its arguments;
+            # it never names the tenant or the finding, and there is no
+            # argument it could pass that would change either.
+            write_plan=lambda prepared: self._core_api.prepare_record(
+                request.org_id, finding_id, prepared
+            ),
+            model_name=model_name,
+            model_version=model_version,
+            provider=provider,
+            budget=self._budget_template.renew() if self._budget_template else None,
+        )
+
+        # Recorded before the response is built, and a failure here is fatal,
+        # for the reason `draft` gives at length. Sharper here for the reason
+        # it is sharper on `run_watch`: this run may already have written a
+        # plan, and a caller told a plan exists with no provenance behind it is
+        # exactly the unprovenanced record this service exists not to produce.
+        try:
+            agent_run_id = self._core_api.record_run(request.org_id, run)
+        except CoreAPIError as exc:
+            logger.error("recording the Hands run failed: %s", exc)
+            raise ConnectError(
+                Code.INTERNAL,
+                "the run completed but could not be recorded, so it is being "
+                "reported as failed rather than returned unprovenanced",
+            ) from exc
+
+        return intelligence_pb2.ExplainApprovalResponse(
+            outcome=_EXPLAIN_OUTCOMES[run.outcome],
+            outcome_detail=run.outcome_detail,
+            # Empty unless it succeeded. A refused explanation is withheld
+            # rather than returned with a warning attached, for the reason
+            # `draft` withholds a refused narrative: a caller handed prose plus
+            # a note is a caller that eventually shows the prose.
+            explanation=(
+                plan.explanation
+                if plan is not None and run.outcome is Outcome.SUCCEEDED
+                else ""
+            ),
+            # The plan itself is reported whatever the outcome, and that is not
+            # a contradiction of the line above. What was WRITTEN is a fact
+            # about the run, and a caller told "REFUSED" with nothing else
+            # would be told less than what happened. The prose is withheld
+            # because it would be shown to a person; the field list is not,
+            # because it is already on the finding.
+            prepared=[
+                hands_pb2.PreparedField(
+                    name=str(f.get("name") or ""),
+                    values=[str(v) for v in f.get("values") or []],
+                    from_fact=str(f.get("from_fact") or ""),
+                )
+                for f in (plan.fields if plan is not None else [])
+            ],
+            left_for_you=[
+                hands_pb2.LeftForYou(name=item["name"], why=item["why"])
+                for item in (plan.left_for_you if plan is not None else [])
             ],
             agent_run_id=agent_run_id,
         )
@@ -665,5 +787,48 @@ def _watch_context(context: watcher_pb2.WatcherContextResponse) -> dict:
         "obligations": [
             {"slug": o.slug, "title": o.title, "summary": o.summary}
             for o in context.obligations
+        ],
+    }
+
+
+def _approval_context(context: hands_pb2.ApprovalContext) -> dict:
+    """The proto approval context as the Hands reads it.
+
+    Converted once, here, for the reason `_watch_context` gives: the skill and
+    its tests then deal in plain data, and a skill importing a generated module
+    would need `gen/python` on the path to be testable at all.
+    """
+    return {
+        "register": context.register,
+        "register_label": context.register_label,
+        "finding": {
+            "finding_id": context.finding.finding_id,
+            "status": context.finding.status,
+            "severity": context.finding.severity,
+            "detected": context.finding.detected,
+            "proposed_action": context.finding.proposed_action,
+            "action_type": context.finding.action_type,
+            "obligation_slug": context.finding.obligation_slug,
+            "obligation_title": context.finding.obligation_title,
+            "obligation_summary": context.finding.obligation_summary,
+            "citation_label": context.finding.citation_label,
+        },
+        "fields": [
+            {
+                "name": f.name,
+                "label": f.label,
+                "required": f.required,
+                "list_valued": f.list_valued,
+                "description": f.description,
+            }
+            for f in context.fields
+        ],
+        "facts": [
+            {"key": f.key, "value_json": f.value_json, "source": f.source}
+            for f in context.facts
+        ],
+        "already_proposed": [
+            {"name": p.name, "values": list(p.values), "from_fact": p.from_fact}
+            for p in context.already_proposed
         ],
     }

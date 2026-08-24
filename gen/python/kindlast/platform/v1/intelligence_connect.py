@@ -26,6 +26,9 @@ class IntelligenceService(Protocol):
     async def answer_finding_question(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def explain_approval(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class IntelligenceServiceASGIApplication(ConnectASGIApplication[IntelligenceService]):
     def __init__(self, service: IntelligenceService | AsyncGenerator[IntelligenceService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -61,6 +64,16 @@ class IntelligenceServiceASGIApplication(ConnectASGIApplication[IntelligenceServ
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.answer_finding_question,
+                ),
+                "/kindlast.platform.v1.IntelligenceService/ExplainApproval": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ExplainApproval",
+                        service_name="kindlast.platform.v1.IntelligenceService",
+                        input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.explain_approval,
                 ),
             },
             interceptors=interceptors,
@@ -135,6 +148,26 @@ class IntelligenceServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def explain_approval(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ExplainApproval",
+                service_name="kindlast.platform.v1.IntelligenceService",
+                input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest,
+                output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class IntelligenceServiceSync(Protocol):
     def draft_narrative(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeResponse:
@@ -142,6 +175,8 @@ class IntelligenceServiceSync(Protocol):
     def watch(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.WatchResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def answer_finding_question(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def explain_approval(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -178,6 +213,16 @@ class IntelligenceServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.answer_finding_question,
+                ),
+                "/kindlast.platform.v1.IntelligenceService/ExplainApproval": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ExplainApproval",
+                        service_name="kindlast.platform.v1.IntelligenceService",
+                        input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.explain_approval,
                 ),
             },
             interceptors=interceptors,
@@ -246,6 +291,26 @@ class IntelligenceServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.IntelligenceService",
                 input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest,
                 output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def explain_approval(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ExplainApproval",
+                service_name="kindlast.platform.v1.IntelligenceService",
+                input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest,
+                output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

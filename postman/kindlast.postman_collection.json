@@ -2197,6 +2197,23 @@
           }
         },
         {
+          "name": "ExplainApproval (IntelligenceService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.IntelligenceService/ExplainApproval",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.IntelligenceService", "ExplainApproval"]
+            },
+            "description": "Runs the Hands over one finding: explain what approving it will do, and prepare the record it would create (ENT-261, §26.5).\n\n# THE THIRD SKILL, AND THE FIRST WHOSE JOB IS TO NOT DECIDE\n\nThe Analyst is given everything and answers. The Watcher decides what is worth raising. This one is shown a decision a person is about to make and its whole job is to make that decision better informed without making any part of it.\n\nThat is a property of the surface rather than of the prompt. The skill's allow-list holds one tool, `HandsService.PrepareRecord`, which writes a proposal onto a finding. There is no RPC anywhere this service can reach that approves a finding, and none that creates an entry in a register: approving is `findings:act`, which only a human's token carries, and creating is `ExecutorService.ExecuteJob`, which acts on an `executor_jobs` row that exists only because a human approved (00036). A model asking for either is refused against the allow-list, recorded as refused, and the run ends.\n\nLike DraftNarrative and Watch, a refusal is a 200 with `outcome: REFUSED`. See DraftNarrative's comment for why.\n\n**From the contract.** `kindlast.platform.v1.IntelligenceService/ExplainApproval`, declared in `proto/kindlast/platform/v1/intelligence.proto`. Required scope: `internal:intelligence`. Declared REST binding: `POST /internal/v1/approvals:explain`."
+          }
+        },
+        {
           "name": "Complete (internal)",
           "request": {
             "method": "POST",
@@ -2351,6 +2368,46 @@
               "path": ["kindlast.core.v1.ConversationService", "AskAboutFinding"]
             },
             "description": "Ask the Analyst why one finding applies to your organisation.\n\n# SYNCHRONOUS, UNLIKE EVERY OTHER RUN\n\nNarration and the sweep run on a queue because nobody is waiting. Somebody is waiting for this, so it happens inside the request and the harness's wall clock is what bounds it. A deployment with no model answers `intelligence_available: false` immediately rather than holding the request open.\n\n# `agents:ask` RATHER THAN `findings:read`\n\nReading a finding and asking a question about it are separately dangerous, which is the same reasoning that keeps `findings:read` and `findings:act` apart. Reading discloses; asking spends a model budget, sends the customer's words to whichever provider that organisation chose, and leaves a record. A token issued to render the feed should not thereby be a token that can run the Analyst in a loop at somebody else's cost.\n\nIt is a human scope, and every member holds it. What bounds it is membership and RLS: the finding is read through the caller's own transaction, so a question about a finding in another organisation is the same `not_found` that reading it would be.\n\n**`Kindlast-Org-Id` is required and the finding id alone is meaningless without it.** The organisation is never in the path, exactly as everywhere else on this surface. Set `finding_id` from a FindingsService response before sending this.\n\n**READ `intelligenceAvailable` BEFORE `outcome`.** False means this deployment runs no model, which is a supported configuration rather than a fault, and it comes back immediately with no run behind it. Only once it is true does `outcome` mean anything.\n\n**A REFUSAL IS A 200 WITH `outcome: ANSWER_OUTCOME_REFUSED`, AND IT IS NOT AN ERROR.** The answer is withheld, `outcomeDetail` says why in words written for the person who asked, and `run` still carries the `agent_runs` row: a refused run was still a run. Try asking what an article requires and you should get one, because the Analyst is forbidden to state the law.\n\n**From the contract.** `kindlast.core.v1.ConversationService/AskAboutFinding`, declared in `proto/kindlast/core/v1/conversation.proto`. Required scope: `agents:ask`. Declared REST binding: `POST /api/v1/findings/{finding_id}:ask`."
+          }
+        },
+        {
+          "name": "ExplainApproval (HandsService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"findingId\": \"{{finding_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.HandsService/ExplainApproval",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.HandsService", "ExplainApproval"]
+            },
+            "description": "Runs the Hands over one finding: load its context, ask Intelligence, and report what came back.\n\nThe load step is here rather than in the agent for the reason §26.2 gives and `WatcherService.WatcherContext` repeats: fetching a context is not a decision, so it happens in Go where the tenancy GUCs already are, and the run stays a pure function of its inputs.\n\nA refusal is a 200 with `outcome: REFUSED`, exactly as it is on `IntelligenceService`. A guardrail stopping a run is the guardrail working, and reporting it as a transport error would put \"the harness broke\" in the column a customer reads to decide whether to trust the result.\n\ninvalid_argument     no org_id, no finding_id, or a finding whose action creates no record and so has nothing to prepare failed_precondition  this deployment runs no Intelligence\n\n**From the contract.** `kindlast.platform.v1.HandsService/ExplainApproval`, declared in `proto/kindlast/platform/v1/hands.proto`. Required scope: `internal:ingest`. Declared REST binding: `POST /internal/v1/hands:explain`."
+          }
+        },
+        {
+          "name": "PrepareRecord (HandsService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"findingId\": \"{{finding_id}}\",\n  \"explanation\": \"Approving this adds one entry to your record of processing activities, for payroll. We can fill in the kinds of data you hold, and you will need to say how long you keep it.\",\n  \"fields\": [\n    {\n      \"name\": \"data_categories\",\n      \"values\": [\"names\", \"bank details\"],\n      \"fromFact\": \"data_categories\"\n    }\n  ],\n  \"leftForYou\": [\n    {\n      \"name\": \"retention_period\",\n      \"why\": \"You have not told us how long you keep payroll records.\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.HandsService/PrepareRecord",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.HandsService", "PrepareRecord"]
+            },
+            "description": "Records what the Hands prepared for one finding: the explanation, the fields it could fill and where each value came from, and the fields it left for a person.\n\nThe Hands' one tool, and the reason the skill's allow-list is not decorative. A model asking for anything else reaches `ToolDispatcher`, is refused against the allow-list, and the refusal is recorded on the run (§26.3).\n\n# EVERY VALUE NAMES THE FACT IT CAME FROM, AND THE NAME IS CHECKED\n\n`PreparedField.from_fact` is a key in `org_profile_facts`, and a field naming a key this organisation has no fact for is refused. That is the citation validator's argument in another register: a value presented as coming from the organisation's memory that did not come from anywhere is a fabrication, and a prepared record is worth less than an empty one if a customer cannot tell which is which.\n\ninvalid_argument     an unknown field for this register, a value with no `from_fact`, or a `from_fact` naming a fact this organisation does not hold failed_precondition  the finding has already been approved and its execution enqueued, so its payload is no longer a proposal\n\n**From the contract.** `kindlast.platform.v1.HandsService/PrepareRecord`, declared in `proto/kindlast/platform/v1/hands.proto`. Required scope: `internal:ingest`. Declared REST binding: `POST /internal/v1/hands:prepare`."
           }
         }
       ]
