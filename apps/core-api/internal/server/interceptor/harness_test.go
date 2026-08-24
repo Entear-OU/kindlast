@@ -19,6 +19,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/apikey"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
@@ -284,6 +285,19 @@ func (o tenantOpener) BeginDelegatedTenant(
 	ctx context.Context, grant delegation.Grant,
 ) (interceptor.Tenant, error) {
 	tenant, err := o.store.BeginDelegatedTenant(ctx, grant)
+	if err != nil {
+		if errors.Is(err, postgres.ErrNotAMember) {
+			return nil, interceptor.ErrNotAMember
+		}
+		return nil, err
+	}
+	return tenant, nil
+}
+
+func (o tenantOpener) BeginAPIKeyTenant(
+	ctx context.Context, key apikey.Principal,
+) (interceptor.Tenant, error) {
+	tenant, err := o.store.BeginAPIKeyTenant(ctx, key)
 	if err != nil {
 		if errors.Is(err, postgres.ErrNotAMember) {
 			return nil, interceptor.ErrNotAMember

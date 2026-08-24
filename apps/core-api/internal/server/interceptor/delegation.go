@@ -80,6 +80,26 @@ func ActOnBehalf(resolver DelegationResolver) connect.UnaryInterceptorFunc {
 				return next(ctx, req)
 			}
 
+			// A PARTNER'S KEY MAY NEVER PRESENT A DELEGATION (ENT-262).
+			//
+			// Refused explicitly rather than left to fail on the scope check
+			// below, because the two failures mean different things and only
+			// one of them is a sentence worth reading. A key holds no
+			// `internal:*` scope by construction (00043 refuses the row), so it
+			// could never pass that check, but a caller told "does not carry
+			// the internal:act-on-behalf scope" would reasonably go and try to
+			// have it granted. The truth is that no key ever can.
+			//
+			// The rule underneath: a delegation is how a MACHINE PRINCIPAL
+			// becomes a person for one call, and it is safe because the machine
+			// holds a platform credential this system issued to it. A key is
+			// already acting as a person, its minter, and letting it present a
+			// delegation would let a partner's credential become somebody else.
+			if _, isKey := APIKeyFrom(ctx); isKey {
+				return nil, connect.NewError(connect.CodePermissionDenied,
+					errors.New("an API key cannot act on behalf of a person"))
+			}
+
 			claims, ok := ClaimsFrom(ctx)
 			if !ok {
 				return nil, connect.NewError(connect.CodeInternal,

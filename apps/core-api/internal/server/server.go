@@ -11,6 +11,7 @@ import (
 
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
+	apikeysservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/apikeys"
 	auditservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/audit"
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
 	completionservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/completion"
@@ -53,6 +54,16 @@ type Dependencies struct {
 	// is the only safe reading of an unwired resolver, because the caller's
 	// intent was to act as somebody with less authority, not more.
 	Delegations interceptor.DelegationResolver
+
+	// APIKeys authenticates a partner's key (ENT-262).
+	//
+	// Nil disables the whole credential model: a request under the `ApiKey`
+	// scheme is then refused at authentication rather than falling through to
+	// the bearer path, so a caller presenting a good key is told their key is
+	// not usable rather than told they presented no token. Every deployment
+	// wires it, and the nil case exists for the internal chain, which takes no
+	// authenticator on purpose.
+	APIKeys interceptor.Authenticator
 
 	// Profiles resolves a display name and email when the access token carries
 	// neither. Nil is allowed: provisioning then names an organisation from the
@@ -274,7 +285,7 @@ func New(deps Dependencies) (http.Handler, error) {
 	}
 
 	chain := connect.WithInterceptors(
-		interceptor.Auth(deps.Verifier),
+		interceptor.Auth(deps.Verifier, interceptor.WithAPIKeys(deps.APIKeys)),
 		interceptor.JTI(deps.DenyList),
 		// Acting for a person (ENT-230). A no-op for every request that does not
 		// present a delegation, which is all of them today, and the stage that
@@ -313,6 +324,12 @@ func New(deps Dependencies) (http.Handler, error) {
 	// with no model. That is ENT-212's "degrades to a form rather than failing"
 	// arranged so there is no second path to keep working.
 	mux.Handle(corev1connect.NewOnboardingServiceHandler(onboardingservice.New(), chain))
+	// Partner API keys (ENT-262). On the tenant chain and with no configuration
+	// switch, because a key is a tenant credential like everything else here:
+	// RLS is what keeps one organisation's keys out of another's console, and
+	// there is no deployment where the credential a customer's own integration
+	// uses should be unavailable to them.
+	mux.Handle(corev1connect.NewApiKeyServiceHandler(apikeysservice.New(), chain))
 	// Connecting a customer's own systems (ENT-231). On the tenant chain,
 	// because a connection belongs to one organisation and RLS is what keeps
 	// one customer's endpoints and credentials out of another's console.
@@ -356,6 +373,16 @@ func New(deps Dependencies) (http.Handler, error) {
 	// EVIDENCE that a person asked, which is what `RecordAgentRun` uses it for,
 	// and evidence travels in the message where it is recorded rather than in a
 	// header that changes who the caller is.
+	//
+	// It also takes NO API KEY AUTHENTICATOR, and that absence is the second
+	// thing worth stopping on (ENT-262). A partner's key is a tenant
+	// credential: it names one organisation and borrows one person's
+	// membership. The platform surface acts across every organisation and
+	// belongs to no person, so there is no sense in which a key could be the
+	// right caller for it. Omitting the option means a key presented here is
+	// refused at authentication rather than later by a scope check, which is
+	// the difference between "this credential is not for this surface" and "ask
+	// for a wider grant".
 	internal := connect.WithInterceptors(
 		interceptor.Auth(deps.Verifier),
 		interceptor.JTI(deps.DenyList),

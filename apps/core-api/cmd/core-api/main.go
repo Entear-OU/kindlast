@@ -23,6 +23,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/billing"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/config"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/apikey"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
 	modelchoicedomain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/gateway"
@@ -342,7 +343,11 @@ func run(logger *slog.Logger) error {
 		// SECURITY DEFINER function because the caller presenting a delegation
 		// has no session yet, which is the whole reason there is one (00021).
 		Delegations: store,
-		Profiles:    identity.NewUserInfo(provider.UserInfoURI, transport),
+		// Partner API keys (ENT-262). The store, not a wrapper: authenticating
+		// a key runs before there is a tenant to hang off, so it is a method on
+		// *Store and satisfies interceptor.Authenticator directly.
+		APIKeys:  store,
+		Profiles: identity.NewUserInfo(provider.UserInfoURI, transport),
 		Ready: func(ctx context.Context) error {
 			return store.Ping(ctx)
 		},
@@ -569,6 +574,24 @@ func (o tenantOpener) BeginDelegatedTenant(
 	ctx context.Context, grant delegation.Grant,
 ) (interceptor.Tenant, error) {
 	tenant, err := o.store.BeginDelegatedTenant(ctx, grant)
+	if err != nil {
+		if errors.Is(err, postgres.ErrNotAMember) {
+			return nil, interceptor.ErrNotAMember
+		}
+		return nil, err
+	}
+	return tenant, nil
+}
+
+// BeginAPIKeyTenant is the same adaptation for a partner's key (ENT-262), and
+// the membership refusal maps to the same error for the same reason. A key whose
+// minter has been removed from the organisation and a key for an organisation
+// that no longer exists are both "you may not act here", and the caller has
+// proved nothing that entitles them to know which.
+func (o tenantOpener) BeginAPIKeyTenant(
+	ctx context.Context, key apikey.Principal,
+) (interceptor.Tenant, error) {
+	tenant, err := o.store.BeginAPIKeyTenant(ctx, key)
 	if err != nil {
 		if errors.Is(err, postgres.ErrNotAMember) {
 			return nil, interceptor.ErrNotAMember

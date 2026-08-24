@@ -7,6 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/apikey"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/delegation"
 )
 
@@ -84,6 +85,23 @@ type TenantOpener interface {
 	// refused on the agent's next call, and the check that refuses them should
 	// be the one the rest of the system already depends on.
 	BeginDelegatedTenant(ctx context.Context, grant delegation.Grant) (Tenant, error)
+
+	// BeginAPIKeyTenant opens the transaction a partner's key runs in
+	// (ENT-262), with both GUCs set to the person who minted the key and a
+	// third, `app.current_api_key_id`, set so every audit row this transaction
+	// writes names the credential that acted.
+	//
+	// A method on this interface rather than an optional one, for the reason
+	// BeginDelegatedTenant is: a deployment cannot wire a tenant opener that
+	// quietly does not support keys and find out as a runtime refusal. There is
+	// one way to start a transaction with tenancy on it, and it now has three
+	// entry points because there are three ways to learn whose transaction it
+	// is.
+	//
+	// The membership check is the same one the other two run. That is what
+	// makes revoking a person's access revoke their keys with it, without a
+	// sweep and without anybody remembering.
+	BeginAPIKeyTenant(ctx context.Context, key apikey.Principal) (Tenant, error)
 }
 
 // Tenancy resolves the active organisation, verifies membership, and sets the
@@ -100,13 +118,15 @@ type TenantOpener interface {
 func Tenancy(store TenantOpener) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			claims, ok := ClaimsFrom(ctx)
-			if !ok {
+			subject := ""
+			if claims, ok := ClaimsFrom(ctx); ok {
+				subject = claims.Subject
+			} else if _, isKey := APIKeyFrom(ctx); !isKey {
 				return nil, connect.NewError(connect.CodeInternal,
 					errors.New("tenancy interceptor ran before authentication"))
 			}
 
-			tenant, err := open(ctx, store, claims.Subject, req.Header().Get(OrgHeader))
+			tenant, err := open(ctx, store, subject, req.Header().Get(OrgHeader))
 			if err != nil {
 				if errors.Is(err, ErrNotAMember) {
 					// The same answer whether the organisation does not exist
@@ -155,7 +175,38 @@ func Tenancy(store TenantOpener) connect.UnaryInterceptorFunc {
 // telling them about. A header naming the same one is fine, because a client
 // that sets it uniformly is not making a claim, and refusing that would make
 // the ordinary console client unusable as an agent driver.
+// # A KEY IS SINGLE-ORG FOR THE SAME REASON, AND THE HEADER DOES NOT GET A VOTE
+//
+// A partner's key names one organisation, chosen when it was minted, and the
+// header cannot move it. That rule is not a copy of the delegation rule out of
+// tidiness: it closes the same hole from a worse position. A delegation lives
+// for minutes; a key lives until somebody revokes it, and it sits in a partner's
+// configuration where the person who set the header is not the person who minted
+// it. If `Kindlast-Org-Id` could redirect a key, then a consultancy's single
+// integration credential would reach every client company that consultancy
+// serves, by changing one header.
+//
+// A mismatched header is refused rather than ignored, exactly as for a
+// delegation: serving a caller rows from an organisation they did not name is
+// the shape of a tenancy bug even when the rows are the right ones. A matching
+// header is fine, so a client that sets it uniformly stays usable.
 func open(ctx context.Context, store TenantOpener, subject, requestedOrgID string) (Tenant, error) {
+	if key, isKey := APIKeyFrom(ctx); isKey {
+		if requestedOrgID != "" && requestedOrgID != key.OrgID {
+			return nil, ErrNotAMember
+		}
+		// Through the delegated opener, because a key asks the same question a
+		// delegation does: open a transaction as THIS PERSON in THIS
+		// ORGANISATION, having verified they are still a member. Reusing it
+		// rather than adding a third entry point is what keeps there being one
+		// membership check in the system rather than three that could disagree.
+		//
+		// ActingAgent is empty, and that is a statement rather than a gap: no
+		// agent is holding the pen. What is acting is the key, and 00043 names
+		// it on the audit row through `app.current_api_key_id`.
+		return store.BeginAPIKeyTenant(ctx, key)
+	}
+
 	grant, delegated := GrantFrom(ctx)
 	if !delegated {
 		return store.BeginTenant(ctx, subject, requestedOrgID)

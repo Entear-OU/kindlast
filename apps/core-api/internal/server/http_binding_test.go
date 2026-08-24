@@ -94,6 +94,33 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 			Method: "POST", Path: "/api/v1/invitations",
 		},
 
+		// ENT-262, partner API keys. Two things here are worth reviewing rather
+		// than merely generating.
+		//
+		// No `{org_id}`, like every other binding on this surface, and for keys
+		// that absence is load-bearing twice over. On these three RPCs the
+		// organisation comes from `Kindlast-Org-Id` as usual. On a request that
+		// ARRIVES on a key, the organisation comes from the key itself and a
+		// header naming a different one is refused, which is what stops one
+		// partner credential reaching every client company a consultancy
+		// serves.
+		//
+		// DELETE on the resource rather than a `:revoke` verb. AIP-136 reserves
+		// the custom verb for an action that is not one of the standard
+		// methods, and revoking a credential is a delete from the caller's
+		// point of view: the thing they hold stops existing. That the row
+		// survives with `revoked_at` set is the schema keeping evidence, and
+		// not something the contract should make a caller think about.
+		"kindlast.core.v1.ApiKeyService.ListApiKeys": {
+			Method: "GET", Path: "/api/v1/api-keys",
+		},
+		"kindlast.core.v1.ApiKeyService.CreateApiKey": {
+			Method: "POST", Path: "/api/v1/api-keys",
+		},
+		"kindlast.core.v1.ApiKeyService.RevokeApiKey": {
+			Method: "DELETE", Path: "/api/v1/api-keys/{key_id}",
+		},
+
 		// ENT-203. Same absence to review as the group above: no `{org_id}`
 		// anywhere. `{finding_id}` names the thing being acted on and is
 		// meaningless without the header, exactly as `{user_id}` is.

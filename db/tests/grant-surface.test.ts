@@ -169,6 +169,9 @@ const DOCUMENTED_CONTROLS: Array<{
   absent: string[]
 }> = [
   { table: 'audit_log', role: 'kindlast_app', absent: ['DELETE', 'UPDATE'] },
+  // ENT-262. A key is revoked, never deleted, so the row that says a
+  // credential once existed cannot be made to stop saying so.
+  { table: 'api_keys', role: 'kindlast_app', absent: ['DELETE'] },
   {
     table: 'transactional_outbox',
     role: 'kindlast_app',
@@ -273,6 +276,61 @@ describe.skipIf(!reachable)('the documented controls are privileges', () => {
       ).toEqual([])
     },
   )
+})
+
+/**
+ * The digest of an API key is unreadable through the ordinary path (ENT-262).
+ *
+ * A separate test from DOCUMENTED_CONTROLS above, because that list can only
+ * express "this role holds none of this command on this table" and `SELECT` on
+ * `api_keys` is very much held. The claim here is narrower and is the one
+ * `db/README.md` makes: the select is COLUMN-LEVEL and `secret_hash` is not in
+ * it.
+ *
+ * Why this cannot be a policy. RLS is row-level. A select policy scoped to the
+ * caller's organisation still admits every column of every row it returns, so
+ * with a table-level grant the listing surface could read a digest for its own
+ * organisation and nothing in the schema would object. A column grant is the
+ * only construct in Postgres that says otherwise.
+ *
+ * The one reader is `authenticate_api_key`, which is SECURITY DEFINER, runs as
+ * the owner, and answers only for an exact key handle.
+ */
+describe.skipIf(!reachable)('an API key digest is not readable', () => {
+  it('because kindlast_app holds no select on api_keys.secret_hash', async () => {
+    const r = await superuser.query(
+      `select column_name
+         from information_schema.column_privileges
+        where table_schema = 'public'
+          and table_name = 'api_keys'
+          and grantee = 'kindlast_app'
+          and privilege_type = 'SELECT'
+          and column_name = 'secret_hash'`,
+    )
+    expect(
+      r.rows.map((row) => row.column_name as string),
+      'kindlast_app can read api_keys.secret_hash. A stored credential digest ' +
+        'must not be reachable from the listing path; grant select on the ' +
+        'named columns rather than on the table. See db/README.md.',
+    ).toEqual([])
+
+    // And the grant is not table-level either, which would make the check
+    // above pass while handing the role every column anyway: a table grant
+    // does not enumerate columns in `column_privileges`... it expands to all
+    // of them, so this asserts the shape rather than trusting it.
+    const table = await superuser.query(
+      `select privilege_type
+         from information_schema.role_table_grants
+        where table_schema = 'public'
+          and table_name = 'api_keys'
+          and grantee = 'kindlast_app'
+          and privilege_type = 'SELECT'`,
+    )
+    expect(
+      table.rowCount,
+      'the select on api_keys is a table grant, so it covers secret_hash too',
+    ).toBe(0)
+  })
 })
 
 /**

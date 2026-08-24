@@ -26,6 +26,26 @@ type DenyList interface {
 func JTI(list DenyList) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			// AN API KEY HAS NO `jti`, AND SKIPPING THIS STAGE MAKES IT
+			// STRONGER RATHER THAN WEAKER (ENT-262).
+			//
+			// The deny-list exists because local verification cannot see a
+			// revocation: a JWT stays valid until it expires, so Redis closes
+			// the window. A key has no such window. It is revoked by setting
+			// `revoked_at`, and `authenticate_api_key` will not return a
+			// revoked row, so the check has ALREADY happened, synchronously,
+			// against the source of truth, one stage earlier. Consulting Redis
+			// here would add nothing and would make a key's authentication
+			// depend on a second system being up.
+			//
+			// Note what this deliberately does not do: it does not skip on an
+			// absent `jti`, only on an authenticated key. A bearer token
+			// carrying no jti is still refused below, because that token really
+			// could never be revoked.
+			if _, isKey := APIKeyFrom(ctx); isKey {
+				return next(ctx, req)
+			}
+
 			claims, ok := ClaimsFrom(ctx)
 			if !ok {
 				return nil, connect.NewError(connect.CodeInternal,
