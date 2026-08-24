@@ -237,18 +237,30 @@ export const AGENTS: readonly Agent[] = [
     slug: 'hands',
     name: 'The Hands',
     does: 'Explains what approving will do, then prepares the record.',
-    // PARTLY WORKING, WHICH IS THE HONEST ANSWER AND NOT A HEDGE (ENT-261).
+    // `working` AS OF ENT-278, AND THE LABEL MOVED IN THE COMMIT THAT EARNED IT.
     //
-    // The skill runs, under a budget and an allow-list, and leaves an
-    // `agent_runs` row. What does not exist is anywhere in the console to see
-    // it: no page, no way for a person to ask it anything. Calling that
-    // "working" would be the failure this file was written after, a dashboard
-    // claiming something about work nobody can look at.
-    status: 'partly-working',
-    runs: 'When something asks it to. There is no page for it yet.',
+    // ENT-261 built the skill and left it on `internal:ingest`, which a browser
+    // never holds, so it ran under a budget and an allow-list and left
+    // `agent_runs` rows nobody could cause and nobody could read. This entry
+    // said "Working, in part" for exactly that reason, and that was the honest
+    // answer rather than a hedge: a dashboard claiming something about work
+    // nobody can look at is the failure this whole file was written after.
+    //
+    // What changed is that a person can now ask it. The finding page shows what
+    // approving will do, for a finding whose approval creates a record, above
+    // the decision it is about, marked as the Hands' and with the run behind
+    // it. `ApprovalService.ExplainApproval` is the door, on `agents:ask`.
+    //
+    // WHAT IS STILL MISSING IS THE READ PATH, WHICH THE WATCHER AND THE ANALYST
+    // ARE MISSING TOO. A person shown an explanation is shown the id of the run
+    // that produced it and has nowhere to open it, so `remaining` says that
+    // rather than claiming nothing is left.
+    status: 'working',
+    runs: 'When you ask it, on a finding whose approval would create a record.',
     effects:
       'It prepares a record only after you approved it. The approval stays yours, and it never decides.',
-    remaining: 'There is no page yet where you can ask it anything.',
+    remaining:
+      'The console cannot yet show you the runs it has made, so you can read what it prepared but not open the record of how.',
     skills: [
       {
         module: 'hands',

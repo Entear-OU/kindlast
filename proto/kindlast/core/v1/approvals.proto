@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package kindlast.core.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// Asking the Hands what approving one finding will do (ENT-278, §26.5).
+//
+// # THE SKILL SHIPPED WITHOUT A SURFACE, AND THIS IS THE SURFACE
+//
+// ENT-261 delivered `hands.prepare`, `HandsService.ExplainApproval` and
+// `IntelligenceService.ExplainApproval`. All three are on the platform surface,
+// on `internal:ingest`, which a browser never holds, so nothing a person could
+// reach ran any of it. The rail said "Working, in part" for exactly that
+// reason. This service is the half that was missing: the same run, asked for by
+// the person who is about to decide, from the page where they decide.
+//
+// # WHY A SECOND SERVICE RATHER THAN A HUMAN SCOPE ON THE PLATFORM ONE
+//
+// `kindlast.platform.v1.HandsService` names its own organisation in the message
+// and is believed, because `internal:ingest` is issued through client
+// credentials and never reaches a browser. Widening it to a human scope would
+// make that field a field somebody can edit. So the customer-facing call names
+// no organisation at all: it arrives with the `Kindlast-Org-Id` header like
+// every other console request, the tenancy interceptor resolves it against the
+// caller's own memberships, and the finding is read through that transaction
+// before anything is asked of a model.
+//
+// The service is named for what a person asks about rather than for the agent
+// that answers, which is the choice `ConversationService` made for the Analyst.
+// The agent is named in the response's attribution and on the page, where a
+// customer reads it, rather than in a URL nobody sees.
+//
+// # WHAT IT CANNOT DO IS UNCHANGED BY BEING REACHABLE
+//
+// Approving is `FindingsService.ApproveFinding` on `findings:act`, and creating
+// a record is `ExecutorService.ExecuteJob` acting on an `executor_jobs` row
+// that exists only inside the transaction which wrote an approval (00036).
+// Neither is on this service and neither is reachable from it. A run started
+// here writes what a run started anywhere else writes: the plan on the finding,
+// which is a proposal beside a decision and not an entry in a register.
+service ApprovalService {
+  // What approving this finding will do for this organisation, and the record
+  // it prepares.
+  //
+  // # `agents:ask` FOR THE REASON ASKING THE ANALYST NEEDS IT
+  //
+  // Reading a finding and running a model over it are separately dangerous.
+  // Reading discloses a compliance gap; this spends a model budget, sends the
+  // organisation's own memory to whichever provider it chose, and writes a
+  // proposed payload onto the finding. A credential issued to render the feed
+  // should not thereby be one that can run the Hands in a loop at somebody
+  // else's cost.
+  //
+  // # SYNCHRONOUS, BECAUSE SOMEBODY IS WAITING
+  //
+  // Same as `AskAboutFinding` and unlike narration: the person is on the
+  // finding page with the decision panel under this. A deployment with no
+  // model answers `intelligence_available: false` at once rather than holding
+  // the request open.
+  //
+  //   not_found            no such finding, and a finding in another
+  //                        organisation, which answer alike
+  //   failed_precondition  approving this finding creates no record, so there
+  //                        is nothing to prepare, or this organisation chose a
+  //                        model that cannot be honoured
+  //   unavailable          the Hands could not be reached
+  rpc ExplainApproval(ExplainApprovalRequest) returns (ExplainApprovalResponse) {
+    option (kindlast.options.v1.required_scope) = "agents:ask";
+    option (google.api.http) = {
+      post: "/api/v1/findings/{finding_id}:explain-approval"
+      body: "*"
+    };
+  }
+}
+
+message ExplainApprovalRequest {
+  // The finding about to be decided. The organisation is never in the path or
+  // the body: it comes from the `Kindlast-Org-Id` header like everything else
+  // on this surface, and this id is meaningless without it.
+  string finding_id = 1;
+}
+
+message ExplainApprovalResponse {
+  // False for a deployment running without the model profile, which is
+  // supported rather than broken. Distinguished from a refusal so a console can
+  // say "this deployment runs no model" instead of "the Hands would not
+  // explain", which are different sentences with different things to do about
+  // them.
+  bool intelligence_available = 1;
+
+  ExplainOutcome outcome = 2;
+
+  // What approving will do, in this organisation's terms. Empty unless the run
+  // succeeded, for the reason a refused narrative is withheld: prose plus a
+  // caveat is prose that ends up on the screen.
+  string explanation = 3;
+
+  // Why, when it did not succeed. Written for the person who asked.
+  string outcome_detail = 4;
+
+  // The register an approval would add an entry to, in a person's words, such
+  // as "your Article 30 record of processing activities".
+  //
+  // AUTHORED IN GO AND NOT BY THE MODEL, and carried separately from the prose
+  // for that reason. It is a statement about what this product does when
+  // somebody presses approve, the model is not the authority on that, and a
+  // console showing the two together is showing one sentence it wrote and one
+  // sentence a run drafted.
+  string register_label = 5;
+
+  // What the run filled, and what it left for a person.
+  //
+  // BOTH HALVES, AND THE SECOND IS THE ONE THAT MATTERS. A response listing
+  // only what was filled lets a console draw a record that reads as complete,
+  // which is the failure this agent exists to fix: an approved ROPA finding
+  // produces a row saying "Not recorded" in every column, which is useless but
+  // honest, and a half-filled row presented as finished would be worse than
+  // either.
+  repeated PreparedField prepared = 6;
+  repeated LeftForYou left_for_you = 7;
+
+  // The `agent_runs` row this produced.
+  //
+  // THE ID AND NOT A SUMMARY, WHICH IS A DIFFERENCE FROM `AskAboutFinding`.
+  // That response carries the skill, version, model and provider because
+  // Intelligence reports them on the answer path. Nothing reports them here:
+  // `HandsExplainResponse` carries an id and no provenance, and assembling the
+  // rest from the console's own catalogue would be showing a customer a run
+  // record nobody observed. So the id is shown as the reference it is, which
+  // is what a support conversation quotes and what a read path for `agent_runs`
+  // would resolve.
+  string agent_run_id = 8;
+}
+
+// PreparedField is one column the Hands filled, and the fact it filled it from.
+message PreparedField {
+  // The column as the register stores it, e.g. `legal_basis`.
+  string name = 1;
+  // The same column in a person's words, e.g. "the lawful basis you rely on".
+  // Filled in by core-api from the register, never by the model.
+  string label = 2;
+  // The value or values. A list for a list-valued column, one entry otherwise.
+  repeated string values = 3;
+  // The `org_profile_facts` key this came from, checked against the
+  // organisation's own facts before it was written. Shown because a value
+  // presented as coming from the organisation's memory that came from nowhere
+  // is a fabrication, and a customer can only tell the two apart if the source
+  // is on the screen.
+  string from_fact = 4;
+}
+
+// LeftForYou is one column the Hands did not fill, and why.
+message LeftForYou {
+  string name = 1;
+  // In a person's words, from the register.
+  string label = 2;
+  // Why it was left, about THIS organisation: "you have not told us how long
+  // you keep payroll records", not "retention period is required".
+  string why = 3;
+}
+
+// The three ways a run ends, on the customer-facing surface.
+//
+// Its own enum rather than the platform surface's `HandsOutcome`, mapped across
+// explicitly in Go. Two enums cost one switch statement; sharing one would put
+// a platform type in a contract a customer's client generates from, and would
+// let a value added on one side default silently on the other.
+enum ExplainOutcome {
+  EXPLAIN_OUTCOME_UNSPECIFIED = 0;
+  EXPLAIN_OUTCOME_SUCCEEDED = 1;
+  // A guardrail stopped it: a budget spent, a tool outside the allow-list, a
+  // column the register does not have, a value with no fact behind it. NOT a
+  // failure: §26.3 makes this what a working ring produces, and a console that
+  // drew it as an error would report the product's most important behaviour as
+  // a fault.
+  EXPLAIN_OUTCOME_REFUSED = 2;
+  // Something went wrong that was nobody's policy.
+  EXPLAIN_OUTCOME_FAILED = 3;
+}

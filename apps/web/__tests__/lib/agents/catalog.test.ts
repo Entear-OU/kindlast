@@ -78,34 +78,43 @@ describe('the agent catalogue (ENT-232)', () => {
 
   // The honesty assertion, and the reason this file exists. ENT-161 happened
   // because a dashboard said everything was fine about work nothing had done.
-  // Exactly one of the four is a working skill today; two are not built at all.
-  it('claims two working agents and one half built, not four', () => {
-    // The Watcher joined the Analyst in ENT-258, and the count is asserted
-    // rather than the absence of a count for the reason this test was written
-    // for: the page used to make one claim about all four, and the failure
-    // that hides is a placeholder reading like a feature. A third agent
-    // becoming "working" should have to change this line and say why in the
-    // commit that does.
+  // Three of the four are working skills today; one is not built at all.
+  it('claims three working agents and one unbuilt, not four the same', () => {
+    // The count is asserted rather than the absence of a count for the reason
+    // this test was written for: the page used to make one claim about all
+    // four, and the failure that hides is a placeholder reading like a
+    // feature. An agent becoming "working" should have to change this line and
+    // say why in the commit that does.
+    //
+    // THE HANDS JOINED IN ENT-278, AND WHAT CHANGED IS NOT THE SKILL. ENT-261
+    // built it and put every entry point on `internal:ingest`, which a browser
+    // never holds, so it ran and left `agent_runs` rows nobody could cause and
+    // nobody could see. That is what "Working, in part" was saying. ENT-278 is
+    // the door: `ApprovalService.ExplainApproval` on `agents:ask`, and a panel
+    // on the finding page, above the decision, that says what approving will
+    // add to a register and what it could not fill.
+    //
+    // The label moved in the same commit as the surface, which is what the
+    // note below asked for when it was the other way round.
     expect(
       AGENTS.filter((a) => a.status === 'working').map((a) => a.slug),
-    ).toEqual(['watcher', 'analyst'])
+    ).toEqual(['watcher', 'analyst', 'hands'])
     expect(
       AGENTS.filter((a) => a.status === 'not-built').map((a) => a.slug),
     ).toEqual(['messenger'])
 
-    // AND THE HALF-BUILT STATE IS IN USE AGAIN, FOR THE CASE IT WAS KEPT FOR.
+    // AND THE HALF-BUILT STATE IS UNUSED AGAIN, WHICH IS NOT THE SAME AS
+    // UNNECESSARY.
     //
-    // This assertion used to read `toHaveLength(0)`, with a note saying the
-    // state was kept because it is the honest answer for the next agent that
-    // gets half built. ENT-261 is that agent. Its skill runs, under a budget
-    // and an allow-list, and leaves an `agent_runs` row; there is no page in
-    // the console where anybody can see it or ask it anything.
-    //
-    // Calling that "working" is the exact failure this file exists after, so
-    // the label that costs us something is the correct one.
+    // It read `toHaveLength(0)` from ENT-258, then held the Hands from
+    // ENT-261, and is back to zero here. That round trip is the argument for
+    // keeping the state rather than retiring it: an agent whose skill runs and
+    // whose surface does not is a real condition this product reaches, twice
+    // now, and the label is what stops the rail claiming work nobody can look
+    // at in the window between the two halves landing.
     expect(
       AGENTS.filter((a) => a.status === 'partly-working').map((a) => a.slug),
-    ).toEqual(['hands'])
+    ).toEqual([])
   })
 
   it('says what remains for every agent that is not finished', () => {

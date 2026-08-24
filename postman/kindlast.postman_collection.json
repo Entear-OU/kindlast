@@ -2429,6 +2429,24 @@
             },
             "description": "Records what the Hands prepared for one finding: the explanation, the fields it could fill and where each value came from, and the fields it left for a person.\n\nThe Hands' one tool, and the reason the skill's allow-list is not decorative. A model asking for anything else reaches `ToolDispatcher`, is refused against the allow-list, and the refusal is recorded on the run (§26.3).\n\n# EVERY VALUE NAMES THE FACT IT CAME FROM, AND THE NAME IS CHECKED\n\n`PreparedField.from_fact` is a key in `org_profile_facts`, and a field naming a key this organisation has no fact for is refused. That is the citation validator's argument in another register: a value presented as coming from the organisation's memory that did not come from anywhere is a fabrication, and a prepared record is worth less than an empty one if a customer cannot tell which is which.\n\ninvalid_argument     an unknown field for this register, a value with no `from_fact`, or a `from_fact` naming a fact this organisation does not hold failed_precondition  the finding has already been approved and its execution enqueued, so its payload is no longer a proposal\n\n**From the contract.** `kindlast.platform.v1.HandsService/PrepareRecord`, declared in `proto/kindlast/platform/v1/hands.proto`. Required scope: `internal:ingest`. Declared REST binding: `POST /internal/v1/hands:prepare`."
           }
+        },
+        {
+          "name": "ExplainApproval (ApprovalService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"findingId\": \"{{finding_id}}\"\n}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.ApprovalService/ExplainApproval",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.ApprovalService", "ExplainApproval"]
+            },
+            "description": "What approving this finding will do for this organisation, and the record it prepares.\n\n# `agents:ask` FOR THE REASON ASKING THE ANALYST NEEDS IT\n\nReading a finding and running a model over it are separately dangerous. Reading discloses a compliance gap; this spends a model budget, sends the organisation's own memory to whichever provider it chose, and writes a proposed payload onto the finding. A credential issued to render the feed should not thereby be one that can run the Hands in a loop at somebody else's cost.\n\n# SYNCHRONOUS, BECAUSE SOMEBODY IS WAITING\n\nSame as `AskAboutFinding` and unlike narration: the person is on the finding page with the decision panel under this. A deployment with no model answers `intelligence_available: false` at once rather than holding the request open.\n\nnot_found            no such finding, and a finding in another organisation, which answer alike failed_precondition  approving this finding creates no record, so there is nothing to prepare, or this organisation chose a model that cannot be honoured unavailable          the Hands could not be reached\n\n**From the contract.** `kindlast.core.v1.ApprovalService/ExplainApproval`, declared in `proto/kindlast/core/v1/approvals.proto`. Required scope: `agents:ask`. Declared REST binding: `POST /api/v1/findings/{finding_id}:explain-approval`."
+          }
         }
       ]
     }

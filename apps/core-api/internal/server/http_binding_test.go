@@ -153,6 +153,16 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.ConversationService.AskAboutFinding": {
 			Method: "POST", Path: "/api/v1/findings/{finding_id}:ask",
 		},
+		// ENT-278. A fifth colon verb on the finding, beside the three that
+		// decide it, because that is what it is about: what pressing approve
+		// will do. On the finding rather than on `/agents/hands:explain` for
+		// the reason the line above gives, and deliberately adjacent to
+		// `:approve` in this list, since the pair is the thing to review. One
+		// runs an agent that cannot decide; the other is the decision, on
+		// `findings:act`, which only a human's token carries.
+		"kindlast.core.v1.ApprovalService.ExplainApproval": {
+			Method: "POST", Path: "/api/v1/findings/{finding_id}:explain-approval",
+		},
 		// Singular, and for the same reason UpdateOrganisation is: it
 		// addresses the dashboard of the organisation the header names, not a
 		// member of a collection of dashboards.
