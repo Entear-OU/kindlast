@@ -6118,6 +6118,32 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                source:
+                    type: string
+                    description: |-
+                        `detector` or `agent`, matching `watcher_findings.source` (00039).
+
+                         # WHY THE AGENT IS TOLD WHOSE SIGNAL IT IS LOOKING AT (ENT-276)
+
+                         Every open signal is shown with its deduplication key, because a run that
+                         is not told what is already open repeats it. Keys are also what the
+                         schema deduplicates on, so a key is an address: writing one lands on
+                         whatever row already has it.
+
+                         ENT-273 made that safe. A trigger refuses an update that changes a
+                         signal's source, so a model echoing a detector's key back can no longer
+                         overwrite a rule's row. What it can still do is TRY, and be refused, and
+                         end the whole run: the customer gets nothing from that sweep, for a
+                         reason they cannot act on.
+
+                         The model is not being unreasonable there. It is shown a list of
+                         addresses with no indication that some are not its to write. This is that
+                         indication.
+
+                         It is not the authority and must not become it. The trigger is the
+                         authority and is unchanged; this makes the refusal predictable rather
+                         than moving the check into a prompt, which AGENTS.md is explicit is the
+                         one thing a prompt must never be.
         Paragraph:
             type: object
             properties:

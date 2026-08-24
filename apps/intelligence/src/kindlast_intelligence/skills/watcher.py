@@ -88,6 +88,14 @@ ALLOWED_TOOLS: tuple[str, ...] = ("raise_signal",)
 # (ENT-235), and enforced by core-api rather than by this description.
 KINDS = ("deadline", "profile_gap", "dsar", "regulatory_update")
 SEVERITIES = ("low", "medium", "high", "critical")
+# What can have raised a signal, matching `watcher_findings.source` (00039).
+#
+# Not offered to the model as a choice: this skill only ever writes `agent`,
+# and the store sets it rather than taking it from a step. It is here because
+# `render_context` has to recognise `detector` to say so in words, and a
+# spelling that has drifted from the schema would silently stop marking
+# anything, which reads exactly like every signal being the agent's to write.
+SOURCES = ("detector", "agent")
 
 
 class ProposedSignal(BaseModel):
@@ -298,7 +306,13 @@ def render_context(context: dict[str, Any]) -> str:
         parts.append(
             "Signals already open, which you must not raise again:\n"
             + "\n".join(
-                f"  - [{s['dedup_key']}] {s['title']} ({s['severity']})" for s in signals
+                f"  - [{s['dedup_key']}] {s['title']} ({s['severity']})"
+                + (
+                    ", a rule raised this and you cannot change it"
+                    if s.get("source") == SOURCES[0]
+                    else ""
+                )
+                for s in signals
             )
         )
     else:

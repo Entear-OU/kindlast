@@ -503,6 +503,55 @@ def test_core_api_being_unreachable_is_a_failure_and_not_a_refusal():
     assert run_record.outcome is Outcome.FAILED
 
 
+def test_a_signal_a_rule_raised_is_marked_as_one():
+    """ENT-276. The model is shown every open signal WITH its deduplication
+    key, because a run that is not told what is open repeats it. A key is also
+    an address: the schema deduplicates on it, so writing one lands on whatever
+    row already holds it.
+
+    A trigger refuses an agent taking over a rule's row (00039), and that is
+    where the authority belongs. What this changes is whether the model can SEE
+    the constraint before it trips over it. Refused mid-run, the customer gets
+    nothing from that sweep for a reason they cannot act on.
+    """
+    rendered = watcher.render_context(
+        {
+            **CONTEXT,
+            "open_signals": [
+                {
+                    "dedup_key": "gap:obligation:gdpr-art-30",
+                    "title": "Records of Processing Activities",
+                    "severity": "high",
+                    "source": "detector",
+                },
+                {
+                    "dedup_key": "agent:something-noticed",
+                    "title": "Something the agent noticed",
+                    "severity": "medium",
+                    "source": "agent",
+                },
+            ],
+        }
+    )
+
+    line = next(l for l in rendered.splitlines() if "gdpr-art-30" in l)
+    assert "a rule raised this" in line
+
+    # And the agent's own signal is NOT marked, or the mark says nothing: a
+    # note on every line is a note the model learns to skip.
+    mine = next(l for l in rendered.splitlines() if "agent:something-noticed" in l)
+    assert "a rule raised this" not in mine
+
+
+def test_the_source_vocabulary_matches_what_the_context_looks_for():
+    """`render_context` recognises one member of SOURCES by position. If the
+    tuple is reordered or respelled, nothing raises: it silently stops marking
+    anything, and every signal reads as the agent's to write. This is what
+    notices."""
+    assert watcher.SOURCES[0] == "detector"
+    assert set(watcher.SOURCES) == {"detector", "agent"}
+
+
 def test_the_watcher_holds_exactly_one_tool_and_it_is_not_a_finding():
     """The separation the whole surface rests on, asserted rather than assumed.
 

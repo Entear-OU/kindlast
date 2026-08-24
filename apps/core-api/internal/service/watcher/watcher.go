@@ -126,7 +126,7 @@ func (s *Service) WatcherContext(
 	for _, sig := range context.OpenSignals {
 		res.OpenSignals = append(res.OpenSignals, &platformv1.OpenSignal{
 			SignalId: sig.ID, Kind: sig.Kind, DedupKey: sig.DedupKey,
-			Title: sig.Title, Severity: sig.Severity,
+			Title: sig.Title, Severity: sig.Severity, Source: sig.Source,
 			UpdatedAt: timestamppb.New(sig.UpdatedAt),
 		})
 	}
