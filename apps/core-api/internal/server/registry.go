@@ -40,6 +40,14 @@ func Services() []protoreflect.ServiceDescriptor {
 		// dangerous, which is the same reasoning that keeps `findings:read` and
 		// `findings:act` apart.
 		corev1.File_kindlast_core_v1_conversation_proto,
+		// ApprovalService (ENT-278). Asking the Hands what approving one
+		// finding will do, on `agents:ask` for the same reason asking the
+		// Analyst needs it: running a model over a finding is separately
+		// dangerous from reading one. Listed here so the scope-declaration
+		// test covers it, which is the check ENT-245 was filed for after
+		// NarrativeService shipped mounted and unlisted and every call to it
+		// was default-denied.
+		corev1.File_kindlast_core_v1_approvals_proto,
 		// NotificationService (ENT-209). Its three RPCs carry
 		// `notifications:read` and `notifications:write`, which were already in
 		// HumanScopes and in the Zitadel seed before anything used them.

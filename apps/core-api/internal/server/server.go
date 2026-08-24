@@ -12,6 +12,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/delivery"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	apikeysservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/apikeys"
+	approvalsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/approvals"
 	auditservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/audit"
 	billingservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/billing"
 	completionservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/completion"
@@ -322,6 +323,21 @@ func New(deps Dependencies) (http.Handler, error) {
 		interceptor.Tenancy(deps.Tenants),
 	)
 
+	// The Hands, built once and reached two ways (ENT-261, ENT-278).
+	//
+	// A machine reaches it on `internal:ingest` at the bottom of this function,
+	// and a person reaches it through ApprovalService on the chain below. One
+	// instance rather than two, because the run's context decides what it may
+	// fill and from which facts, and a second instance would be a second thing
+	// that could be configured differently from the first.
+	//
+	// Nil for a deployment with no agent pool, which is supported.
+	var hands *handsservice.Service
+	if deps.HandsApprovals != nil {
+		hands = handsservice.New(deps.HandsApprovals, deps.Explainer, deps.Logger,
+			handsservice.WithModelRoute(handsRouterOrNil(deps.ModelRouter)))
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle(corev1connect.NewSessionServiceHandler(session.New(deps.Profiles), chain))
 	mux.Handle(corev1connect.NewOrgServiceHandler(org.New(deps.AppBaseURL, deps.Profiles), chain))
@@ -336,6 +352,13 @@ func New(deps Dependencies) (http.Handler, error) {
 		conversationservice.New(deps.Answerer, deps.Logger,
 			conversationservice.WithRouter(conversationRouterOrNil(deps.ModelRouter))),
 		chain))
+	// Asking the Hands what approving one finding will do (ENT-278).
+	// Registered unconditionally, for the reason ConversationService is: a
+	// deployment with no model is supported, the handler says so in its
+	// response, and registering only when there is something to ask would make
+	// "no model here" and "wrong URL" the same 404.
+	mux.Handle(corev1connect.NewApprovalServiceHandler(
+		approvalsservice.New(handsOrNil(hands, deps.Explainer), deps.Logger), chain))
 	mux.Handle(corev1connect.NewRecordsServiceHandler(records.New(), chain))
 	mux.Handle(corev1connect.NewNotificationServiceHandler(
 		notifications.New(deps.Channels), chain))
@@ -466,11 +489,12 @@ func New(deps Dependencies) (http.Handler, error) {
 	// Approving is `findings:act`, which only a human's token carries, and the
 	// record itself is created by ExecutorService from a job row that exists
 	// only because a human approved (00036).
-	if deps.HandsApprovals != nil {
-		mux.Handle(platformv1connect.NewHandsServiceHandler(
-			handsservice.New(deps.HandsApprovals, deps.Explainer, deps.Logger,
-				handsservice.WithModelRoute(handsRouterOrNil(deps.ModelRouter))),
-			internal))
+	//
+	// The service itself is built above, because since ENT-278 a person can
+	// reach the same run from the finding page and both doors open onto one
+	// implementation.
+	if hands != nil {
+		mux.Handle(platformv1connect.NewHandsServiceHandler(hands, internal))
 	}
 
 	// Writing the corpus (ENT-207). On the same shorter chain, for the same
@@ -719,6 +743,23 @@ func watcherRouterOrNil(r *modelroute.Resolver) watcherservice.ModelRoute {
 		return nil
 	}
 	return r
+}
+
+// handsOrNil decides whether a person can ask the Hands anything (ENT-278).
+//
+// The typed-nil trap once more, plus one condition of its own. A deployment
+// with an agent pool and no Intelligence registers HandsService and answers
+// `failed_precondition` on it, which is right for a machine caller. For a
+// person on the finding page it is the wrong shape: "this deployment runs no
+// model" is a fact about the stack rather than a rule refusing them, and
+// ApprovalService says so by carrying no Hands at all.
+func handsOrNil(
+	hands *handsservice.Service, explainer handsservice.Explainer,
+) approvalsservice.Hands {
+	if hands == nil || explainer == nil {
+		return nil
+	}
+	return hands
 }
 
 // handsRouterOrNil is the same helper again, for the Hands (ENT-261).

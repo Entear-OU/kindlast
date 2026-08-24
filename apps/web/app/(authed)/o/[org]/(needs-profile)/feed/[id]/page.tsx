@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
 import { AskAnalyst } from '@/components/agents/ask-analyst'
+import { ExplainApproval } from '@/components/agents/explain-approval'
 import { ActControls } from '@/components/feed/act-controls'
 import { FindingNarrative } from '@/components/feed/finding-card'
 import { SeverityBadge, StatusLabel } from '@/components/feed/severity'
@@ -11,9 +12,10 @@ import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { currentSession } from '@/lib/auth/session'
 import { getFinding } from '@/lib/findings/client'
 import { effortSentence } from '@/lib/findings/effort'
+import { awaitingADecision, createsARecord } from '@/lib/findings/registers'
 
 import { approve, reject, snooze } from '../actions'
-import { ask } from './actions'
+import { ask, explain } from './actions'
 
 /**
  * The section this page is, for the tab strip (ENT-269). The organisation
@@ -189,6 +191,28 @@ export default async function FindingPage({
           </p>
         )}
       </section>
+
+      {/* WHAT APPROVING WILL DO, IMMEDIATELY ABOVE THE DECISION (ENT-278).
+          Above rather than below, unlike the Analyst's box at the foot of this
+          page, and the two placements are not in tension. The chat is a thing
+          somebody chooses to start after they have read the finding; this is
+          about the button underneath it, so a person who reads down the page
+          and stops at the decision has already been shown what pressing it
+          creates and what it will leave blank.
+
+          Offered only where it is true. A finding whose approval creates no
+          record has nothing to prepare, and one already approved or rejected
+          has a payload that is no longer a proposal, so in both cases core-api
+          refuses and a control here would be a button whose only outcome is a
+          refusal. */}
+      {createsARecord(finding.actionType) &&
+      awaitingADecision(finding.status) ? (
+        <ExplainApproval
+          slug={slug}
+          findingId={finding.findingId}
+          action={explain}
+        />
+      ) : null}
 
       <div className="mt-8">
         <ActControls
