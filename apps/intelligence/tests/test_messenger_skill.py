@@ -435,7 +435,12 @@ def test_a_refused_draft_is_recorded_as_a_refused_tool_call():
     assert [c.tool for c in run_record.tool_calls] == ["queue_message"]
     assert run_record.tool_calls[0].refused is True
     assert run_record.refused_patterns == ["a link with a scheme"]
-    assert "https://acme.example" in run_record.rejected_text
+    # Equality rather than a substring, and not only because CodeQL reads a
+    # URL-substring check as sanitization logic. `rejected_text` holds the
+    # whole field so a customer can see exactly what was refused, and an
+    # equality is the only assertion that proves the WHOLE field survived
+    # rather than the fragment this test happened to look for.
+    assert run_record.rejected_text == "Go to https://acme.example"
     # And the refusal is machine readable, so counting how often each control
     # fires does not mean parsing English out of a detail column.
     assert json.loads(run_record.refusal_json())["critic"] == "no_links"
