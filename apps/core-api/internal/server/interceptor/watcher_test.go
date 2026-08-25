@@ -72,6 +72,16 @@ func (r *recordingWatcher) EvidenceFor(
 	}}, nil
 }
 
+func (r *recordingWatcher) RequestFetch(
+	_ context.Context, orgID, _, _, _ string, _, _ time.Time,
+) (postgres.FetchAsk, error) {
+	r.orgs = append(r.orgs, orgID)
+	if r.err != nil {
+		return postgres.FetchAsk{}, r.err
+	}
+	return postgres.FetchAsk{State: postgres.FetchAskQueued, RequestID: "r1"}, nil
+}
+
 func (r *recordingWatcher) RaiseSignal(_ context.Context, orgID string, signal postgres.Signal) (string, bool, error) {
 	r.orgs = append(r.orgs, orgID)
 	if r.err != nil {

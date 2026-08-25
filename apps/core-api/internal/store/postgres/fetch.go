@@ -73,13 +73,16 @@ type FetchPlan struct {
 // arrives from the caller and is a server constant rather than a request
 // field, because a caller that could send zero would dial every customer's
 // systems at once.
+// The request window is the second interval (00050): a pending, unserved ask
+// younger than it makes its pair due now, without waiting for staleness. Both
+// intervals are server constants for the same reason either is.
 func (a *AgentStore) FetchTargets(
-	ctx context.Context, staleAfter time.Duration, limit int,
+	ctx context.Context, staleAfter, requestWindow time.Duration, limit int,
 ) ([]FetchTarget, error) {
 	rows, err := a.pool.Query(ctx,
 		`select org_id::text, integration_id::text, tool
-		   from public.fetch_targets($1, $2)`,
-		staleAfter, limit)
+		   from public.fetch_targets($1, $2, $3)`,
+		staleAfter, requestWindow, limit)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: listing fetch targets: %w", err)
 	}

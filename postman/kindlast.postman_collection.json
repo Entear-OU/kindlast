@@ -949,6 +949,26 @@
           }
         },
         {
+          "name": "Request a fetch (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orgId\": \"{{org_id}}\",\n  \"connectionId\": \"{{integration_id}}\",\n  \"tool\": \"search_tickets\",\n  \"reason\": \"The stored answer is a day old and a signal would depend on it.\"\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.WatcherService/RequestFetch",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.WatcherService", "RequestFetch"]
+            },
+            "description": "The Watcher's ask for a fetch of one granted read-only tool on one connection, answered with an acknowledgement rather than a payload (ENT-279). **Served as of ENT-279.** Required scope: `internal:ingest`, so a service principal through client credentials and never a browser.\n\n**This queues and reaches nothing.** The mediated shape: the agent asks, core-api decides, and the workers gateway fetches later under the connection's own standing consent. `state` in the answer is `queued`, `already_queued` or `recently_fetched`; the cooldown and the pending window are server constants, deliberately not request fields, so no caller can shorten how often a customer is dialled. A queued ask is a `fetch_requests` row the scheduled fetch relay serves; until that relay lands (the sibling half of ENT-279), a queued request waits.\n\n**The refusals are what a caller has to handle.** An ungranted tool and a granted tool that can write are both `permission_denied`, which the Intelligence harness records as a REFUSED run: the customer's grant saying no is a control working. A revoked connection is `failed_precondition`. A `connectionId` in another organisation is `not_found`, the same answer as one that does not exist, deliberately.\n\n`detail` is core-api's own sentence and never relays anything a customer's endpoint said; after a recent failed attempt it reports only the outcome and the age.\n\n**From the contract.** `kindlast.platform.v1.WatcherService/RequestFetch`, declared in `proto/kindlast/platform/v1/watcher.proto`. Required scope: `internal:ingest`. Declared REST binding: `POST /internal/v1/watcher:request-fetch`."
+          }
+        },
+        {
           "name": "List pending executor jobs (internal)",
           "request": {
             "method": "POST",

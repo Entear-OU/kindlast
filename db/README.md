@@ -200,6 +200,7 @@ brackets is a column-level grant, and the brackets name every column it covers.
 | `kindlast_agent` | `compliance_profiles` | select, update |
 | `kindlast_agent` | `dsars` | select |
 | `kindlast_agent` | `executor_jobs` | select |
+| `kindlast_agent` | `fetch_requests` | insert, select |
 | `kindlast_agent` | `findings` | insert, select, update |
 | `kindlast_agent` | `integration_fetches` | insert, select |
 | `kindlast_agent` | `integration_tools` | select |

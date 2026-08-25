@@ -69,7 +69,7 @@ func seedFetchConnection(
 
 func targetsOf(t *testing.T, agent *AgentStore) map[uuid.UUID]bool {
 	t.Helper()
-	targets, err := agent.FetchTargets(t.Context(), 24*time.Hour, 1000)
+	targets, err := agent.FetchTargets(t.Context(), 24*time.Hour, time.Hour, 1000)
 	if err != nil {
 		t.Fatalf("FetchTargets: %v", err)
 	}
@@ -146,6 +146,90 @@ func TestFetchTargetsListsOnlyWhatACustomerActuallyOpened(t *testing.T) {
 	}
 	if listed[recentlyFailed] {
 		t.Error("a connection with a recent FAILED attempt was listed; a broken endpoint would be dialled every tick forever")
+	}
+}
+
+// The union arm (00050): a pending ask makes its pair due now, and nothing an
+// ask says gets to skip a customer decision.
+//
+// The interesting cases are the refusals. An ask can change WHEN a permitted
+// fetch happens; it cannot make an impermissible one permitted, and it cannot
+// force a redial of a pair that has already been attempted since the ask.
+func TestAnAskMakesItsPairDueAndSkipsNoFilter(t *testing.T) {
+	agent := agentStore(t)
+	migrator := migratorConn(t)
+	org, _ := seedFetchOrg(t)
+
+	ask := func(connection uuid.UUID, tool string, age string) {
+		t.Helper()
+		if _, err := migrator.Exec(t.Context(),
+			`insert into fetch_requests (org_id, integration_id, tool, reason, created_at)
+			 values ($1, $2, $3, 'the sweep judged the evidence stale', now() - $4::interval)`,
+			org, connection, tool, age); err != nil {
+			t.Fatalf("seeding an ask: %v", err)
+		}
+	}
+	freshAttempt := func(connection uuid.UUID) {
+		t.Helper()
+		if _, err := migrator.Exec(t.Context(),
+			`insert into integration_fetches (org_id, integration_id, tool, outcome, detail)
+			 values ($1, $2, 'list_records', 'failed', 'did not answer')`,
+			org, connection); err != nil {
+			t.Fatalf("seeding an attempt: %v", err)
+		}
+	}
+
+	// Fetched five minutes ago, so the schedule arm will not list it for a
+	// day. A pending ask is what makes it due anyway, which is the entire
+	// point of the RPC.
+	asked := seedFetchConnection(t, org, "list_records", true, false)
+	freshAttempt(asked)
+	// The attempt above predates nothing; the ask must come after it.
+	ask(asked, "list_records", "0 seconds")
+
+	// Same shape, but an attempt landed AFTER the ask: the ask is served,
+	// failed included, and does not force a redial. This is 00048's
+	// attempts-suppress rule surviving the union arm.
+	served := seedFetchConnection(t, org, "list_records", true, false)
+	ask(served, "list_records", "10 minutes")
+	freshAttempt(served)
+
+	// An ask older than the window stops counting, so a relay outage does not
+	// leave a stack of stale asks dialling customers when it comes back.
+	expired := seedFetchConnection(t, org, "list_records", true, false)
+	freshAttempt(expired)
+	ask(expired, "list_records", "2 hours")
+
+	// And the customer decisions hold against an ask: a grant withdrawn after
+	// the ask stops the fetch, and an ask for a revoked connection fetches
+	// nothing. The Go ask-path refuses these up front; this proves fetch time
+	// refuses them AGAIN, because the withdrawal can happen in between.
+	ungrantedAsk := seedFetchConnection(t, org, "list_records", false, false)
+	ask(ungrantedAsk, "list_records", "0 seconds")
+
+	revokedAsk := seedFetchConnection(t, org, "list_records", true, false)
+	ask(revokedAsk, "list_records", "0 seconds")
+	if _, err := migrator.Exec(t.Context(),
+		`update integrations set status = 'revoked', revoked_at = now() where id = $1`,
+		revokedAsk); err != nil {
+		t.Fatalf("revoking: %v", err)
+	}
+
+	listed := targetsOf(t, agent)
+	if !listed[asked] {
+		t.Error("a pending ask did not make its pair due; RequestFetch acknowledges an ask the relay would never serve")
+	}
+	if listed[served] {
+		t.Error("an ask already served by a later attempt was listed; an ask could force a redial of a down endpoint")
+	}
+	if listed[expired] {
+		t.Error("an ask older than the request window was listed; old asks should stop counting")
+	}
+	if listed[ungrantedAsk] {
+		t.Error("an ask for an ungranted tool was listed; an ask must not widen the customer's grant")
+	}
+	if listed[revokedAsk] {
+		t.Error("an ask for a revoked connection was listed; revoking is supposed to stop future fetches")
 	}
 }
 

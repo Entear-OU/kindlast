@@ -51,6 +51,7 @@ DONE = "done"
 
 RAISE_SIGNAL = "raise_signal"
 READ_EVIDENCE = "read_evidence"
+REQUEST_FETCH = "request_fetch"
 
 # HOW MUCH OF SOMEBODY ELSE'S TEXT ONE READ MAY PUT IN FRONT OF THE MODEL.
 #
@@ -102,6 +103,13 @@ SignalWriter = Callable[[dict[str, Any]], tuple[str, bool]]
 # core-api's ReadEvidence answers. No arguments: see `EvidenceRequest`.
 EvidenceReader = Callable[[str, str], list[dict[str, Any]]]
 
+# And to ask for a fetch (ENT-279). Takes the connection id, the tool and the
+# model's reason; returns what core-api's RequestFetch answered, a dict with
+# `state` and `detail`. An acknowledgement, never a payload: the fetch happens
+# after this run, elsewhere, and the caller of this callable never sees what
+# it deposited.
+FetchRequester = Callable[[str, str, str], dict[str, str]]
+
 
 def watch(
     *,
@@ -115,6 +123,7 @@ def watch(
     budget: Budget | None = None,
     queued_at: datetime | None = None,
     read_evidence: EvidenceReader | None = None,
+    request_fetch: FetchRequester | None = None,
 ) -> tuple[AgentRun, list[RaisedSignal]]:
     """Watch one organisation, or refuse.
 
@@ -141,6 +150,8 @@ def watch(
     }
     if read_evidence is not None:
         tools[READ_EVIDENCE] = _reader_tool(read_evidence, context, budget)
+    if request_fetch is not None:
+        tools[REQUEST_FETCH] = _fetch_tool(request_fetch, context, budget)
     # A DEPLOYMENT THAT WIRED NO READER LEAVES THE TOOL ALLOWED AND ABSENT,
     # which the dispatcher answers with "allowed but not implemented" and a
     # refusal that ends the run. That is the honest outcome: the skill was
@@ -419,6 +430,97 @@ def _reader_tool(
     return read
 
 
+def _fetch_tool(
+    request_fetch: FetchRequester,
+    context: dict[str, Any],
+    budget: Budget,
+) -> Callable[..., str]:
+    """The `request_fetch` tool: check what was asked, then ask core-api.
+
+    # THE SAME CHECKS AS A READ, PLUS TWO, AND IN THE SAME ORDER
+
+    A connection the run was not shown is a fabrication and ends the run; an
+    incomplete ask or a tool the customer's policy says no to is declined and
+    the loop carries on. The two checks a fetch adds are its own: a revoked
+    connection may still have its stored evidence READ, because "what it said
+    while we could see it" is a real question, but nothing may be fetched
+    through it again; and a tool that can write is declined however it is
+    granted, because a fetch a model asked for is nobody deciding.
+
+    The budget is spent last and it is the fetch budget, not the read budget:
+    the cost being bounded is a call on a customer's infrastructure, and a run
+    that spent its asks can still read and still raise.
+
+    # AND core-api CHECKS EVERYTHING AGAIN, WHICH IS NOT DUPLICATION
+
+    The same division `_reader_tool` documents: these checks are the guardrail
+    (this run asks for nothing it was not shown), core-api's are the invariant
+    (no ask stands on a grant the customer has withdrawn, whatever this file
+    believes). When they disagree the far side wins, its code decides whether
+    the record says REFUSED or FAILED, and the run records what happened.
+
+    # THE ANSWER IS AN ACKNOWLEDGEMENT AND IS RELAYED AS ONE
+
+    What comes back is core-api's own sentence about the ASK: queued, already
+    queued, or attempted recently enough that the stored answer stands. It is
+    our text end to end. Nothing a customer's endpoint produced can reach this
+    reply, which is why it is not fenced the way a read's answer is: there is
+    no third-party content to fence.
+    """
+
+    def request(**arguments: object) -> str:
+        connection_id = str(arguments.get("connection_id") or "").strip()
+        tool = str(arguments.get("tool") or "").strip()
+        reason = str(arguments.get("reason") or "").strip()
+
+        if not connection_id:
+            raise ToolDeclined(
+                "no connection was named. Say which connection to fetch from, "
+                "using one of the ids in your context"
+            )
+
+        connection = _connection(context, connection_id)
+        if connection is None:
+            raise _ConnectionRefused(connection_id)
+
+        if not tool:
+            raise ToolDeclined(
+                "no tool was named. Say which of that connection's granted "
+                "tools to fetch through"
+            )
+
+        if connection.get("revoked"):
+            raise ToolDeclined(
+                f"access to {connection['display_name']!r} has been revoked, "
+                "so nothing can be fetched through it again. What it reported "
+                "before that is still readable with read_evidence"
+            )
+
+        granted = _granted_tool(connection, tool)
+        if granted is None:
+            raise ToolDeclined(
+                f"{tool!r} is not granted on {connection['display_name']!r}. "
+                "This organisation decides which tools Kindlast may look at, "
+                "and that is not one of them"
+            )
+
+        if granted.get("write_capable"):
+            raise ToolDeclined(
+                f"{tool!r} can write, and a fetch you ask for only reads. "
+                "The evidence this product wants is what a system reports, "
+                "never what it can be made to do"
+            )
+
+        budget.spend_fetch_request()
+        acknowledgement = request_fetch(connection_id, tool, reason)
+
+        state = str(acknowledgement.get("state") or "")
+        detail = str(acknowledgement.get("detail") or "")
+        return f"fetch {state}: {detail}".strip()
+
+    return request
+
+
 def _connection(context: dict[str, Any], connection_id: str) -> dict[str, Any] | None:
     for candidate in context.get("connections", []):
         if str(candidate.get("connection_id")) == connection_id:
@@ -531,15 +633,18 @@ def _arguments(step: Step) -> dict[str, object]:
     so a model naming a tool and forgetting its arguments is refused by the
     allow-list or by the tool, and either way lands in the record.
 
-    `signal` first when a confused step set both, which is the direction that
-    fails safely: `raise_signal` given evidence fields has no dedup key and is
-    refused by core-api, while `read_evidence` given signal fields names no
-    connection and is declined here. Both end up recorded; neither writes.
+    `signal` first when a confused step set several, which is the direction
+    that fails safely: `raise_signal` given evidence or fetch fields has no
+    dedup key and is refused by core-api, while `read_evidence` or
+    `request_fetch` given signal fields names no connection and is declined
+    here. Everything ends up recorded; nothing writes by accident.
     """
     if step.signal is not None:
         return step.signal.model_dump()
     if step.evidence is not None:
         return step.evidence.model_dump()
+    if step.fetch is not None:
+        return step.fetch.model_dump()
     return {}
 
 

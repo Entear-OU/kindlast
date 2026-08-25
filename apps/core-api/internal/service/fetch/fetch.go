@@ -67,6 +67,16 @@ import (
 // once, which is the blast radius this surface is arranged around.
 const EvidenceStaleAfter = 24 * time.Hour
 
+// RequestWindow is how long an agent's unserved ask keeps its pair due
+// (00050). It matches the ask path's pending window in
+// `service/watcher/fetchrequest.go` by design rather than by import: the two
+// services answer different questions (may this ask queue; is this pair due)
+// and coupling them through a shared constant would let a change to one
+// silently retune the other. A mismatch is safe in both directions, only
+// either widening the already-queued answer or leaving a due pair to the
+// daily schedule.
+const RequestWindow = time.Hour
+
 // Bounds on one listing. What is not listed now is listed on the next tick.
 const (
 	DefaultListLimit = 200
@@ -85,7 +95,7 @@ const scheduledArguments = "{}"
 // Targets is the listing half, on the producer pool: cross-organisation, read
 // only, and it learns no endpoint and no credential.
 type Targets interface {
-	FetchTargets(ctx context.Context, staleAfter time.Duration, limit int) ([]postgres.FetchTarget, error)
+	FetchTargets(ctx context.Context, staleAfter, requestWindow time.Duration, limit int) ([]postgres.FetchTarget, error)
 }
 
 // Plans is the credential-reading half, on the application pool, acting as the
@@ -141,7 +151,7 @@ func (s *Service) ListFetchTargets(
 		limit = MaxListLimit
 	}
 
-	targets, err := s.targets.FetchTargets(ctx, EvidenceStaleAfter, limit)
+	targets, err := s.targets.FetchTargets(ctx, EvidenceStaleAfter, RequestWindow, limit)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

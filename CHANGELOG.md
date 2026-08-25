@@ -1289,6 +1289,41 @@ what they have to do about it, which no commit subject knows.
   tool) is a server constant. Pausing the schedule in Temporal is the off
   switch. Agents still cannot cause a fetch; whether they ever can is a
   separate decision this change deliberately does not take.
+- **The Watcher can ask for a fetch, and only ask** (ENT-279). The agentic
+  Watcher gains a third tool, `request_fetch`: it may request that one granted
+  read-only tool on one connection be fetched again, when what is stored is
+  missing or too old to raise a signal on. The shape is mediated end to end,
+  and the mediation is the feature: the agent asks, core-api decides, and the
+  fetch runs later through the policy gateway, behind the egress allow-list,
+  under the standing consent of the person who connected the system. The
+  answer the agent gets is an acknowledgement, never a payload, so no run is
+  answered with your live systems and the run that asked reads the result, if
+  any, only through `read_evidence` on a later sweep.
+
+  **No role was widened.** The producer role that runs models keeps the
+  column-limited select on `integrations` that omits the sealed credential; an
+  ask is a `fetch_requests` row and nothing else, and everything that touches
+  a credential or a network stays on roles and processes the agent cannot
+  reach. A tool you have not granted, a tool that can write, and a revoked
+  connection are each refused by core-api against your own rows, whatever the
+  model believed, and the refusal lands in `agent_runs.tool_calls` where you
+  can read it back.
+
+  **How often your systems can be dialled because a model asked is bounded
+  twice, and neither bound is the model's to move.** Each run may ask at most
+  twice, below its three reads. And core-api holds a one-hour cooldown per
+  connection and tool: a pair fetched or even attempted inside it is answered
+  from the record, and a request already waiting is not queued again, so
+  repeated asks, including a sweep's automatic retries, cause at most one
+  fetch per pair per hour on top of the daily schedule.
+
+  New RPC `WatcherService.RequestFetch` on the internal surface, requiring
+  `internal:ingest`. Migration `00049` adds `fetch_requests`, closed like
+  every table: the producer role can insert and read its own organisation's
+  asks and cannot rewrite or remove one. The Watcher skill version moves to
+  `1.2.0`. Queued requests are served by the scheduled fetch relay, which
+  lands separately as the other half of ENT-279; until it does, a queued ask
+  waits and everything the customer sees stays truthful about that.
 
 ## [0.1.0]
 

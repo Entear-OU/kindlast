@@ -226,6 +226,44 @@ class CoreAPI:
             for o in response.observations
         ]
 
+    def request_fetch(
+        self, org_id: str, connection_id: str, tool: str, reason: str
+    ) -> dict[str, str]:
+        """Ask core-api to queue a fetch of one granted tool (ENT-279).
+
+        An ask, never a fetch: this client holds no credential, no endpoint
+        and no way to dial, and the answer is an acknowledgement rather than a
+        payload. Everything that decides whether the ask stands happens on the
+        far side: that the connection is this organisation's and active, that
+        the tool is granted and read-only, and how recently the pair was
+        attempted are core-api's checks, and this client cannot ask it to
+        skip any of them. A refusal arrives as a `CoreAPIError` whose code
+        says whether a rule worked or something broke, exactly as a read's
+        does.
+
+        NO ORGANISATION HEADER, for the reason `record_run` gives.
+        """
+        request = watcher_pb2.RequestFetchRequest(
+            org_id=org_id,
+            connection_id=connection_id,
+            tool=tool,
+            reason=reason,
+        )
+        try:
+            response = self._watcher.request_fetch(
+                request, headers={"Authorization": f"Bearer {self._tokens.get()}"}
+            )
+        except Exception as exc:
+            raise CoreAPIError(
+                f"asking for a fetch: {exc}", code=code_of(exc)
+            ) from exc
+
+        return {
+            "state": response.state,
+            "detail": response.detail,
+            "request_id": response.request_id,
+        }
+
     def raise_signal(self, org_id: str, signal: dict[str, object]) -> tuple[str, bool]:
         """Raise one signal, and answer whether it was new.
 

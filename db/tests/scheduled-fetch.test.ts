@@ -1,6 +1,6 @@
 /**
  * The two definer functions the scheduled fetch stands on (ENT-279, migration
- * 00048): `fetch_targets()`, which lists what is due across every
+ * 00048, arity widened by 00050): `fetch_targets()`, which lists what is due across every
  * organisation, and `integration_fetch_context()`, which says whose consent
  * one fetch runs under.
  *
@@ -102,13 +102,15 @@ describe.skipIf(!reachable)('only the producer may list fetch targets', () => {
       ada,
     ])
     await expect(
-      app.query(`select * from public.fetch_targets(interval '24 hours', 10)`),
+      app.query(
+        `select * from public.fetch_targets(interval '24 hours', interval '1 hour', 10)`,
+      ),
     ).rejects.toThrow(/permission denied for function/)
   })
 
   it('the producer role can, with no tenant set, and learns ids and a tool name only', async () => {
     const r = await agent.query(
-      `select * from public.fetch_targets(interval '24 hours', 1000)`,
+      `select * from public.fetch_targets(interval '24 hours', interval '1 hour', 1000)`,
     )
     const listed = r.rows.filter(
       (row: { integration_id: string }) => row.integration_id === connection,

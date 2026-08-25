@@ -42,6 +42,9 @@ const (
 	// WatcherServiceReadEvidenceProcedure is the fully-qualified name of the WatcherService's
 	// ReadEvidence RPC.
 	WatcherServiceReadEvidenceProcedure = "/kindlast.platform.v1.WatcherService/ReadEvidence"
+	// WatcherServiceRequestFetchProcedure is the fully-qualified name of the WatcherService's
+	// RequestFetch RPC.
+	WatcherServiceRequestFetchProcedure = "/kindlast.platform.v1.WatcherService/RequestFetch"
 )
 
 // WatcherServiceClient is a client for the kindlast.platform.v1.WatcherService service.
@@ -105,6 +108,57 @@ type WatcherServiceClient interface {
 	// showing them the row is a person reading their own data; an agent reading
 	// it is the thing they granted or did not.
 	ReadEvidence(context.Context, *connect.Request[v1.ReadEvidenceRequest]) (*connect.Response[v1.ReadEvidenceResponse], error)
+	// Asks for a fetch of one granted tool on one connection, and is answered
+	// with an acknowledgement rather than a payload (ENT-279).
+	//
+	// # THE AGENT ASKS, core-api DECIDES, THE GATEWAY FETCHES
+	//
+	// This is the mediated shape ENT-279 settled on, and the words are in that
+	// order because each one is a boundary. The Watcher may ask: asking is a
+	// request, never an action, and nothing about this RPC gives the producer
+	// role a way to reach `credential_ciphertext`, which stays exactly as 00025
+	// wrote it. core-api decides: the connection must be this organisation's,
+	// active, and the tool granted and read-only, checked here against the rows
+	// rather than against anything the caller believes. And the gateway fetches:
+	// what a queued request causes is the same scheduled fetch every other
+	// deposit goes through, behind the egress allow-list and the tool policy,
+	// under the standing consent of the person who connected the system. No
+	// packet leaves this handler.
+	//
+	// # THE ANSWER IS AN ACKNOWLEDGEMENT, AND IT DOES NOT PRETEND OTHERWISE
+	//
+	// A sweep is a twenty minute activity with three retries and nobody waiting
+	// on it, and a synchronous fetch inside one would hold a sweep slot on a
+	// customer's latency and could dial them three times per sweep. So the fetch
+	// is not awaited and the response says what became of the ASK: queued, or
+	// already queued, or attempted so recently that queueing another would be
+	// dialling a customer's system twice for one answer. The run that asked
+	// reads nothing back; the deposit lands in `org_evidence` and the next
+	// `read_evidence`, usually the next sweep's, sees it.
+	//
+	// # HOW OFTEN A CUSTOMER CAN BE DIALLED BECAUSE A MODEL ASKED
+	//
+	// Two server constants, deliberately not request fields, for the blast
+	// radius reason `FetchService` gives about its staleness interval: a caller
+	// able to send zero would be able to dial every customer's systems at once.
+	// A pair with any fetch attempt inside the cooldown answers
+	// `recently_fetched` and queues nothing, and attempts count whatever their
+	// outcome, so a down endpoint is not redialled on every ask. A pair with a
+	// request already waiting answers `already_queued` and queues nothing. So
+	// however many times one run, or one run's three retries, asks for the same
+	// pair, at most one fetch is caused per cooldown, on top of the schedule.
+	//
+	//	invalid_argument     no organisation, no connection, no tool, or a
+	//	                     reason longer than a sentence should be
+	//	not_found            no such connection in this organisation, and the
+	//	                     same answer when it exists in another one: the
+	//	                     producer role saw no rows either way
+	//	failed_precondition  the connection is revoked, so nothing may be
+	//	                     fetched through it again
+	//	permission_denied    the tool is not granted, or it can write. Both are
+	//	                     the customer's decision working, and the harness
+	//	                     maps this code onto a refusal rather than a failure
+	RequestFetch(context.Context, *connect.Request[v1.RequestFetchRequest]) (*connect.Response[v1.RequestFetchResponse], error)
 }
 
 // NewWatcherServiceClient constructs a client for the kindlast.platform.v1.WatcherService service.
@@ -136,6 +190,12 @@ func NewWatcherServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(watcherServiceMethods.ByName("ReadEvidence")),
 			connect.WithClientOptions(opts...),
 		),
+		requestFetch: connect.NewClient[v1.RequestFetchRequest, v1.RequestFetchResponse](
+			httpClient,
+			baseURL+WatcherServiceRequestFetchProcedure,
+			connect.WithSchema(watcherServiceMethods.ByName("RequestFetch")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -144,6 +204,7 @@ type watcherServiceClient struct {
 	watcherContext *connect.Client[v1.WatcherContextRequest, v1.WatcherContextResponse]
 	raiseSignal    *connect.Client[v1.RaiseSignalRequest, v1.RaiseSignalResponse]
 	readEvidence   *connect.Client[v1.ReadEvidenceRequest, v1.ReadEvidenceResponse]
+	requestFetch   *connect.Client[v1.RequestFetchRequest, v1.RequestFetchResponse]
 }
 
 // WatcherContext calls kindlast.platform.v1.WatcherService.WatcherContext.
@@ -159,6 +220,11 @@ func (c *watcherServiceClient) RaiseSignal(ctx context.Context, req *connect.Req
 // ReadEvidence calls kindlast.platform.v1.WatcherService.ReadEvidence.
 func (c *watcherServiceClient) ReadEvidence(ctx context.Context, req *connect.Request[v1.ReadEvidenceRequest]) (*connect.Response[v1.ReadEvidenceResponse], error) {
 	return c.readEvidence.CallUnary(ctx, req)
+}
+
+// RequestFetch calls kindlast.platform.v1.WatcherService.RequestFetch.
+func (c *watcherServiceClient) RequestFetch(ctx context.Context, req *connect.Request[v1.RequestFetchRequest]) (*connect.Response[v1.RequestFetchResponse], error) {
+	return c.requestFetch.CallUnary(ctx, req)
 }
 
 // WatcherServiceHandler is an implementation of the kindlast.platform.v1.WatcherService service.
@@ -222,6 +288,57 @@ type WatcherServiceHandler interface {
 	// showing them the row is a person reading their own data; an agent reading
 	// it is the thing they granted or did not.
 	ReadEvidence(context.Context, *connect.Request[v1.ReadEvidenceRequest]) (*connect.Response[v1.ReadEvidenceResponse], error)
+	// Asks for a fetch of one granted tool on one connection, and is answered
+	// with an acknowledgement rather than a payload (ENT-279).
+	//
+	// # THE AGENT ASKS, core-api DECIDES, THE GATEWAY FETCHES
+	//
+	// This is the mediated shape ENT-279 settled on, and the words are in that
+	// order because each one is a boundary. The Watcher may ask: asking is a
+	// request, never an action, and nothing about this RPC gives the producer
+	// role a way to reach `credential_ciphertext`, which stays exactly as 00025
+	// wrote it. core-api decides: the connection must be this organisation's,
+	// active, and the tool granted and read-only, checked here against the rows
+	// rather than against anything the caller believes. And the gateway fetches:
+	// what a queued request causes is the same scheduled fetch every other
+	// deposit goes through, behind the egress allow-list and the tool policy,
+	// under the standing consent of the person who connected the system. No
+	// packet leaves this handler.
+	//
+	// # THE ANSWER IS AN ACKNOWLEDGEMENT, AND IT DOES NOT PRETEND OTHERWISE
+	//
+	// A sweep is a twenty minute activity with three retries and nobody waiting
+	// on it, and a synchronous fetch inside one would hold a sweep slot on a
+	// customer's latency and could dial them three times per sweep. So the fetch
+	// is not awaited and the response says what became of the ASK: queued, or
+	// already queued, or attempted so recently that queueing another would be
+	// dialling a customer's system twice for one answer. The run that asked
+	// reads nothing back; the deposit lands in `org_evidence` and the next
+	// `read_evidence`, usually the next sweep's, sees it.
+	//
+	// # HOW OFTEN A CUSTOMER CAN BE DIALLED BECAUSE A MODEL ASKED
+	//
+	// Two server constants, deliberately not request fields, for the blast
+	// radius reason `FetchService` gives about its staleness interval: a caller
+	// able to send zero would be able to dial every customer's systems at once.
+	// A pair with any fetch attempt inside the cooldown answers
+	// `recently_fetched` and queues nothing, and attempts count whatever their
+	// outcome, so a down endpoint is not redialled on every ask. A pair with a
+	// request already waiting answers `already_queued` and queues nothing. So
+	// however many times one run, or one run's three retries, asks for the same
+	// pair, at most one fetch is caused per cooldown, on top of the schedule.
+	//
+	//	invalid_argument     no organisation, no connection, no tool, or a
+	//	                     reason longer than a sentence should be
+	//	not_found            no such connection in this organisation, and the
+	//	                     same answer when it exists in another one: the
+	//	                     producer role saw no rows either way
+	//	failed_precondition  the connection is revoked, so nothing may be
+	//	                     fetched through it again
+	//	permission_denied    the tool is not granted, or it can write. Both are
+	//	                     the customer's decision working, and the harness
+	//	                     maps this code onto a refusal rather than a failure
+	RequestFetch(context.Context, *connect.Request[v1.RequestFetchRequest]) (*connect.Response[v1.RequestFetchResponse], error)
 }
 
 // NewWatcherServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -249,6 +366,12 @@ func NewWatcherServiceHandler(svc WatcherServiceHandler, opts ...connect.Handler
 		connect.WithSchema(watcherServiceMethods.ByName("ReadEvidence")),
 		connect.WithHandlerOptions(opts...),
 	)
+	watcherServiceRequestFetchHandler := connect.NewUnaryHandler(
+		WatcherServiceRequestFetchProcedure,
+		svc.RequestFetch,
+		connect.WithSchema(watcherServiceMethods.ByName("RequestFetch")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.WatcherService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case WatcherServiceWatcherContextProcedure:
@@ -257,6 +380,8 @@ func NewWatcherServiceHandler(svc WatcherServiceHandler, opts ...connect.Handler
 			watcherServiceRaiseSignalHandler.ServeHTTP(w, r)
 		case WatcherServiceReadEvidenceProcedure:
 			watcherServiceReadEvidenceHandler.ServeHTTP(w, r)
+		case WatcherServiceRequestFetchProcedure:
+			watcherServiceRequestFetchHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -276,4 +401,8 @@ func (UnimplementedWatcherServiceHandler) RaiseSignal(context.Context, *connect.
 
 func (UnimplementedWatcherServiceHandler) ReadEvidence(context.Context, *connect.Request[v1.ReadEvidenceRequest]) (*connect.Response[v1.ReadEvidenceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.WatcherService.ReadEvidence is not implemented"))
+}
+
+func (UnimplementedWatcherServiceHandler) RequestFetch(context.Context, *connect.Request[v1.RequestFetchRequest]) (*connect.Response[v1.RequestFetchResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.WatcherService.RequestFetch is not implemented"))
 }

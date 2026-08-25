@@ -657,3 +657,180 @@ func (a *AgentStore) EvidenceFor(
 	}
 	return connectionName, observations, nil
 }
+
+// What became of one agent's ask for a fetch (ENT-279).
+//
+// The closed set the RPC answers with. Held here rather than in the service
+// because the state is decided inside the transaction below: whether an ask
+// queues is a fact about the rows at the moment of asking, and a state decided
+// anywhere else would be decided about rows that may have changed.
+const (
+	FetchAskQueued          = "queued"
+	FetchAskAlreadyQueued   = "already_queued"
+	FetchAskRecentlyFetched = "recently_fetched"
+)
+
+// ErrConnectionRevoked is a connection nothing may be fetched through again.
+var ErrConnectionRevoked = errors.New("that connection has been revoked")
+
+// ErrToolWrites is a granted tool that can write, which an agent-requested
+// fetch never touches: a person triggering a write from the Integrations page
+// is a person deciding, and a model asking is nobody deciding.
+var ErrToolWrites = errors.New("that tool can write, and an agent-requested fetch only reads")
+
+// FetchAsk is what one RequestFetch left behind.
+type FetchAsk struct {
+	// One of the FetchAsk constants above.
+	State string
+	// The queued request when this ask queued one, and the request already
+	// waiting when it did not. Empty for a recent attempt.
+	RequestID string
+	// For the acknowledgement's sentence.
+	ConnectionName string
+	// The most recent attempt inside the cooldown, when there was one.
+	// LastDetail is the stored sentence and the caller must not relay it to a
+	// model: it derives from a customer's endpoint. It is here so the service
+	// can log it, never so it can say it.
+	LastOutcome   string
+	LastDetail    string
+	LastAttemptAt time.Time
+}
+
+// RequestFetch records the agent's ask for a fetch of one granted tool on one
+// connection, or answers why nothing was queued (ENT-279).
+//
+// # NOTHING HERE DIALS, AND NOTHING HERE COULD
+//
+// This runs on the producer pool, whose select on `integrations` omits
+// `credential_ciphertext` (00025) and stays that way. What it writes is a
+// `fetch_requests` row, which the scheduled fetch relay picks up the way it
+// picks up a stale observation; the credential is read there, on the
+// application role, under the connection's own standing consent. An attacker
+// holding this whole method holds a way to ask, bounded by the cooldown below.
+//
+// # THE CHECKS ARE THE INVARIANT, NOT THE GUARDRAIL
+//
+// The harness has already checked the connection was shown to the run and the
+// tool granted in its context; this checks the rows, so no ask stands on a
+// grant the customer has withdrawn, whatever any caller believes. Two checks
+// that refuse different things, the same arrangement ReadEvidence has.
+//
+// # ATTEMPTS COUNT, NOT SUCCESSES
+//
+// `attemptedSince` is compared against every fetch for the pair whatever its
+// outcome, for the reason the scheduled listing counts attempts: keyed on
+// successes, a down endpoint would be redialled on every ask forever.
+func (a *AgentStore) RequestFetch(
+	ctx context.Context, orgID, connectionID, tool, reason string,
+	attemptedSince, pendingSince time.Time,
+) (FetchAsk, error) {
+	org, err := uuid.Parse(orgID)
+	if err != nil {
+		return FetchAsk{}, fmt.Errorf("%w: %q is not a uuid", ErrBadOrganisation, orgID)
+	}
+	connection, err := uuid.Parse(connectionID)
+	if err != nil {
+		return FetchAsk{}, fmt.Errorf("%w: %q is not a uuid", ErrNoConnection, connectionID)
+	}
+
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return FetchAsk{}, fmt.Errorf("postgres: asking for a fetch: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := setLocal(ctx, tx, "app.current_org_id", org.String()); err != nil {
+		return FetchAsk{}, err
+	}
+
+	ask := FetchAsk{}
+	var status string
+	err = tx.QueryRow(ctx, `
+		select display_name, status
+		  from integrations
+		 where id = $1::uuid and org_id = $2::uuid
+	`, connection, org).Scan(&ask.ConnectionName, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The same answer for a connection that does not exist and one that
+		// is another organisation's, for the reason EvidenceFor gives: what a
+		// caller must never learn here is whether an id it guessed exists
+		// somewhere else.
+		return FetchAsk{}, ErrNoConnection
+	}
+	if err != nil {
+		return FetchAsk{}, fmt.Errorf("postgres: reading the connection to fetch from: %w", err)
+	}
+	if status != "active" {
+		return FetchAsk{}, ErrConnectionRevoked
+	}
+
+	var granted, writeCapable bool
+	err = tx.QueryRow(ctx, `
+		select granted, write_capable
+		  from integration_tools
+		 where integration_id = $1::uuid and org_id = $2::uuid and name = $3
+	`, connection, org, tool).Scan(&granted, &writeCapable)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A tool the connection never offered reads the same as one it has
+		// not granted, as it does for EvidenceFor and for the same reason.
+		return FetchAsk{}, ErrToolNotGranted
+	}
+	if err != nil {
+		return FetchAsk{}, fmt.Errorf("postgres: reading the tool grant: %w", err)
+	}
+	if !granted {
+		return FetchAsk{}, ErrToolNotGranted
+	}
+	if writeCapable {
+		return FetchAsk{}, ErrToolWrites
+	}
+
+	// A recent attempt answers the ask from the record. Newest first, so the
+	// age the acknowledgement reports is the age of the answer that stands.
+	err = tx.QueryRow(ctx, `
+		select outcome, coalesce(detail, ''), requested_at
+		  from integration_fetches
+		 where integration_id = $1::uuid and tool = $2
+		   and requested_at > $3
+		 order by requested_at desc
+		 limit 1
+	`, connection, tool, attemptedSince).Scan(&ask.LastOutcome, &ask.LastDetail, &ask.LastAttemptAt)
+	if err == nil {
+		ask.State = FetchAskRecentlyFetched
+		return ask, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return FetchAsk{}, fmt.Errorf("postgres: reading recent fetches: %w", err)
+	}
+
+	// An ask already waiting is not asked twice.
+	err = tx.QueryRow(ctx, `
+		select id::text
+		  from fetch_requests
+		 where integration_id = $1::uuid and tool = $2
+		   and created_at > $3
+		 order by created_at desc
+		 limit 1
+	`, connection, tool, pendingSince).Scan(&ask.RequestID)
+	if err == nil {
+		ask.State = FetchAskAlreadyQueued
+		return ask, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return FetchAsk{}, fmt.Errorf("postgres: reading pending fetch requests: %w", err)
+	}
+
+	err = tx.QueryRow(ctx, `
+		insert into fetch_requests (org_id, integration_id, tool, reason)
+		values ($1::uuid, $2::uuid, $3, $4)
+		returning id::text
+	`, org, connection, tool, reason).Scan(&ask.RequestID)
+	if err != nil {
+		return FetchAsk{}, fmt.Errorf("postgres: queueing a fetch request: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return FetchAsk{}, fmt.Errorf("postgres: committing a fetch request: %w", err)
+	}
+	ask.State = FetchAskQueued
+	return ask, nil
+}
