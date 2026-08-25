@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -27,7 +28,17 @@ func migratorConn(t *testing.T) *pgx.Conn {
 
 	conn, err := pgx.Connect(t.Context(), dsn)
 	if err != nil {
-		t.Fatalf("connecting as the migrator: %v", err)
+		// Same convention as agentStore and testStore: skips on a laptop,
+		// fails in CI when KINDLAST_REQUIRE_STACK is set. Every caller used to
+		// reach this only after another helper had already skipped, so the
+		// hard Fatalf here looked safe; the first test to open with a
+		// migrator read (fetch_test.go) failed the stackless `go` job instead
+		// of skipping, which is this line's job to prevent.
+		if os.Getenv("KINDLAST_REQUIRE_STACK") != "" {
+			t.Fatalf("KINDLAST_REQUIRE_STACK is set, so this must not skip: %s unreachable (%v)", dsn, err)
+		}
+		t.Skipf("compose stack not reachable at %s (%v); "+
+			"run: docker compose -f deploy/compose.yaml up -d", dsn, err)
 	}
 	t.Cleanup(func() { _ = conn.Close(t.Context()) })
 	return conn
