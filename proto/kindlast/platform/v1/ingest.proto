@@ -633,4 +633,15 @@ message IngestEvidenceResponse {
   string evidence_id = 1;
   // The stored fetch record's id, which is written whatever the outcome.
   string fetch_id = 2;
+  // False when the endpoint returned exactly what it returned last time and
+  // this fetch was linked to the existing observation rather than writing a
+  // second identical one (ENT-279).
+  //
+  // `org_evidence.content_hash` was built for this and 00020 made it an index
+  // rather than a unique constraint on the grounds that deduplication is Go's
+  // call. This is that call: a machine fetching the same tool every day for a
+  // year should not put 365 identical rows in a customer's memory. The fetch
+  // record is written every time regardless, so "we checked and it still said
+  // this" is recorded.
+  bool evidence_is_new = 3;
 }

@@ -35,7 +35,7 @@ future one nobody has written yet:
 - The append-only trigger on `audit_log`
 - Indexes
 - The `SECURITY DEFINER` functions that exist because RLS structurally cannot
-  express the check. There are ten:
+  express the check. There are twelve:
 
   | Function | Added by | Why it cannot be a policy |
   |---|---|---|
@@ -49,10 +49,12 @@ future one nobody has written yet:
   | `expire_snoozed_findings` | `00034` | A maintenance pass over every organisation at once, started by a schedule with no tenant and no person; every `findings` policy is scoped by one organisation's GUC and the producer role cannot list organisations to iterate them |
   | `sweep_targets` | `00035` | The daily sweep is "sweep everyone", written deliberately as a workflow that visits one organisation per activity; the producer role holds nothing on `organisations` and its `compliance_profiles` policies see nothing with no GUC set, so the list of tenants with something to sweep is a question only a definer can answer, and it answers with ids alone |
   | `executor_job_context` | `00036` | The Executor runs as the approver, and the row that says who that is is protected by a policy testing the very GUCs it would set: no tenant transaction can read the row that tells it which tenant to be. The function answers that one question about one row by primary key, and every read after it, including the claim of the same row, happens under the ordinary policy |
+  | `fetch_targets` | `00048` | The scheduled fetch is "fetch what has gone stale, across every organisation", the same shape as `sweep_targets`: the producer role's policies on `integrations` and `integration_tools` see nothing with no GUC set, and there is no organisation to set because which organisations have something due is the question being asked. It answers with ids and a tool name, never an endpoint or a credential |
+  | `integration_fetch_context` | `00048` | The scheduled fetch runs as the person who consented to the connection, and the row that says who that is sits behind the policy testing the very GUCs it would set, the same chicken-and-egg `executor_job_context` has. One row by primary key, an organisation and a person, used to SET the tenancy rather than to read anything under it |
 
 Each carries its justification in the migration that creates it. A definer
-function is how RLS gets bypassed by accident, so adding an eleventh means
-writing down why none of these eight already covers you.
+function is how RLS gets bypassed by accident, so adding a thirteenth means
+writing down why none of these twelve already covers you.
 
 **This table went stale twice before anyone noticed, which is the argument for
 the `Added by` column.** It read "five" while the database held seven:

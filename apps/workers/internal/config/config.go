@@ -140,6 +140,24 @@ type Temporal struct {
 	// they approved.
 	ExecutorRelayInterval time.Duration
 
+	// FetchRelayInterval is how often the relay asks core-api which
+	// connections have evidence that has gone stale (ENT-279).
+	//
+	// NOT HOW OFTEN A CUSTOMER IS DIALLED. That is core-api's staleness
+	// constant, which is deliberately not a request field: a caller able to
+	// say "everything is stale" would be a caller able to dial every
+	// customer's systems at once. This only sets how often the question is
+	// asked.
+	//
+	// Hourly rather than the fifteen seconds the other three relays use,
+	// because nothing here is a person waiting: the other relays exist so that
+	// somebody staring at a screen sees their sweep or their record. This one
+	// collects evidence for a sweep that runs tomorrow morning. Hourly is what
+	// gets a newly granted tool its first observation within the hour instead
+	// of at six tomorrow, and what spreads an estate's fetches across the day
+	// instead of dialling every customer at once.
+	FetchRelayInterval time.Duration
+
 	// CoreAPIURL is where the activities call. Through the edge on the bundled
 	// stack, the same door Intelligence uses, so there is no
 	// development-only shortcut.
@@ -180,6 +198,7 @@ func Load() (*Config, error) {
 			SweepRelayInterval:    durationOr("KINDLAST_SWEEP_RELAY_INTERVAL", 15*time.Second),
 			SweepSchedule:         valueOr("KINDLAST_SWEEP_SCHEDULE", "0 6 * * *"),
 			ExecutorRelayInterval: durationOr("KINDLAST_EXECUTOR_RELAY_INTERVAL", 15*time.Second),
+			FetchRelayInterval:    durationOr("KINDLAST_FETCH_RELAY_INTERVAL", time.Hour),
 			CoreAPIURL:            strings.TrimSpace(os.Getenv("KINDLAST_CORE_API_URL")),
 			OIDCIssuer:            strings.TrimSpace(os.Getenv("KINDLAST_OIDC_ISSUER")),
 			OIDCDiscoveryURL:      strings.TrimSpace(os.Getenv("KINDLAST_OIDC_DISCOVERY_URL")),

@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package kindlast.platform.v1;
+
+import "google/api/annotations.proto";
+import "kindlast/options/v1/scope.proto";
+
+// A scheduled fetch deposits evidence (ENT-279; ENT-231, §26.4).
+//
+// WHAT THIS IS FOR
+//
+// ENT-274 gave the Watcher `read_evidence`: it reads observations a fetch has
+// already deposited for one connection and one granted tool. Nothing deposited
+// any on a schedule, so stored evidence was whatever a person happened to
+// click Fetch for, and the tool usually found nothing. This is the thing that
+// deposits.
+//
+// THE SHAPE, WHICH IS THE DESIGN RATHER THAN A STAGE OF IT
+//
+// A scheduled fetch deposits, a sweep reads. The agent never dials. A sweep is
+// a twenty minute activity with three retries and nobody waiting on it, so a
+// synchronous fetch inside one would put a customer's latency on the sweep's
+// critical path and could dial them three times per sweep; and letting an
+// agent cause a fetch would mean the role that runs models holding what it
+// takes to reach a customer's systems. Both roads end somewhere worse than
+// here.
+//
+// WHO DIALS, AND WHOSE AUTHORITY IT RUNS UNDER
+//
+// Nothing in core-api opens a connection to a customer-supplied address. The
+// dial happens in the workers gateway, behind the egress allow-list, the tool
+// policy and the per-organisation rate limit, exactly as a fetch from the
+// Integrations page does. What core-api adds is the credential, read under the
+// application role acting as the person who most recently consented to the
+// connection (00048). A revoked connection, an ungranted tool, or a consenting
+// person who has left the organisation each stop the fetch.
+service FetchService {
+  // Lists the connection-and-tool pairs whose evidence has gone stale, across
+  // every organisation: organisation, connection and tool name, and nothing
+  // else. The relay's question, asked on a schedule.
+  //
+  // NO ORGANISATION HEADER, AND NO STALENESS PARAMETER. The list is every
+  // organisation's, the same way ListSweepTargets and ListPendingJobs are, and
+  // for the same reason: the loop is a workflow an operator can watch and
+  // pause rather than a parameter somebody passes.
+  //
+  // How stale is stale is a server constant, deliberately not a request field.
+  // A caller that could send zero would dial every customer's systems at once,
+  // which is the blast radius this whole surface is careful about.
+  //
+  // Returns nothing rather than failing when this deployment has no gateway
+  // and therefore connects nothing.
+  rpc ListFetchTargets(ListFetchTargetsRequest) returns (ListFetchTargetsResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/fetch-targets:due"
+      body: "*"
+    };
+  }
+
+  // Fetches one granted read-only tool on one connection, and records what
+  // happened whatever that was.
+  //
+  // # A REFUSAL AND A FAILURE ARE BOTH SUCCESSFUL CALLS
+  //
+  // The same choice IntegrationsService.FetchNow makes and for the same
+  // reason: the record is the feature. "We did not fetch list_records on the
+  // 24th because the connection was revoked" is a sentence a customer can
+  // read, and it cannot be written by an error path that stores nothing. So
+  // the outcome lives in the response and in the `integration_fetches` row
+  // rather than in whether this call threw.
+  //
+  // What DOES come back as an error is this deployment failing: core-api could
+  // not reach its own database, or the caller sent something malformed. Those
+  // are the only cases the workflow's retry policy should key on, and keeping
+  // a customer's outage out of them is what stops Temporal retrying somebody
+  // else's broken endpoint on our schedule.
+  //
+  // # THE CALLER NAMES A CONNECTION AND A TOOL, AND NOTHING ELSE
+  //
+  // Not an organisation, not a user, not arguments, not an endpoint. Whose
+  // authority the fetch runs under comes from the connection's own consent
+  // record through a definer function (00048), because a caller that could
+  // name it would be able to reach a customer's systems in somebody else's
+  // name. Arguments are absent because nothing describes what a customer's
+  // tool accepts, and ENT-274's reasoning holds: the honest bound on what
+  // nothing can check is zero, so a scheduled fetch sends `{}`.
+  //
+  //   invalid_argument   the connection id is not a uuid, or no tool was named
+  //   not_found          no such connection in this deployment
+  //   unimplemented      this deployment has no gateway, so it fetches nothing
+  //   internal           the outcome could not be recorded, which is the one
+  //                      failure worth retrying
+  rpc RunScheduledFetch(RunScheduledFetchRequest) returns (RunScheduledFetchResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/fetches:run"
+      body: "*"
+    };
+  }
+}
+
+message ListFetchTargetsRequest {
+  // At most this many. Zero means the server's default.
+  int32 limit = 1;
+}
+
+message ListFetchTargetsResponse {
+  repeated FetchTarget targets = 1;
+}
+
+// One connection and one tool that is due a fetch.
+//
+// Ids and a tool name. No endpoint and no credential: this answer travels into
+// a workflow history, which is readable by anybody who can read the engine.
+message FetchTarget {
+  string org_id = 1;
+  string integration_id = 2;
+  string tool = 3;
+}
+
+message RunScheduledFetchRequest {
+  string integration_id = 1;
+  string tool = 2;
+}
+
+message RunScheduledFetchResponse {
+  // `succeeded`, `refused` or `failed`, the same closed set
+  // `integration_fetches.outcome` holds.
+  string outcome = 1;
+  // Why, for anything that was not a success. The gateway's sentence, with
+  // Connect's code prefix stripped, which is what the customer reads in the
+  // fetch log.
+  string detail = 2;
+  // The `integration_fetches` row this call wrote. Always set: a fetch is
+  // recorded whatever became of it.
+  string fetch_id = 3;
+  // The observation, when there was one. Empty for a refusal or a failure.
+  string evidence_id = 4;
+  // False when the endpoint returned exactly what it returned last time and
+  // the fetch was linked to the existing observation instead of writing a
+  // second identical one.
+  //
+  // `org_evidence.content_hash` exists for this and 00020 says in as many
+  // words that deduplication is Go's call rather than a unique constraint. A
+  // person clicking Fetch twice wants both answers kept; a schedule running
+  // unattended for a year would otherwise put 365 identical rows in a
+  // customer's memory and hand the Watcher 365 copies of one fact.
+  bool evidence_is_new = 5;
+}

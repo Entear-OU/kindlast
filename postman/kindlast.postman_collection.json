@@ -2467,6 +2467,40 @@
             },
             "description": "What approving this finding will do for this organisation, and the record it prepares.\n\n# `agents:ask` FOR THE REASON ASKING THE ANALYST NEEDS IT\n\nReading a finding and running a model over it are separately dangerous. Reading discloses a compliance gap; this spends a model budget, sends the organisation's own memory to whichever provider it chose, and writes a proposed payload onto the finding. A credential issued to render the feed should not thereby be one that can run the Hands in a loop at somebody else's cost.\n\n# SYNCHRONOUS, BECAUSE SOMEBODY IS WAITING\n\nSame as `AskAboutFinding` and unlike narration: the person is on the finding page with the decision panel under this. A deployment with no model answers `intelligence_available: false` at once rather than holding the request open.\n\nnot_found            no such finding, and a finding in another organisation, which answer alike failed_precondition  approving this finding creates no record, so there is nothing to prepare, or this organisation chose a model that cannot be honoured unavailable          the Hands could not be reached\n\n**From the contract.** `kindlast.core.v1.ApprovalService/ExplainApproval`, declared in `proto/kindlast/core/v1/approvals.proto`. Required scope: `agents:ask`. Declared REST binding: `POST /api/v1/findings/{finding_id}:explain-approval`."
           }
+        },
+        {
+          "name": "ListFetchTargets (FetchService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.FetchService/ListFetchTargets",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.FetchService", "ListFetchTargets"]
+            },
+            "description": "Lists the connection-and-tool pairs whose evidence has gone stale, across every organisation: organisation, connection and tool name, and nothing else. The relay's question, asked on a schedule.\n\nNO ORGANISATION HEADER, AND NO STALENESS PARAMETER. The list is every organisation's, the same way ListSweepTargets and ListPendingJobs are, and for the same reason: the loop is a workflow an operator can watch and pause rather than a parameter somebody passes.\n\nHow stale is stale is a server constant, deliberately not a request field. A caller that could send zero would dial every customer's systems at once, which is the blast radius this whole surface is careful about.\n\nReturns nothing rather than failing when this deployment has no gateway and therefore connects nothing.\n\n**From the contract.** `kindlast.platform.v1.FetchService/ListFetchTargets`, declared in `proto/kindlast/platform/v1/fetch.proto`. Required scope: `internal:ingest`. Declared REST binding: `POST /internal/v1/fetch-targets:due`."
+          }
+        },
+        {
+          "name": "RunScheduledFetch (FetchService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"integration_id\": \"{{integration_id}}\",\n  \"tool\": \"list_records\"\n}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.FetchService/RunScheduledFetch",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.FetchService", "RunScheduledFetch"]
+            },
+            "description": "Fetches one granted read-only tool on one connection, and records what happened whatever that was.\n\n# A REFUSAL AND A FAILURE ARE BOTH SUCCESSFUL CALLS\n\nThe same choice IntegrationsService.FetchNow makes and for the same reason: the record is the feature. \"We did not fetch list_records on the 24th because the connection was revoked\" is a sentence a customer can read, and it cannot be written by an error path that stores nothing. So the outcome lives in the response and in the `integration_fetches` row rather than in whether this call threw.\n\nWhat DOES come back as an error is this deployment failing: core-api could not reach its own database, or the caller sent something malformed. Those are the only cases the workflow's retry policy should key on, and keeping a customer's outage out of them is what stops Temporal retrying somebody else's broken endpoint on our schedule.\n\n# THE CALLER NAMES A CONNECTION AND A TOOL, AND NOTHING ELSE\n\nNot an organisation, not a user, not arguments, not an endpoint. Whose authority the fetch runs under comes from the connection's own consent record through a definer function (00048), because a caller that could name it would be able to reach a customer's systems in somebody else's name. Arguments are absent because nothing describes what a customer's tool accepts, and ENT-274's reasoning holds: the honest bound on what nothing can check is zero, so a scheduled fetch sends `{}`.\n\ninvalid_argument   the connection id is not a uuid, or no tool was named not_found          no such connection in this deployment unimplemented      this deployment has no gateway, so it fetches nothing internal           the outcome could not be recorded, which is the one failure worth retrying\n\n**From the contract.** `kindlast.platform.v1.FetchService/RunScheduledFetch`, declared in `proto/kindlast/platform/v1/fetch.proto`. Required scope: `internal:ingest`. Declared REST binding: `POST /internal/v1/fetches:run`."
+          }
         }
       ]
     }

@@ -31,6 +31,11 @@ type Activities struct {
 	// Executions is ExecutorService: creating the record an approved finding
 	// asked for (ENT-271), which used to be a database trigger.
 	Executions Executor
+	// Fetches is FetchService: the scheduled fetch that deposits the evidence
+	// the Watcher reads (ENT-279). The same generated client as the rest;
+	// named separately because what a caller may do is a statement, and "may
+	// dial a customer's system" is not a permission to hand out by accident.
+	Fetches Fetcher
 	// Mail is DeliveryService: the transactional outbox's delivery half
 	// (part three).
 	Mail Deliverer

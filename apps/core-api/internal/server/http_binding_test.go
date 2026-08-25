@@ -589,6 +589,16 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.ExecutorService.ExecuteJob": {
 			Method: "POST", Path: "/internal/v1/executor-jobs:execute",
 		},
+		// The scheduled fetch (ENT-279): what the relay lists and what one
+		// fetch workflow calls. Cross-organisation like the Executor, and for
+		// the same reason: the organisation and the consenting person come
+		// from the connection's own rows, never from the caller.
+		"kindlast.platform.v1.FetchService.ListFetchTargets": {
+			Method: "POST", Path: "/internal/v1/fetch-targets:due",
+		},
+		"kindlast.platform.v1.FetchService.RunScheduledFetch": {
+			Method: "POST", Path: "/internal/v1/fetches:run",
+		},
 		// The Watcher's own surface (ENT-258): what it reads, and the one
 		// thing it writes. `/signals` is a collection because raising one is
 		// creating a signal; the context is a custom action because it is a

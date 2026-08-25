@@ -279,6 +279,12 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 	// decision and not this wiring's, so a deployment that turns the flag on
 	// does not also need a restart to get a client.
 	watchers := platformv1connect.NewWatcherServiceClient(httpClient, t.CoreAPIURL)
+	// The scheduled fetch that deposits evidence (ENT-279). Built
+	// unconditionally like the rest: whether this deployment fetches anything
+	// is core-api's decision (it serves no FetchService without a gateway),
+	// and the relay reads the resulting `unimplemented` as "there is nothing
+	// to fetch here" rather than as a fault.
+	fetches := platformv1connect.NewFetchServiceClient(httpClient, t.CoreAPIURL)
 
 	opts := schedule.Options{
 		Addr:                  t.Addr,
@@ -290,10 +296,11 @@ func startWorker(ctx context.Context, logger *slog.Logger, cfg *config.Config) (
 		SweepRelayInterval:    t.SweepRelayInterval,
 		SweepSchedule:         t.SweepSchedule,
 		ExecutorRelayInterval: t.ExecutorRelayInterval,
+		FetchRelayInterval:    t.FetchRelayInterval,
 		Activities: &schedule.Activities{
 			CoreAPI: coreAPI, Sweeps: coreAPI, Mail: mail,
 			Narratives: narratives, Executions: executions,
-			Watchers: watchers,
+			Watchers: watchers, Fetches: fetches,
 		},
 		Logger: logger,
 	}

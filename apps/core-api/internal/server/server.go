@@ -96,6 +96,18 @@ type Dependencies struct {
 	ExecutorJobs executorservice.Jobs
 	Executions   executorservice.Executions
 
+	// Fetch is the scheduled fetch that deposits evidence (ENT-279), built in
+	// main because it needs three pools' worth of dependency and the gateway
+	// and the keyring, exactly as Integrations below is.
+	//
+	// Nil is a supported deployment and then FetchService is not served at
+	// all: core-api opens no connection to a customer-supplied address, so
+	// without a gateway there is nothing behind this surface, and a schedule
+	// calling it every hour would collect failures rather than evidence. The
+	// worker reads the resulting `unimplemented` as "this deployment fetches
+	// nothing on a schedule" and does nothing.
+	Fetch platformv1connect.FetchServiceHandler
+
 	// Watcher is what an agentic Watcher reads and writes (ENT-258), on the
 	// producer pool. Registered with Producer, because they are the same pool
 	// and the same supported absence.
@@ -480,6 +492,15 @@ func New(deps Dependencies) (http.Handler, error) {
 	if deps.ExecutorJobs != nil && deps.Executions != nil {
 		mux.Handle(platformv1connect.NewExecutorServiceHandler(
 			executorservice.New(deps.ExecutorJobs, deps.Executions), internal))
+	}
+
+	// The scheduled fetch (ENT-279), on the internal chain like the rest of
+	// the platform surface. Nothing a browser holds reaches it: `internal:*`
+	// is issued to service clients through client credentials and never to the
+	// browser client, which is what keeps "a schedule may dial a customer's
+	// systems" from becoming "a session may".
+	if deps.Fetch != nil {
+		mux.Handle(platformv1connect.NewFetchServiceHandler(deps.Fetch, internal))
 	}
 
 	// The Hands (ENT-261). What approving a finding will do, and the record it
