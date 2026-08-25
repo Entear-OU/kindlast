@@ -1225,6 +1225,46 @@ what they have to do about it, which no commit subject knows.
   existing privileges. The Watcher skill version moves to `1.1.0`, so runs
   recorded before and after this are distinguishable in `agent_runs`.
 
+- **The Messenger exists as a skill: it drafts the words of a notification,
+  and it can only hand them to the dispatch path** (ENT-260). The fourth of
+  the four agents. Given the shape of one finding notification (the
+  organisation's name, how serious it is, how much else is open, which
+  channels it goes out on), it writes the subject and opening prose a person
+  would read, in place of the fixed template's one-size sentence.
+
+  **Nothing sends it, and nothing about your deliveries changes yet.** No
+  caller is wired in this release: the dispatch path still renders the
+  template, so every message you receive is the same one as before. The agents
+  page says exactly that, and the Messenger's status reads "Working, in part"
+  rather than "Working" until a message you receive has actually been through
+  it.
+
+  **It cannot send, structurally rather than by instruction.** Its allow-list
+  holds one tool, `queue_message`, which hands a draft over and nothing else;
+  the Python service holds no mail or chat credential and no way to obtain
+  one; and who a notification reaches, on which verified channel and when, is
+  decided by the same delivery code as before, which the draft cannot touch. A
+  model that asks to send is refused in code, and the refusal is written into
+  `agent_runs` for you to read.
+
+  **A draft is refused rather than repaired** when it contains anything that
+  reads as a link, an address or a phone number (every link in a notification
+  is minted per recipient by the server, so a written one is one nobody
+  minted), when it states what the law requires, or when it uses typography
+  the house style forbids. A refused draft is withheld entirely and the
+  template is used, so the failure mode is the message you already get today.
+
+  **It is deliberately not told what the finding says.** A notification says
+  that something needs a decision and how urgent it is, never what was found:
+  that stays behind your sign-in, which has been the rule since notifications
+  shipped. The Messenger cannot restate what it was never shown, and the
+  request shape has no field that could carry it.
+
+  New RPC `IntelligenceService.DraftMessage` on the internal surface,
+  requiring `internal:intelligence`, plus a `DraftMessage` Temporal activity
+  on the `intelligence` task queue. No migration, no new scope, no schema
+  change. The skill is `messenger.draft` at `1.0.0`, recorded on every run.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,

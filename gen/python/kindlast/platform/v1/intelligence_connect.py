@@ -29,6 +29,9 @@ class IntelligenceService(Protocol):
     async def explain_approval(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def draft_message(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class IntelligenceServiceASGIApplication(ConnectASGIApplication[IntelligenceService]):
     def __init__(self, service: IntelligenceService | AsyncGenerator[IntelligenceService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -74,6 +77,16 @@ class IntelligenceServiceASGIApplication(ConnectASGIApplication[IntelligenceServ
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.explain_approval,
+                ),
+                "/kindlast.platform.v1.IntelligenceService/DraftMessage": Endpoint.unary(
+                    method=MethodInfo(
+                        name="DraftMessage",
+                        service_name="kindlast.platform.v1.IntelligenceService",
+                        input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.draft_message,
                 ),
             },
             interceptors=interceptors,
@@ -168,6 +181,26 @@ class IntelligenceServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def draft_message(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DraftMessage",
+                service_name="kindlast.platform.v1.IntelligenceService",
+                input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageRequest,
+                output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class IntelligenceServiceSync(Protocol):
     def draft_narrative(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftNarrativeResponse:
@@ -177,6 +210,8 @@ class IntelligenceServiceSync(Protocol):
     def answer_finding_question(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.AnswerFindingQuestionResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def explain_approval(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def draft_message(self, request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -223,6 +258,16 @@ class IntelligenceServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.explain_approval,
+                ),
+                "/kindlast.platform.v1.IntelligenceService/DraftMessage": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="DraftMessage",
+                        service_name="kindlast.platform.v1.IntelligenceService",
+                        input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.draft_message,
                 ),
             },
             interceptors=interceptors,
@@ -311,6 +356,26 @@ class IntelligenceServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.IntelligenceService",
                 input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalRequest,
                 output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.ExplainApprovalResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def draft_message(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DraftMessage",
+                service_name="kindlast.platform.v1.IntelligenceService",
+                input=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageRequest,
+                output=kindlast_dot_platform_dot_v1_dot_intelligence__pb2.DraftMessageResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

@@ -3,12 +3,18 @@
 
 # WHAT RUNS HERE
 
-One activity, `DraftNarrative`, which is the same draft the RPC of that name
-performs: the harness, the guardrail ring, the citation validator and the run
-record. The Go worker's sweep workflow asks core-api for the next finding with
-no narrative, hands the draft request it gets back to this activity, and
-records what comes back. Go loads, Python drafts, Go persists, each retrying
-on its own.
+Three activities, each the same run the RPC of its name performs: the harness,
+the guardrail ring, whatever validator that skill has, and the run record. The
+Go workflows load, this service drafts or decides, and Go persists, each half
+retrying on its own.
+
+  DraftNarrative   the Analyst. The sweep workflow asks core-api for the next
+                   finding with no narrative and records what comes back.
+  Watch            the Watcher, over one organisation's context.
+  DraftMessage     the Messenger (ENT-260). The doorbell workflow runs it
+                   between planning who to tell and telling them, and treats
+                   anything other than a drafted message as "use the
+                   template", so a notification goes out either way.
 
 # WHAT THIS WORKER HOLDS, WHICH IS THE SAME AS THE RPC: NOTHING
 
@@ -54,6 +60,11 @@ logger = logging.getLogger("kindlast.intelligence.worker")
 TASK_QUEUE = "intelligence"
 ACTIVITY_NAME = "DraftNarrative"
 WATCH_ACTIVITY_NAME = "Watch"
+# Pinned here first (ENT-260). The Go half of the pin arrives with the caller:
+# the doorbell workflow does not schedule this activity yet, and when it does,
+# apps/workers/internal/schedule/doorbell.go must name exactly this string,
+# which the end-to-end run is what proves.
+DRAFT_MESSAGE_ACTIVITY_NAME = "DraftMessage"
 
 
 def make_activity(service: IntelligenceService):
@@ -97,6 +108,34 @@ def make_watch_activity(service: IntelligenceService):
     return watch
 
 
+def make_draft_message_activity(service: IntelligenceService):
+    """The Messenger activity, closed over the service that drafts (ENT-260).
+
+    The doorbell workflow runs this between planning and sending, and treats
+    every failure as "use the template". So the two error shapes matter less
+    here than anywhere else on this queue: whatever comes back, a notification
+    still goes out. What they buy is a workflow history that says WHY the
+    template was used, which is the difference between a deployment whose
+    Messenger is off and one whose Messenger is broken.
+    """
+
+    @activity.defn(name=DRAFT_MESSAGE_ACTIVITY_NAME)
+    def draft_message(
+        request: intelligence_pb2.DraftMessageRequest,
+    ) -> intelligence_pb2.DraftMessageResponse:
+        try:
+            return service.run_draft_message(request)
+        except ConnectError as exc:
+            if exc.code == Code.INVALID_ARGUMENT:
+                # A malformed request, or a context with no severity. Neither
+                # changes by waiting, and a doorbell must not sit in a retry
+                # loop over the words it would have been nicer to use.
+                raise ApplicationError(str(exc), type="bad-request", non_retryable=True) from exc
+            raise ApplicationError(str(exc), type=exc.code.name) from exc
+
+    return draft_message
+
+
 async def run_worker(
     service: IntelligenceService,
     address: str,
@@ -121,7 +160,11 @@ async def run_worker(
     worker = Worker(
         client,
         task_queue=TASK_QUEUE,
-        activities=[make_activity(service), make_watch_activity(service)],
+        activities=[
+            make_activity(service),
+            make_watch_activity(service),
+            make_draft_message_activity(service),
+        ],
         activity_executor=ThreadPoolExecutor(max_workers=concurrency),
         max_concurrent_activities=concurrency,
     )

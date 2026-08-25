@@ -62,23 +62,24 @@ describe('the agent rail (ENT-232)', () => {
     const list = within(pipeline!)
 
     // The Watcher, the Analyst and the Hands are skills on the harness that a
-    // person can reach; the Messenger does not exist. Saying the same thing
-    // about all four is the failure this replaced, so the counts are asserted
-    // rather than the labels merely being present.
-    //
-    // THREE SINCE ENT-278, and the Hands is why. Its skill has run since
-    // ENT-261 with every entry point on `internal:ingest`, which no browser
-    // holds, so the rail said "Working, in part" about work nobody could ask
-    // for or look at. The finding page now asks it what approving will do,
-    // above the decision, so the label moved with the surface rather than
-    // ahead of it.
+    // person can reach (three since ENT-278, the Hands' surface being why);
+    // the Messenger is a skill nothing calls yet (ENT-260). Saying the same
+    // thing about all four is the failure this replaced, so the counts are
+    // asserted rather than the labels merely being present.
     expect(list.getAllByText(STATUS_LABEL['working'])).toHaveLength(3)
-    expect(list.getAllByText(STATUS_LABEL['not-built'])).toHaveLength(1)
-    // Back to zero, having been one since ENT-261 and zero since ENT-258. The
-    // state earns its keep by being reachable in both directions: it is what
-    // the rail says in the window where an agent's skill has landed and its
-    // surface has not, which has now happened twice.
-    expect(list.queryAllByText(STATUS_LABEL['partly-working'])).toHaveLength(0)
+    // Zero since ENT-260, the Messenger having been the last one. Asserted
+    // rather than dropped: an absence is a claim, and this is the one that
+    // would go quietly wrong the day a fifth agent joins the rail ahead of its
+    // skill.
+    expect(list.queryAllByText(STATUS_LABEL['not-built'])).toHaveLength(0)
+    // One again, and the state earns its keep by being reachable in both
+    // directions: zero at ENT-258, one at ENT-261, zero at ENT-278 when the
+    // Hands' surface landed, one at ENT-260. It is what the rail says in the
+    // window where an agent has one half and not the other, and the
+    // Messenger's missing half is the caller rather than a page: its skill
+    // runs and leaves records, and the delivery path still renders the
+    // template, so no message anybody receives has been through it.
+    expect(list.getAllByText(STATUS_LABEL['partly-working'])).toHaveLength(1)
   })
 
   it('no longer claims that nothing is scheduled', () => {

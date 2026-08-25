@@ -78,8 +78,8 @@ describe('the agent catalogue (ENT-232)', () => {
 
   // The honesty assertion, and the reason this file exists. ENT-161 happened
   // because a dashboard said everything was fine about work nothing had done.
-  // Three of the four are working skills today; one is not built at all.
-  it('claims three working agents and one unbuilt, not four the same', () => {
+  // Three of the four are working skills today; one is half built.
+  it('claims three working agents and one half built, not four the same', () => {
     // The count is asserted rather than the absence of a count for the reason
     // this test was written for: the page used to make one claim about all
     // four, and the failure that hides is a placeholder reading like a
@@ -93,28 +93,38 @@ describe('the agent catalogue (ENT-232)', () => {
     // the door: `ApprovalService.ExplainApproval` on `agents:ask`, and a panel
     // on the finding page, above the decision, that says what approving will
     // add to a register and what it could not fill.
-    //
-    // The label moved in the same commit as the surface, which is what the
-    // note below asked for when it was the other way round.
     expect(
       AGENTS.filter((a) => a.status === 'working').map((a) => a.slug),
     ).toEqual(['watcher', 'analyst', 'hands'])
-    expect(
-      AGENTS.filter((a) => a.status === 'not-built').map((a) => a.slug),
-    ).toEqual(['messenger'])
 
-    // AND THE HALF-BUILT STATE IS UNUSED AGAIN, WHICH IS NOT THE SAME AS
-    // UNNECESSARY.
+    // NOTHING IS "NOT BUILT" ANY MORE, AS OF ENT-260.
     //
-    // It read `toHaveLength(0)` from ENT-258, then held the Hands from
-    // ENT-261, and is back to zero here. That round trip is the argument for
-    // keeping the state rather than retiring it: an agent whose skill runs and
-    // whose surface does not is a real condition this product reaches, twice
-    // now, and the label is what stops the rail claiming work nobody can look
-    // at in the window between the two halves landing.
+    // The Messenger was the last one, and this assertion moved rather than
+    // being deleted: an empty list here is a claim in its own right, and it is
+    // the claim that would be quietly wrong the day somebody adds a fifth
+    // agent to the rail before its skill exists.
+    expect(AGENTS.filter((a) => a.status === 'not-built')).toHaveLength(0)
+
+    // AND THE HALF-BUILT STATE HOLDS THE MESSENGER, HAVING JUST RELEASED THE
+    // HANDS (ENT-278) IN THE SAME WEEK IT TOOK IT (ENT-261).
+    //
+    // That round trip, twice now, is the argument for keeping the state rather
+    // than retiring it: an agent with one half landed is a real condition this
+    // product keeps reaching, and the label is what stops the rail claiming
+    // work nobody can look at in the window between the halves.
+    //
+    // The Messenger's missing half is not the console's: its skill runs, under
+    // a budget, an allow-list and three critics, and leaves an `agent_runs`
+    // row whatever the outcome. What does not exist is the CALLER. core-api
+    // does not yet build its context and the delivery transaction still
+    // renders the template, so no message anybody receives has been through
+    // it. Calling that "working" would be the exact failure this file exists
+    // after, and worse here than anywhere: this agent's whole output is copy a
+    // person is supposed to receive, so "working" would be a claim about their
+    // mailbox.
     expect(
       AGENTS.filter((a) => a.status === 'partly-working').map((a) => a.slug),
-    ).toEqual([])
+    ).toEqual(['messenger'])
   })
 
   it('says what remains for every agent that is not finished', () => {

@@ -568,3 +568,174 @@ def test_what_the_read_returned_reaches_the_model_only_as_a_user_turn(auth_serve
     for message in after:
         if message["role"] == "system":
             assert "open_access_requests" not in message["content"]
+
+
+# --- The Messenger, over the wire (ENT-260) --------------------------------
+
+
+def a_draft_message_request(
+    org_id: str = "6d1cfa32-1c3d-4dd8-9c1e-6bb3a5c3f0f1", **overrides
+) -> intelligence_pb2.DraftMessageRequest:
+    context = intelligence_pb2.MessageContext(
+        org_name="Acme Ltd",
+        severity="high",
+        open_findings=4,
+        first_for_org=False,
+        has_approve_link=True,
+        channels=["email"],
+    )
+    fields = {
+        "org_id": org_id,
+        "notification_id": "9b2c4f3a-7d1e-4c8b-9a5f-2e6d0c1b3a47",
+        "context": context,
+    }
+    fields.update(overrides)
+    return intelligence_pb2.DraftMessageRequest(**fields)
+
+
+def a_drafted_message(**overrides):
+    message = {
+        "subject": "A high severity finding is waiting in Acme Ltd",
+        "body": (
+            "Something in your compliance record needs a decision, and it is "
+            "the most serious of the five now open. Open it to read what was "
+            "found, or approve it from this message if you already know."
+        ),
+    }
+    message.update(overrides)
+    return message
+
+
+def test_a_message_cannot_be_drafted_without_a_token(auth_server):
+    service = a_service(auth_server)
+    captured, _ = call(service, a_draft_message_request(), None, method="DraftMessage")
+    assert captured["status"].startswith("401")
+
+
+def test_a_human_token_cannot_draft_a_message(auth_server):
+    # The scope is granted to one machine principal. A console token carries a
+    # different audience and does not carry this scope, and both are checked.
+    service = a_service(auth_server)
+    token = auth_server.mint(auth_server.claims(scope="findings:read"))
+    captured, _ = call(service, a_draft_message_request(), token, method="DraftMessage")
+    assert captured["status"].startswith("403")
+
+
+def test_a_drafted_message_comes_back_with_the_run_that_produced_it(auth_server):
+    core_api = FakeCoreAPI()
+    service = a_service(
+        auth_server,
+        model=SteppingModel(
+            {"action": "queue_message", "reason": "ready",
+             "message": a_drafted_message()},
+            {"action": "done", "reason": "queued"},
+        ),
+        core_api=core_api,
+    )
+
+    response = service.run_draft_message(a_draft_message_request())
+
+    assert response.outcome == intelligence_pb2.MESSAGE_OUTCOME_SUCCEEDED
+    assert response.subject == "A high severity finding is waiting in Acme Ltd"
+    assert response.body_text.startswith("Something in your compliance record")
+    assert response.agent_run_id
+    # And the run was recorded against the organisation the request named,
+    # before the response was built. A caller handed words with no provenance
+    # is handed something this service exists not to produce, and here those
+    # words are about to be sent to a person.
+    assert [org for org, _ in core_api.recorded] == [
+        "6d1cfa32-1c3d-4dd8-9c1e-6bb3a5c3f0f1"
+    ]
+    assert core_api.recorded[0][1].skill == "messenger.draft"
+
+
+def test_a_run_that_asked_to_send_is_a_refusal_and_not_an_error(auth_server):
+    # THE ACCEPTANCE CRITERION, DRIVEN THROUGH THE SURFACE A CALLER USES.
+    #
+    # §26.3 makes a refusal what a working guardrail produces, so it arrives as
+    # an outcome. Returning `internal` here would tell core-api the harness
+    # broke when it did exactly what it was built to do.
+    service = a_service(
+        auth_server,
+        model=SteppingModel(
+            {"action": "send_email", "reason": "I will deliver it myself",
+             "message": a_drafted_message()},
+        ),
+    )
+
+    response = service.run_draft_message(a_draft_message_request())
+
+    assert response.outcome == intelligence_pb2.MESSAGE_OUTCOME_REFUSED
+    assert "send_email" in response.outcome_detail
+    # And nothing is handed back for core-api to send.
+    assert response.subject == ""
+    assert response.body_text == ""
+
+
+def test_a_refused_draft_is_withheld_rather_than_returned_with_a_warning(auth_server):
+    # The likeliest thing to have been refused is a link the model invented,
+    # and the caller is about to put this in an email under our own From:
+    # header. A caller handed copy plus a note is a caller that sends the copy.
+    service = a_service(
+        auth_server,
+        model=SteppingModel(
+            {"action": "queue_message", "reason": "ready",
+             "message": a_drafted_message(body="Open https://acme.example now.")},
+        ),
+    )
+
+    response = service.run_draft_message(a_draft_message_request())
+
+    assert response.outcome == intelligence_pb2.MESSAGE_OUTCOME_REFUSED
+    assert response.subject == ""
+    assert response.body_text == ""
+    assert response.agent_run_id
+
+
+def test_a_message_run_that_could_not_be_recorded_is_not_returned(auth_server):
+    # ENT-277's rule: every run leaves a record a customer can read, and a run
+    # that vanished is a run they cannot ask about. Fatal rather than
+    # best-effort, because the words were about to be sent to a person.
+    service = a_service(
+        auth_server,
+        model=SteppingModel(
+            {"action": "queue_message", "reason": "ready",
+             "message": a_drafted_message()},
+            {"action": "done", "reason": "queued"},
+        ),
+        core_api=FakeCoreAPI(fail=True),
+    )
+
+    with pytest.raises(ConnectError):
+        service.run_draft_message(a_draft_message_request())
+
+
+def test_a_context_with_no_severity_is_refused(auth_server):
+    service = a_service(auth_server)
+    request = a_draft_message_request()
+    request.context.severity = ""
+
+    with pytest.raises(ConnectError):
+        service.run_draft_message(request)
+
+
+def test_the_finding_never_reaches_the_messenger_because_it_is_never_sent(auth_server):
+    """§17.1, ASSERTED AT THE WIRE RATHER THAN IN A PROMPT.
+
+    `MessageContext` has no field for the detected text, the proposed action or
+    the obligation summary, so there is no value core-api could put in the
+    request that would carry them, and no lookup in this process that could
+    fetch them. This goes red the day somebody adds one, which is exactly the
+    change ENT-260's own description asks for and §17.1 refuses. See
+    `skills/messenger.py` for the disagreement, which is reported rather than
+    resolved.
+    """
+    fields = {f.name for f in intelligence_pb2.MessageContext.DESCRIPTOR.fields}
+    assert fields == {
+        "org_name",
+        "severity",
+        "open_findings",
+        "first_for_org",
+        "has_approve_link",
+        "channels",
+    }
