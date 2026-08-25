@@ -299,6 +299,15 @@ type Doorbell struct {
 	// without one is a message to somebody the schema will not let act from a
 	// link.
 	ApproveURL string
+
+	// The Messenger's words, or empty (ENT-280). Set together or not at all,
+	// and used only together: half a draft renders as no draft, because a
+	// renderer that trusts its caller's validation is one bug away from a
+	// subject with no body behind it. They replace the subject and the opening
+	// prose and nothing else; see draft.go for what that buys and what checks
+	// them.
+	DraftedSubject string
+	DraftedBody    string
 }
 
 // FindingNotification renders the doorbell.
@@ -323,8 +332,19 @@ func FindingNotification(d Doorbell) Message {
 
 	subject := fmt.Sprintf("A %s compliance finding needs attention in %s", d.Severity, org)
 
+	opening := fmt.Sprintf("Kindlast has raised a %s finding for %s.", d.Severity, org)
+	// The Messenger's words, when there are words, and BOTH halves or neither
+	// (ENT-280). The draft replaces the subject and this opening sentence and
+	// nothing below them: every link and the why-you-received-this are still
+	// appended by this function, per recipient, which is the property that
+	// makes drafted prose safe to accept at all.
+	if d.DraftedSubject != "" && d.DraftedBody != "" {
+		subject = d.DraftedSubject
+		opening = d.DraftedBody
+	}
+
 	lines := []string{
-		fmt.Sprintf("Kindlast has raised a %s finding for %s.", d.Severity, org),
+		opening,
 		"",
 		"Open it here to read what was found and decide what to do:",
 		d.FindingURL,

@@ -81,6 +81,9 @@ type Doorbells interface {
 	Doorbell(ctx context.Context, id string) (postgres.Doorbell, error)
 	LockDoorbell(ctx context.Context, tx pgx.Tx, id string) (postgres.Doorbell, error)
 	Recipients(ctx context.Context, tx pgx.Tx, outboxID string) ([]postgres.Recipient, error)
+	// FindingCounts answers how much else is asking for a decision in the
+	// organisation, for the drafting instruction's context (ENT-280).
+	FindingCounts(ctx context.Context, tx pgx.Tx, orgID, findingID string) (int32, int64, error)
 	MintCapabilityToken(ctx context.Context, tx pgx.Tx, orgID, userID, kind, tokenHash, lifetime string) error
 	// MintApprovalDelegation returns false when the mint was declined rather
 	// than when it failed, which is why it is a boolean and not an error. See
@@ -105,7 +108,8 @@ func (s *Service) PlanNotification(
 		return nil, err
 	}
 
-	if _, err := s.outbox.Doorbell(ctx, id); err != nil {
+	bell, err := s.outbox.Doorbell(ctx, id)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return connect.NewResponse(&platformv1.PlanNotificationResponse{Settled: true}), nil
 		}
@@ -119,7 +123,13 @@ func (s *Service) PlanNotification(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	// Guarded, because pgx.Tx is an interface and the read-only fakes hand
+	// back nil: a plan needs no transaction of its own to be worth testing.
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
 
 	recipients, err := s.outbox.Recipients(ctx, tx, id)
 	if err != nil {
@@ -127,6 +137,7 @@ func (s *Service) PlanNotification(
 	}
 
 	res := &platformv1.PlanNotificationResponse{}
+	var sending []postgres.Recipient
 	for _, r := range recipients {
 		// The decision, in Go, over rows the database merely fetched.
 		d := notify.Decide(r.FindingSeverity, r.MinSeverity,
@@ -135,6 +146,7 @@ func (s *Service) PlanNotification(
 		switch {
 		case d.Send:
 			planned.Decision = platformv1.PlannedRecipient_DECISION_SEND
+			sending = append(sending, r)
 		case d.Held():
 			planned.Decision = platformv1.PlannedRecipient_DECISION_HOLD
 			planned.HoldUntil = timestamppb.New(d.HoldUntil)
@@ -143,6 +155,10 @@ func (s *Service) PlanNotification(
 		}
 		res.Recipients = append(res.Recipients, planned)
 	}
+	// The drafting half of the plan (ENT-280): an instruction when somebody
+	// will receive the message, and nothing when nobody will, because asking
+	// a model to write words nobody reads spends a run on nothing.
+	res.Draft = s.draftInstruction(ctx, tx, bell, recipients, sending)
 	return connect.NewResponse(res), nil
 }
 
@@ -163,6 +179,26 @@ func (s *Service) NotifyRecipients(
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("a notification goes to somebody; send user_ids"))
 	}
+	// The drafted words, when there are words (ENT-280). Both halves or
+	// neither: the harness cannot produce the half-state (a refusal withholds
+	// both, a success carries both), so one arriving alone means something
+	// between the services changed, and invalid_argument is marked
+	// non-retryable by the worker so the row stays pending for a fresh run.
+	subject, body := req.Msg.GetSubject(), req.Msg.GetBodyText()
+	if (subject == "") != (body == "") {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("a draft is both halves or neither: a subject with no body, "+
+				"or a body with no subject, is a caller bug"))
+	}
+	if subject != "" {
+		// Checked AGAIN beside the send, not only in the harness: the words
+		// rode through a workflow history and a second service on the way
+		// here, and under our From: header a link the model wrote is a
+		// phishing primitive. This handler is the last code that can stop it.
+		if err := notify.AcceptableDraft(subject, body); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+	}
 	if s.channels.Empty() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			errors.New("no delivery channel is configured (neither KINDLAST_SMTP_ADDR nor "+
@@ -181,7 +217,11 @@ func (s *Service) NotifyRecipients(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
 
 	bell, err := s.outbox.LockDoorbell(ctx, tx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -210,24 +250,33 @@ func (s *Service) NotifyRecipients(
 		}
 	}
 
-	if sendErr := s.sendAll(ctx, tx, bell, wanted); sendErr != nil {
+	if sendErr := s.sendAll(ctx, tx, bell, wanted, subject, body); sendErr != nil {
 		if err := s.outbox.MarkDoorbellFailed(ctx, tx, bell.ID, sendErr); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		if err := tx.Commit(ctx); err != nil {
+		if err := commit(ctx, tx); err != nil {
 			return nil, connect.NewError(connect.CodeInternal,
 				fmt.Errorf("committing a failed notification: %w", err))
 		}
 		return nil, connect.NewError(connect.CodeUnavailable,
 			fmt.Errorf("the notification was not delivered: %w", sendErr))
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return nil, connect.NewError(connect.CodeInternal,
 			fmt.Errorf("committing a notification: %w", err))
 	}
 	return connect.NewResponse(&platformv1.NotifyRecipientsResponse{
 		Sent: int32(len(wanted)),
 	}), nil
+}
+
+// commit tolerates the nil transaction the read-only fakes hand back, the
+// same way the deferred rollbacks do. A real pool never returns one.
+func commit(ctx context.Context, tx pgx.Tx) error {
+	if tx == nil {
+		return nil
+	}
+	return tx.Commit(ctx)
 }
 
 // SettleNotification marks a notification sent or skipped.
@@ -314,6 +363,7 @@ func notificationID(raw string) (string, error) {
 // failure this product exists to prevent.
 func (s *Service) sendAll(
 	ctx context.Context, tx pgx.Tx, bell postgres.Doorbell, recipients []postgres.Recipient,
+	draftedSubject, draftedBody string,
 ) error {
 	for _, r := range recipients {
 		// Which channel, decided in Go over rows the function merely fetched
@@ -359,6 +409,8 @@ func (s *Service) sendAll(
 			FindingURL:     findingURL,
 			UnsubscribeURL: fmt.Sprintf("%s/unsubscribe/%s", s.baseURL, token),
 			ApproveURL:     approveURL,
+			DraftedSubject: draftedSubject,
+			DraftedBody:    draftedBody,
 		})
 
 		if err := s.channels.Send(ctx, delivery.Message{

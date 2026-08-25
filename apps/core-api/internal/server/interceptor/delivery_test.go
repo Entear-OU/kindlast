@@ -125,6 +125,10 @@ func (r *recordingOutbox) LockDoorbell(ctx context.Context, _ pgx.Tx, id string)
 	r.locks++
 	return r.Doorbell(ctx, id)
 }
+func (r *recordingOutbox) FindingCounts(context.Context, pgx.Tx, string, string) (int32, int64, error) {
+	return 0, 1, nil
+}
+
 func (r *recordingOutbox) Recipients(context.Context, pgx.Tx, string) ([]postgres.Recipient, error) {
 	return bellRecipients, nil
 }

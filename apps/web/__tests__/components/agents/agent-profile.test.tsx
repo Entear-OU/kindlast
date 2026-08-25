@@ -86,9 +86,17 @@ describe('an agent profile (ENT-232)', () => {
   })
 
   it('says what remains, for an agent that is not finished', () => {
-    const messenger = agentBySlug('messenger')!
-    render(<AgentProfile agent={messenger} />)
-    expect(screen.getByText(messenger.remaining!)).toBeInTheDocument()
+    // A synthetic agent, since ENT-280 finished the last real one. The branch
+    // stays covered because the next half-built agent will need it, and a
+    // test pinned to a real agent's unfinishedness is a test that argues for
+    // leaving something unfinished.
+    const halfBuilt = {
+      ...agentBySlug('messenger')!,
+      status: 'partly-working' as const,
+      remaining: 'The other half is not built yet.',
+    }
+    render(<AgentProfile agent={halfBuilt} />)
+    expect(screen.getByText(halfBuilt.remaining)).toBeInTheDocument()
   })
 
   it('says when it runs and what it may change, for every agent', () => {

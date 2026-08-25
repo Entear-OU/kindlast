@@ -62,6 +62,8 @@ func DeliverNotificationWorkflow(ctx workflow.Context, notificationID string) (N
 
 	sent := map[string]bool{}
 	var result NotificationResult
+	var draftedSubject, draftedBody string
+	draftTried := false
 
 	// Bounded, so a plan that keeps answering "hold" for a reason nobody
 	// anticipated (a clock that never reaches the end of a window, say) ends
@@ -103,8 +105,56 @@ func DeliverNotificationWorkflow(ctx workflow.Context, notificationID string) (N
 		}
 
 		if len(due) > 0 {
+			// The Messenger, between the plan and the send (ENT-280), and
+			// UNABLE TO STOP THE DOORBELL. Every way this step can end other
+			// than a drafted message reads as "use the template": the
+			// activity failing, the run being refused by its own guardrails,
+			// nobody polling the intelligence queue, or the plan carrying no
+			// instruction at all. A doorbell nobody receives is worse than a
+			// doorbell in the template's words, and the send below re-checks
+			// whatever arrives here beside the send in any case.
+			//
+			// Once per run, not per round: the words describe the finding,
+			// which does not change while a colleague's quiet hours pass, and
+			// a second model run would spend a customer's budget restating it.
+			if plan.Draft != nil && !draftTried {
+				draftTried = true
+				draftCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+					// The Python worker's queue; nothing in this binary
+					// registers the name. Same numbers as the Watch step's
+					// scheduling half, for the same reasons.
+					TaskQueue:              IntelligenceTaskQueue,
+					ScheduleToStartTimeout: 2 * time.Minute,
+					// One model call plus the critics; five minutes is
+					// generous on a local model and short enough that a hung
+					// call delays a doorbell rather than losing it.
+					StartToCloseTimeout: 5 * time.Minute,
+					RetryPolicy: &temporal.RetryPolicy{
+						InitialInterval:    10 * time.Second,
+						BackoffCoefficient: 2,
+						MaximumInterval:    time.Minute,
+						// Two: enough to ride out a restarting worker, few
+						// enough that the doorbell is late by minutes, not
+						// hours, when drafting is genuinely broken.
+						MaximumAttempts: 2,
+					},
+				})
+				var drafted platformv1.DraftMessageResponse
+				err := workflow.ExecuteActivity(draftCtx, DraftMessageActivityName,
+					&platformv1.DraftMessageRequest{
+						OrgId:          plan.Draft.GetOrgId(),
+						NotificationId: notificationID,
+						Context:        plan.Draft.GetContext(),
+						ModelEndpoint:  plan.Draft.GetModelEndpoint(),
+					}).Get(ctx, &drafted)
+				if err == nil && drafted.GetOutcome() == platformv1.MessageOutcome_MESSAGE_OUTCOME_SUCCEEDED {
+					draftedSubject, draftedBody = drafted.GetSubject(), drafted.GetBodyText()
+				}
+			}
+
 			var n int32
-			if err := workflow.ExecuteActivity(ctx, NotifyRecipientsActivityName, notificationID, due).Get(ctx, &n); err != nil {
+			if err := workflow.ExecuteActivity(ctx, NotifyRecipientsActivityName,
+				notificationID, due, draftedSubject, draftedBody).Get(ctx, &n); err != nil {
 				return result, err
 			}
 			for _, u := range due {
@@ -148,6 +198,12 @@ func DeliverNotificationWorkflow(ctx workflow.Context, notificationID string) (N
 type NotificationPlan struct {
 	Settled    bool
 	Recipients []PlannedRecipient
+	// Draft is the Messenger's instruction, or nil for the template
+	// (ENT-280). The proto rides in the history the way WatchCandidate's
+	// request does: it is the exact payload the Python activity takes, and
+	// MessageContext structurally cannot carry the finding, so it is safe to
+	// store and safe to read in the UI.
+	Draft *platformv1.DraftInstruction
 }
 
 // PlannedRecipient is one person's decision as of the plan.
@@ -160,6 +216,11 @@ type PlannedRecipient struct {
 
 // The decisions, as strings in the history so a person reading it in the UI
 // sees "hold" rather than 2.
+// DraftMessageActivityName is registered by the Python worker on the
+// intelligence queue (worker.py, ENT-260); nothing in this binary registers
+// it, exactly like the Watch step.
+const DraftMessageActivityName = "DraftMessage"
+
 const (
 	decisionSend = "send"
 	decisionHold = "hold"
@@ -196,7 +257,7 @@ func (a *Activities) PlanNotification(ctx context.Context, notificationID string
 	if err != nil {
 		return NotificationPlan{}, badRequestOrRefusal(err)
 	}
-	plan := NotificationPlan{Settled: res.Msg.GetSettled()}
+	plan := NotificationPlan{Settled: res.Msg.GetSettled(), Draft: res.Msg.GetDraft()}
 	for _, r := range res.Msg.GetRecipients() {
 		p := PlannedRecipient{UserID: r.GetUserId(), Reason: r.GetReason()}
 		switch r.GetDecision() {
@@ -216,10 +277,14 @@ func (a *Activities) PlanNotification(ctx context.Context, notificationID string
 }
 
 // NotifyRecipients asks core-api to send to the named people now.
-func (a *Activities) NotifyRecipients(ctx context.Context, notificationID string, userIDs []string) (int32, error) {
+func (a *Activities) NotifyRecipients(
+	ctx context.Context, notificationID string, userIDs []string, subject, bodyText string,
+) (int32, error) {
 	res, err := a.Mail.NotifyRecipients(ctx, connect.NewRequest(&platformv1.NotifyRecipientsRequest{
 		NotificationId: notificationID,
 		UserIds:        userIDs,
+		Subject:        subject,
+		BodyText:       bodyText,
 	}))
 	if err != nil {
 		return 0, badRequestOrRefusal(err)

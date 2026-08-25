@@ -238,26 +238,23 @@ export const AGENTS: readonly Agent[] = [
     slug: 'messenger',
     name: 'The Messenger',
     does: 'Tells you when something needs a decision.',
-    // PARTLY WORKING, AND THE MISSING HALF IS NOT THE CONSOLE (ENT-260).
+    // WORKING, IN THE COMMIT THAT MADE IT TRUE (ENT-280).
     //
-    // The skill runs, under a budget, an allow-list and three critics, and
-    // leaves an `agent_runs` row whether it succeeded, refused or failed. What
-    // does not exist yet is the caller: core-api does not yet build the
-    // context, the doorbell workflow does not yet run the draft, and the
-    // delivery transaction still renders the template. So no message anybody
-    // receives has been through it.
+    // ENT-260 shipped the skill and this entry said `partly-working`, because
+    // nothing called it and "working" would have been a claim about somebody's
+    // mailbox. The caller exists now: the plan carries the instruction, the
+    // doorbell workflow runs the draft between plan and send, and the
+    // delivery transaction renders drafted words with every link still minted
+    // per recipient. A message a person receives has been through it.
     //
-    // Calling that "working" would be the exact failure this file exists
-    // after, a dashboard claiming something about work nobody can look at, and
-    // it would be worse here than it was for the half-built Hands: this
-    // agent's whole output is copy a person is supposed to receive, so
-    // "working" would be a claim about their mailbox.
-    status: 'partly-working',
-    runs: 'Nothing calls it yet. The message you get today is still written by a template.',
+    // What keeps the claim honest is what it still cannot do, and the send
+    // path re-checks it beside the send: a draft that fails, refuses or
+    // carries a link falls back to the template, and the doorbell rings
+    // either way.
+    status: 'working',
+    runs: 'When a finding rings a doorbell, to write the words of the message.',
     effects:
       'It writes the words of a message and hands them over. It cannot decide that a message exists, who it goes to, or where, and it never holds a mail or chat credential of its own.',
-    remaining:
-      'Nothing asks it for a draft yet, so the messages you receive are still the templated ones.',
     skills: [
       {
         module: 'messenger',
