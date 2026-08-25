@@ -244,6 +244,10 @@ func TestTheInstructionNamesTheModelTheRunIsRecordedAgainst(t *testing.T) {
 	if endpoint.GetProvider() != "anthropic" || endpoint.GetModel() != "claude-haiku-x" {
 		t.Fatalf("the endpoint names %q/%q", endpoint.GetProvider(), endpoint.GetModel())
 	}
+	// The deprecated getter is the assertion: the field is deprecated
+	// PRECISELY so nothing rides in it, and this is the test that a plan
+	// never puts a credential where a workflow history would keep it.
+	//nolint:staticcheck // asserting the deprecated field stays empty is the point
 	if endpoint.GetApiKey() != "" || endpoint.GetBaseUrl() != "" {
 		t.Fatal("names only: a credential or an endpoint must never ride here")
 	}
