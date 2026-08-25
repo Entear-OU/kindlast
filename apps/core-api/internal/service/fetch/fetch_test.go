@@ -39,15 +39,17 @@ const (
 // --- the fakes -------------------------------------------------------------
 
 type fakeTargets struct {
-	staleAfter time.Duration
-	limit      int
-	targets    []postgres.FetchTarget
+	staleAfter    time.Duration
+	requestWindow time.Duration
+	limit         int
+	targets       []postgres.FetchTarget
 }
 
 func (f *fakeTargets) FetchTargets(
-	_ context.Context, staleAfter time.Duration, limit int,
+	_ context.Context, staleAfter, requestWindow time.Duration, limit int,
 ) ([]postgres.FetchTarget, error) {
 	f.staleAfter = staleAfter
+	f.requestWindow = requestWindow
 	f.limit = limit
 	return f.targets, nil
 }
