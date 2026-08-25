@@ -45,6 +45,9 @@ const (
 	// IntelligenceServiceExplainApprovalProcedure is the fully-qualified name of the
 	// IntelligenceService's ExplainApproval RPC.
 	IntelligenceServiceExplainApprovalProcedure = "/kindlast.platform.v1.IntelligenceService/ExplainApproval"
+	// IntelligenceServiceDraftMessageProcedure is the fully-qualified name of the IntelligenceService's
+	// DraftMessage RPC.
+	IntelligenceServiceDraftMessageProcedure = "/kindlast.platform.v1.IntelligenceService/DraftMessage"
 )
 
 // IntelligenceServiceClient is a client for the kindlast.platform.v1.IntelligenceService service.
@@ -173,6 +176,41 @@ type IntelligenceServiceClient interface {
 	// Like DraftNarrative and Watch, a refusal is a 200 with `outcome:
 	// REFUSED`. See DraftNarrative's comment for why.
 	ExplainApproval(context.Context, *connect.Request[v1.ExplainApprovalRequest]) (*connect.Response[v1.ExplainApprovalResponse], error)
+	// Runs the Messenger over one finding notification: write the words a
+	// person will read, and hand them to the dispatch path (ENT-260, §26.5).
+	//
+	// # THE FOURTH SKILL, AND THE FIRST WHOSE OUTPUT LEAVES THE BUILDING
+	//
+	// Everything the other three write is read on a page, behind the reader's
+	// own sign-in, beside the finding it is about. This arrives in a mailbox or
+	// a chat that somebody did not open at that moment, under our From: header.
+	//
+	// So the question the issue's title asks, can it send any other way, is
+	// answered by the surface rather than by the prompt. The skill's allow-list
+	// holds one entry, `queue_message`, and there is no RPC anywhere this
+	// service can reach that delivers anything: the SMTP client and the
+	// Telegram token are held by core-api, this process declares no library
+	// that could open either, and `tests/test_no_third_party_credential.py`
+	// asserts that rather than assuming it. A model asking to send is refused
+	// against the allow-list, recorded as refused, and the run ends.
+	//
+	// And the draft changes nothing about the send. Who hears about a finding
+	// comes from memberships and `notification_preferences` at delivery time;
+	// whether a channel may be addressed at all comes from `notify.RouteFor`,
+	// which answers a linked but unverified Telegram chat with the remaining
+	// channel or with nowhere. A Messenger run reaches none of that.
+	//
+	// # WHAT IT IS GIVEN IS DELIBERATELY THIN
+	//
+	// See `MessageContext` below, which carries the argument in
+	// full: §17.1 keeps the finding's own words out of a doorbell, and this
+	// issue's description asks for exactly those words. The contradiction is
+	// reported rather than resolved, and the run is not shown them, so it
+	// cannot restate what it never saw.
+	//
+	// Like DraftNarrative and Watch, a refusal is a 200 with `outcome:
+	// REFUSED`. See DraftNarrative's comment for why.
+	DraftMessage(context.Context, *connect.Request[v1.DraftMessageRequest]) (*connect.Response[v1.DraftMessageResponse], error)
 }
 
 // NewIntelligenceServiceClient constructs a client for the kindlast.platform.v1.IntelligenceService
@@ -210,6 +248,12 @@ func NewIntelligenceServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(intelligenceServiceMethods.ByName("ExplainApproval")),
 			connect.WithClientOptions(opts...),
 		),
+		draftMessage: connect.NewClient[v1.DraftMessageRequest, v1.DraftMessageResponse](
+			httpClient,
+			baseURL+IntelligenceServiceDraftMessageProcedure,
+			connect.WithSchema(intelligenceServiceMethods.ByName("DraftMessage")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -219,6 +263,7 @@ type intelligenceServiceClient struct {
 	watch                 *connect.Client[v1.WatchRequest, v1.WatchResponse]
 	answerFindingQuestion *connect.Client[v1.AnswerFindingQuestionRequest, v1.AnswerFindingQuestionResponse]
 	explainApproval       *connect.Client[v1.ExplainApprovalRequest, v1.ExplainApprovalResponse]
+	draftMessage          *connect.Client[v1.DraftMessageRequest, v1.DraftMessageResponse]
 }
 
 // DraftNarrative calls kindlast.platform.v1.IntelligenceService.DraftNarrative.
@@ -239,6 +284,11 @@ func (c *intelligenceServiceClient) AnswerFindingQuestion(ctx context.Context, r
 // ExplainApproval calls kindlast.platform.v1.IntelligenceService.ExplainApproval.
 func (c *intelligenceServiceClient) ExplainApproval(ctx context.Context, req *connect.Request[v1.ExplainApprovalRequest]) (*connect.Response[v1.ExplainApprovalResponse], error) {
 	return c.explainApproval.CallUnary(ctx, req)
+}
+
+// DraftMessage calls kindlast.platform.v1.IntelligenceService.DraftMessage.
+func (c *intelligenceServiceClient) DraftMessage(ctx context.Context, req *connect.Request[v1.DraftMessageRequest]) (*connect.Response[v1.DraftMessageResponse], error) {
+	return c.draftMessage.CallUnary(ctx, req)
 }
 
 // IntelligenceServiceHandler is an implementation of the kindlast.platform.v1.IntelligenceService
@@ -368,6 +418,41 @@ type IntelligenceServiceHandler interface {
 	// Like DraftNarrative and Watch, a refusal is a 200 with `outcome:
 	// REFUSED`. See DraftNarrative's comment for why.
 	ExplainApproval(context.Context, *connect.Request[v1.ExplainApprovalRequest]) (*connect.Response[v1.ExplainApprovalResponse], error)
+	// Runs the Messenger over one finding notification: write the words a
+	// person will read, and hand them to the dispatch path (ENT-260, §26.5).
+	//
+	// # THE FOURTH SKILL, AND THE FIRST WHOSE OUTPUT LEAVES THE BUILDING
+	//
+	// Everything the other three write is read on a page, behind the reader's
+	// own sign-in, beside the finding it is about. This arrives in a mailbox or
+	// a chat that somebody did not open at that moment, under our From: header.
+	//
+	// So the question the issue's title asks, can it send any other way, is
+	// answered by the surface rather than by the prompt. The skill's allow-list
+	// holds one entry, `queue_message`, and there is no RPC anywhere this
+	// service can reach that delivers anything: the SMTP client and the
+	// Telegram token are held by core-api, this process declares no library
+	// that could open either, and `tests/test_no_third_party_credential.py`
+	// asserts that rather than assuming it. A model asking to send is refused
+	// against the allow-list, recorded as refused, and the run ends.
+	//
+	// And the draft changes nothing about the send. Who hears about a finding
+	// comes from memberships and `notification_preferences` at delivery time;
+	// whether a channel may be addressed at all comes from `notify.RouteFor`,
+	// which answers a linked but unverified Telegram chat with the remaining
+	// channel or with nowhere. A Messenger run reaches none of that.
+	//
+	// # WHAT IT IS GIVEN IS DELIBERATELY THIN
+	//
+	// See `MessageContext` below, which carries the argument in
+	// full: §17.1 keeps the finding's own words out of a doorbell, and this
+	// issue's description asks for exactly those words. The contradiction is
+	// reported rather than resolved, and the run is not shown them, so it
+	// cannot restate what it never saw.
+	//
+	// Like DraftNarrative and Watch, a refusal is a 200 with `outcome:
+	// REFUSED`. See DraftNarrative's comment for why.
+	DraftMessage(context.Context, *connect.Request[v1.DraftMessageRequest]) (*connect.Response[v1.DraftMessageResponse], error)
 }
 
 // NewIntelligenceServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -401,6 +486,12 @@ func NewIntelligenceServiceHandler(svc IntelligenceServiceHandler, opts ...conne
 		connect.WithSchema(intelligenceServiceMethods.ByName("ExplainApproval")),
 		connect.WithHandlerOptions(opts...),
 	)
+	intelligenceServiceDraftMessageHandler := connect.NewUnaryHandler(
+		IntelligenceServiceDraftMessageProcedure,
+		svc.DraftMessage,
+		connect.WithSchema(intelligenceServiceMethods.ByName("DraftMessage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.platform.v1.IntelligenceService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IntelligenceServiceDraftNarrativeProcedure:
@@ -411,6 +502,8 @@ func NewIntelligenceServiceHandler(svc IntelligenceServiceHandler, opts ...conne
 			intelligenceServiceAnswerFindingQuestionHandler.ServeHTTP(w, r)
 		case IntelligenceServiceExplainApprovalProcedure:
 			intelligenceServiceExplainApprovalHandler.ServeHTTP(w, r)
+		case IntelligenceServiceDraftMessageProcedure:
+			intelligenceServiceDraftMessageHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -434,4 +527,8 @@ func (UnimplementedIntelligenceServiceHandler) AnswerFindingQuestion(context.Con
 
 func (UnimplementedIntelligenceServiceHandler) ExplainApproval(context.Context, *connect.Request[v1.ExplainApprovalRequest]) (*connect.Response[v1.ExplainApprovalResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IntelligenceService.ExplainApproval is not implemented"))
+}
+
+func (UnimplementedIntelligenceServiceHandler) DraftMessage(context.Context, *connect.Request[v1.DraftMessageRequest]) (*connect.Response[v1.DraftMessageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.platform.v1.IntelligenceService.DraftMessage is not implemented"))
 }

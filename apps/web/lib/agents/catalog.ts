@@ -2,8 +2,9 @@
  * The four agents, as the console is allowed to describe them (ENT-232).
  *
  * §26.5 defines an agent as a skill plus a tool allow-list plus a workflow,
- * addressable by name in the rail. Three of the four are not that yet, and this
- * file is where the console keeps track of which is which.
+ * addressable by name in the rail. They arrived at different times and one is
+ * still missing a half, and this file is where the console keeps track of
+ * which is which.
  *
  * # WHY THIS IS NOT FOUR CHEERFUL CARDS
  *
@@ -23,18 +24,26 @@
  *   The Analyst    runs as a skill, under a budget and a citation validator,
  *                  and leaves an `agent_runs` row. Nothing calls it on a
  *                  schedule.
- *   The Messenger  does not exist.
- *   The Hands      runs as a skill (ENT-261): it explains what approving will
- *                  do and prepares the record, and it cannot approve.
+ *   The Messenger  runs as a skill (ENT-260): it writes the words of a
+ *                  message and hands them to the dispatch path, and it cannot
+ *                  send. Nothing asks it for a draft yet.
+ *   The Hands      runs as a skill (ENT-261) a person can reach (ENT-278):
+ *                  it explains what approving will do and prepares the
+ *                  record, and it cannot approve.
  *
- * # AND WHY THE UNBUILT TWO ARE HERE AT ALL
+ * # AND WHY A HALF-BUILT AGENT IS HERE AT ALL
  *
- * Because leaving them out would answer a different question. A person looking
+ * Because leaving it out would answer a different question. A person looking
  * at this rail wants to know what the product will and will not do for them,
- * and "we have not built the thing that would email you" is an answer. What
- * would be dishonest is drawing them as though they were waiting on a
- * schedule. Their copy is written in the conditional for exactly that reason:
- * the Messenger "would" send, because it cannot.
+ * and "the thing that would email you is built and nothing calls it yet" is
+ * an answer. What would be dishonest is drawing it as though it were
+ * finished, which is why the Messenger does not say "Working" and says what
+ * is missing.
+ *
+ * The conditional wording this section used to describe went with ENT-260:
+ * the Messenger no longer "would" draft, it does. What it still cannot do is
+ * cause a message to exist, and that is a sentence about its authority rather
+ * than about how far along it is.
  *
  * # WHERE THE SKILL FACTS COME FROM
  *
@@ -109,8 +118,9 @@ export interface Agent {
    *
    * Absent rather than empty when there is no skill at all. An empty tool list
    * is a statement the Analyst makes on purpose; an empty SKILL list would
-   * claim a guardrail with nothing behind it, which is the Messenger's case and
-   * the opposite claim.
+   * claim a guardrail with nothing behind it, which is the opposite claim.
+   * Every agent has a skill since ENT-260, so nothing takes this branch today
+   * and the distinction is kept for the next agent added before its skill.
    */
   skills?: readonly AgentSkill[]
 }
@@ -223,15 +233,44 @@ export const AGENTS: readonly Agent[] = [
     slug: 'messenger',
     name: 'The Messenger',
     does: 'Tells you when something needs a decision.',
-    status: 'not-built',
-    runs: 'Never yet.',
+    // PARTLY WORKING, AND THE MISSING HALF IS NOT THE CONSOLE (ENT-260).
+    //
+    // The skill runs, under a budget, an allow-list and three critics, and
+    // leaves an `agent_runs` row whether it succeeded, refused or failed. What
+    // does not exist yet is the caller: core-api does not yet build the
+    // context, the doorbell workflow does not yet run the draft, and the
+    // delivery transaction still renders the template. So no message anybody
+    // receives has been through it.
+    //
+    // Calling that "working" would be the exact failure this file exists
+    // after, a dashboard claiming something about work nobody can look at, and
+    // it would be worse here than it was for the half-built Hands: this
+    // agent's whole output is copy a person is supposed to receive, so
+    // "working" would be a claim about their mailbox.
+    status: 'partly-working',
+    runs: 'Nothing calls it yet. The message you get today is still written by a template.',
     effects:
-      'It would draft a message and send it only through a channel you had verified. It would never hold a mail or chat credential of its own.',
-    // ENT-219 (the transactional outbox and its dispatcher) and ENT-209
-    // (preferences and the dispatch paths) come first. Without them there is
-    // nowhere for a send to go that could be bounded.
+      'It writes the words of a message and hands them over. It cannot decide that a message exists, who it goes to, or where, and it never holds a mail or chat credential of its own.',
     remaining:
-      'The outbox and the verified channels it would send through do not exist yet.',
+      'Nothing asks it for a draft yet, so the messages you receive are still the templated ones.',
+    skills: [
+      {
+        module: 'messenger',
+        name: 'messenger.draft',
+        version: '1.0.0',
+        // ONE TOOL, AND ITS NAME IS THE WHOLE CLAIM (ENT-260).
+        //
+        // `queue_message` hands a drafted subject and body to the dispatch
+        // path. There is nothing here that sends, nothing that names a
+        // recipient and nothing that chooses a channel, and those are not
+        // omitted from a longer list: they exist nowhere the Python service
+        // can reach. It holds no SMTP client and no chat token, and the
+        // grammar deliberately lets the model ASK for `send_email` so that the
+        // refusal is a real event landing in `agent_runs` rather than
+        // something made inexpressible and therefore invisible.
+        tools: ['queue_message'],
+      },
+    ],
   },
   {
     slug: 'hands',

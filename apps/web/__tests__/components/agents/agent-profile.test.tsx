@@ -52,10 +52,37 @@ describe('an agent profile (ENT-232)', () => {
   })
 
   it('shows no tool list for an agent that has no skill', () => {
-    // The Messenger's allow-list is not empty, it is absent. Showing an empty
-    // one would claim a guardrail with nothing behind it.
-    render(<AgentProfile agent={agentBySlug('messenger')!} />)
+    // An absent allow-list is not an empty one. Showing an empty list where
+    // there is no skill would claim a guardrail with nothing behind it, which
+    // is the opposite claim from the Analyst's deliberate emptiness above.
+    //
+    // THE MESSENGER USED TO BE THIS TEST'S SUBJECT, AND ENT-260 TOOK IT AWAY.
+    // Every agent in the catalogue has a skill now, so the case is built here
+    // rather than found: the branch is still in the component and is what the
+    // next agent added to the rail ahead of its skill will land on, and
+    // deleting the test because nothing currently exercises it is how that
+    // branch stops being covered right before it is needed.
+    render(
+      <AgentProfile
+        agent={{ ...agentBySlug('messenger')!, skills: undefined }}
+      />,
+    )
     expect(screen.queryByTestId('tool-allow-list')).toBeNull()
+  })
+
+  it('names the one tool the Messenger may call, because that is the claim', () => {
+    // The whole of ENT-260 is that it drafts and sends only through the
+    // dispatch path, and this list is where a customer checks that rather than
+    // taking our word for it. One entry, and it is the one that hands a draft
+    // over: nothing here sends, names a recipient or chooses a channel.
+    const messenger = agentBySlug('messenger')!
+    render(<AgentProfile agent={messenger} />)
+
+    const list = screen.getByTestId('tool-allow-list')
+    expect(list).toHaveTextContent('queue_message')
+    for (const forbidden of ['send_email', 'send_telegram', 'deliver']) {
+      expect(list).not.toHaveTextContent(forbidden)
+    }
   })
 
   it('says what remains, for an agent that is not finished', () => {

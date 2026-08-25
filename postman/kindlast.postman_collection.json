@@ -2234,6 +2234,26 @@
           }
         },
         {
+          "name": "DraftMessage (IntelligenceService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"org_id\": \"{{org_id}}\",\n  \"notification_id\": \"00000000-0000-4000-8000-000000000000\",\n  \"context\": {\n    \"org_name\": \"Acme Ltd\",\n    \"severity\": \"high\",\n    \"open_findings\": 4,\n    \"first_for_org\": false,\n    \"has_approve_link\": true,\n    \"channels\": [\"email\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.platform.v1.IntelligenceService/DraftMessage",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.platform.v1.IntelligenceService", "DraftMessage"]
+            },
+            "description": "Runs the Messenger over one finding notification: write the words a person will read, and hand them to the dispatch path (ENT-260, §26.5).\n\n# THE FOURTH SKILL, AND THE FIRST WHOSE OUTPUT LEAVES THE BUILDING\n\nEverything the other three write is read on a page, behind the reader's own sign-in, beside the finding it is about. This arrives in a mailbox or a chat that somebody did not open at that moment, under our From: header.\n\nSo the question the issue's title asks, can it send any other way, is answered by the surface rather than by the prompt. The skill's allow-list holds one entry, `queue_message`, and there is no RPC anywhere this service can reach that delivers anything: the SMTP client and the Telegram token are held by core-api, this process declares no library that could open either, and `tests/test_no_third_party_credential.py` asserts that rather than assuming it. A model asking to send is refused against the allow-list, recorded as refused, and the run ends.\n\nAnd the draft changes nothing about the send. Who hears about a finding comes from memberships and `notification_preferences` at delivery time; whether a channel may be addressed at all comes from `notify.RouteFor`, which answers a linked but unverified Telegram chat with the remaining channel or with nowhere. A Messenger run reaches none of that.\n\n# WHAT IT IS GIVEN IS DELIBERATELY THIN\n\nSee `MessageContext` in intelligence.proto, which carries the argument in full: §17.1 keeps the finding's own words out of a doorbell, and this issue's description asks for exactly those words. The contradiction is reported rather than resolved, and the run is not shown them, so it cannot restate what it never saw.\n\nLike DraftNarrative and Watch, a refusal is a 200 with `outcome: REFUSED`. See DraftNarrative's comment for why.\n\n**From the contract.** `kindlast.platform.v1.IntelligenceService/DraftMessage`, declared in `proto/kindlast/platform/v1/intelligence.proto`. Required scope: `internal:intelligence`. Declared REST binding: `POST /internal/v1/messages:draft`."
+          }
+        },
+        {
           "name": "Complete (internal)",
           "request": {
             "method": "POST",

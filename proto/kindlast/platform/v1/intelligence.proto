@@ -197,6 +197,48 @@ service IntelligenceService {
       body: "*"
     };
   }
+
+  // Runs the Messenger over one finding notification: write the words a
+  // person will read, and hand them to the dispatch path (ENT-260, §26.5).
+  //
+  // # THE FOURTH SKILL, AND THE FIRST WHOSE OUTPUT LEAVES THE BUILDING
+  //
+  // Everything the other three write is read on a page, behind the reader's
+  // own sign-in, beside the finding it is about. This arrives in a mailbox or
+  // a chat that somebody did not open at that moment, under our From: header.
+  //
+  // So the question the issue's title asks, can it send any other way, is
+  // answered by the surface rather than by the prompt. The skill's allow-list
+  // holds one entry, `queue_message`, and there is no RPC anywhere this
+  // service can reach that delivers anything: the SMTP client and the
+  // Telegram token are held by core-api, this process declares no library
+  // that could open either, and `tests/test_no_third_party_credential.py`
+  // asserts that rather than assuming it. A model asking to send is refused
+  // against the allow-list, recorded as refused, and the run ends.
+  //
+  // And the draft changes nothing about the send. Who hears about a finding
+  // comes from memberships and `notification_preferences` at delivery time;
+  // whether a channel may be addressed at all comes from `notify.RouteFor`,
+  // which answers a linked but unverified Telegram chat with the remaining
+  // channel or with nowhere. A Messenger run reaches none of that.
+  //
+  // # WHAT IT IS GIVEN IS DELIBERATELY THIN
+  //
+  // See `MessageContext` below, which carries the argument in
+  // full: §17.1 keeps the finding's own words out of a doorbell, and this
+  // issue's description asks for exactly those words. The contradiction is
+  // reported rather than resolved, and the run is not shown them, so it
+  // cannot restate what it never saw.
+  //
+  // Like DraftNarrative and Watch, a refusal is a 200 with `outcome:
+  // REFUSED`. See DraftNarrative's comment for why.
+  rpc DraftMessage(DraftMessageRequest) returns (DraftMessageResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:intelligence";
+    option (google.api.http) = {
+      post: "/internal/v1/messages:draft"
+      body: "*"
+    };
+  }
 }
 
 message DraftNarrativeRequest {
@@ -638,4 +680,118 @@ enum ExplainOutcome {
   EXPLAIN_OUTCOME_REFUSED = 2;
   // Something went wrong that was nobody's policy.
   EXPLAIN_OUTCOME_FAILED = 3;
+}
+
+// MessageContext is what a Messenger run is allowed to know about the doorbell
+// it is writing the words of (ENT-260, §26.5).
+//
+// # WHAT IS MISSING FROM THIS MESSAGE IS THE MESSAGE
+//
+// There is no detected text, no proposed action and no obligation summary, and
+// that is not an oversight for somebody to fill in later. §17.1 decided that a
+// doorbell says that something happened and not what it says, because those
+// three fields are a customer's compliance exposure and putting them in a
+// message moves them into a mailbox and into a mail provider's logs. The
+// recipient follows a link and reads the finding behind their own sign-in,
+// where their role and their organisation are checked again.
+// `notify.FindingNotification` has carried that reasoning since ENT-209.
+//
+// ENT-260's own description asks for the opposite in as many words: "what
+// needs a decision, why it matters to this organisation in particular, what
+// approving will do". Those are exactly the three fields §17.1 keeps out. The
+// contradiction is reported rather than resolved, which is what AGENTS.md asks
+// for when the design and the code disagree, and until somebody decides it the
+// rule that was written down with its reasoning wins, because it is the one
+// that is about somebody's privacy.
+//
+// Widening this message is the change that would settle it, which is why the
+// argument lives here rather than in a commit message nobody will find, and
+// why a test asserts this field set exactly.
+//
+// There is no recipient either. Who hears about a finding is resolved at
+// delivery time from memberships and preferences, and one draft is the words
+// everybody who does will read.
+message MessageContext {
+  // The organisation, as it named itself. Free text a customer typed, and
+  // therefore data: it reaches the model in a fenced user message and never in
+  // a system prompt.
+  string org_name = 1;
+  // How serious this one is, in the vocabulary of `severity_level`.
+  string severity = 2;
+  // How many other findings are open and undecided in this organisation. An
+  // aggregate, so it says how loud to be without saying what about.
+  int32 open_findings = 3;
+  // True when this organisation has never had a finding before, so the message
+  // is also the first of these anybody there has seen. Distinct from
+  // `open_findings` being zero, which means everything else has been decided.
+  bool first_for_org = 4;
+  // True when at least one recipient will be given the one-tap approve link,
+  // so a draft may say the choice is there. Never the link itself: every link
+  // in a doorbell is minted per recipient inside the delivery transaction.
+  bool has_approve_link = 5;
+  // The channels this notification is going out on, from the recipients' own
+  // preferences. A chat message and an email want different lengths, and
+  // ENT-263 shipped Telegram receiving the email body verbatim.
+  repeated string channels = 6;
+}
+
+message DraftMessageRequest {
+  // The organisation this run is for. Carried in the message because this
+  // caller holds no session; used to record the run and to name the
+  // organisation on the completion, never to decide what may be read.
+  string org_id = 1;
+
+  // The notification row the words are for. Used only to record the run
+  // against something a person can find later. Nothing this service can call
+  // takes it, so it is not an identifier the skill could act on.
+  string notification_id = 2;
+
+  // What this run may know, and the only thing it may know. The whole message
+  // rather than its fields copied across, so there is one definition of what a
+  // Messenger run sees. A second copy would drift the first time a field was
+  // added to one and not the other, and what would go wrong is a model
+  // reasoning without something core-api thought it had been given.
+  MessageContext context = 3;
+
+  // Which model this run is recorded against (ENT-236, §26.6): names only, for
+  // the run record. Absent means the deployment's own model. Identical in
+  // meaning and in what it must never carry to DraftNarrativeRequest's field
+  // of the same name.
+  ModelEndpoint model_endpoint = 4;
+}
+
+message DraftMessageResponse {
+  MessageOutcome outcome = 1;
+
+  // Why, when the outcome was not success. For a human to read.
+  string outcome_detail = 2;
+
+  // The words, and empty unless the outcome is SUCCEEDED.
+  //
+  // Withheld on a refusal rather than returned with a warning attached, for
+  // the reason DraftNarrativeResponse withholds a refused narrative, and it is
+  // sharper here: the thing most likely to have been refused is a link the
+  // model invented, and a caller handed copy plus a note is a caller that
+  // eventually sends the copy.
+  //
+  // Both empty means the template renders the message, which is what a
+  // deployment with no model gets and what every deployment got before this.
+  string subject = 3;
+  string body_text = 4;
+
+  // The `agent_runs` row this produced. Always set on a 200, for the reason
+  // DraftNarrativeResponse gives: a run that happened and left no record a
+  // customer can read is the one outcome the harness is not allowed to
+  // produce (ENT-277).
+  string agent_run_id = 5;
+}
+
+enum MessageOutcome {
+  MESSAGE_OUTCOME_UNSPECIFIED = 0;
+  MESSAGE_OUTCOME_SUCCEEDED = 1;
+  // A guardrail stopped it: a link, a claim about the law, a forbidden dash, a
+  // request to send. Not a kind of failure; see the RPC's comment.
+  MESSAGE_OUTCOME_REFUSED = 2;
+  // Something went wrong that was nobody's policy.
+  MESSAGE_OUTCOME_FAILED = 3;
 }

@@ -37,6 +37,7 @@ from .coreapi import CoreAPI, CoreAPIError
 from .harness.budget import Budget
 from .harness.citations import CitationValidator, OfferedObligations
 from .harness.converse import answer_question
+from .harness.message import draft_message
 from .harness.model import Completer
 from .harness.prepare import prepare
 from .harness.run import AgentRun, Outcome, draft_narrative
@@ -73,6 +74,14 @@ _ANSWER_OUTCOMES = {
     Outcome.SUCCEEDED: intelligence_pb2.ANSWER_OUTCOME_SUCCEEDED,
     Outcome.REFUSED: intelligence_pb2.ANSWER_OUTCOME_REFUSED,
     Outcome.FAILED: intelligence_pb2.ANSWER_OUTCOME_FAILED,
+}
+
+# And a fifth, for the Messenger (ENT-260). Written out like the rest: five
+# explicit maps cost five lines each and cannot silently default.
+_MESSAGE_OUTCOMES = {
+    Outcome.SUCCEEDED: intelligence_pb2.MESSAGE_OUTCOME_SUCCEEDED,
+    Outcome.REFUSED: intelligence_pb2.MESSAGE_OUTCOME_REFUSED,
+    Outcome.FAILED: intelligence_pb2.MESSAGE_OUTCOME_FAILED,
 }
 
 
@@ -420,6 +429,106 @@ class IntelligenceService:
                 hands_pb2.LeftForYou(name=item["name"], why=item["why"])
                 for item in (plan.left_for_you if plan is not None else [])
             ],
+            agent_run_id=agent_run_id,
+        )
+
+    def draft_message(
+        self,
+        request: intelligence_pb2.DraftMessageRequest,
+        ctx: RequestContext,
+    ) -> intelligence_pb2.DraftMessageResponse:
+        """The RPC: authorise, then draft. The Temporal activity calls
+        `run_draft_message` directly, for the reason `draft_narrative` gives."""
+        self._authorise(ctx)
+        return self.run_draft_message(request)
+
+    def run_draft_message(
+        self, request: intelligence_pb2.DraftMessageRequest
+    ) -> intelligence_pb2.DraftMessageResponse:
+        """One Messenger run: the step loop, the allow-list, the critics that
+        read outbound copy, and the run record (ENT-260).
+
+        # THE QUEUE IS A LOCAL SINK, AND THAT IS NOT A WEAKER GUARANTEE
+
+        The Watcher's tool reaches core-api because a raise changes what the
+        next step should do. Nothing about this one does: a draft is one value,
+        so the shape is narration's (Go loads, Python drafts, Go persists) and
+        `queue_message` hands the words to the response for core-api to put on
+        the message it was already sending.
+
+        What the tool buys, and the reason it is a tool rather than a field on
+        a single-shot answer, is the refusal. §26.3 wants a model that CAN ask
+        for something it may not have, so that the refusal is real and lands in
+        `agent_runs`. A schema of `{subject, body}` would make `send_email`
+        inexpressible, which hides that the model wanted to send instead of
+        refusing it. `test_a_messenger_run_asking_to_send_is_refused` is what
+        proves the guard can fail.
+
+        # AND THE WORDS ARE WITHHELD UNLESS THE RUN SUCCEEDED
+
+        `draft` withholds a refused narrative because a caller handed prose
+        plus a note is a caller that eventually shows the prose. Here that is
+        sharper: the likeliest thing to have been refused is a link the model
+        invented, and the caller is about to put this in an email under our
+        own From: header. A refused draft leaves both fields empty, and the
+        dispatch path renders the template, which is what it did before this
+        skill existed.
+        """
+        if not request.org_id:
+            raise ConnectError(Code.INVALID_ARGUMENT, "org_id is required")
+        if not request.HasField("context"):
+            raise ConnectError(Code.INVALID_ARGUMENT, "context is required")
+        if not request.context.severity:
+            # A doorbell with no severity is one the run cannot say how loud to
+            # be about, which is most of what it was given. core-api never
+            # sends one; a caller assembling the request itself might.
+            raise ConnectError(
+                Code.INVALID_ARGUMENT,
+                "the context names no severity, so there is nothing to say "
+                "about how urgent this is",
+            )
+
+        context = _message_context(request.context)
+        model, model_name, model_version, provider = self._model_for(
+            request.org_id, request.model_endpoint
+        )
+
+        drafted: list[tuple[str, str]] = []
+
+        run, queued = draft_message(
+            context=context,
+            model=model,
+            # THE SINK IS BOUND HERE, WHERE THE REQUEST IS. The skill names a
+            # tool and its arguments; it never names the organisation, the
+            # notification or a recipient, and there is no argument it could
+            # pass that would change any of them.
+            queue_message=lambda subject, body: drafted.append((subject, body)),
+            model_name=model_name,
+            model_version=model_version,
+            provider=provider,
+            budget=self._budget_template.renew() if self._budget_template else None,
+        )
+
+        # Recorded before the response is built, and a failure here is fatal,
+        # for the reason `draft` gives at length: a caller handed words with no
+        # provenance behind them is handed something this service exists not to
+        # produce, and here those words are about to be sent to a person.
+        try:
+            agent_run_id = self._core_api.record_run(request.org_id, run)
+        except CoreAPIError as exc:
+            logger.error("recording the Messenger run failed: %s", exc)
+            raise ConnectError(
+                Code.INTERNAL,
+                "the run completed but could not be recorded, so it is being "
+                "reported as failed rather than returned unprovenanced",
+            ) from exc
+
+        send = queued is not None and run.outcome is Outcome.SUCCEEDED
+        return intelligence_pb2.DraftMessageResponse(
+            outcome=_MESSAGE_OUTCOMES[run.outcome],
+            outcome_detail=run.outcome_detail,
+            subject=queued.subject if send else "",
+            body_text=queued.body if send else "",
             agent_run_id=agent_run_id,
         )
 
@@ -850,4 +959,29 @@ def _approval_context(context: hands_pb2.ApprovalContext) -> dict:
             {"name": p.name, "values": list(p.values), "from_fact": p.from_fact}
             for p in context.already_proposed
         ],
+    }
+
+
+def _message_context(context: intelligence_pb2.MessageContext) -> dict:
+    """The proto notification context as the Messenger reads it.
+
+    Converted once, here, for the reason `_watch_context` gives: the skill and
+    its tests then deal in plain data, and a skill importing a generated module
+    would need `gen/python` on the path to be testable at all.
+
+    IT COPIES WHAT IT WAS GIVEN AND ADDS NOTHING. There is no lookup here that
+    could fetch the finding's own words, because there is nothing in this
+    process that could: it holds no database handle
+    (`tests/test_no_database.py`) and no RPC that reads a finding. §17.1's rule
+    that a doorbell says that something happened and not what it says is
+    therefore not a convention this function politely observes. It is the shape
+    of the surface.
+    """
+    return {
+        "org_name": context.org_name,
+        "severity": context.severity,
+        "open_findings": context.open_findings,
+        "first_for_org": context.first_for_org,
+        "has_approve_link": context.has_approve_link,
+        "channels": list(context.channels),
     }
