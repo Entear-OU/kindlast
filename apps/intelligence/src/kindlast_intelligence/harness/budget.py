@@ -1,6 +1,6 @@
 """Per-run budgets, and refusing when one is spent (§26.3, ENT-218, ENT-238).
 
-Seven limits, not four. The design names token budget, model calls, tool calls
+Eight limits, not four. The design names token budget, model calls, tool calls
 and recursion; all four are cost controls, and they are the right ones when
 inference is somebody else's API and concurrency is their problem.
 
@@ -12,6 +12,10 @@ clock, and hence queue wait beside it.
 ENT-274 added the seventh, and it is the only one that is not about cost at
 all. `max_evidence_reads` bounds how much of a customer's own systems' output a
 run may pull into the conversation it is reasoning in. See the field.
+
+ENT-279 added the eighth, `max_fetch_requests`, and it is the only one whose
+cost lands on somebody else: each ask a run makes becomes, at most once per
+cooldown, a gateway call to a customer's own endpoint. See the field.
 
 # TIME WAITED AND TIME WORKED ARE TWO BUDGETS, NOT ONE
 
@@ -89,6 +93,20 @@ class Budget(BaseModel):
     # or merely chatty endpoint cannot make third-party text the majority of
     # what the model is looking at.
     max_evidence_reads: int = Field(default=3, gt=0)
+    # HOW MANY FETCHES OF A CUSTOMER'S SYSTEM ONE RUN MAY CAUSE (ENT-279).
+    #
+    # The eighth limit, and the only one whose cost lands on somebody else's
+    # infrastructure. `request_fetch` does not dial during the run, but every
+    # queued ask becomes a gateway call to a customer's endpoint later, so the
+    # bound is on network effects caused rather than on anything this process
+    # spends. Two, deliberately below `max_evidence_reads`: a run may read
+    # three stored answers and ask for at most two of them to be refreshed,
+    # which covers comparing a pair of connections, and core-api's own
+    # cooldown deduplicates across runs and retries so this bound multiplied
+    # by three activity retries still causes at most one dial per pair per
+    # hour. Charged before the ask leaves the process, and never charged for
+    # an ask the context checks declined, like every other limit here.
+    max_fetch_requests: int = Field(default=2, gt=0)
     max_depth: int = Field(default=4, gt=0)
     # Sized for a 4B on CPU answering a handful of times rather than for a
     # hosted API. On local inference this is the limit that actually fires.
@@ -106,6 +124,7 @@ class Budget(BaseModel):
     model_calls: int = Field(default=0, ge=0)
     tool_calls: int = Field(default=0, ge=0)
     evidence_reads: int = Field(default=0, ge=0)
+    fetch_requests: int = Field(default=0, ge=0)
     # How long this run waited before the work started. Measured once at
     # admission and then kept, rather than recomputed, so the number in the
     # record is the number the limit was checked against.
@@ -131,6 +150,7 @@ class Budget(BaseModel):
         "max_model_calls",
         "max_tool_calls",
         "max_evidence_reads",
+        "max_fetch_requests",
         "max_depth",
         "max_seconds",
         "max_queue_seconds",
@@ -214,6 +234,21 @@ class Budget(BaseModel):
                 f"{self.evidence_reads} of {self.max_evidence_reads} used",
             )
         self.evidence_reads += 1
+
+    def spend_fetch_request(self) -> None:
+        """Charged before the ask leaves the process, like every limit here.
+
+        A fetch request is also a tool call and costs one of each, for the
+        reason `spend_evidence_read` gives: a run that spent its asks can
+        still read and can still raise what it concluded, which keeps this a
+        bound on network effects rather than a bound on the run.
+        """
+        if self.fetch_requests >= self.max_fetch_requests:
+            raise BudgetExhausted(
+                "fetch_requests",
+                f"{self.fetch_requests} of {self.max_fetch_requests} used",
+            )
+        self.fetch_requests += 1
 
     def enter_depth(self, depth: int) -> None:
         if depth > self.max_depth:

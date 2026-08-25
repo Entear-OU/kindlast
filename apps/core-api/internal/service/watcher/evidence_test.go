@@ -42,6 +42,12 @@ func (s *stubProducer) RaiseSignal(context.Context, string, postgres.Signal) (st
 	return "", false, nil
 }
 
+func (s *stubProducer) RequestFetch(
+	context.Context, string, string, string, string, time.Time, time.Time,
+) (postgres.FetchAsk, error) {
+	return postgres.FetchAsk{}, nil
+}
+
 func (s *stubProducer) EvidenceFor(
 	_ context.Context, orgID, connectionID, tool string, limit int,
 ) (string, []postgres.StoredObservation, error) {

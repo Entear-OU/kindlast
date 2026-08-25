@@ -26,6 +26,9 @@ class WatcherService(Protocol):
     async def read_evidence(self, request: kindlast_dot_platform_dot_v1_dot_watcher__pb2.ReadEvidenceRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_watcher__pb2.ReadEvidenceResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def request_fetch(self, request: kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class WatcherServiceASGIApplication(ConnectASGIApplication[WatcherService]):
     def __init__(self, service: WatcherService | AsyncGenerator[WatcherService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -61,6 +64,16 @@ class WatcherServiceASGIApplication(ConnectASGIApplication[WatcherService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.read_evidence,
+                ),
+                "/kindlast.platform.v1.WatcherService/RequestFetch": Endpoint.unary(
+                    method=MethodInfo(
+                        name="RequestFetch",
+                        service_name="kindlast.platform.v1.WatcherService",
+                        input=kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.request_fetch,
                 ),
             },
             interceptors=interceptors,
@@ -135,6 +148,26 @@ class WatcherServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def request_fetch(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RequestFetch",
+                service_name="kindlast.platform.v1.WatcherService",
+                input=kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchRequest,
+                output=kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class WatcherServiceSync(Protocol):
     def watcher_context(self, request: kindlast_dot_platform_dot_v1_dot_watcher__pb2.WatcherContextRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_watcher__pb2.WatcherContextResponse:
@@ -142,6 +175,8 @@ class WatcherServiceSync(Protocol):
     def raise_signal(self, request: kindlast_dot_platform_dot_v1_dot_watcher__pb2.RaiseSignalRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_watcher__pb2.RaiseSignalResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def read_evidence(self, request: kindlast_dot_platform_dot_v1_dot_watcher__pb2.ReadEvidenceRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_watcher__pb2.ReadEvidenceResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def request_fetch(self, request: kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchRequest, ctx: RequestContext) -> kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -178,6 +213,16 @@ class WatcherServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.read_evidence,
+                ),
+                "/kindlast.platform.v1.WatcherService/RequestFetch": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="RequestFetch",
+                        service_name="kindlast.platform.v1.WatcherService",
+                        input=kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchRequest,
+                        output=kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.request_fetch,
                 ),
             },
             interceptors=interceptors,
@@ -246,6 +291,26 @@ class WatcherServiceClientSync(ConnectClientSync):
                 service_name="kindlast.platform.v1.WatcherService",
                 input=kindlast_dot_platform_dot_v1_dot_watcher__pb2.ReadEvidenceRequest,
                 output=kindlast_dot_platform_dot_v1_dot_watcher__pb2.ReadEvidenceResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def request_fetch(
+        self,
+        request: kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RequestFetch",
+                service_name="kindlast.platform.v1.WatcherService",
+                input=kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchRequest,
+                output=kindlast_dot_platform_dot_v1_dot_watcher__pb2.RequestFetchResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

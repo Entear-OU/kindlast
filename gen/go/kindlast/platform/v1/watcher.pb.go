@@ -949,6 +949,154 @@ func (x *ReadEvidenceResponse) GetConnectionName() string {
 	return ""
 }
 
+type RequestFetchRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	OrgId string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// Which connection to fetch, by the id `WatcherContext` gave. The harness
+	// refuses an id the run was never shown before this is ever sent, and this
+	// handler checks the row regardless, because the two refuse different
+	// things: one catches a fabricated id, the other holds the invariant.
+	ConnectionId string `protobuf:"bytes,2,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	// Which granted tool to fetch through. Required, and a tool that can write
+	// is refused however it is granted: a fetch a model asked for is nobody
+	// deciding, and the evidence a compliance product wants is what a system
+	// reports rather than what it can be made to do.
+	Tool string `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
+	// Why, in the model's own sentence, for the person reading the request
+	// later. Bounded and optional: a missing reason is a thinner record, not a
+	// refusal.
+	Reason        string `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestFetchRequest) Reset() {
+	*x = RequestFetchRequest{}
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestFetchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestFetchRequest) ProtoMessage() {}
+
+func (x *RequestFetchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestFetchRequest.ProtoReflect.Descriptor instead.
+func (*RequestFetchRequest) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *RequestFetchRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *RequestFetchRequest) GetConnectionId() string {
+	if x != nil {
+		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *RequestFetchRequest) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *RequestFetchRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type RequestFetchResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// `queued`, `already_queued` or `recently_fetched`: what became of the ask.
+	// A closed set the harness renders back to the model, so it can act on the
+	// answer rather than asking again.
+	State string `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	// The sentence that goes with it, written by core-api. Deliberately carries
+	// nothing a customer's endpoint produced: an acknowledgement is our own
+	// text, and the one message here a model always reads must not be a place
+	// third-party content can reach it.
+	Detail string `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
+	// The queued request, when this call queued one, and the request already
+	// waiting when it did not. Empty for `recently_fetched`.
+	RequestId     string `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestFetchResponse) Reset() {
+	*x = RequestFetchResponse{}
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestFetchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestFetchResponse) ProtoMessage() {}
+
+func (x *RequestFetchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestFetchResponse.ProtoReflect.Descriptor instead.
+func (*RequestFetchResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *RequestFetchResponse) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *RequestFetchResponse) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *RequestFetchResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type RaiseSignalResponse struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	SignalId string                 `protobuf:"bytes,1,opt,name=signal_id,json=signalId,proto3" json:"signal_id,omitempty"`
@@ -962,7 +1110,7 @@ type RaiseSignalResponse struct {
 
 func (x *RaiseSignalResponse) Reset() {
 	*x = RaiseSignalResponse{}
-	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[10]
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -974,7 +1122,7 @@ func (x *RaiseSignalResponse) String() string {
 func (*RaiseSignalResponse) ProtoMessage() {}
 
 func (x *RaiseSignalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[10]
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -987,7 +1135,7 @@ func (x *RaiseSignalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaiseSignalResponse.ProtoReflect.Descriptor instead.
 func (*RaiseSignalResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{10}
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *RaiseSignalResponse) GetSignalId() string {
@@ -1034,7 +1182,7 @@ type CitableObligation struct {
 
 func (x *CitableObligation) Reset() {
 	*x = CitableObligation{}
-	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[11]
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1046,7 +1194,7 @@ func (x *CitableObligation) String() string {
 func (*CitableObligation) ProtoMessage() {}
 
 func (x *CitableObligation) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[11]
+	mi := &file_kindlast_platform_v1_watcher_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1059,7 +1207,7 @@ func (x *CitableObligation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CitableObligation.ProtoReflect.Descriptor instead.
 func (*CitableObligation) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{11}
+	return file_kindlast_platform_v1_watcher_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CitableObligation) GetSlug() string {
@@ -1157,18 +1305,29 @@ const file_kindlast_platform_v1_watcher_proto_rawDesc = "" +
 	"\tbody_json\x18\x06 \x01(\tR\bbodyJson\"\x8c\x01\n" +
 	"\x14ReadEvidenceResponse\x12K\n" +
 	"\fobservations\x18\x01 \x03(\v2'.kindlast.platform.v1.StoredObservationR\fobservations\x12'\n" +
-	"\x0fconnection_name\x18\x02 \x01(\tR\x0econnectionName\"J\n" +
+	"\x0fconnection_name\x18\x02 \x01(\tR\x0econnectionName\"}\n" +
+	"\x13RequestFetchRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12#\n" +
+	"\rconnection_id\x18\x02 \x01(\tR\fconnectionId\x12\x12\n" +
+	"\x04tool\x18\x03 \x01(\tR\x04tool\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"c\n" +
+	"\x14RequestFetchResponse\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\x12\x16\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"J\n" +
 	"\x13RaiseSignalResponse\x12\x1b\n" +
 	"\tsignal_id\x18\x01 \x01(\tR\bsignalId\x12\x16\n" +
 	"\x06raised\x18\x02 \x01(\bR\x06raised\"W\n" +
 	"\x11CitableObligation\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
-	"\asummary\x18\x03 \x01(\tR\asummary2\xf8\x03\n" +
+	"\asummary\x18\x03 \x01(\tR\asummary2\xa2\x05\n" +
 	"\x0eWatcherService\x12\xa7\x01\n" +
 	"\x0eWatcherContext\x12+.kindlast.platform.v1.WatcherContextRequest\x1a,.kindlast.platform.v1.WatcherContextResponse\":\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/internal/v1/watcher:context\x12\x96\x01\n" +
 	"\vRaiseSignal\x12(.kindlast.platform.v1.RaiseSignalRequest\x1a).kindlast.platform.v1.RaiseSignalResponse\"2\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/internal/v1/signals\x12\xa2\x01\n" +
-	"\fReadEvidence\x12).kindlast.platform.v1.ReadEvidenceRequest\x1a*.kindlast.platform.v1.ReadEvidenceResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/internal/v1/watcher:evidenceB\xe0\x01\n" +
+	"\fReadEvidence\x12).kindlast.platform.v1.ReadEvidenceRequest\x1a*.kindlast.platform.v1.ReadEvidenceResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/internal/v1/watcher:evidence\x12\xa7\x01\n" +
+	"\fRequestFetch\x12).kindlast.platform.v1.RequestFetchRequest\x1a*.kindlast.platform.v1.RequestFetchResponse\"@\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02':\x01*\"\"/internal/v1/watcher:request-fetchB\xe0\x01\n" +
 	"\x18com.kindlast.platform.v1B\fWatcherProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3"
 
 var (
@@ -1183,7 +1342,7 @@ func file_kindlast_platform_v1_watcher_proto_rawDescGZIP() []byte {
 	return file_kindlast_platform_v1_watcher_proto_rawDescData
 }
 
-var file_kindlast_platform_v1_watcher_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_kindlast_platform_v1_watcher_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_kindlast_platform_v1_watcher_proto_goTypes = []any{
 	(*WatcherContextRequest)(nil),  // 0: kindlast.platform.v1.WatcherContextRequest
 	(*WatcherContextResponse)(nil), // 1: kindlast.platform.v1.WatcherContextResponse
@@ -1195,30 +1354,34 @@ var file_kindlast_platform_v1_watcher_proto_goTypes = []any{
 	(*ReadEvidenceRequest)(nil),    // 7: kindlast.platform.v1.ReadEvidenceRequest
 	(*StoredObservation)(nil),      // 8: kindlast.platform.v1.StoredObservation
 	(*ReadEvidenceResponse)(nil),   // 9: kindlast.platform.v1.ReadEvidenceResponse
-	(*RaiseSignalResponse)(nil),    // 10: kindlast.platform.v1.RaiseSignalResponse
-	(*CitableObligation)(nil),      // 11: kindlast.platform.v1.CitableObligation
-	(*timestamppb.Timestamp)(nil),  // 12: google.protobuf.Timestamp
+	(*RequestFetchRequest)(nil),    // 10: kindlast.platform.v1.RequestFetchRequest
+	(*RequestFetchResponse)(nil),   // 11: kindlast.platform.v1.RequestFetchResponse
+	(*RaiseSignalResponse)(nil),    // 12: kindlast.platform.v1.RaiseSignalResponse
+	(*CitableObligation)(nil),      // 13: kindlast.platform.v1.CitableObligation
+	(*timestamppb.Timestamp)(nil),  // 14: google.protobuf.Timestamp
 }
 var file_kindlast_platform_v1_watcher_proto_depIdxs = []int32{
 	2,  // 0: kindlast.platform.v1.WatcherContextResponse.facts:type_name -> kindlast.platform.v1.ProfileFact
 	3,  // 1: kindlast.platform.v1.WatcherContextResponse.connections:type_name -> kindlast.platform.v1.WatchedConnection
 	5,  // 2: kindlast.platform.v1.WatcherContextResponse.open_signals:type_name -> kindlast.platform.v1.OpenSignal
-	12, // 3: kindlast.platform.v1.WatcherContextResponse.last_swept_at:type_name -> google.protobuf.Timestamp
-	11, // 4: kindlast.platform.v1.WatcherContextResponse.obligations:type_name -> kindlast.platform.v1.CitableObligation
-	12, // 5: kindlast.platform.v1.ProfileFact.valid_from:type_name -> google.protobuf.Timestamp
+	14, // 3: kindlast.platform.v1.WatcherContextResponse.last_swept_at:type_name -> google.protobuf.Timestamp
+	13, // 4: kindlast.platform.v1.WatcherContextResponse.obligations:type_name -> kindlast.platform.v1.CitableObligation
+	14, // 5: kindlast.platform.v1.ProfileFact.valid_from:type_name -> google.protobuf.Timestamp
 	4,  // 6: kindlast.platform.v1.WatchedConnection.tools:type_name -> kindlast.platform.v1.ConnectionTool
-	12, // 7: kindlast.platform.v1.OpenSignal.updated_at:type_name -> google.protobuf.Timestamp
-	12, // 8: kindlast.platform.v1.StoredObservation.observed_at:type_name -> google.protobuf.Timestamp
-	12, // 9: kindlast.platform.v1.StoredObservation.fetched_at:type_name -> google.protobuf.Timestamp
+	14, // 7: kindlast.platform.v1.OpenSignal.updated_at:type_name -> google.protobuf.Timestamp
+	14, // 8: kindlast.platform.v1.StoredObservation.observed_at:type_name -> google.protobuf.Timestamp
+	14, // 9: kindlast.platform.v1.StoredObservation.fetched_at:type_name -> google.protobuf.Timestamp
 	8,  // 10: kindlast.platform.v1.ReadEvidenceResponse.observations:type_name -> kindlast.platform.v1.StoredObservation
 	0,  // 11: kindlast.platform.v1.WatcherService.WatcherContext:input_type -> kindlast.platform.v1.WatcherContextRequest
 	6,  // 12: kindlast.platform.v1.WatcherService.RaiseSignal:input_type -> kindlast.platform.v1.RaiseSignalRequest
 	7,  // 13: kindlast.platform.v1.WatcherService.ReadEvidence:input_type -> kindlast.platform.v1.ReadEvidenceRequest
-	1,  // 14: kindlast.platform.v1.WatcherService.WatcherContext:output_type -> kindlast.platform.v1.WatcherContextResponse
-	10, // 15: kindlast.platform.v1.WatcherService.RaiseSignal:output_type -> kindlast.platform.v1.RaiseSignalResponse
-	9,  // 16: kindlast.platform.v1.WatcherService.ReadEvidence:output_type -> kindlast.platform.v1.ReadEvidenceResponse
-	14, // [14:17] is the sub-list for method output_type
-	11, // [11:14] is the sub-list for method input_type
+	10, // 14: kindlast.platform.v1.WatcherService.RequestFetch:input_type -> kindlast.platform.v1.RequestFetchRequest
+	1,  // 15: kindlast.platform.v1.WatcherService.WatcherContext:output_type -> kindlast.platform.v1.WatcherContextResponse
+	12, // 16: kindlast.platform.v1.WatcherService.RaiseSignal:output_type -> kindlast.platform.v1.RaiseSignalResponse
+	9,  // 17: kindlast.platform.v1.WatcherService.ReadEvidence:output_type -> kindlast.platform.v1.ReadEvidenceResponse
+	11, // 18: kindlast.platform.v1.WatcherService.RequestFetch:output_type -> kindlast.platform.v1.RequestFetchResponse
+	15, // [15:19] is the sub-list for method output_type
+	11, // [11:15] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -1235,7 +1398,7 @@ func file_kindlast_platform_v1_watcher_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_watcher_proto_rawDesc), len(file_kindlast_platform_v1_watcher_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

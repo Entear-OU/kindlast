@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -35,6 +36,13 @@ type Producer interface {
 	// deliberately no method here that reaches a customer's system, and the
 	// RPC's own comment says what it would take to add one.
 	EvidenceFor(ctx context.Context, orgID, connectionID, tool string, limit int) (string, []postgres.StoredObservation, error)
+	// RequestFetch records the agent's ask for a fetch, or answers why
+	// nothing was queued (ENT-279). Still not a method that reaches a
+	// customer's system: what it writes is a request the scheduled fetch
+	// relay serves later, on roles this pool cannot reach, and the cutoffs
+	// are the handler's own constants rather than anything a caller chose.
+	RequestFetch(ctx context.Context, orgID, connectionID, tool, reason string,
+		attemptedSince, pendingSince time.Time) (postgres.FetchAsk, error)
 }
 
 // ModelRoute resolves which model serves one organisation, declared here for

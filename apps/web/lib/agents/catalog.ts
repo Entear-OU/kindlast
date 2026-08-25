@@ -166,24 +166,29 @@ export const AGENTS: readonly Agent[] = [
       {
         module: 'watcher',
         name: 'watcher.sweep',
-        // 1.1.0 is ENT-274: `read_evidence` joined the allow-list. A minor
-        // bump because the skill answers the same question and was given more
-        // to answer it from, and `agent_runs` records which version answered,
-        // so a run from before this saw less than a run after it.
-        version: '1.1.0',
-        // TWO TOOLS, AND THE PAGE SHOWS THEM FOR THE REASON THE LIST EXISTS.
+        // 1.1.0 is ENT-274: `read_evidence` joined the allow-list. 1.2.0 is
+        // ENT-279: `request_fetch` joined it. Minor bumps because the skill
+        // answers the same question and was given more to answer it from, and
+        // `agent_runs` records which version answered, so a run from before
+        // each saw less than a run after it.
+        version: '1.2.0',
+        // THREE TOOLS, AND THE PAGE SHOWS THEM FOR THE REASON THE LIST EXISTS.
         //
         // A reader looking at "what can this thing do to my data" gets the whole
         // answer: it can read what one of your connected tools already reported,
-        // and it can raise a signal. There is nothing here that writes a
-        // finding, changes a record or sends anything. That is the separation
-        // the product rests on, and showing the list is how a customer checks it
+        // it can ask for one granted read-only tool to be fetched again, and it
+        // can raise a signal. There is nothing here that writes a finding,
+        // changes a record or sends anything. That is the separation the
+        // product rests on, and showing the list is how a customer checks it
         // rather than taking our word for it.
         //
-        // `read_evidence` reads observations a fetch already deposited. It
-        // cannot cause a fetch, so nothing here dials a customer's systems
-        // (ENT-279 is where that decision lives, and it is not taken).
-        tools: ['raise_signal', 'read_evidence'],
+        // `read_evidence` reads observations a fetch already deposited.
+        // `request_fetch` asks; it never dials. core-api decides whether the
+        // ask stands, the fetch runs later through the same gateway a
+        // scheduled fetch uses, and the Watcher is answered with an
+        // acknowledgement rather than a payload (ENT-279). The agent holds no
+        // credential and no way to reach one, before or after this tool.
+        tools: ['raise_signal', 'read_evidence', 'request_fetch'],
       },
     ],
   },

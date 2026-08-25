@@ -281,6 +281,16 @@ class IntelligenceService:
             read_evidence=lambda connection_id, tool: self._core_api.read_evidence(
                 request.org_id, connection_id, tool
             ),
+            # AND SO IS THE ASK FOR A FETCH (ENT-279). The skill names a
+            # connection, a tool and its reason; it never names the tenant,
+            # and the answer is core-api's acknowledgement rather than
+            # anything fetched, so nothing here starts holding what a fetch
+            # needs. core-api checks the connection against this org_id as
+            # well, so a bug here queues nothing rather than queueing a fetch
+            # of somebody else's system.
+            request_fetch=lambda connection_id, tool, reason: self._core_api.request_fetch(
+                request.org_id, connection_id, tool, reason
+            ),
             validator=CitationValidator(OfferedObligations(context["obligations"])),
             model_name=model_name,
             model_version=model_version,

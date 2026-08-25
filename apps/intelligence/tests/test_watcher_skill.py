@@ -897,20 +897,22 @@ def test_core_api_refusing_a_read_is_a_recorded_refusal_and_not_a_crash():
     assert run_record.tool_calls, "a refused run recorded no tool call"
 
 
-def test_the_watcher_holds_two_tools_and_neither_writes_a_finding():
+def test_the_watcher_holds_three_tools_and_none_writes_a_finding():
     """The separation the whole surface rests on, asserted rather than assumed.
 
     A signal is a thing worth looking at; a finding cites regulation and goes
-    to a human. ENT-274 adds a second tool and it is a READ, so the separation
-    is unchanged: if a tool that writes findings ever appears in this tuple,
+    to a human. ENT-274 added a READ and ENT-279 added an ASK, so the
+    separation is unchanged: the Watcher can look, ask for a look, and raise,
+    and nothing in this tuple writes a finding, changes a record or carries
+    arguments to a customer's tool. If a tool that does ever appears here,
     that separation has been removed and this test is where it should be
     noticed."""
-    assert watcher.ALLOWED_TOOLS == ("raise_signal", "read_evidence")
+    assert watcher.ALLOWED_TOOLS == ("raise_signal", "read_evidence", "request_fetch")
 
 
 def test_the_skill_version_moved_with_the_tool_list():
-    """The tool list is part of what the model was asked, so a run recorded
-    against 1.0.0 and a run recorded against a Watcher that could read evidence
-    are not comparable. `agent_runs` stores the version precisely so that
-    somebody can tell them apart a year later."""
-    assert watcher.VERSION != "1.0.0"
+    """The tool list is part of what the model was asked, so runs recorded
+    against 1.0.0 (no tools but the raise), 1.1.0 (a read) and 1.2.0 (an ask
+    for a fetch) are not comparable. `agent_runs` stores the version precisely
+    so that somebody can tell them apart a year later."""
+    assert watcher.VERSION not in ("1.0.0", "1.1.0")

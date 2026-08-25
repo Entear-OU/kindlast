@@ -128,6 +128,64 @@ service WatcherService {
       body: "*"
     };
   }
+
+  // Asks for a fetch of one granted tool on one connection, and is answered
+  // with an acknowledgement rather than a payload (ENT-279).
+  //
+  // # THE AGENT ASKS, core-api DECIDES, THE GATEWAY FETCHES
+  //
+  // This is the mediated shape ENT-279 settled on, and the words are in that
+  // order because each one is a boundary. The Watcher may ask: asking is a
+  // request, never an action, and nothing about this RPC gives the producer
+  // role a way to reach `credential_ciphertext`, which stays exactly as 00025
+  // wrote it. core-api decides: the connection must be this organisation's,
+  // active, and the tool granted and read-only, checked here against the rows
+  // rather than against anything the caller believes. And the gateway fetches:
+  // what a queued request causes is the same scheduled fetch every other
+  // deposit goes through, behind the egress allow-list and the tool policy,
+  // under the standing consent of the person who connected the system. No
+  // packet leaves this handler.
+  //
+  // # THE ANSWER IS AN ACKNOWLEDGEMENT, AND IT DOES NOT PRETEND OTHERWISE
+  //
+  // A sweep is a twenty minute activity with three retries and nobody waiting
+  // on it, and a synchronous fetch inside one would hold a sweep slot on a
+  // customer's latency and could dial them three times per sweep. So the fetch
+  // is not awaited and the response says what became of the ASK: queued, or
+  // already queued, or attempted so recently that queueing another would be
+  // dialling a customer's system twice for one answer. The run that asked
+  // reads nothing back; the deposit lands in `org_evidence` and the next
+  // `read_evidence`, usually the next sweep's, sees it.
+  //
+  // # HOW OFTEN A CUSTOMER CAN BE DIALLED BECAUSE A MODEL ASKED
+  //
+  // Two server constants, deliberately not request fields, for the blast
+  // radius reason `FetchService` gives about its staleness interval: a caller
+  // able to send zero would be able to dial every customer's systems at once.
+  // A pair with any fetch attempt inside the cooldown answers
+  // `recently_fetched` and queues nothing, and attempts count whatever their
+  // outcome, so a down endpoint is not redialled on every ask. A pair with a
+  // request already waiting answers `already_queued` and queues nothing. So
+  // however many times one run, or one run's three retries, asks for the same
+  // pair, at most one fetch is caused per cooldown, on top of the schedule.
+  //
+  //   invalid_argument     no organisation, no connection, no tool, or a
+  //                        reason longer than a sentence should be
+  //   not_found            no such connection in this organisation, and the
+  //                        same answer when it exists in another one: the
+  //                        producer role saw no rows either way
+  //   failed_precondition  the connection is revoked, so nothing may be
+  //                        fetched through it again
+  //   permission_denied    the tool is not granted, or it can write. Both are
+  //                        the customer's decision working, and the harness
+  //                        maps this code onto a refusal rather than a failure
+  rpc RequestFetch(RequestFetchRequest) returns (RequestFetchResponse) {
+    option (kindlast.options.v1.required_scope) = "internal:ingest";
+    option (google.api.http) = {
+      post: "/internal/v1/watcher:request-fetch"
+      body: "*"
+    };
+  }
 }
 
 message WatcherContextRequest {
@@ -369,6 +427,39 @@ message ReadEvidenceResponse {
   // organisation's, which is the same answer as no observations and for the
   // same reason: the producer role saw no rows.
   string connection_name = 2;
+}
+
+message RequestFetchRequest {
+  string org_id = 1;
+  // Which connection to fetch, by the id `WatcherContext` gave. The harness
+  // refuses an id the run was never shown before this is ever sent, and this
+  // handler checks the row regardless, because the two refuse different
+  // things: one catches a fabricated id, the other holds the invariant.
+  string connection_id = 2;
+  // Which granted tool to fetch through. Required, and a tool that can write
+  // is refused however it is granted: a fetch a model asked for is nobody
+  // deciding, and the evidence a compliance product wants is what a system
+  // reports rather than what it can be made to do.
+  string tool = 3;
+  // Why, in the model's own sentence, for the person reading the request
+  // later. Bounded and optional: a missing reason is a thinner record, not a
+  // refusal.
+  string reason = 4;
+}
+
+message RequestFetchResponse {
+  // `queued`, `already_queued` or `recently_fetched`: what became of the ask.
+  // A closed set the harness renders back to the model, so it can act on the
+  // answer rather than asking again.
+  string state = 1;
+  // The sentence that goes with it, written by core-api. Deliberately carries
+  // nothing a customer's endpoint produced: an acknowledgement is our own
+  // text, and the one message here a model always reads must not be a place
+  // third-party content can reach it.
+  string detail = 2;
+  // The queued request, when this call queued one, and the request already
+  // waiting when it did not. Empty for `recently_fetched`.
+  string request_id = 3;
 }
 
 message RaiseSignalResponse {

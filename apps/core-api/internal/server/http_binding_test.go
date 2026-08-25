@@ -616,6 +616,13 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.platform.v1.WatcherService.ReadEvidence": {
 			Method: "POST", Path: "/internal/v1/watcher:evidence",
 		},
+		// And the ask for a fetch (ENT-279). A custom action, not a
+		// collection: what it creates is queued work with no addressable
+		// resource behind it, and the acknowledgement is the answer, not a
+		// representation of anything.
+		"kindlast.platform.v1.WatcherService.RequestFetch": {
+			Method: "POST", Path: "/internal/v1/watcher:request-fetch",
+		},
 
 		// The Hands' surface (ENT-261): what approving a finding will do, and
 		// the plan it prepares. Both are custom actions rather than resources,
