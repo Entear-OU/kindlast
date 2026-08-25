@@ -59,7 +59,7 @@ func TestIngestEvidenceStoresAnObservationAndTheFetchThatProducedIt(t *testing.T
 	migrator := migratorConn(t)
 
 	observed := time.Now().UTC().Add(-72 * time.Hour).Truncate(time.Second)
-	evidenceID, fetchID, err := agent.IngestEvidence(t.Context(), FetchRecord{
+	deposit, err := agent.IngestEvidence(t.Context(), FetchRecord{
 		OrgID:         org,
 		ConnectionID:  connection,
 		Tool:          "search_tickets",
@@ -73,10 +73,10 @@ func TestIngestEvidenceStoresAnObservationAndTheFetchThatProducedIt(t *testing.T
 	if err != nil {
 		t.Fatalf("IngestEvidence: %v", err)
 	}
-	if evidenceID == "" {
+	if deposit.EvidenceID == "" {
 		t.Fatal("a successful fetch stored no observation")
 	}
-	if fetchID == "" {
+	if deposit.FetchID == "" {
 		t.Fatal("no fetch record was written")
 	}
 
@@ -87,7 +87,7 @@ func TestIngestEvidenceStoresAnObservationAndTheFetchThatProducedIt(t *testing.T
 	var storedObserved, fetchedAt time.Time
 	err = migrator.QueryRow(t.Context(), `
 		select source, connection_id::text, kind, observed_at, fetched_at
-		  from org_evidence where id = $1`, evidenceID).
+		  from org_evidence where id = $1`, deposit.EvidenceID).
 		Scan(&source, &connectionID, &kind, &storedObserved, &fetchedAt)
 	if err != nil {
 		t.Fatalf("reading the observation back: %v", err)
@@ -118,13 +118,13 @@ func TestIngestEvidenceStoresAnObservationAndTheFetchThatProducedIt(t *testing.T
 	var redactions int32
 	err = migrator.QueryRow(t.Context(), `
 		select coalesce(evidence_id::text, ''), redactions
-		  from integration_fetches where id = $1`, fetchID).
+		  from integration_fetches where id = $1`, deposit.FetchID).
 		Scan(&linked, &redactions)
 	if err != nil {
 		t.Fatalf("reading the fetch back: %v", err)
 	}
-	if linked != evidenceID {
-		t.Errorf("the fetch points at %q, want %s", linked, evidenceID)
+	if linked != deposit.EvidenceID {
+		t.Errorf("the fetch points at %q, want %s", linked, deposit.EvidenceID)
 	}
 	if redactions != 2 {
 		t.Errorf("redactions is %d, want 2", redactions)
@@ -138,7 +138,7 @@ func TestIngestEvidenceRecordsARefusalWithNothingStored(t *testing.T) {
 	org, connection := seedConnection(t)
 	migrator := migratorConn(t)
 
-	evidenceID, fetchID, err := agent.IngestEvidence(t.Context(), FetchRecord{
+	deposit, err := agent.IngestEvidence(t.Context(), FetchRecord{
 		OrgID:        org,
 		ConnectionID: connection,
 		Tool:         "close_ticket",
@@ -148,17 +148,17 @@ func TestIngestEvidenceRecordsARefusalWithNothingStored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IngestEvidence: %v", err)
 	}
-	if evidenceID != "" {
-		t.Errorf("a refusal stored an observation: %s", evidenceID)
+	if deposit.EvidenceID != "" {
+		t.Errorf("a refusal stored an observation: %s", deposit.EvidenceID)
 	}
-	if fetchID == "" {
+	if deposit.FetchID == "" {
 		t.Fatal("a refusal was not recorded, which is the whole point of recording refusals")
 	}
 
 	var outcome, detail string
 	err = migrator.QueryRow(t.Context(),
 		`select outcome, coalesce(detail, '') from integration_fetches where id = $1`,
-		fetchID).Scan(&outcome, &detail)
+		deposit.FetchID).Scan(&outcome, &detail)
 	if err != nil {
 		t.Fatalf("reading the fetch back: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestIngestEvidenceWritesNothingForAnOrganisationThatDoesNotOwnTheConnection
 	migrator := migratorConn(t)
 
 	stranger := uuid.New()
-	_, _, err := agent.IngestEvidence(t.Context(), FetchRecord{
+	_, err := agent.IngestEvidence(t.Context(), FetchRecord{
 		OrgID:        stranger,
 		ConnectionID: connection,
 		Tool:         "search_tickets",
@@ -216,7 +216,7 @@ func TestIngestEvidenceRefusesContentThatIsNotJSON(t *testing.T) {
 	agent := agentStore(t)
 	org, connection := seedConnection(t)
 
-	_, _, err := agent.IngestEvidence(t.Context(), FetchRecord{
+	_, err := agent.IngestEvidence(t.Context(), FetchRecord{
 		OrgID:        org,
 		ConnectionID: connection,
 		Tool:         "search_tickets",
@@ -239,7 +239,7 @@ func TestIngestEvidenceStampsAnObservationThatCameWithNoTime(t *testing.T) {
 	org, connection := seedConnection(t)
 	migrator := migratorConn(t)
 
-	evidenceID, _, err := agent.IngestEvidence(t.Context(), FetchRecord{
+	deposit, err := agent.IngestEvidence(t.Context(), FetchRecord{
 		OrgID:        org,
 		ConnectionID: connection,
 		Tool:         "search_tickets",
@@ -252,7 +252,7 @@ func TestIngestEvidenceStampsAnObservationThatCameWithNoTime(t *testing.T) {
 
 	var observed time.Time
 	if err := migrator.QueryRow(t.Context(),
-		`select observed_at from org_evidence where id = $1`, evidenceID).
+		`select observed_at from org_evidence where id = $1`, deposit.EvidenceID).
 		Scan(&observed); err != nil {
 		t.Fatalf("reading the observation back: %v", err)
 	}

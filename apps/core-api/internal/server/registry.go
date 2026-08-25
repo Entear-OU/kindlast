@@ -140,6 +140,12 @@ func Services() []protoreflect.ServiceDescriptor {
 		// anything that approves: the Hands explains and prepares, and the
 		// decision stays a human's.
 		platformv1.File_kindlast_platform_v1_hands_proto,
+		// FetchService (ENT-279). The scheduled fetch that deposits the
+		// evidence the Watcher's `read_evidence` reads, on `internal:ingest`.
+		// Deliberately not reachable by anything that runs a model: the shape
+		// is that a scheduled fetch deposits and a sweep reads, and the agent
+		// never dials.
+		platformv1.File_kindlast_platform_v1_fetch_proto,
 	}
 
 	var services []protoreflect.ServiceDescriptor

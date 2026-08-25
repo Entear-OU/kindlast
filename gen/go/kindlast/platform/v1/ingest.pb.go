@@ -1958,7 +1958,18 @@ type IngestEvidenceResponse struct {
 	// that wants to reference what it learned has something to reference.
 	EvidenceId string `protobuf:"bytes,1,opt,name=evidence_id,json=evidenceId,proto3" json:"evidence_id,omitempty"`
 	// The stored fetch record's id, which is written whatever the outcome.
-	FetchId       string `protobuf:"bytes,2,opt,name=fetch_id,json=fetchId,proto3" json:"fetch_id,omitempty"`
+	FetchId string `protobuf:"bytes,2,opt,name=fetch_id,json=fetchId,proto3" json:"fetch_id,omitempty"`
+	// False when the endpoint returned exactly what it returned last time and
+	// this fetch was linked to the existing observation rather than writing a
+	// second identical one (ENT-279).
+	//
+	// `org_evidence.content_hash` was built for this and 00020 made it an index
+	// rather than a unique constraint on the grounds that deduplication is Go's
+	// call. This is that call: a machine fetching the same tool every day for a
+	// year should not put 365 identical rows in a customer's memory. The fetch
+	// record is written every time regardless, so "we checked and it still said
+	// this" is recorded.
+	EvidenceIsNew bool `protobuf:"varint,3,opt,name=evidence_is_new,json=evidenceIsNew,proto3" json:"evidence_is_new,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2005,6 +2016,13 @@ func (x *IngestEvidenceResponse) GetFetchId() string {
 		return x.FetchId
 	}
 	return ""
+}
+
+func (x *IngestEvidenceResponse) GetEvidenceIsNew() bool {
+	if x != nil {
+		return x.EvidenceIsNew
+	}
+	return false
 }
 
 var File_kindlast_platform_v1_ingest_proto protoreflect.FileDescriptor
@@ -2183,11 +2201,12 @@ const file_kindlast_platform_v1_ingest_proto_rawDesc = "" +
 	"\vobserved_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"observedAt\x12=\n" +
 	"\frequested_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\vrequestedAt\"T\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\vrequestedAt\"|\n" +
 	"\x16IngestEvidenceResponse\x12\x1f\n" +
 	"\vevidence_id\x18\x01 \x01(\tR\n" +
 	"evidenceId\x12\x19\n" +
-	"\bfetch_id\x18\x02 \x01(\tR\afetchId*\x92\x01\n" +
+	"\bfetch_id\x18\x02 \x01(\tR\afetchId\x12&\n" +
+	"\x0fevidence_is_new\x18\x03 \x01(\bR\revidenceIsNew*\x92\x01\n" +
 	"\x0fAgentRunOutcome\x12!\n" +
 	"\x1dAGENT_RUN_OUTCOME_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bAGENT_RUN_OUTCOME_SUCCEEDED\x10\x01\x12\x1d\n" +

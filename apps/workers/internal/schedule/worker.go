@@ -38,6 +38,11 @@ type Options struct {
 	// ExecutorRelayInterval is how often the relay looks for approvals whose
 	// record has not been created yet.
 	ExecutorRelayInterval time.Duration
+	// FetchRelayInterval is how often the relay asks which connections have
+	// evidence that has gone stale (ENT-279). Not how often a customer is
+	// dialled: that is core-api's staleness constant, and this tick only asks
+	// the question.
+	FetchRelayInterval time.Duration
 	// Activities is the dependency set the activities close over.
 	Activities *Activities
 	Logger     *slog.Logger
@@ -151,6 +156,8 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 	w.RegisterWorkflow(DailySweepWorkflow)
 	w.RegisterWorkflow(RelayExecutorJobsWorkflow)
 	w.RegisterWorkflow(ExecuteApprovalWorkflow)
+	w.RegisterWorkflow(RelayEvidenceFetchesWorkflow)
+	w.RegisterWorkflow(FetchEvidenceWorkflow)
 	w.RegisterActivityWithOptions(opts.Activities.ExpireSnoozes,
 		activityOptions(ExpireSnoozesActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.ListUndelivered,
@@ -191,6 +198,12 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		activityOptions(ExecuteJobActivityName))
 	w.RegisterActivityWithOptions(opts.Activities.LoadWatchContext,
 		activityOptions(LoadWatchContextActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.ListFetchTargets,
+		activityOptions(ListFetchTargetsActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.StartFetches,
+		activityOptions(StartFetchesActivityName))
+	w.RegisterActivityWithOptions(opts.Activities.RunScheduledFetch,
+		activityOptions(RunScheduledFetchActivityName))
 	// DraftNarrative and Watch are deliberately NOT registered here: both run
 	// on the `intelligence` task queue, served by the Python worker (§16.4).
 
@@ -213,7 +226,8 @@ func Start(ctx context.Context, c client.Client, opts Options) (*Worker, error) 
 		"outbox_reclaim", opts.OutboxReclaimSchedule,
 		"sweep_relay", opts.SweepRelayInterval.String(),
 		"sweep", opts.SweepSchedule,
-		"executor_relay", opts.ExecutorRelayInterval.String())
+		"executor_relay", opts.ExecutorRelayInterval.String(),
+		"fetch_relay", opts.FetchRelayInterval.String())
 	return &Worker{client: c, worker: w}, nil
 }
 
@@ -340,6 +354,35 @@ func schedules(opts Options) []scheduleDefinition {
 			Memo: map[string]any{
 				"owner": "workers (ENT-271)",
 				"what":  "creates the record every approved finding asked for",
+			},
+		},
+		{
+			ID: EvidenceFetchRelayScheduleID,
+			// AN INTERVAL RATHER THAN A DAILY CRON, ALTHOUGH EACH TARGET IS
+			// FETCHED AT MOST DAILY.
+			//
+			// How often a customer is dialled is decided by core-api's
+			// staleness constant, not here: this tick only asks what has gone
+			// stale. Asking hourly rather than once a day is what gets a newly
+			// granted tool its first observation within the hour instead of at
+			// six tomorrow morning, and what spreads the estate's fetches
+			// across the day instead of dialling every customer at once.
+			//
+			// A missed tick is not made up beyond a few minutes, because the
+			// next tick lists exactly the same stale targets. Replaying old
+			// ones would start the same fetches again and find them running.
+			Spec: client.ScheduleSpec{
+				Intervals: []client.ScheduleIntervalSpec{{Every: opts.FetchRelayInterval}},
+			},
+			Workflow: RelayEvidenceFetchesWorkflow,
+			// The relay lists and starts; the fetches themselves are separate
+			// workflows with their own timeouts, so this one is over in
+			// seconds however slow a customer's endpoint is.
+			ExecutionTimeout: 5 * time.Minute,
+			CatchupWindow:    5 * time.Minute,
+			Memo: map[string]any{
+				"owner": "workers (ENT-279)",
+				"what":  "fetches every granted read-only tool whose evidence has gone stale, and deposits what it says",
 			},
 		},
 		{

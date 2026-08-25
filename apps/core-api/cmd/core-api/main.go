@@ -34,6 +34,7 @@ import (
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/conversation"
 	deliveryservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/delivery"
 	executorservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/executor"
+	fetchservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/fetch"
 	handsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/hands"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/ingest"
 	integrationsservice "github.com/Entear-OU/kindlast/apps/core-api/internal/service/integrations"
@@ -419,6 +420,11 @@ func run(logger *slog.Logger) error {
 		// produce an interface that is not nil, the registration guard would
 		// pass, and every call would panic.
 		Integrations: integrationsDependency(gatewayClient, integrationKeys),
+		// The scheduled fetch that deposits the evidence the Watcher reads
+		// (ENT-279). The same gateway and the same keyring the console's
+		// Integrations page uses, driven by a Temporal schedule instead of a
+		// person.
+		Fetch: fetchDependency(gatewayClient, outbox, store, integrationKeys),
 		// Where an organisation's model runs (ENT-236). Served on every
 		// deployment, including one permitting no provider, so a member always
 		// gets a true answer to "where is our compliance data processed".
@@ -869,4 +875,26 @@ func integrationsDependency(
 		return nil
 	}
 	return integrationsservice.New(client, keys)
+}
+
+// fetchDependency builds the scheduled fetch, or nothing (ENT-279).
+//
+// Three conditions, and each of them makes the surface useless without it: a
+// gateway, because core-api dials nobody itself; the agent pool, because
+// listing what is stale across every organisation and writing the result both
+// run on it; and the application pool, which is always there and is named
+// anyway so the reader can see all three halves in one place.
+//
+// The same typed-nil guard as integrationsDependency above, and for the same
+// reason: a nil *gateway.Client or a nil *postgres.AgentStore assigned into an
+// interface is not a nil interface, so the guard has to stay on the concrete
+// pointers.
+func fetchDependency(
+	client *gateway.Client, agent *postgres.AgentStore, store *postgres.Store,
+	keys *secrets.Keyring,
+) platformv1connect.FetchServiceHandler {
+	if client == nil || agent == nil || store == nil {
+		return nil
+	}
+	return fetchservice.New(agent, store, agent, client, keys)
 }

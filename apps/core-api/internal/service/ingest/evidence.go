@@ -25,7 +25,7 @@ import (
 // mean the corpus loader's neighbour could do both because it happened to hold
 // one handle.
 type EvidenceRecorder interface {
-	IngestEvidence(ctx context.Context, record postgres.FetchRecord) (evidenceID string, fetchID string, err error)
+	IngestEvidence(ctx context.Context, record postgres.FetchRecord) (postgres.Deposit, error)
 }
 
 // IngestEvidence records what a machine fetched from a customer's own system.
@@ -144,7 +144,7 @@ func (s *Service) IngestEvidence(
 		record.RequestedAt = stamp.AsTime()
 	}
 
-	evidenceID, fetchID, err := s.evidence.IngestEvidence(ctx, record)
+	deposit, err := s.evidence.IngestEvidence(ctx, record)
 	if err != nil {
 		// Logged as well as returned, because this caller is a schedule rather
 		// than a browser and an error nobody sees is one nobody fixes.
@@ -154,7 +154,8 @@ func (s *Service) IngestEvidence(
 	}
 
 	return connect.NewResponse(&platformv1.IngestEvidenceResponse{
-		EvidenceId: evidenceID,
-		FetchId:    fetchID,
+		EvidenceId:    deposit.EvidenceID,
+		FetchId:       deposit.FetchID,
+		EvidenceIsNew: deposit.EvidenceIsNew,
 	}), nil
 }

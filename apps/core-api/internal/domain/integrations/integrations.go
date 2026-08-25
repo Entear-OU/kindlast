@@ -94,6 +94,16 @@ var (
 	// request would have been fine yesterday, and the caller needs to be told
 	// what changed rather than to look for a typo.
 	ErrRevoked = errors.New("that connection has been revoked")
+
+	// ErrNotGranted is what a fetch of a tool the customer did not grant
+	// returns.
+	//
+	// Its own error rather than ErrInvalid, because it is the consent screen
+	// working. `granted` is the customer's decision and nothing in this
+	// product may widen it, so a caller asking for an ungranted tool needs an
+	// answer that says "you were told no" rather than one that reads like a
+	// malformed request (ENT-279).
+	ErrNotGranted = errors.New("that tool is not granted on this connection")
 )
 
 // ValidateEndpoint refuses a URL that is not one this product can store.

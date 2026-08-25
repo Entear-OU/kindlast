@@ -1265,6 +1265,31 @@ what they have to do about it, which no commit subject knows.
   on the `intelligence` task queue. No migration, no new scope, no schema
   change. The skill is `messenger.draft` at `1.0.0`, recorded on every run.
 
+- Connected systems are now fetched on a schedule, so the Watcher has evidence
+  to read without anybody clicking Fetch. A new Temporal schedule,
+  `fetch-evidence-for-every-connection`, asks core-api hourly which granted
+  read-only tools have no fetch attempt in the last day and runs one fetch per
+  connection and tool, through the same gateway, egress allow-list, tool
+  policy and rate limit a manual fetch goes through. Each fetch runs on the
+  standing consent of the person who connected the system, and stops when that
+  person leaves the organisation. Outcomes are recorded in
+  `integration_fetches` whatever they are, including refusals and a customer's
+  endpoint being down, and an endpoint that returns the same bytes as last
+  time has its fetch linked to the existing observation rather than writing an
+  identical `org_evidence` row every day.
+
+  For an operator: migration `00048` adds two `SECURITY DEFINER` functions
+  (`fetch_targets`, `integration_fetch_context`) and an index, and widens no
+  role, in particular not the producer role's deliberately credential-less
+  select on `integrations`. New RPCs `FetchService.ListFetchTargets` and
+  `FetchService.RunScheduledFetch` on the internal surface require
+  `internal:ingest` and are served only when a gateway is configured. New
+  setting `KINDLAST_FETCH_RELAY_INTERVAL` (default `1h`) controls how often
+  staleness is checked; how often a customer is dialled (at most daily per
+  tool) is a server constant. Pausing the schedule in Temporal is the off
+  switch. Agents still cannot cause a fetch; whether they ever can is a
+  separate decision this change deliberately does not take.
+
 ## [0.1.0]
 
 The version the repository has carried in its manifests since the beginning,
