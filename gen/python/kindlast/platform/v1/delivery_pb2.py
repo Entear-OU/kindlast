@@ -25,9 +25,10 @@ _sym_db = _symbol_database.Default()
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
+from kindlast.platform.v1 import intelligence_pb2 as kindlast_dot_platform_dot_v1_dot_intelligence__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#kindlast/platform/v1/delivery.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\".\n\x16ListUndeliveredRequest\x12\x14\n\x05limit\x18\x01 \x01(\x05R\x05limit\"e\n\x17ListUndeliveredResponse\x12\x1f\n\x0bmessage_ids\x18\x01 \x03(\tR\nmessageIds\x12)\n\x10notification_ids\x18\x02 \x03(\tR\x0fnotificationIds\"6\n\x15\x44\x65liverMessageRequest\x12\x1d\n\nmessage_id\x18\x01 \x01(\tR\tmessageId\"\x91\x02\n\x16\x44\x65liverMessageResponse\x12N\n\x07outcome\x18\x01 \x01(\x0e\x32\x34.kindlast.platform.v1.DeliverMessageResponse.OutcomeR\x07outcome\x12\x1a\n\x08\x61ttempts\x18\x02 \x01(\x05R\x08\x61ttempts\x12\x33\n\x07sent_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x06sentAt\"V\n\x07Outcome\x12\x17\n\x13OUTCOME_UNSPECIFIED\x10\x00\x12\x15\n\x11OUTCOME_DELIVERED\x10\x01\x12\x1b\n\x17OUTCOME_ALREADY_SETTLED\x10\x02\"B\n\x17PlanNotificationRequest\x12\'\n\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\"|\n\x18PlanNotificationResponse\x12\x18\n\x07settled\x18\x01 \x01(\x08R\x07settled\x12\x46\n\nrecipients\x18\x02 \x03(\x0b\x32&.kindlast.platform.v1.PlannedRecipientR\nrecipients\"\xaa\x02\n\x10PlannedRecipient\x12\x17\n\x07user_id\x18\x01 \x01(\tR\x06userId\x12K\n\x08\x64\x65\x63ision\x18\x02 \x01(\x0e\x32/.kindlast.platform.v1.PlannedRecipient.DecisionR\x08\x64\x65\x63ision\x12\x39\n\nhold_until\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tholdUntil\x12\x16\n\x06reason\x18\x04 \x01(\tR\x06reason\"]\n\x08\x44\x65\x63ision\x12\x18\n\x14\x44\x45\x43ISION_UNSPECIFIED\x10\x00\x12\x11\n\rDECISION_SEND\x10\x01\x12\x11\n\rDECISION_HOLD\x10\x02\x12\x11\n\rDECISION_SKIP\x10\x03\"]\n\x17NotifyRecipientsRequest\x12\'\n\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12\x19\n\x08user_ids\x18\x02 \x03(\tR\x07userIds\"H\n\x18NotifyRecipientsResponse\x12\x12\n\x04sent\x18\x01 \x01(\x05R\x04sent\x12\x18\n\x07settled\x18\x02 \x01(\x08R\x07settled\"\xfa\x01\n\x19SettleNotificationRequest\x12\'\n\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12Q\n\x07outcome\x18\x02 \x01(\x0e\x32\x37.kindlast.platform.v1.SettleNotificationRequest.OutcomeR\x07outcome\x12\x16\n\x06reason\x18\x03 \x01(\tR\x06reason\"I\n\x07Outcome\x12\x17\n\x13OUTCOME_UNSPECIFIED\x10\x00\x12\x10\n\x0cOUTCOME_SENT\x10\x01\x12\x13\n\x0fOUTCOME_SKIPPED\x10\x02\"6\n\x1aSettleNotificationResponse\x12\x18\n\x07settled\x18\x01 \x01(\x08R\x07settled\"\x18\n\x16ReclaimMessagesRequest\"\x86\x01\n\x17ReclaimMessagesResponse\x12\x1a\n\x08redacted\x18\x01 \x01(\x05R\x08redacted\x12\x1c\n\tabandoned\x18\x02 \x01(\x05R\tabandoned\x12\x31\n\x06ran_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt2\xbb\x08\n\x0f\x44\x65liveryService\x12\xab\x01\n\x0fListUndelivered\x12,.kindlast.platform.v1.ListUndeliveredRequest\x1a-.kindlast.platform.v1.ListUndeliveredResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/messages:pending:\x01*\x12\xa8\x01\n\x0e\x44\x65liverMessage\x12+.kindlast.platform.v1.DeliverMessageRequest\x1a,.kindlast.platform.v1.DeliverMessageResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/messages:deliver:\x01*\x12\xb0\x01\n\x10PlanNotification\x12-.kindlast.platform.v1.PlanNotificationRequest\x1a..kindlast.platform.v1.PlanNotificationResponse\"=\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02$\"\x1f/internal/v1/notifications:plan:\x01*\x12\xb2\x01\n\x10NotifyRecipients\x12-.kindlast.platform.v1.NotifyRecipientsRequest\x1a..kindlast.platform.v1.NotifyRecipientsResponse\"?\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02&\"!/internal/v1/notifications:notify:\x01*\x12\xb8\x01\n\x12SettleNotification\x12/.kindlast.platform.v1.SettleNotificationRequest\x1a\x30.kindlast.platform.v1.SettleNotificationResponse\"?\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02&\"!/internal/v1/notifications:settle:\x01*\x12\xab\x01\n\x0fReclaimMessages\x12,.kindlast.platform.v1.ReclaimMessagesRequest\x1a-.kindlast.platform.v1.ReclaimMessagesResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/messages:reclaim:\x01*B\xe1\x01\n\x18\x63om.kindlast.platform.v1B\rDeliveryProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#kindlast/platform/v1/delivery.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\x1a\'kindlast/platform/v1/intelligence.proto\".\n\x16ListUndeliveredRequest\x12\x14\n\x05limit\x18\x01 \x01(\x05R\x05limit\"e\n\x17ListUndeliveredResponse\x12\x1f\n\x0bmessage_ids\x18\x01 \x03(\tR\nmessageIds\x12)\n\x10notification_ids\x18\x02 \x03(\tR\x0fnotificationIds\"6\n\x15\x44\x65liverMessageRequest\x12\x1d\n\nmessage_id\x18\x01 \x01(\tR\tmessageId\"\x91\x02\n\x16\x44\x65liverMessageResponse\x12N\n\x07outcome\x18\x01 \x01(\x0e\x32\x34.kindlast.platform.v1.DeliverMessageResponse.OutcomeR\x07outcome\x12\x1a\n\x08\x61ttempts\x18\x02 \x01(\x05R\x08\x61ttempts\x12\x33\n\x07sent_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x06sentAt\"V\n\x07Outcome\x12\x17\n\x13OUTCOME_UNSPECIFIED\x10\x00\x12\x15\n\x11OUTCOME_DELIVERED\x10\x01\x12\x1b\n\x17OUTCOME_ALREADY_SETTLED\x10\x02\"B\n\x17PlanNotificationRequest\x12\'\n\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\"\xba\x01\n\x18PlanNotificationResponse\x12\x18\n\x07settled\x18\x01 \x01(\x08R\x07settled\x12\x46\n\nrecipients\x18\x02 \x03(\x0b\x32&.kindlast.platform.v1.PlannedRecipientR\nrecipients\x12<\n\x05\x64raft\x18\x03 \x01(\x0b\x32&.kindlast.platform.v1.DraftInstructionR\x05\x64raft\"\xb5\x01\n\x10\x44raftInstruction\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\x12>\n\x07\x63ontext\x18\x02 \x01(\x0b\x32$.kindlast.platform.v1.MessageContextR\x07\x63ontext\x12J\n\x0emodel_endpoint\x18\x03 \x01(\x0b\x32#.kindlast.platform.v1.ModelEndpointR\rmodelEndpoint\"\xaa\x02\n\x10PlannedRecipient\x12\x17\n\x07user_id\x18\x01 \x01(\tR\x06userId\x12K\n\x08\x64\x65\x63ision\x18\x02 \x01(\x0e\x32/.kindlast.platform.v1.PlannedRecipient.DecisionR\x08\x64\x65\x63ision\x12\x39\n\nhold_until\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tholdUntil\x12\x16\n\x06reason\x18\x04 \x01(\tR\x06reason\"]\n\x08\x44\x65\x63ision\x12\x18\n\x14\x44\x45\x43ISION_UNSPECIFIED\x10\x00\x12\x11\n\rDECISION_SEND\x10\x01\x12\x11\n\rDECISION_HOLD\x10\x02\x12\x11\n\rDECISION_SKIP\x10\x03\"\x94\x01\n\x17NotifyRecipientsRequest\x12\'\n\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12\x19\n\x08user_ids\x18\x02 \x03(\tR\x07userIds\x12\x18\n\x07subject\x18\x03 \x01(\tR\x07subject\x12\x1b\n\tbody_text\x18\x04 \x01(\tR\x08\x62odyText\"H\n\x18NotifyRecipientsResponse\x12\x12\n\x04sent\x18\x01 \x01(\x05R\x04sent\x12\x18\n\x07settled\x18\x02 \x01(\x08R\x07settled\"\xfa\x01\n\x19SettleNotificationRequest\x12\'\n\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12Q\n\x07outcome\x18\x02 \x01(\x0e\x32\x37.kindlast.platform.v1.SettleNotificationRequest.OutcomeR\x07outcome\x12\x16\n\x06reason\x18\x03 \x01(\tR\x06reason\"I\n\x07Outcome\x12\x17\n\x13OUTCOME_UNSPECIFIED\x10\x00\x12\x10\n\x0cOUTCOME_SENT\x10\x01\x12\x13\n\x0fOUTCOME_SKIPPED\x10\x02\"6\n\x1aSettleNotificationResponse\x12\x18\n\x07settled\x18\x01 \x01(\x08R\x07settled\"\x18\n\x16ReclaimMessagesRequest\"\x86\x01\n\x17ReclaimMessagesResponse\x12\x1a\n\x08redacted\x18\x01 \x01(\x05R\x08redacted\x12\x1c\n\tabandoned\x18\x02 \x01(\x05R\tabandoned\x12\x31\n\x06ran_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x05ranAt2\xbb\x08\n\x0f\x44\x65liveryService\x12\xab\x01\n\x0fListUndelivered\x12,.kindlast.platform.v1.ListUndeliveredRequest\x1a-.kindlast.platform.v1.ListUndeliveredResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/messages:pending:\x01*\x12\xa8\x01\n\x0e\x44\x65liverMessage\x12+.kindlast.platform.v1.DeliverMessageRequest\x1a,.kindlast.platform.v1.DeliverMessageResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/messages:deliver:\x01*\x12\xb0\x01\n\x10PlanNotification\x12-.kindlast.platform.v1.PlanNotificationRequest\x1a..kindlast.platform.v1.PlanNotificationResponse\"=\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02$\"\x1f/internal/v1/notifications:plan:\x01*\x12\xb2\x01\n\x10NotifyRecipients\x12-.kindlast.platform.v1.NotifyRecipientsRequest\x1a..kindlast.platform.v1.NotifyRecipientsResponse\"?\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02&\"!/internal/v1/notifications:notify:\x01*\x12\xb8\x01\n\x12SettleNotification\x12/.kindlast.platform.v1.SettleNotificationRequest\x1a\x30.kindlast.platform.v1.SettleNotificationResponse\"?\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02&\"!/internal/v1/notifications:settle:\x01*\x12\xab\x01\n\x0fReclaimMessages\x12,.kindlast.platform.v1.ReclaimMessagesRequest\x1a-.kindlast.platform.v1.ReclaimMessagesResponse\";\x8a\xb5\x18\x0finternal:ingest\x82\xd3\xe4\x93\x02\"\"\x1d/internal/v1/messages:reclaim:\x01*B\xe1\x01\n\x18\x63om.kindlast.platform.v1B\rDeliveryProtoP\x01ZDgithub.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1;platformv1\xa2\x02\x03KPX\xaa\x02\x14Kindlast.Platform.V1\xca\x02\x14Kindlast\\Platform\\V1\xe2\x02 Kindlast\\Platform\\V1\\GPBMetadata\xea\x02\x16Kindlast::Platform::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -47,38 +48,40 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_DELIVERYSERVICE'].methods_by_name['SettleNotification']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002&\"!/internal/v1/notifications:settle:\001*'
   _globals['_DELIVERYSERVICE'].methods_by_name['ReclaimMessages']._loaded_options = None
   _globals['_DELIVERYSERVICE'].methods_by_name['ReclaimMessages']._serialized_options = b'\212\265\030\017internal:ingest\202\323\344\223\002\"\"\035/internal/v1/messages:reclaim:\001*'
-  _globals['_LISTUNDELIVEREDREQUEST']._serialized_start=157
-  _globals['_LISTUNDELIVEREDREQUEST']._serialized_end=203
-  _globals['_LISTUNDELIVEREDRESPONSE']._serialized_start=205
-  _globals['_LISTUNDELIVEREDRESPONSE']._serialized_end=306
-  _globals['_DELIVERMESSAGEREQUEST']._serialized_start=308
-  _globals['_DELIVERMESSAGEREQUEST']._serialized_end=362
-  _globals['_DELIVERMESSAGERESPONSE']._serialized_start=365
-  _globals['_DELIVERMESSAGERESPONSE']._serialized_end=638
-  _globals['_DELIVERMESSAGERESPONSE_OUTCOME']._serialized_start=552
-  _globals['_DELIVERMESSAGERESPONSE_OUTCOME']._serialized_end=638
-  _globals['_PLANNOTIFICATIONREQUEST']._serialized_start=640
-  _globals['_PLANNOTIFICATIONREQUEST']._serialized_end=706
-  _globals['_PLANNOTIFICATIONRESPONSE']._serialized_start=708
-  _globals['_PLANNOTIFICATIONRESPONSE']._serialized_end=832
-  _globals['_PLANNEDRECIPIENT']._serialized_start=835
-  _globals['_PLANNEDRECIPIENT']._serialized_end=1133
-  _globals['_PLANNEDRECIPIENT_DECISION']._serialized_start=1040
-  _globals['_PLANNEDRECIPIENT_DECISION']._serialized_end=1133
-  _globals['_NOTIFYRECIPIENTSREQUEST']._serialized_start=1135
-  _globals['_NOTIFYRECIPIENTSREQUEST']._serialized_end=1228
-  _globals['_NOTIFYRECIPIENTSRESPONSE']._serialized_start=1230
-  _globals['_NOTIFYRECIPIENTSRESPONSE']._serialized_end=1302
-  _globals['_SETTLENOTIFICATIONREQUEST']._serialized_start=1305
-  _globals['_SETTLENOTIFICATIONREQUEST']._serialized_end=1555
-  _globals['_SETTLENOTIFICATIONREQUEST_OUTCOME']._serialized_start=1482
-  _globals['_SETTLENOTIFICATIONREQUEST_OUTCOME']._serialized_end=1555
-  _globals['_SETTLENOTIFICATIONRESPONSE']._serialized_start=1557
-  _globals['_SETTLENOTIFICATIONRESPONSE']._serialized_end=1611
-  _globals['_RECLAIMMESSAGESREQUEST']._serialized_start=1613
-  _globals['_RECLAIMMESSAGESREQUEST']._serialized_end=1637
-  _globals['_RECLAIMMESSAGESRESPONSE']._serialized_start=1640
-  _globals['_RECLAIMMESSAGESRESPONSE']._serialized_end=1774
-  _globals['_DELIVERYSERVICE']._serialized_start=1777
-  _globals['_DELIVERYSERVICE']._serialized_end=2860
+  _globals['_LISTUNDELIVEREDREQUEST']._serialized_start=198
+  _globals['_LISTUNDELIVEREDREQUEST']._serialized_end=244
+  _globals['_LISTUNDELIVEREDRESPONSE']._serialized_start=246
+  _globals['_LISTUNDELIVEREDRESPONSE']._serialized_end=347
+  _globals['_DELIVERMESSAGEREQUEST']._serialized_start=349
+  _globals['_DELIVERMESSAGEREQUEST']._serialized_end=403
+  _globals['_DELIVERMESSAGERESPONSE']._serialized_start=406
+  _globals['_DELIVERMESSAGERESPONSE']._serialized_end=679
+  _globals['_DELIVERMESSAGERESPONSE_OUTCOME']._serialized_start=593
+  _globals['_DELIVERMESSAGERESPONSE_OUTCOME']._serialized_end=679
+  _globals['_PLANNOTIFICATIONREQUEST']._serialized_start=681
+  _globals['_PLANNOTIFICATIONREQUEST']._serialized_end=747
+  _globals['_PLANNOTIFICATIONRESPONSE']._serialized_start=750
+  _globals['_PLANNOTIFICATIONRESPONSE']._serialized_end=936
+  _globals['_DRAFTINSTRUCTION']._serialized_start=939
+  _globals['_DRAFTINSTRUCTION']._serialized_end=1120
+  _globals['_PLANNEDRECIPIENT']._serialized_start=1123
+  _globals['_PLANNEDRECIPIENT']._serialized_end=1421
+  _globals['_PLANNEDRECIPIENT_DECISION']._serialized_start=1328
+  _globals['_PLANNEDRECIPIENT_DECISION']._serialized_end=1421
+  _globals['_NOTIFYRECIPIENTSREQUEST']._serialized_start=1424
+  _globals['_NOTIFYRECIPIENTSREQUEST']._serialized_end=1572
+  _globals['_NOTIFYRECIPIENTSRESPONSE']._serialized_start=1574
+  _globals['_NOTIFYRECIPIENTSRESPONSE']._serialized_end=1646
+  _globals['_SETTLENOTIFICATIONREQUEST']._serialized_start=1649
+  _globals['_SETTLENOTIFICATIONREQUEST']._serialized_end=1899
+  _globals['_SETTLENOTIFICATIONREQUEST_OUTCOME']._serialized_start=1826
+  _globals['_SETTLENOTIFICATIONREQUEST_OUTCOME']._serialized_end=1899
+  _globals['_SETTLENOTIFICATIONRESPONSE']._serialized_start=1901
+  _globals['_SETTLENOTIFICATIONRESPONSE']._serialized_end=1955
+  _globals['_RECLAIMMESSAGESREQUEST']._serialized_start=1957
+  _globals['_RECLAIMMESSAGESREQUEST']._serialized_end=1981
+  _globals['_RECLAIMMESSAGESRESPONSE']._serialized_start=1984
+  _globals['_RECLAIMMESSAGESRESPONSE']._serialized_end=2118
+  _globals['_DELIVERYSERVICE']._serialized_start=2121
+  _globals['_DELIVERYSERVICE']._serialized_end=3204
 # @@protoc_insertion_point(module_scope)

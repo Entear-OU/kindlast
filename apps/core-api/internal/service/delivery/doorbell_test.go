@@ -62,6 +62,10 @@ func (m *mintRecorder) Doorbell(context.Context, string) (postgres.Doorbell, err
 func (m *mintRecorder) LockDoorbell(context.Context, pgx.Tx, string) (postgres.Doorbell, error) {
 	panic("not used")
 }
+func (m *mintRecorder) FindingCounts(context.Context, pgx.Tx, string, string) (int32, int64, error) {
+	return 0, 1, nil
+}
+
 func (m *mintRecorder) Recipients(context.Context, pgx.Tx, string) ([]postgres.Recipient, error) {
 	panic("not used")
 }

@@ -42,6 +42,7 @@ type fakeDeliverer struct {
 	plans        []*platformv1.PlanNotificationResponse
 	planCalls    int
 	notified     [][]string
+	notifiedWith []*platformv1.NotifyRecipientsRequest
 	settledWith  *platformv1.SettleNotificationRequest
 }
 
@@ -68,6 +69,7 @@ func (f *fakeDeliverer) NotifyRecipients(
 		return nil, f.refuse
 	}
 	f.notified = append(f.notified, req.Msg.GetUserIds())
+	f.notifiedWith = append(f.notifiedWith, req.Msg)
 	return connect.NewResponse(&platformv1.NotifyRecipientsResponse{Sent: int32(len(req.Msg.GetUserIds()))}), nil
 }
 

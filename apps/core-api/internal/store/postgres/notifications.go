@@ -290,6 +290,37 @@ func (a *AgentStore) FindingSummary(ctx context.Context, tx pgx.Tx, findingID st
 	return severity, slug, nil
 }
 
+// FindingCounts answers how much else is asking for a decision in one
+// organisation, for the Messenger's context (ENT-280).
+//
+// Two numbers and nothing else, deliberately: how many other findings are
+// pending (so a draft can say how loud to be), and how many the organisation
+// has ever had (so a draft can say when this is the first). No text leaves
+// this query, which is §17.1's rule holding at the store as well as at the
+// proto: there is no column in the result a finding's words could ride in.
+//
+// The GUC is set here rather than assumed, because the doorbell path's other
+// reads go through a SECURITY DEFINER function and this one goes to `findings`
+// under `findings_agent`, whose org-equality predicate ERRORS on an unset GUC
+// (00037 chose the one-argument current_setting on purpose). Local to the
+// transaction, so a rolled-back plan leaves nothing behind.
+func (a *AgentStore) FindingCounts(
+	ctx context.Context, tx pgx.Tx, orgID, findingID string,
+) (pendingOthers int32, total int64, err error) {
+	if err := setLocal(ctx, tx, "app.current_org_id", orgID); err != nil {
+		return 0, 0, err
+	}
+	err = tx.QueryRow(ctx, `
+		select count(*) filter (where status = 'pending' and id <> $1::uuid),
+		       count(*)
+		  from findings
+	`, findingID).Scan(&pendingOthers, &total)
+	if err != nil {
+		return 0, 0, fmt.Errorf("postgres: counting findings for a notification: %w", err)
+	}
+	return pendingOthers, total, nil
+}
+
 // MintCapabilityToken stores the hash of a link that acts without a session.
 //
 // The raw token never reaches this function. Hashing happens at the call site

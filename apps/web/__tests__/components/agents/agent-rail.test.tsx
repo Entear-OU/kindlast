@@ -61,25 +61,20 @@ describe('the agent rail (ENT-232)', () => {
     expect(pipeline).not.toBeNull()
     const list = within(pipeline!)
 
-    // The Watcher, the Analyst and the Hands are skills on the harness that a
-    // person can reach (three since ENT-278, the Hands' surface being why);
-    // the Messenger is a skill nothing calls yet (ENT-260). Saying the same
-    // thing about all four is the failure this replaced, so the counts are
-    // asserted rather than the labels merely being present.
-    expect(list.getAllByText(STATUS_LABEL['working'])).toHaveLength(3)
-    // Zero since ENT-260, the Messenger having been the last one. Asserted
-    // rather than dropped: an absence is a claim, and this is the one that
-    // would go quietly wrong the day a fifth agent joins the rail ahead of its
-    // skill.
+    // All four are working as of ENT-280, and the count arrived one commit at
+    // a time: the Watcher and the Analyst at ENT-258, the Hands when its
+    // surface landed at ENT-278, the Messenger when the doorbell workflow
+    // started running its draft at ENT-280. Saying the same thing about all
+    // four is the failure this replaced, so the count is asserted rather than
+    // the labels merely being present.
+    expect(list.getAllByText(STATUS_LABEL['working'])).toHaveLength(4)
+    // Both zero, and asserted rather than dropped: an absence is a claim, and
+    // these are the ones that would go quietly wrong the day a fifth agent
+    // joins the rail ahead of its skill, or an agent's half gets rebuilt. The
+    // states stay rendered; partly-working has been reached for twice
+    // (ENT-261's Hands, ENT-260's Messenger) and earned its keep both times.
     expect(list.queryAllByText(STATUS_LABEL['not-built'])).toHaveLength(0)
-    // One again, and the state earns its keep by being reachable in both
-    // directions: zero at ENT-258, one at ENT-261, zero at ENT-278 when the
-    // Hands' surface landed, one at ENT-260. It is what the rail says in the
-    // window where an agent has one half and not the other, and the
-    // Messenger's missing half is the caller rather than a page: its skill
-    // runs and leaves records, and the delivery path still renders the
-    // template, so no message anybody receives has been through it.
-    expect(list.getAllByText(STATUS_LABEL['partly-working'])).toHaveLength(1)
+    expect(list.queryAllByText(STATUS_LABEL['partly-working'])).toHaveLength(0)
   })
 
   it('no longer claims that nothing is scheduled', () => {

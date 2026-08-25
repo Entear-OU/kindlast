@@ -78,8 +78,9 @@ describe('the agent catalogue (ENT-232)', () => {
 
   // The honesty assertion, and the reason this file exists. ENT-161 happened
   // because a dashboard said everything was fine about work nothing had done.
-  // Three of the four are working skills today; one is half built.
-  it('claims three working agents and one half built, not four the same', () => {
+  // All four are working skills today, and that is a count this file arrived
+  // at one commit at a time, each one naming what made the claim true.
+  it('claims four working agents, each earned in a named commit', () => {
     // The count is asserted rather than the absence of a count for the reason
     // this test was written for: the page used to make one claim about all
     // four, and the failure that hides is a placeholder reading like a
@@ -93,9 +94,15 @@ describe('the agent catalogue (ENT-232)', () => {
     // the door: `ApprovalService.ExplainApproval` on `agents:ask`, and a panel
     // on the finding page, above the decision, that says what approving will
     // add to a register and what it could not fill.
+    // THE MESSENGER JOINED IN ENT-280, AND WHAT CHANGED IS NOT THE SKILL.
+    // ENT-260 built it and nothing called it, so no message anybody received
+    // had been through it, and this file said so. ENT-280 is the caller: the
+    // plan carries the instruction, the doorbell workflow runs the draft
+    // between plan and send, and the send re-checks the words beside the
+    // send. A message a person receives has been through it.
     expect(
       AGENTS.filter((a) => a.status === 'working').map((a) => a.slug),
-    ).toEqual(['watcher', 'analyst', 'hands'])
+    ).toEqual(['watcher', 'analyst', 'messenger', 'hands'])
 
     // NOTHING IS "NOT BUILT" ANY MORE, AS OF ENT-260.
     //
@@ -122,9 +129,10 @@ describe('the agent catalogue (ENT-232)', () => {
     // after, and worse here than anywhere: this agent's whole output is copy a
     // person is supposed to receive, so "working" would be a claim about their
     // mailbox.
-    expect(
-      AGENTS.filter((a) => a.status === 'partly-working').map((a) => a.slug),
-    ).toEqual(['messenger'])
+    // Back to zero as of ENT-280, having been the Hands and then the
+    // Messenger. The state stays rendered for the next agent that gets half
+    // built, which twice now has been the honest label for a real week.
+    expect(AGENTS.filter((a) => a.status === 'partly-working')).toHaveLength(0)
   })
 
   it('says what remains for every agent that is not finished', () => {

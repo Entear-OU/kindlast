@@ -130,7 +130,7 @@ func (x PlannedRecipient_Decision) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PlannedRecipient_Decision.Descriptor instead.
 func (PlannedRecipient_Decision) EnumDescriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{6, 0}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{7, 0}
 }
 
 type SettleNotificationRequest_Outcome int32
@@ -181,7 +181,7 @@ func (x SettleNotificationRequest_Outcome) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SettleNotificationRequest_Outcome.Descriptor instead.
 func (SettleNotificationRequest_Outcome) EnumDescriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{9, 0}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{10, 0}
 }
 
 type ListUndeliveredRequest struct {
@@ -448,7 +448,22 @@ type PlanNotificationResponse struct {
 	// Every candidate recipient, with the decision for each as of now. Empty
 	// when the organisation has nobody with a deliverable address, which the
 	// workflow settles as skipped.
-	Recipients    []*PlannedRecipient `protobuf:"bytes,2,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	Recipients []*PlannedRecipient `protobuf:"bytes,2,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	// How the Messenger would be asked to write this doorbell's words, if this
+	// deployment has an Intelligence to ask (ENT-280).
+	//
+	// Answered by the plan rather than by an RPC of its own, because the
+	// workflow already asks this question first and the answer is read from the
+	// same rows inside the same transaction. A second call would be a second
+	// round trip for facts already in hand.
+	//
+	// Absent means draft nothing and send the template, and absent is a correct
+	// answer rather than a degraded one: a notification nobody will receive, or
+	// an organisation whose chosen model cannot be honoured, drafts nothing.
+	// The workflow treats a missing instruction, a failed draft and a refused
+	// draft identically, which is what keeps the Messenger unable to stop a
+	// doorbell: the words are the only thing it can change, never the ringing.
+	Draft         *DraftInstruction `protobuf:"bytes,3,opt,name=draft,proto3" json:"draft,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -497,6 +512,88 @@ func (x *PlanNotificationResponse) GetRecipients() []*PlannedRecipient {
 	return nil
 }
 
+func (x *PlanNotificationResponse) GetDraft() *DraftInstruction {
+	if x != nil {
+		return x.Draft
+	}
+	return nil
+}
+
+// DraftInstruction is a ready-to-send DraftMessage request, minus the
+// notification id the workflow already holds.
+//
+// Built by core-api rather than assembled in the workflow, the way
+// NextFindingToNarrate builds a DraftNarrativeRequest, and for the same
+// reason: the facts inside it (the organisation's name, the counts, the
+// model the run must be recorded against) are core-api's to know, and a
+// workflow assembling them from fragments would be a second definition of
+// what a Messenger run sees.
+type DraftInstruction struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The organisation, for the run record and the completion binding. A uuid,
+	// not personal data; org ids already ride in sweep workflow inputs.
+	OrgId string `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	// What the run may know, and the only thing it may know. See
+	// MessageContext in intelligence.proto for what is deliberately missing.
+	Context *MessageContext `protobuf:"bytes,2,opt,name=context,proto3" json:"context,omitempty"`
+	// Which model the run is recorded against (ENT-236): names only. Absent
+	// means the deployment's own model.
+	ModelEndpoint *ModelEndpoint `protobuf:"bytes,3,opt,name=model_endpoint,json=modelEndpoint,proto3" json:"model_endpoint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DraftInstruction) Reset() {
+	*x = DraftInstruction{}
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DraftInstruction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DraftInstruction) ProtoMessage() {}
+
+func (x *DraftInstruction) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DraftInstruction.ProtoReflect.Descriptor instead.
+func (*DraftInstruction) Descriptor() ([]byte, []int) {
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *DraftInstruction) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *DraftInstruction) GetContext() *MessageContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *DraftInstruction) GetModelEndpoint() *ModelEndpoint {
+	if x != nil {
+		return x.ModelEndpoint
+	}
+	return nil
+}
+
 type PlannedRecipient struct {
 	state    protoimpl.MessageState    `protogen:"open.v1"`
 	UserId   string                    `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -512,7 +609,7 @@ type PlannedRecipient struct {
 
 func (x *PlannedRecipient) Reset() {
 	*x = PlannedRecipient{}
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[6]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -524,7 +621,7 @@ func (x *PlannedRecipient) String() string {
 func (*PlannedRecipient) ProtoMessage() {}
 
 func (x *PlannedRecipient) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[6]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -537,7 +634,7 @@ func (x *PlannedRecipient) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedRecipient.ProtoReflect.Descriptor instead.
 func (*PlannedRecipient) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{6}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PlannedRecipient) GetUserId() string {
@@ -574,14 +671,44 @@ type NotifyRecipientsRequest struct {
 	// Who to send to now, from a PlanNotification answer. Somebody named here
 	// who is no longer a recipient (left the organisation since the plan) is
 	// left out rather than failing the call.
-	UserIds       []string `protobuf:"bytes,2,rep,name=user_ids,json=userIds,proto3" json:"user_ids,omitempty"`
+	UserIds []string `protobuf:"bytes,2,rep,name=user_ids,json=userIds,proto3" json:"user_ids,omitempty"`
+	// The Messenger's words for this doorbell, or nothing (ENT-280).
+	//
+	// Both or neither. A subject with no body, or a body with no subject, is
+	// refused with invalid_argument rather than half applied, because a message
+	// assembled from one drafted half and one templated half is copy no author
+	// wrote, and because the harness cannot produce the half-state: a refused
+	// draft withholds both, a successful one carries both. One arriving alone
+	// means something between the two services changed, which is a bug to
+	// surface rather than smooth over.
+	//
+	// Empty is the ordinary case, and always will be for a deployment with no
+	// model: the template renders the message exactly as it did before this
+	// field existed. What is drafted is the PROSE. The finding link, the
+	// one-tap approve link, the unsubscribe link and the sentence saying why
+	// this arrived are appended per recipient by core-api afterwards, so a
+	// draft can neither remove an unsubscribe link nor add a link of its own.
+	// core-api checks that again before rendering (notify.AcceptableDraft):
+	// the harness's critics are the guardrail, and a check beside the send is
+	// the invariant, because these words rode through a workflow history and a
+	// second service, and a value that travels and comes back is a value that
+	// could have been changed.
+	//
+	// # WHY THE WORDS RIDE IN AN ACTIVITY INPUT
+	//
+	// They are written into a workflow history and kept for the namespace's
+	// retention (§16.3). That is the trade narration already makes with the
+	// narrative, and it is smaller here: a doorbell carries no address, no
+	// token, and by §17.1 nothing about what the finding says.
+	Subject       string `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
+	BodyText      string `protobuf:"bytes,4,opt,name=body_text,json=bodyText,proto3" json:"body_text,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NotifyRecipientsRequest) Reset() {
 	*x = NotifyRecipientsRequest{}
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[7]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -593,7 +720,7 @@ func (x *NotifyRecipientsRequest) String() string {
 func (*NotifyRecipientsRequest) ProtoMessage() {}
 
 func (x *NotifyRecipientsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[7]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -606,7 +733,7 @@ func (x *NotifyRecipientsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotifyRecipientsRequest.ProtoReflect.Descriptor instead.
 func (*NotifyRecipientsRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{7}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *NotifyRecipientsRequest) GetNotificationId() string {
@@ -623,6 +750,20 @@ func (x *NotifyRecipientsRequest) GetUserIds() []string {
 	return nil
 }
 
+func (x *NotifyRecipientsRequest) GetSubject() string {
+	if x != nil {
+		return x.Subject
+	}
+	return ""
+}
+
+func (x *NotifyRecipientsRequest) GetBodyText() string {
+	if x != nil {
+		return x.BodyText
+	}
+	return ""
+}
+
 type NotifyRecipientsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// How many emails left.
@@ -635,7 +776,7 @@ type NotifyRecipientsResponse struct {
 
 func (x *NotifyRecipientsResponse) Reset() {
 	*x = NotifyRecipientsResponse{}
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[8]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -647,7 +788,7 @@ func (x *NotifyRecipientsResponse) String() string {
 func (*NotifyRecipientsResponse) ProtoMessage() {}
 
 func (x *NotifyRecipientsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[8]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -660,7 +801,7 @@ func (x *NotifyRecipientsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotifyRecipientsResponse.ProtoReflect.Descriptor instead.
 func (*NotifyRecipientsResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{8}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *NotifyRecipientsResponse) GetSent() int32 {
@@ -688,7 +829,7 @@ type SettleNotificationRequest struct {
 
 func (x *SettleNotificationRequest) Reset() {
 	*x = SettleNotificationRequest{}
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[9]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -700,7 +841,7 @@ func (x *SettleNotificationRequest) String() string {
 func (*SettleNotificationRequest) ProtoMessage() {}
 
 func (x *SettleNotificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[9]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -713,7 +854,7 @@ func (x *SettleNotificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettleNotificationRequest.ProtoReflect.Descriptor instead.
 func (*SettleNotificationRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{9}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SettleNotificationRequest) GetNotificationId() string {
@@ -747,7 +888,7 @@ type SettleNotificationResponse struct {
 
 func (x *SettleNotificationResponse) Reset() {
 	*x = SettleNotificationResponse{}
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[10]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -759,7 +900,7 @@ func (x *SettleNotificationResponse) String() string {
 func (*SettleNotificationResponse) ProtoMessage() {}
 
 func (x *SettleNotificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[10]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -772,7 +913,7 @@ func (x *SettleNotificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettleNotificationResponse.ProtoReflect.Descriptor instead.
 func (*SettleNotificationResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{10}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SettleNotificationResponse) GetSettled() bool {
@@ -790,7 +931,7 @@ type ReclaimMessagesRequest struct {
 
 func (x *ReclaimMessagesRequest) Reset() {
 	*x = ReclaimMessagesRequest{}
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[11]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -802,7 +943,7 @@ func (x *ReclaimMessagesRequest) String() string {
 func (*ReclaimMessagesRequest) ProtoMessage() {}
 
 func (x *ReclaimMessagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[11]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -815,7 +956,7 @@ func (x *ReclaimMessagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReclaimMessagesRequest.ProtoReflect.Descriptor instead.
 func (*ReclaimMessagesRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{11}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{12}
 }
 
 type ReclaimMessagesResponse struct {
@@ -833,7 +974,7 @@ type ReclaimMessagesResponse struct {
 
 func (x *ReclaimMessagesResponse) Reset() {
 	*x = ReclaimMessagesResponse{}
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[12]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -845,7 +986,7 @@ func (x *ReclaimMessagesResponse) String() string {
 func (*ReclaimMessagesResponse) ProtoMessage() {}
 
 func (x *ReclaimMessagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[12]
+	mi := &file_kindlast_platform_v1_delivery_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -858,7 +999,7 @@ func (x *ReclaimMessagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReclaimMessagesResponse.ProtoReflect.Descriptor instead.
 func (*ReclaimMessagesResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{12}
+	return file_kindlast_platform_v1_delivery_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ReclaimMessagesResponse) GetRedacted() int32 {
@@ -886,7 +1027,7 @@ var File_kindlast_platform_v1_delivery_proto protoreflect.FileDescriptor
 
 const file_kindlast_platform_v1_delivery_proto_rawDesc = "" +
 	"\n" +
-	"#kindlast/platform/v1/delivery.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\".\n" +
+	"#kindlast/platform/v1/delivery.proto\x12\x14kindlast.platform.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\x1a'kindlast/platform/v1/intelligence.proto\".\n" +
 	"\x16ListUndeliveredRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\"e\n" +
 	"\x17ListUndeliveredResponse\x12\x1f\n" +
@@ -905,12 +1046,17 @@ const file_kindlast_platform_v1_delivery_proto_rawDesc = "" +
 	"\x11OUTCOME_DELIVERED\x10\x01\x12\x1b\n" +
 	"\x17OUTCOME_ALREADY_SETTLED\x10\x02\"B\n" +
 	"\x17PlanNotificationRequest\x12'\n" +
-	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\"|\n" +
+	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\"\xba\x01\n" +
 	"\x18PlanNotificationResponse\x12\x18\n" +
 	"\asettled\x18\x01 \x01(\bR\asettled\x12F\n" +
 	"\n" +
 	"recipients\x18\x02 \x03(\v2&.kindlast.platform.v1.PlannedRecipientR\n" +
-	"recipients\"\xaa\x02\n" +
+	"recipients\x12<\n" +
+	"\x05draft\x18\x03 \x01(\v2&.kindlast.platform.v1.DraftInstructionR\x05draft\"\xb5\x01\n" +
+	"\x10DraftInstruction\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12>\n" +
+	"\acontext\x18\x02 \x01(\v2$.kindlast.platform.v1.MessageContextR\acontext\x12J\n" +
+	"\x0emodel_endpoint\x18\x03 \x01(\v2#.kindlast.platform.v1.ModelEndpointR\rmodelEndpoint\"\xaa\x02\n" +
 	"\x10PlannedRecipient\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12K\n" +
 	"\bdecision\x18\x02 \x01(\x0e2/.kindlast.platform.v1.PlannedRecipient.DecisionR\bdecision\x129\n" +
@@ -921,10 +1067,12 @@ const file_kindlast_platform_v1_delivery_proto_rawDesc = "" +
 	"\x14DECISION_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rDECISION_SEND\x10\x01\x12\x11\n" +
 	"\rDECISION_HOLD\x10\x02\x12\x11\n" +
-	"\rDECISION_SKIP\x10\x03\"]\n" +
+	"\rDECISION_SKIP\x10\x03\"\x94\x01\n" +
 	"\x17NotifyRecipientsRequest\x12'\n" +
 	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12\x19\n" +
-	"\buser_ids\x18\x02 \x03(\tR\auserIds\"H\n" +
+	"\buser_ids\x18\x02 \x03(\tR\auserIds\x12\x18\n" +
+	"\asubject\x18\x03 \x01(\tR\asubject\x12\x1b\n" +
+	"\tbody_text\x18\x04 \x01(\tR\bbodyText\"H\n" +
 	"\x18NotifyRecipientsResponse\x12\x12\n" +
 	"\x04sent\x18\x01 \x01(\x05R\x04sent\x12\x18\n" +
 	"\asettled\x18\x02 \x01(\bR\asettled\"\xfa\x01\n" +
@@ -965,7 +1113,7 @@ func file_kindlast_platform_v1_delivery_proto_rawDescGZIP() []byte {
 }
 
 var file_kindlast_platform_v1_delivery_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_kindlast_platform_v1_delivery_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_kindlast_platform_v1_delivery_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_kindlast_platform_v1_delivery_proto_goTypes = []any{
 	(DeliverMessageResponse_Outcome)(0),    // 0: kindlast.platform.v1.DeliverMessageResponse.Outcome
 	(PlannedRecipient_Decision)(0),         // 1: kindlast.platform.v1.PlannedRecipient.Decision
@@ -976,40 +1124,46 @@ var file_kindlast_platform_v1_delivery_proto_goTypes = []any{
 	(*DeliverMessageResponse)(nil),         // 6: kindlast.platform.v1.DeliverMessageResponse
 	(*PlanNotificationRequest)(nil),        // 7: kindlast.platform.v1.PlanNotificationRequest
 	(*PlanNotificationResponse)(nil),       // 8: kindlast.platform.v1.PlanNotificationResponse
-	(*PlannedRecipient)(nil),               // 9: kindlast.platform.v1.PlannedRecipient
-	(*NotifyRecipientsRequest)(nil),        // 10: kindlast.platform.v1.NotifyRecipientsRequest
-	(*NotifyRecipientsResponse)(nil),       // 11: kindlast.platform.v1.NotifyRecipientsResponse
-	(*SettleNotificationRequest)(nil),      // 12: kindlast.platform.v1.SettleNotificationRequest
-	(*SettleNotificationResponse)(nil),     // 13: kindlast.platform.v1.SettleNotificationResponse
-	(*ReclaimMessagesRequest)(nil),         // 14: kindlast.platform.v1.ReclaimMessagesRequest
-	(*ReclaimMessagesResponse)(nil),        // 15: kindlast.platform.v1.ReclaimMessagesResponse
-	(*timestamppb.Timestamp)(nil),          // 16: google.protobuf.Timestamp
+	(*DraftInstruction)(nil),               // 9: kindlast.platform.v1.DraftInstruction
+	(*PlannedRecipient)(nil),               // 10: kindlast.platform.v1.PlannedRecipient
+	(*NotifyRecipientsRequest)(nil),        // 11: kindlast.platform.v1.NotifyRecipientsRequest
+	(*NotifyRecipientsResponse)(nil),       // 12: kindlast.platform.v1.NotifyRecipientsResponse
+	(*SettleNotificationRequest)(nil),      // 13: kindlast.platform.v1.SettleNotificationRequest
+	(*SettleNotificationResponse)(nil),     // 14: kindlast.platform.v1.SettleNotificationResponse
+	(*ReclaimMessagesRequest)(nil),         // 15: kindlast.platform.v1.ReclaimMessagesRequest
+	(*ReclaimMessagesResponse)(nil),        // 16: kindlast.platform.v1.ReclaimMessagesResponse
+	(*timestamppb.Timestamp)(nil),          // 17: google.protobuf.Timestamp
+	(*MessageContext)(nil),                 // 18: kindlast.platform.v1.MessageContext
+	(*ModelEndpoint)(nil),                  // 19: kindlast.platform.v1.ModelEndpoint
 }
 var file_kindlast_platform_v1_delivery_proto_depIdxs = []int32{
 	0,  // 0: kindlast.platform.v1.DeliverMessageResponse.outcome:type_name -> kindlast.platform.v1.DeliverMessageResponse.Outcome
-	16, // 1: kindlast.platform.v1.DeliverMessageResponse.sent_at:type_name -> google.protobuf.Timestamp
-	9,  // 2: kindlast.platform.v1.PlanNotificationResponse.recipients:type_name -> kindlast.platform.v1.PlannedRecipient
-	1,  // 3: kindlast.platform.v1.PlannedRecipient.decision:type_name -> kindlast.platform.v1.PlannedRecipient.Decision
-	16, // 4: kindlast.platform.v1.PlannedRecipient.hold_until:type_name -> google.protobuf.Timestamp
-	2,  // 5: kindlast.platform.v1.SettleNotificationRequest.outcome:type_name -> kindlast.platform.v1.SettleNotificationRequest.Outcome
-	16, // 6: kindlast.platform.v1.ReclaimMessagesResponse.ran_at:type_name -> google.protobuf.Timestamp
-	3,  // 7: kindlast.platform.v1.DeliveryService.ListUndelivered:input_type -> kindlast.platform.v1.ListUndeliveredRequest
-	5,  // 8: kindlast.platform.v1.DeliveryService.DeliverMessage:input_type -> kindlast.platform.v1.DeliverMessageRequest
-	7,  // 9: kindlast.platform.v1.DeliveryService.PlanNotification:input_type -> kindlast.platform.v1.PlanNotificationRequest
-	10, // 10: kindlast.platform.v1.DeliveryService.NotifyRecipients:input_type -> kindlast.platform.v1.NotifyRecipientsRequest
-	12, // 11: kindlast.platform.v1.DeliveryService.SettleNotification:input_type -> kindlast.platform.v1.SettleNotificationRequest
-	14, // 12: kindlast.platform.v1.DeliveryService.ReclaimMessages:input_type -> kindlast.platform.v1.ReclaimMessagesRequest
-	4,  // 13: kindlast.platform.v1.DeliveryService.ListUndelivered:output_type -> kindlast.platform.v1.ListUndeliveredResponse
-	6,  // 14: kindlast.platform.v1.DeliveryService.DeliverMessage:output_type -> kindlast.platform.v1.DeliverMessageResponse
-	8,  // 15: kindlast.platform.v1.DeliveryService.PlanNotification:output_type -> kindlast.platform.v1.PlanNotificationResponse
-	11, // 16: kindlast.platform.v1.DeliveryService.NotifyRecipients:output_type -> kindlast.platform.v1.NotifyRecipientsResponse
-	13, // 17: kindlast.platform.v1.DeliveryService.SettleNotification:output_type -> kindlast.platform.v1.SettleNotificationResponse
-	15, // 18: kindlast.platform.v1.DeliveryService.ReclaimMessages:output_type -> kindlast.platform.v1.ReclaimMessagesResponse
-	13, // [13:19] is the sub-list for method output_type
-	7,  // [7:13] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	17, // 1: kindlast.platform.v1.DeliverMessageResponse.sent_at:type_name -> google.protobuf.Timestamp
+	10, // 2: kindlast.platform.v1.PlanNotificationResponse.recipients:type_name -> kindlast.platform.v1.PlannedRecipient
+	9,  // 3: kindlast.platform.v1.PlanNotificationResponse.draft:type_name -> kindlast.platform.v1.DraftInstruction
+	18, // 4: kindlast.platform.v1.DraftInstruction.context:type_name -> kindlast.platform.v1.MessageContext
+	19, // 5: kindlast.platform.v1.DraftInstruction.model_endpoint:type_name -> kindlast.platform.v1.ModelEndpoint
+	1,  // 6: kindlast.platform.v1.PlannedRecipient.decision:type_name -> kindlast.platform.v1.PlannedRecipient.Decision
+	17, // 7: kindlast.platform.v1.PlannedRecipient.hold_until:type_name -> google.protobuf.Timestamp
+	2,  // 8: kindlast.platform.v1.SettleNotificationRequest.outcome:type_name -> kindlast.platform.v1.SettleNotificationRequest.Outcome
+	17, // 9: kindlast.platform.v1.ReclaimMessagesResponse.ran_at:type_name -> google.protobuf.Timestamp
+	3,  // 10: kindlast.platform.v1.DeliveryService.ListUndelivered:input_type -> kindlast.platform.v1.ListUndeliveredRequest
+	5,  // 11: kindlast.platform.v1.DeliveryService.DeliverMessage:input_type -> kindlast.platform.v1.DeliverMessageRequest
+	7,  // 12: kindlast.platform.v1.DeliveryService.PlanNotification:input_type -> kindlast.platform.v1.PlanNotificationRequest
+	11, // 13: kindlast.platform.v1.DeliveryService.NotifyRecipients:input_type -> kindlast.platform.v1.NotifyRecipientsRequest
+	13, // 14: kindlast.platform.v1.DeliveryService.SettleNotification:input_type -> kindlast.platform.v1.SettleNotificationRequest
+	15, // 15: kindlast.platform.v1.DeliveryService.ReclaimMessages:input_type -> kindlast.platform.v1.ReclaimMessagesRequest
+	4,  // 16: kindlast.platform.v1.DeliveryService.ListUndelivered:output_type -> kindlast.platform.v1.ListUndeliveredResponse
+	6,  // 17: kindlast.platform.v1.DeliveryService.DeliverMessage:output_type -> kindlast.platform.v1.DeliverMessageResponse
+	8,  // 18: kindlast.platform.v1.DeliveryService.PlanNotification:output_type -> kindlast.platform.v1.PlanNotificationResponse
+	12, // 19: kindlast.platform.v1.DeliveryService.NotifyRecipients:output_type -> kindlast.platform.v1.NotifyRecipientsResponse
+	14, // 20: kindlast.platform.v1.DeliveryService.SettleNotification:output_type -> kindlast.platform.v1.SettleNotificationResponse
+	16, // 21: kindlast.platform.v1.DeliveryService.ReclaimMessages:output_type -> kindlast.platform.v1.ReclaimMessagesResponse
+	16, // [16:22] is the sub-list for method output_type
+	10, // [10:16] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_platform_v1_delivery_proto_init() }
@@ -1017,13 +1171,14 @@ func file_kindlast_platform_v1_delivery_proto_init() {
 	if File_kindlast_platform_v1_delivery_proto != nil {
 		return
 	}
+	file_kindlast_platform_v1_intelligence_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_platform_v1_delivery_proto_rawDesc), len(file_kindlast_platform_v1_delivery_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

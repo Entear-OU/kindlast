@@ -118,6 +118,11 @@ type Service struct {
 	// depends on the clock, and a rule that can only be exercised by waiting
 	// until 22:00 is one nobody tests.
 	now func() time.Time
+	// models names the model a drafting instruction is recorded against
+	// (ENT-280). Nil is a deployment with no router wired, and the
+	// instruction then names no endpoint, which the worker reads as the
+	// deployment's own model.
+	models ModelRouter
 }
 
 // New builds the handler.
@@ -128,8 +133,12 @@ type Service struct {
 // the service being absent, because the rows are there and an operator asking
 // "why is mail not leaving" should get an answer that names the setting. An
 // empty base URL is the same for notifications.
-func New(outbox Outbox, channels *delivery.Router, baseURL string) *Service {
-	return &Service{outbox: outbox, channels: channels, baseURL: baseURL, now: time.Now}
+func New(outbox Outbox, channels *delivery.Router, baseURL string, opts ...Option) *Service {
+	s := &Service{outbox: outbox, channels: channels, baseURL: baseURL, now: time.Now}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // WithClock replaces the clock the plan reads, for tests that need to be

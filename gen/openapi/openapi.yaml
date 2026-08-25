@@ -5105,6 +5105,36 @@ components:
                          value, because "we read this as two processors" is checkable and the list
                          on its own is not.
             description: One value the interview would record.
+        DraftInstruction:
+            type: object
+            properties:
+                orgId:
+                    type: string
+                    description: |-
+                        The organisation, for the run record and the completion binding. A uuid,
+                         not personal data; org ids already ride in sweep workflow inputs.
+                context:
+                    allOf:
+                        - $ref: '#/components/schemas/MessageContext'
+                    description: |-
+                        What the run may know, and the only thing it may know. See
+                         MessageContext in intelligence.proto for what is deliberately missing.
+                modelEndpoint:
+                    allOf:
+                        - $ref: '#/components/schemas/ModelEndpoint'
+                    description: |-
+                        Which model the run is recorded against (ENT-236): names only. Absent
+                         means the deployment's own model.
+            description: |-
+                DraftInstruction is a ready-to-send DraftMessage request, minus the
+                 notification id the workflow already holds.
+
+                 Built by core-api rather than assembled in the workflow, the way
+                 NextFindingToNarrate builds a DraftNarrativeRequest, and for the same
+                 reason: the facts inside it (the organisation's name, the counts, the
+                 model the run must be recorded against) are core-api's to know, and a
+                 workflow assembling them from fragments would be a second definition of
+                 what a Messenger run sees.
         DraftMessageRequest:
             type: object
             properties:
@@ -7289,6 +7319,39 @@ components:
                         Who to send to now, from a PlanNotification answer. Somebody named here
                          who is no longer a recipient (left the organisation since the plan) is
                          left out rather than failing the call.
+                subject:
+                    type: string
+                    description: |-
+                        The Messenger's words for this doorbell, or nothing (ENT-280).
+
+                         Both or neither. A subject with no body, or a body with no subject, is
+                         refused with invalid_argument rather than half applied, because a message
+                         assembled from one drafted half and one templated half is copy no author
+                         wrote, and because the harness cannot produce the half-state: a refused
+                         draft withholds both, a successful one carries both. One arriving alone
+                         means something between the two services changed, which is a bug to
+                         surface rather than smooth over.
+
+                         Empty is the ordinary case, and always will be for a deployment with no
+                         model: the template renders the message exactly as it did before this
+                         field existed. What is drafted is the PROSE. The finding link, the
+                         one-tap approve link, the unsubscribe link and the sentence saying why
+                         this arrived are appended per recipient by core-api afterwards, so a
+                         draft can neither remove an unsubscribe link nor add a link of its own.
+                         core-api checks that again before rendering (notify.AcceptableDraft):
+                         the harness's critics are the guardrail, and a check beside the send is
+                         the invariant, because these words rode through a workflow history and a
+                         second service, and a value that travels and comes back is a value that
+                         could have been changed.
+
+                         # WHY THE WORDS RIDE IN AN ACTIVITY INPUT
+
+                         They are written into a workflow history and kept for the namespace's
+                         retention (§16.3). That is the trade narration already makes with the
+                         narrative, and it is smaller here: a doorbell carries no address, no
+                         token, and by §17.1 nothing about what the finding says.
+                bodyText:
+                    type: string
         NotifyRecipientsResponse:
             type: object
             properties:
@@ -7617,6 +7680,24 @@ components:
                         Every candidate recipient, with the decision for each as of now. Empty
                          when the organisation has nobody with a deliverable address, which the
                          workflow settles as skipped.
+                draft:
+                    allOf:
+                        - $ref: '#/components/schemas/DraftInstruction'
+                    description: |-
+                        How the Messenger would be asked to write this doorbell's words, if this
+                         deployment has an Intelligence to ask (ENT-280).
+
+                         Answered by the plan rather than by an RPC of its own, because the
+                         workflow already asks this question first and the answer is read from the
+                         same rows inside the same transaction. A second call would be a second
+                         round trip for facts already in hand.
+
+                         Absent means draft nothing and send the template, and absent is a correct
+                         answer rather than a degraded one: a notification nobody will receive, or
+                         an organisation whose chosen model cannot be honoured, drafts nothing.
+                         The workflow treats a missing instruction, a failed draft and a refused
+                         draft identically, which is what keeps the Messenger unable to stop a
+                         doorbell: the words are the only thing it can change, never the ringing.
         PlannedRecipient:
             type: object
             properties:

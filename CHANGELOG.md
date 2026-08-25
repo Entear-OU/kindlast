@@ -1324,6 +1324,28 @@ what they have to do about it, which no commit subject knows.
   `1.2.0`. Queued requests are served by the scheduled fetch relay, which
   lands separately as the other half of ENT-279; until it does, a queued ask
   waits and everything the customer sees stays truthful about that.
+### Changed
+
+- **The words in a finding notification are the Messenger's** (ENT-280). The
+  doorbell workflow now runs the Messenger between deciding who to tell and
+  telling them: the plan carries a drafting instruction built from rows
+  core-api already holds, the draft happens on the Intelligence worker under
+  the budgets and critics ENT-260 shipped, and the delivery transaction opens
+  the message with the drafted words while still minting every link per
+  recipient.
+
+  What did not change is who is in charge. The Messenger cannot stop a
+  doorbell: a draft that fails, is refused by its own guardrails, or arrives
+  carrying a link falls back to the template, and the message leaves either
+  way. The drafted words are checked a second time beside the send, because
+  they rode through a workflow history and a second service on the way, and
+  under our From: header a link a model wrote is a phishing primitive. The
+  structural half of §17.1 also holds at the wire: the drafting instruction
+  cannot carry what the finding says, pinned by tests on both sides.
+
+  **For self-hosters:** no action. A deployment without the model profile
+  keeps sending the templated words, now via the explicit fallback rather
+  than by being the only path.
 
 ## [0.1.0]
 
