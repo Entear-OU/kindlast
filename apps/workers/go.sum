@@ -1,5 +1,9 @@
 connectrpc.com/connect v1.20.0 h1:6TNDAB+WeNd2uolWNlYczB5E0KNNaVMNUEx8JEUsPmQ=
 connectrpc.com/connect v1.20.0/go.mod h1:A2ygJrukXwWy32vkCAAHNVguZrqZ+jeZ9rGRnGR4dN4=
+github.com/Entear-OU/kindlast/gen/go v0.0.0-20260825202942-604b078accd9 h1:3oah4Ykh3oj4TIX/X5qXX5Qo9joOww6Dz/vD2YKVAbY=
+github.com/Entear-OU/kindlast/gen/go v0.0.0-20260825202942-604b078accd9/go.mod h1:FuD67dFLRWXZUgYIGGa9OtH2L3BZCzAgSap4nUfoMW0=
+github.com/Entear-OU/kindlast/libs/chassis v0.0.0-20260825202942-604b078accd9 h1:LGE5HQP+pitS27UtSArtB7dY6hebwaEOU8XkIGN4I58=
+github.com/Entear-OU/kindlast/libs/chassis v0.0.0-20260825202942-604b078accd9/go.mod h1:aC4SCWOYCdmv87WewLA3y77+6hL5ltRhlrlXiTqC/gA=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -61,8 +65,8 @@ go.opentelemetry.io/otel/sdk/metric v1.43.0 h1:S88dyqXjJkuBNLeMcVPRFXpRw2fuwdvfC
 go.opentelemetry.io/otel/sdk/metric v1.43.0/go.mod h1:C/RJtwSEJ5hzTiUz5pXF1kILHStzb9zFlIEe85bhj6A=
 go.opentelemetry.io/otel/trace v1.43.0 h1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09nk+3A=
 go.opentelemetry.io/otel/trace v1.43.0/go.mod h1:/QJhyVBUUswCphDVxq+8mld+AvhXZLhe+8WVFxiFff0=
-go.temporal.io/api v1.63.4 h1:p4dVIAP3dJop0MfcyH9QSzjU7+V/ttLDhxFhSRUar58=
-go.temporal.io/api v1.63.4/go.mod h1:SrlW2JMwVlDP4nRWSNznUFqnSHd+YeMDS1BkYo63HCQ=
+go.temporal.io/api v1.63.5 h1:c11+kPYHkXXL3UiShPdbMD+xtvqGsbTibUA9ypmiCa4=
+go.temporal.io/api v1.63.5/go.mod h1:SrlW2JMwVlDP4nRWSNznUFqnSHd+YeMDS1BkYo63HCQ=
 go.temporal.io/sdk v1.48.0 h1:WDctKDVuh0Z8Nf7euAyqs/EwcPg1JTIIq1Fut8Tq118=
 go.temporal.io/sdk v1.48.0/go.mod h1:SHv3+fLzD0GGZAwf0xNSvu8UmO1nFgG9WBSYoowApIk=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
