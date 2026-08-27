@@ -101,8 +101,8 @@ function Exchange({
           {/* Honest about the wait: on a self-hosted model this is minutes,
               not seconds, and a bare ellipsis reads as broken long before
               the answer lands. */}
-          Kindy is writing. On this deployment's own model that can take a
-          minute or two.
+          Kindy is writing. On this deployment&apos;s own model that can take
+          a minute or two.
         </p>
       ) : (
         <Reply state={state} orgSlug={orgSlug} />
