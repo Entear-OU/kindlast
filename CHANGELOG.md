@@ -14,6 +14,17 @@ what they have to do about it, which no commit subject knows.
 
 ### Fixed
 
+- **The self-hosting guide now says the model profile needs
+  `KINDLAST_INTELLIGENCE_URL`.** The compose file has always defaulted it to
+  empty on purpose (a profile cannot set a variable on a service outside it,
+  and empty is the honest no-model report), and its comment pointed at
+  instructions that did not exist. A stack brought up with `--profile model`
+  but without the line ran its sweeps and notification drafts normally while
+  every surface a person waits on, asking the Analyst, asking the Hands,
+  narrated findings, reported "this deployment runs no model". If that
+  describes your deployment, add `KINDLAST_INTELLIGENCE_URL=http://intelligence:8090`
+  to `deploy/.env` and recreate `core-api`.
+
 - **Console tabs and bookmarks now say which organisation they are showing**
   (ENT-269). Every page under `/o/{slug}/` inherited the marketing site's
   title, so a consultant with three client organisations open had three tabs
