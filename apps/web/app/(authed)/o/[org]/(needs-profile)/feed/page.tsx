@@ -44,10 +44,10 @@ export default async function FeedPage({
   searchParams,
 }: {
   params: Promise<{ org: string }>
-  searchParams: Promise<{ status?: string; page?: string }>
+  searchParams: Promise<{ status?: string; page?: string; ask?: string }>
 }) {
   const { org: slug } = await params
-  const { status, page } = await searchParams
+  const { status, page, ask } = await searchParams
 
   const session = await currentSession()
   if (!session)
@@ -59,6 +59,26 @@ export default async function FeedPage({
     return <WorkspaceUnavailable title="Feed" />
 
   const orgId = resolved.membership.orgId
+
+  // A message from Kindy's composer, looking for a subject. The Analyst only
+  // answers about one finding, so the words are carried to the newest one
+  // still needing a decision and prefill the Ask box there. With nothing
+  // open the feed simply renders, and its own empty state explains why there
+  // is nothing to ask about.
+  if (ask) {
+    const newest = await listFindings(session.accessToken, orgId, {
+      status: 'pending',
+      pageSize: 1,
+    })
+    const target = newest.ok ? newest.value.findings?.[0] : undefined
+    if (target)
+      redirect(
+        orgPath(
+          slug,
+          `/feed/${target.findingId}?ask=${encodeURIComponent(ask)}`,
+        ),
+      )
+  }
 
   // Concurrent rather than sequential: they are independent reads and the feed
   // should not wait on the dashboard to render.

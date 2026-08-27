@@ -4,6 +4,8 @@ import { notFound, redirect } from 'next/navigation'
 import { ConsoleShell } from '@/components/console/shell'
 import { currentSession } from '@/lib/auth/session'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
+import { listFindings } from '@/lib/findings/client'
+import type { ActivityItem } from '@/components/console/agent-rail'
 
 /**
  * The title every console page inherits when we do not know whose console it
@@ -139,8 +141,32 @@ export default async function OrgLayout({
     )
   }
 
+  // The rail's Activity list: the newest findings, whatever their state,
+  // because "the Watcher raised this yesterday" is still activity after it
+  // was approved. Fetched here rather than in the rail so the rail stays a
+  // plain synchronous component a test can render, and passed as absent on a
+  // failed read so the rail shows nothing-listed rather than claiming
+  // nothing happened.
+  const recent = await listFindings(
+    session.accessToken,
+    resolved.membership.orgId,
+    { pageSize: 3 },
+  )
+  const activity: ActivityItem[] | undefined = recent.ok
+    ? (recent.value.findings ?? []).map((f) => ({
+        id: f.findingId,
+        title: f.detected,
+        severity: f.severity,
+        at: f.createdAt,
+      }))
+    : undefined
+
   return (
-    <ConsoleShell orgSlug={slug} orgName={resolved.membership.orgName}>
+    <ConsoleShell
+      orgSlug={slug}
+      orgName={resolved.membership.orgName}
+      activity={activity}
+    >
       {children}
     </ConsoleShell>
   )
