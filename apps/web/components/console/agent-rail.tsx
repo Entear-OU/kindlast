@@ -111,7 +111,7 @@ export function AgentRail({
       className={
         variant === 'mobile'
           ? 'flex flex-col gap-6 border-t border-border/60 bg-background px-5 py-6'
-          : 'flex h-full flex-col gap-6 overflow-y-auto border-l border-border/60 bg-background px-5 py-6'
+          : 'flex h-full flex-col gap-6 overflow-y-auto px-5 py-6'
       }
     >
       <div>
