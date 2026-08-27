@@ -99,8 +99,9 @@ export default async function OrgHomePage({
             {first ? `Hello, ${first}` : orgName}
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Where {orgName} stands. Every number here opens the page it came
-            from.
+            {/* "you", not the organisation again: when the greeting has
+                already fallen back to the name, repeating it here stutters. */}
+            Where you stand. Every number here opens the page it came from.
           </p>
         </div>
         <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
@@ -272,7 +273,12 @@ function StatCell({
           ) : null}
           <span className="truncate">{value}</span>
         </p>
-        <p className={`mt-0.5 truncate text-xs ${detailTone}`}>{detail}</p>
+        {/* Two lines, then clamped: every cell's detail was ellipsing at one
+            line, and three ellipses in a row read as a rendering fault rather
+            than as three sentences. */}
+        <p className={`mt-0.5 line-clamp-2 text-xs leading-snug ${detailTone}`}>
+          {detail}
+        </p>
       </div>
     </div>
   )
