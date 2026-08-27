@@ -191,6 +191,24 @@ That starts two more services. `model-init` fetches the weights once, checks
 them against a pinned SHA256 and exits; `model` is llama.cpp's `llama-server`,
 OpenAI-compatible on port 8081.
 
+**The profile needs one line of configuration to go with it**, in
+`deploy/.env` so compose picks it up on every `up` from then on:
+
+```bash
+KINDLAST_INTELLIGENCE_URL=http://intelligence:8090
+```
+
+It cannot default on, and the reason is compose itself: a profile cannot set
+an environment variable on a service outside it, so either the URL is always
+set, in which case a stack without the profile reports
+`intelligence_available: true` and fails every call, or it defaults to empty
+and the profile needs it supplied. Empty wins, because "this deployment has no
+model" and "the model is broken" want different reactions from an operator.
+Without this line the sweeps and the notification drafts still run (they reach
+Intelligence through the task queue), but everything a person waits on, asking
+the Analyst on a finding, asking the Hands what approving will do, and the
+narrated findings themselves, reports the deployment as having no model.
+
 Without `--profile model` you get the rest of the stack and no model, which is
 a supported configuration rather than a broken one: the console runs and
 onboarding degrades to a form. It is the right default for CI and for anyone
@@ -203,6 +221,7 @@ an actual deployment, so a real install passes the flag.
 | `KINDLAST_MODEL_CTX` | `16384` | Context window. A **memory** decision, not a capability one: the model supports 262144 natively, and allocating that would want far more RAM than the weights. |
 | `KINDLAST_MODEL_PARALLEL` | `2` | Concurrent slots. |
 | `KINDLAST_MODEL_PORT` | `8081` | Host port for the endpoint. |
+| `KINDLAST_INTELLIGENCE_URL` | empty (on core-api) | Where Intelligence answers core-api's synchronous calls: the Analyst on a finding, the Hands' explanation, narration. Empty is the no-model path, deliberately, see above. `http://intelligence:8090` on the bundled stack. |
 | `KINDLAST_MODEL_ENDPOINT` | `http://model:8080` (on core-api) | Where core-api sends the deployment's own completions. **core-api makes every model call** (ENT-256, part five): the Python service asks core-api for each completion, naming only the organisation, and core-api resolves whether that organisation uses this endpoint or a provider it chose, opens the provider key only it holds, and dials. The Python service holds no model endpoint and no key. Empty means this deployment runs no model; a completion is then refused with a reason and nothing dials anything. Not `KINDLAST_MODEL_URL`, which is `model-init`'s download URL. |
 
 Sizing, so you can pick before rather than after:
