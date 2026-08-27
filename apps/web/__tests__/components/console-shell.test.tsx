@@ -44,7 +44,12 @@ vi.mock('next/navigation', () => ({
 }))
 
 import { ConsoleShell } from '@/components/console/shell'
-import { AGENTS, STATUS_LABEL } from '@/lib/agents/catalog'
+import { KINDY_IDLE, type KindyState } from '@/components/console/kindy-state'
+
+// The composer's server action, stubbed the way SignOutForm is above: the
+// layout always provides it in production, and what it does when called is
+// kindy-composer.test.tsx's business.
+const noopKindy = async (): Promise<KindyState> => KINDY_IDLE
 
 /**
  * The console shell (ENT-91, re-homed by ENT-198, three columns by ENT-222).
@@ -72,7 +77,11 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
     // would make every click on the logo a redirect that has to look up an
     // organisation the page already knows.
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -84,7 +93,11 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
     // With several organisations reachable by URL alone, which one you are
     // looking at has to be visible without reading the address bar.
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -95,7 +108,7 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
     // The layout renders this shell when core-api cannot be reached, so it
     // has to hold together with nothing but a slug.
     render(
-      <ConsoleShell orgSlug="acme-ltd">
+      <ConsoleShell orgSlug="acme-ltd" kindyAction={noopKindy}>
         <div>child</div>
       </ConsoleShell>,
     )
@@ -109,7 +122,11 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
 
   it('renders a sign-out button that posts to /auth/logout', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -129,7 +146,11 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
 
   it('renders the children', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <main data-testid="chat-root">chat</main>
       </ConsoleShell>,
     )
@@ -144,7 +165,11 @@ describe('the sidebar (ENT-222)', () => {
   it('marks the surface you are on', () => {
     // usePathname is stubbed to the organisation home above.
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -169,7 +194,11 @@ describe('the sidebar (ENT-222)', () => {
   // over nothing reads as a section that failed to load.
   it('shows no coming-next heading when nothing is waiting', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -181,7 +210,11 @@ describe('the sidebar (ENT-222)', () => {
   // quietly deleted from it. Feed made that move in ENT-203.
   it('links a surface once it exists', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -193,92 +226,64 @@ describe('the sidebar (ENT-222)', () => {
   })
 })
 
-describe('the agent rail (ENT-222)', () => {
+describe("the agent rail, now Kindy's panel (ENT-222, ENT-270)", () => {
   // Two instances render, one per layout, and jsdom applies no media queries
   // so both are in the tree. Asserting "two of each" is the honest form: it
   // also fails if a future change drops one layout's rail entirely.
-  it('names the four agents as the product names them, in both layouts', () => {
+  //
+  // This block used to pin the four agents by name and count their statuses.
+  // The panel is Kindy now, the agents live behind its "more" button on the
+  // agents page, and what the shell has to guarantee moved with the design:
+  // Kindy is named, the agents page stays reachable, and the dead channels
+  // stay visibly disabled. The finer contract lives with the component, in
+  // __tests__/components/agents/agent-rail.test.tsx.
+  it('names Kindy and keeps the agents page reachable, in both layouts', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
-    for (const agent of [
-      'The Watcher',
-      'The Analyst',
-      'The Messenger',
-      'The Hands',
-    ]) {
-      expect(screen.getAllByText(agent)).toHaveLength(2)
+    expect(screen.getAllByText('Kindy')).toHaveLength(2)
+    // The kebab is the console's one route to what each agent is allowed to
+    // do; losing it orphans that surface (the ENT-245 failure shape).
+    for (const link of screen.getAllByRole('link', {
+      name: /About Kindy's agents/,
+    })) {
+      expect(link).toHaveAttribute('href', '/o/acme-ltd/agents')
     }
+    expect(
+      screen.getAllByRole('link', { name: /About Kindy's agents/ }),
+    ).toHaveLength(2)
   })
 
-  // The reason this rail exists before it can hold a conversation. ENT-161
-  // happened because a dashboard claimed everything was fine on a profile the
-  // Watcher had never looked at, so the rail has to answer "is this running".
-  //
-  // It answered it with one sentence under all four, "Not scheduled yet", and
-  // that assertion is gone rather than loosened. ENT-218 shipped the Analyst as
-  // a real skill and the sentence quietly became false, which is what a claim
-  // about four separate things does as soon as one of them moves. ENT-232 gives
-  // each agent its own status from the catalogue; what that status says, and
-  // that exactly one agent is a working skill, is asserted where the catalogue
-  // is, in __tests__/lib/agents/catalog.test.ts.
-  //
-  // What survives here is the property this test was protecting: the rail says
-  // something about running, per agent, in both layouts.
-  it('carries a status for every agent, in both layouts', () => {
-    const { container } = render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
-        <div>child</div>
-      </ConsoleShell>,
-    )
-    // Four agents, two layouts, so eight status lines. Counted over the
-    // distinct labels rather than per agent, because two agents share the
-    // "not built" wording and querying it once per agent would count it twice.
-    //
-    // Sourced from the catalogue rather than retyped, so a status whose
-    // wording changes does not need this file edited to stay meaningful.
-    //
-    // Scoped to the pipeline lists rather than to the whole shell, because the
-    // card at the foot of each rail carries status lines of its own now
-    // (ENT-270) and they are about chat, call and walkthrough rather than about
-    // an agent. Counting both would make this assertion drift every time
-    // either half changed, which is the opposite of what it is for.
-    const pipelines = [...container.querySelectorAll('aside ol')]
-    expect(pipelines).toHaveLength(2)
-
-    const labels = [
-      ...new Set(AGENTS.map((agent) => STATUS_LABEL[agent.status])),
-    ]
-    const rendered = pipelines.reduce(
-      (total, pipeline) =>
-        total +
-        labels.reduce(
-          (found, label) =>
-            found + within(pipeline as HTMLElement).getAllByText(label).length,
-          0,
-        ),
-      0,
-    )
-    expect(rendered).toBe(8)
-  })
-
-  it('offers chat and not call or walkthrough, in both layouts', () => {
+  it('offers the composer, and keeps call and walkthrough disabled, in both layouts', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
-    // Chat exists now (ENT-270) and is a link, once per layout. Call and
-    // walkthrough are still announced rather than offered: nothing is behind
-    // either, and a person who pressed one would wait for an answer that is
-    // not coming.
-    expect(screen.getAllByRole('link', { name: /Chat/ })).toHaveLength(2)
+    // Chat exists (ENT-270) as the composer, a working form once per layout.
+    // Call and walkthrough are visibly disabled rather than live or silent:
+    // nothing is behind either, and a person who pressed a live-looking one
+    // would wait for an answer that is not coming (ENT-202).
+    expect(
+      screen.getAllByRole('textbox', { name: /Message Kindy/ }),
+    ).toHaveLength(2)
 
     for (const label of ['Call', 'Walkthrough']) {
-      expect(screen.getAllByText(label)).toHaveLength(2)
-      expect(screen.queryByRole('button', { name: label })).toBeNull()
+      const controls = screen.getAllByRole('button', {
+        name: new RegExp(`${label} \\(not built yet\\)`),
+      })
+      expect(controls).toHaveLength(2)
+      for (const control of controls) expect(control).toBeDisabled()
       expect(screen.queryByRole('link', { name: label })).toBeNull()
     }
   })
@@ -290,7 +295,11 @@ describe('the phone layout (ENT-222)', () => {
   // cost nothing to carry.
   it('gives every icon-only tab an accessible name', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -312,7 +321,11 @@ describe('the phone layout (ENT-222)', () => {
   // nowhere.
   it('gives every built surface a tab that points at it', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -331,7 +344,11 @@ describe('the phone layout (ENT-222)', () => {
   // Without the anchor the tab is decoration.
   it('points the agents tab at the rail it renders below the content', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )

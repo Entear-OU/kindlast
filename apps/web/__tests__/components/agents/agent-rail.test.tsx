@@ -17,132 +17,139 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-import { AgentRail } from '@/components/console/agent-rail'
-import { AGENTS, STATUS_LABEL } from '@/lib/agents/catalog'
+import { AgentRail, type ActivityItem } from '@/components/console/agent-rail'
+import { KINDY_IDLE, type KindyState } from '@/components/console/kindy-state'
+
+// The composer's server action, stubbed: what it does when called is the
+// composer's own test's business (kindy-composer.test.tsx). Here it only has
+// to exist, the way the layout always provides it in production.
+const noopKindy = async (): Promise<KindyState> => KINDY_IDLE
 
 /**
- * The agent rail (ENT-222, made per-agent and addressable by ENT-232).
+ * Kindy's panel (ENT-222, ENT-232, ENT-270, reshaped into a contact card).
  *
- * The rail used to say "Not scheduled yet" under all four, which was true when
- * it was written and stopped being true when ENT-218 shipped the Analyst. A
- * blanket claim about four things is wrong the moment one of them changes, and
- * a rail that is wrong in the reassuring direction is the ENT-161 failure
- * running the other way: understating is safer than overstating, and neither
- * is what a customer asked for.
+ * The rail used to be a directory of the four agents, and its tests pinned
+ * that directory: every agent a link, every status counted. The panel is
+ * Kindy now and the agents live behind its "more" button on the agents page,
+ * so what these tests pin moved with the design. What did not move is the
+ * discipline underneath: nothing on the card is a live-looking control with
+ * nothing behind it (ENT-202), the one path to the agents page stays a real
+ * link (losing it orphans that surface, the ENT-245 failure shape), and an
+ * absent read renders as nothing-listed rather than as a claim.
  *
- * Rendered directly rather than through ConsoleShell, because the rail now
- * takes the organisation and the shell test is about the chrome around it.
+ * Rendered directly rather than through ConsoleShell, because the rail takes
+ * its own props and the shell test is about the chrome around it.
  */
-describe('the agent rail (ENT-232)', () => {
-  it('makes every agent addressable by name', () => {
-    render(<AgentRail orgSlug="acme-ltd" />)
+describe("Kindy's panel", () => {
+  it('keeps the one path to the agents page', () => {
+    render(<AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />)
 
-    for (const agent of AGENTS) {
-      const link = screen.getByRole('link', { name: new RegExp(agent.name) })
-      expect(link).toHaveAttribute('href', `/o/acme-ltd/agents/${agent.slug}`)
-    }
-  })
-
-  it('reaches the four as a set, not only one at a time', () => {
-    render(<AgentRail orgSlug="acme-ltd" />)
+    // The kebab on the contact card. This is the console's only route to the
+    // page saying what each agent is allowed to do, so it is asserted as a
+    // link with a real destination rather than trusted as decoration.
     expect(
-      screen.getByRole('link', { name: 'What each one is allowed to do' }),
+      screen.getByRole('link', { name: /About Kindy's agents/ }),
     ).toHaveAttribute('href', '/o/acme-ltd/agents')
   })
 
-  it('gives each agent its own status rather than one claim for all four', () => {
-    const { container } = render(<AgentRail orgSlug="acme-ltd" />)
+  it('lists activity newest-in, each row a door to its finding', () => {
+    const activity: ActivityItem[] = [
+      {
+        id: 'f-1',
+        title: 'Profile gap: Records of Processing Activities (ROPA)',
+        severity: 'high',
+        at: new Date().toISOString(),
+      },
+      {
+        id: 'f-2',
+        title: 'Profile gap: AI literacy',
+        severity: 'medium',
+        at: new Date().toISOString(),
+      },
+    ]
+    render(
+      <AgentRail
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        activity={activity}
+      />,
+    )
 
-    // Scoped to the pipeline, because the card at the foot carries status lines
-    // of its own since ENT-270 and those are about chat, call and walkthrough
-    // rather than about an agent. Counting both would tie this assertion to a
-    // number that moves whenever either half does.
-    const pipeline = container.querySelector('ol')
-    expect(pipeline).not.toBeNull()
-    const list = within(pipeline!)
-
-    // All four are working as of ENT-280, and the count arrived one commit at
-    // a time: the Watcher and the Analyst at ENT-258, the Hands when its
-    // surface landed at ENT-278, the Messenger when the doorbell workflow
-    // started running its draft at ENT-280. Saying the same thing about all
-    // four is the failure this replaced, so the count is asserted rather than
-    // the labels merely being present.
-    expect(list.getAllByText(STATUS_LABEL['working'])).toHaveLength(4)
-    // Both zero, and asserted rather than dropped: an absence is a claim, and
-    // these are the ones that would go quietly wrong the day a fifth agent
-    // joins the rail ahead of its skill, or an agent's half gets rebuilt. The
-    // states stay rendered; partly-working has been reached for twice
-    // (ENT-261's Hands, ENT-260's Messenger) and earned its keep both times.
-    expect(list.queryAllByText(STATUS_LABEL['not-built'])).toHaveLength(0)
-    expect(list.queryAllByText(STATUS_LABEL['partly-working'])).toHaveLength(0)
+    for (const item of activity) {
+      expect(
+        screen.getByRole('link', { name: new RegExp(item.title.slice(0, 20)) }),
+      ).toHaveAttribute('href', `/o/acme-ltd/feed/${item.id}`)
+    }
   })
 
-  it('no longer claims that nothing is scheduled', () => {
-    render(<AgentRail orgSlug="acme-ltd" />)
-    expect(screen.queryByText('Not scheduled yet')).toBeNull()
+  it('says nothing has landed rather than nothing happened, when there is nothing to list', () => {
+    render(
+      <AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} activity={[]} />,
+    )
+    // Absent data and empty data read the same here on purpose: the rail is
+    // chrome on every page and the feed is where an empty list is a claim.
+    expect(screen.getByText(/Nothing yet/)).toBeVisible()
   })
 
   it('keeps the two layouts apart in the DOM', () => {
-    // Both render at once in jsdom (no media queries), and two elements with
-    // one id is invalid HTML that gives a screen reader two things to land on.
     const { container } = render(
       <>
-        <AgentRail orgSlug="acme-ltd" />
-        <AgentRail orgSlug="acme-ltd" variant="mobile" />
+        <AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />
+        <AgentRail
+          orgSlug="acme-ltd"
+          kindyAction={noopKindy}
+          variant="mobile"
+        />
       </>,
     )
+    // Two elements with one id is invalid HTML, and the phone's tab bar links
+    // to the mobile rail by id, so the ids have to differ per variant.
     const ids = [...container.querySelectorAll('[id]')].map((el) => el.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
 
   /**
-   * The card at the foot of the rail (ENT-270).
-   *
-   * It used to say "talking to them is coming" over three icons, and the three
-   * were drawn as text rather than controls precisely because none of them did
-   * anything (ENT-202: a control that silently does nothing is worse than one
-   * visibly absent). One of the three is now real, and the card has to stop
-   * describing all three the same way, which is the same failure the rail's
-   * per-agent status was written to fix one level up.
+   * Kindy's contact card and composer (ENT-270, reshaped with the card).
    */
-  describe('talking to them (ENT-270)', () => {
-    it('offers chat as a link, because it exists now', () => {
-      render(<AgentRail orgSlug="acme-ltd" />)
+  describe("Kindy's card and composer (ENT-270)", () => {
+    it('carries the composer, wired to the action the layout injects', () => {
+      render(<AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />)
 
-      // Into the feed rather than into a chat window. The Analyst answers about
-      // one finding, so a conversation has to start at a finding: a chat with
-      // no subject would have no obligation to check a citation against, which
-      // is the guardrail the whole feature rests on.
-      expect(screen.getByRole('link', { name: /Chat/ })).toHaveAttribute(
-        'href',
-        '/o/acme-ltd/feed',
-      )
+      // Presence and wiring only: what an exchange renders is the composer's
+      // own test's business. The first cut of this box navigated to the feed,
+      // and a person who typed "hello" into a face's message box and landed
+      // on a list page rightly reported it broken, so the box answering in
+      // place IS the contract now.
+      const input = screen.getByRole('textbox', { name: /Message Kindy/ })
+      expect(input).toHaveAttribute('name', 'ask')
+      expect(
+        screen.getByRole('button', { name: /Send to Kindy/ }),
+      ).toBeVisible()
     })
 
-    it('says call and walkthrough are not built, in the words the agents page uses', () => {
-      const { container } = render(<AgentRail orgSlug="acme-ltd" />)
+    it('renders call and walkthrough as disabled controls that say so', () => {
+      const { container } = render(
+        <AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />,
+      )
 
-      // The same vocabulary as the Messenger and the Hands, deliberately. A
-      // second phrase for the same state is a second thing to keep true, and
-      // ENT-232 already paid for that lesson one level up this component.
+      // Disabled and labelled, rather than absent and rather than live: the
+      // reference design carries the buttons, and the honest version of a
+      // button with nothing behind it is one that visibly cannot be pressed.
       for (const label of ['Call', 'Walkthrough']) {
-        const row = screen.getByText(label).closest('li')
-        expect(row).not.toBeNull()
-        expect(within(row!).getByText(STATUS_LABEL['not-built'])).toBeVisible()
-      }
-
-      // Still not controls. Nothing behind either of them, so a person who
-      // pressed one would wait for an answer that is not coming.
-      for (const label of ['Call', 'Walkthrough']) {
-        expect(screen.queryByRole('button', { name: label })).toBeNull()
+        const control = screen.getByRole('button', {
+          name: new RegExp(`${label} \\(not built yet\\)`),
+        })
+        expect(control).toBeDisabled()
+        // And never a link: a disabled button cannot navigate, a link always
+        // can, and these two must not go anywhere.
         expect(
-          within(container).queryByRole('link', { name: label }),
+          within(container).queryByRole('link', { name: new RegExp(label) }),
         ).toBeNull()
       }
     })
 
     it('no longer promises that all three are coming', () => {
-      render(<AgentRail orgSlug="acme-ltd" />)
+      render(<AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />)
       // The sentence this replaced described writing, speech and video as one
       // step away. One of the three arrived and the other two are not close, so
       // repeating it would be the placeholder reading as a feature again.
