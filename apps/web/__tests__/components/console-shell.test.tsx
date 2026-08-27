@@ -44,6 +44,12 @@ vi.mock('next/navigation', () => ({
 }))
 
 import { ConsoleShell } from '@/components/console/shell'
+import { KINDY_IDLE, type KindyState } from '@/components/console/kindy-state'
+
+// The composer's server action, stubbed the way SignOutForm is above: the
+// layout always provides it in production, and what it does when called is
+// kindy-composer.test.tsx's business.
+const noopKindy = async (): Promise<KindyState> => KINDY_IDLE
 
 /**
  * The console shell (ENT-91, re-homed by ENT-198, three columns by ENT-222).
@@ -71,7 +77,11 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
     // would make every click on the logo a redirect that has to look up an
     // organisation the page already knows.
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -83,7 +93,11 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
     // With several organisations reachable by URL alone, which one you are
     // looking at has to be visible without reading the address bar.
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -94,7 +108,7 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
     // The layout renders this shell when core-api cannot be reached, so it
     // has to hold together with nothing but a slug.
     render(
-      <ConsoleShell orgSlug="acme-ltd">
+      <ConsoleShell orgSlug="acme-ltd" kindyAction={noopKindy}>
         <div>child</div>
       </ConsoleShell>,
     )
@@ -108,7 +122,11 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
 
   it('renders a sign-out button that posts to /auth/logout', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -128,7 +146,11 @@ describe('ConsoleShell (ENT-91, ENT-198, ENT-222)', () => {
 
   it('renders the children', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <main data-testid="chat-root">chat</main>
       </ConsoleShell>,
     )
@@ -143,7 +165,11 @@ describe('the sidebar (ENT-222)', () => {
   it('marks the surface you are on', () => {
     // usePathname is stubbed to the organisation home above.
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -168,7 +194,11 @@ describe('the sidebar (ENT-222)', () => {
   // over nothing reads as a section that failed to load.
   it('shows no coming-next heading when nothing is waiting', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -180,7 +210,11 @@ describe('the sidebar (ENT-222)', () => {
   // quietly deleted from it. Feed made that move in ENT-203.
   it('links a surface once it exists', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -205,7 +239,11 @@ describe("the agent rail, now Kindy's panel (ENT-222, ENT-270)", () => {
   // __tests__/components/agents/agent-rail.test.tsx.
   it('names Kindy and keeps the agents page reachable, in both layouts', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -224,7 +262,11 @@ describe("the agent rail, now Kindy's panel (ENT-222, ENT-270)", () => {
 
   it('offers the composer, and keeps call and walkthrough disabled, in both layouts', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -253,7 +295,11 @@ describe('the phone layout (ENT-222)', () => {
   // cost nothing to carry.
   it('gives every icon-only tab an accessible name', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -275,7 +321,11 @@ describe('the phone layout (ENT-222)', () => {
   // nowhere.
   it('gives every built surface a tab that points at it', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )
@@ -294,7 +344,11 @@ describe('the phone layout (ENT-222)', () => {
   // Without the anchor the tab is decoration.
   it('points the agents tab at the rail it renders below the content', () => {
     render(
-      <ConsoleShell orgSlug="acme-ltd" orgName="Acme Ltd">
+      <ConsoleShell
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        orgName="Acme Ltd"
+      >
         <div>child</div>
       </ConsoleShell>,
     )

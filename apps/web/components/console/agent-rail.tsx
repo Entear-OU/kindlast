@@ -1,12 +1,8 @@
-import {
-  MoreHorizontal,
-  Phone,
-  SendHorizontal,
-  Sparkles,
-  Video,
-} from 'lucide-react'
+import { MoreHorizontal, Phone, Sparkles, Video } from 'lucide-react'
 import Link from 'next/link'
 
+import { KindyComposer } from '@/components/console/kindy-composer'
+import type { KindyAction } from '@/components/console/kindy-state'
 import { orgPath } from '@/lib/auth/org'
 import { relativeTime } from '@/lib/utils'
 
@@ -73,6 +69,7 @@ export function AgentRail({
   orgSlug,
   variant = 'desktop',
   activity,
+  kindyAction,
 }: {
   orgSlug: string
   variant?: 'desktop' | 'mobile'
@@ -83,6 +80,12 @@ export function AgentRail({
    * nothing happened.
    */
   activity?: ActivityItem[]
+  /**
+   * The server action behind the composer, injected by the layout for the
+   * same reason activity is: importing it here would drag `next/headers`
+   * into every test that renders the chrome.
+   */
+  kindyAction: KindyAction
 }) {
   const headingId = `agent-rail-heading-${variant}`
 
@@ -99,9 +102,9 @@ export function AgentRail({
       <div className="rounded-2xl bg-card px-5 py-6 text-center shadow-[0_1px_3px_oklch(0_0_0/0.06)]">
         <span className="relative mx-auto flex size-14 items-center justify-center rounded-full bg-gradient-to-br from-[oklch(0.62_0.11_176)] to-[oklch(0.42_0.1_200)] text-white">
           <Sparkles aria-hidden="true" className="size-6" />
-          {/* The dot carries the same claim the composer's caption spells
-              out: Kindy answers in writing today. It goes grey the day that
-              stops being true, not the day someone remembers it. */}
+          {/* The dot claims exactly what the composer delivers: Kindy
+              answers in writing today. It goes grey the day that stops being
+              true, not the day someone remembers it. */}
           <span
             aria-hidden="true"
             className="absolute right-0 bottom-0 size-3 rounded-full border-2 border-card bg-emerald-500"
@@ -182,41 +185,11 @@ export function AgentRail({
         )}
       </div>
 
-      {/* The composer, and it is a working control rather than a prop: a
-          plain GET form to the feed, which forwards the words to the Ask the
-          Analyst box on the newest open finding, where the citation to check
-          the answer against is on screen. No JavaScript, no pretend send
-          button, and no caption either: the box explains itself by working,
-          and where the words went is obvious from where the person lands. */}
-      <div className="mt-auto rounded-2xl bg-card p-3 shadow-[0_1px_3px_oklch(0_0_0/0.06)]">
-        <form
-          action={orgPath(orgSlug, '/feed')}
-          method="get"
-          aria-label="Message Kindy"
-          className="flex items-center gap-2"
-        >
-          <label htmlFor={`kindy-ask-${variant}`} className="sr-only">
-            Message Kindy
-          </label>
-          <input
-            id={`kindy-ask-${variant}`}
-            name="ask"
-            required
-            maxLength={500}
-            placeholder="Write a message"
-            autoComplete="off"
-            className="min-w-0 flex-1 bg-transparent px-1 text-xs text-foreground outline-none placeholder:text-muted-foreground/70"
-          />
-          <button
-            type="submit"
-            title="Send to Kindy"
-            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <SendHorizontal aria-hidden="true" className="size-3.5" />
-            <span className="sr-only">Send to Kindy</span>
-          </button>
-        </form>
-      </div>
+      {/* The composer answers here. The first cut navigated to the feed,
+          and typing "hello" into a face's message box and landing on a list
+          page was rightly reported as broken. See KindyComposer for the
+          contract. */}
+      <KindyComposer orgSlug={orgSlug} action={kindyAction} variant={variant} />
     </aside>
   )
 }

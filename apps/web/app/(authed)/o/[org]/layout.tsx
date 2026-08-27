@@ -5,6 +5,7 @@ import { ConsoleShell } from '@/components/console/shell'
 import { currentSession } from '@/lib/auth/session'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { listFindings } from '@/lib/findings/client'
+import { askKindy } from './kindy-actions'
 import type { ActivityItem } from '@/components/console/agent-rail'
 
 /**
@@ -124,7 +125,7 @@ export default async function OrgLayout({
     // whether this person belongs here, and answering "not found" would tell
     // them their organisation had been deleted during an outage.
     return (
-      <ConsoleShell orgSlug={slug}>
+      <ConsoleShell orgSlug={slug} kindyAction={askKindy}>
         <main className="mx-auto w-full max-w-3xl px-4 py-12">
           <h1 className="text-2xl font-semibold tracking-[-0.02em] text-foreground">
             Workspace unavailable
@@ -166,6 +167,7 @@ export default async function OrgLayout({
       orgSlug={slug}
       orgName={resolved.membership.orgName}
       activity={activity}
+      kindyAction={askKindy}
     >
       {children}
     </ConsoleShell>

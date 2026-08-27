@@ -18,6 +18,12 @@ vi.mock('next/link', () => ({
 }))
 
 import { AgentRail, type ActivityItem } from '@/components/console/agent-rail'
+import { KINDY_IDLE, type KindyState } from '@/components/console/kindy-state'
+
+// The composer's server action, stubbed: what it does when called is the
+// composer's own test's business (kindy-composer.test.tsx). Here it only has
+// to exist, the way the layout always provides it in production.
+const noopKindy = async (): Promise<KindyState> => KINDY_IDLE
 
 /**
  * Kindy's panel (ENT-222, ENT-232, ENT-270, reshaped into a contact card).
@@ -36,7 +42,7 @@ import { AgentRail, type ActivityItem } from '@/components/console/agent-rail'
  */
 describe("Kindy's panel", () => {
   it('keeps the one path to the agents page', () => {
-    render(<AgentRail orgSlug="acme-ltd" />)
+    render(<AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />)
 
     // The kebab on the contact card. This is the console's only route to the
     // page saying what each agent is allowed to do, so it is asserted as a
@@ -61,7 +67,13 @@ describe("Kindy's panel", () => {
         at: new Date().toISOString(),
       },
     ]
-    render(<AgentRail orgSlug="acme-ltd" activity={activity} />)
+    render(
+      <AgentRail
+        orgSlug="acme-ltd"
+        kindyAction={noopKindy}
+        activity={activity}
+      />,
+    )
 
     for (const item of activity) {
       expect(
@@ -71,7 +83,9 @@ describe("Kindy's panel", () => {
   })
 
   it('says nothing has landed rather than nothing happened, when there is nothing to list', () => {
-    render(<AgentRail orgSlug="acme-ltd" activity={[]} />)
+    render(
+      <AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} activity={[]} />,
+    )
     // Absent data and empty data read the same here on purpose: the rail is
     // chrome on every page and the feed is where an empty list is a claim.
     expect(screen.getByText(/Nothing yet/)).toBeVisible()
@@ -80,8 +94,12 @@ describe("Kindy's panel", () => {
   it('keeps the two layouts apart in the DOM', () => {
     const { container } = render(
       <>
-        <AgentRail orgSlug="acme-ltd" />
-        <AgentRail orgSlug="acme-ltd" variant="mobile" />
+        <AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />
+        <AgentRail
+          orgSlug="acme-ltd"
+          kindyAction={noopKindy}
+          variant="mobile"
+        />
       </>,
     )
     // Two elements with one id is invalid HTML, and the phone's tab bar links
@@ -94,26 +112,25 @@ describe("Kindy's panel", () => {
    * Kindy's contact card and composer (ENT-270, reshaped with the card).
    */
   describe("Kindy's card and composer (ENT-270)", () => {
-    it('carries a composer that is a real form aimed at the feed, not a prop', () => {
-      render(<AgentRail orgSlug="acme-ltd" />)
+    it('carries the composer, wired to the action the layout injects', () => {
+      render(<AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />)
 
-      // A plain GET form: the feed receives `ask` and relays it to the Ask
-      // box on the newest open finding. If either half of that path breaks,
-      // this input becomes the silently-dead control ENT-202 forbids, so the
-      // form's target and the field's name are the contract asserted here.
+      // Presence and wiring only: what an exchange renders is the composer's
+      // own test's business. The first cut of this box navigated to the feed,
+      // and a person who typed "hello" into a face's message box and landed
+      // on a list page rightly reported it broken, so the box answering in
+      // place IS the contract now.
       const input = screen.getByRole('textbox', { name: /Message Kindy/ })
       expect(input).toHaveAttribute('name', 'ask')
-      expect(input.closest('form')).toHaveAttribute(
-        'action',
-        '/o/acme-ltd/feed',
-      )
       expect(
         screen.getByRole('button', { name: /Send to Kindy/ }),
       ).toBeVisible()
     })
 
     it('renders call and walkthrough as disabled controls that say so', () => {
-      const { container } = render(<AgentRail orgSlug="acme-ltd" />)
+      const { container } = render(
+        <AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />,
+      )
 
       // Disabled and labelled, rather than absent and rather than live: the
       // reference design carries the buttons, and the honest version of a
@@ -132,7 +149,7 @@ describe("Kindy's panel", () => {
     })
 
     it('no longer promises that all three are coming', () => {
-      render(<AgentRail orgSlug="acme-ltd" />)
+      render(<AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />)
       // The sentence this replaced described writing, speech and video as one
       // step away. One of the three arrived and the other two are not close, so
       // repeating it would be the placeholder reading as a feature again.

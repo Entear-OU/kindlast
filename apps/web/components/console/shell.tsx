@@ -42,12 +42,15 @@ export function ConsoleShell({
   orgSlug,
   orgName,
   activity,
+  kindyAction,
   children,
 }: {
   orgSlug: string
   orgName?: string
   /** The rail's Activity items, fetched by the layout. See AgentRail. */
   activity?: import('@/components/console/agent-rail').ActivityItem[]
+  /** The composer's server action, injected by the layout. See AgentRail. */
+  kindyAction: import('@/components/console/kindy-state').KindyAction
   children: React.ReactNode
 }) {
   return (
@@ -82,7 +85,12 @@ export function ConsoleShell({
             Hidden from md up, because from there it either has its own column
             or has been dropped deliberately. */}
         <div className="md:hidden">
-          <AgentRail orgSlug={orgSlug} variant="mobile" activity={activity} />
+          <AgentRail
+            orgSlug={orgSlug}
+            variant="mobile"
+            activity={activity}
+            kindyAction={kindyAction}
+          />
         </div>
 
         <MobileTabs orgSlug={orgSlug} />
@@ -95,7 +103,11 @@ export function ConsoleShell({
             white and lost the panel: the inset has to be visibly a panel
             for the white cards inside it to read as cards. */}
         <div className="h-full min-h-0 overflow-hidden rounded-2xl bg-[oklch(0.951_0.005_84)]">
-          <AgentRail orgSlug={orgSlug} activity={activity} />
+          <AgentRail
+            orgSlug={orgSlug}
+            activity={activity}
+            kindyAction={kindyAction}
+          />
         </div>
       </div>
     </div>

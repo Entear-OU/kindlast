@@ -41,17 +41,10 @@ export function AskAnalyst({
   slug,
   findingId,
   action,
-  initialQuestion,
 }: {
   slug: string
   findingId: string
   action: (state: AskState, form: FormData) => Promise<AskState>
-  /**
-   * Words that arrived through Kindy's composer in the rail, prefilled and
-   * nothing more: the send is still the person's, on this page, with the
-   * finding and its regulation in front of them.
-   */
-  initialQuestion?: string
 }) {
   const [state, submit, asking] = useActionState(action, idle)
 
@@ -90,7 +83,6 @@ export function AskAnalyst({
           // the refusal that matters is recorded on the run. See
           // MAX_QUESTION_CHARS.
           maxLength={MAX_QUESTION_CHARS}
-          defaultValue={initialQuestion}
           placeholder="Why does this apply to us?"
           className="w-full resize-y rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
         />

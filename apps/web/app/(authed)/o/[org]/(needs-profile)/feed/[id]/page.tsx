@@ -43,16 +43,10 @@ export const metadata: Metadata = {
  */
 export default async function FindingPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ org: string; id: string }>
-  // `ask` is a question that arrived through Kindy's composer, relayed here
-  // by the feed. It only prefills the Ask box below; nothing is sent until
-  // the person presses Ask themselves.
-  searchParams: Promise<{ ask?: string }>
 }) {
   const { org: slug, id } = await params
-  const { ask: askedFromRail } = await searchParams
 
   const session = await currentSession()
   if (!session)
@@ -243,12 +237,7 @@ export default async function FindingPage({
           model's words where the law's are, which is the ENT-164 mistake at
           page scale. It is also why the Analyst is forbidden to state the law
           here: the passage above already does, and a person wrote it. */}
-      <AskAnalyst
-        slug={slug}
-        findingId={finding.findingId}
-        action={ask}
-        initialQuestion={askedFromRail}
-      />
+      <AskAnalyst slug={slug} findingId={finding.findingId} action={ask} />
     </div>
   )
 }
