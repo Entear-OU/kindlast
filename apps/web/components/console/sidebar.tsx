@@ -58,7 +58,7 @@ export function ConsoleSidebar({
   return (
     <nav
       aria-label="Console"
-      className="flex h-full flex-col gap-6 border-r border-border/60 bg-background px-4 py-6"
+      className="flex h-full flex-col gap-6 border-r border-border/50 px-4 py-6"
     >
       <Link
         href={orgPath(orgSlug)}

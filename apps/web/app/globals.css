@@ -38,6 +38,7 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-rim: var(--rim);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,6 +49,10 @@
 }
 
 :root {
+  /* The dark frame the console canvas floats on. Deep slate carrying the
+     brand's teal hue at low chroma, so the rim reads as Kindlast rather than
+     as a generic near-black. */
+  --rim: oklch(0.22 0.022 205);
   --background: oklch(0.967 0.004 84);
   --foreground: oklch(0.145 0.033 243);
   --card: oklch(1 0 0);
@@ -86,6 +91,9 @@
 }
 
 .dark {
+  /* Darker than the canvas rather than lighter, so the frame-and-canvas
+     relationship survives the theme instead of inverting. */
+  --rim: oklch(0.1 0.012 205);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
