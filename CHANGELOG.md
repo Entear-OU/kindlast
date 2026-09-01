@@ -12,6 +12,45 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
+### Changed
+
+- **A deployment can point at a model it runs itself, without the bundled one**
+  (ENT-282). `KINDLAST_MODEL_ENDPOINT` is now overridable. Set it in
+  `deploy/.env` to any OpenAI-compatible endpoint (a llama.cpp, vLLM or Ollama
+  on the host, on your LAN, or a hosted endpoint that needs no key) and leave
+  the `model` profile down:
+
+  ```bash
+  KINDLAST_MODEL_ENDPOINT=http://host.docker.internal:8080
+  ```
+
+  `docs/self-hosting.md` has told self-hosters to do this for some time, and it
+  was not possible: the value was hardcoded in `deploy/compose.yaml`, so the
+  only way to follow the instruction was to edit a tracked file and carry that
+  edit across every upgrade. The default is unchanged, so a stack that sets
+  nothing behaves exactly as before.
+
+  This does not loosen the per-organisation providers, which still require
+  HTTPS and still refuse a host resolving to a private address. That asymmetry
+  is deliberate: this setting is an operator configuring their own deployment,
+  and that one is a tenant naming a host core-api will dial on their behalf.
+
+- **Intelligence no longer needs the bundled model to run** (ENT-282). It has
+  sat behind the `model` profile with `depends_on: model`, which described the
+  architecture ENT-256 part five replaced: it holds no model endpoint and no
+  credential now, and asks core-api's `CompletionService` for every completion.
+  The effect was that no agent surface (the Analyst, narration, the console's
+  assistant) could run without also running a multi-gigabyte model container,
+  even where every organisation used a provider it had chosen. `intelligence`
+  is a default service now, so `docker compose up -d` starts it and
+  `--profile model` still adds only `model` and `model-init`.
+
+  **If you are upgrading**, `KINDLAST_INTELLIGENCE_URL` now defaults to
+  `http://intelligence:8090` rather than empty, because the container is always
+  present. If you added that line to `deploy/.env` when enabling the model
+  profile, you can drop it; leaving it changes nothing. To run without
+  Intelligence at all, set it empty explicitly.
+
 ### Fixed
 
 - **The self-hosting guide now says the model profile needs
