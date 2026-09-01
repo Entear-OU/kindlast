@@ -191,19 +191,17 @@ That starts two more services. `model-init` fetches the weights once, checks
 them against a pinned SHA256 and exits; `model` is llama.cpp's `llama-server`,
 OpenAI-compatible on port 8081.
 
-**The profile needs one line of configuration to go with it**, in
-`deploy/.env` so compose picks it up on every `up` from then on:
+**It needs no configuration to go with it since ENT-282.** If you are upgrading
+and have `KINDLAST_INTELLIGENCE_URL=http://intelligence:8090` in `deploy/.env`,
+that line is now the default and you can drop it; leaving it changes nothing.
+It was needed because `intelligence` used to sit behind this profile and a
+profile cannot set an environment variable on a service outside it, so the URL
+had to default to empty and be supplied by hand. `intelligence` is a default
+service now, so the variable simply names it.
 
-```bash
-KINDLAST_INTELLIGENCE_URL=http://intelligence:8090
-```
-
-It cannot default on, and the reason is compose itself: a profile cannot set
-an environment variable on a service outside it, so either the URL is always
-set, in which case a stack without the profile reports
-`intelligence_available: true` and fails every call, or it defaults to empty
-and the profile needs it supplied. Empty wins, because "this deployment has no
-model" and "the model is broken" want different reactions from an operator.
+**You do not need this profile to run the agent surfaces.** Point
+`KINDLAST_MODEL_ENDPOINT` at a model you run yourself and leave it down: see
+the endpoint section below.
 Without this line the sweeps and the notification drafts still run (they reach
 Intelligence through the task queue), but everything a person waits on, asking
 the Analyst on a finding, asking the Hands what approving will do, and the
@@ -221,8 +219,8 @@ an actual deployment, so a real install passes the flag.
 | `KINDLAST_MODEL_CTX` | `16384` | Context window. A **memory** decision, not a capability one: the model supports 262144 natively, and allocating that would want far more RAM than the weights. |
 | `KINDLAST_MODEL_PARALLEL` | `2` | Concurrent slots. |
 | `KINDLAST_MODEL_PORT` | `8081` | Host port for the endpoint. |
-| `KINDLAST_INTELLIGENCE_URL` | empty (on core-api) | Where Intelligence answers core-api's synchronous calls: the Analyst on a finding, the Hands' explanation, narration. Empty is the no-model path, deliberately, see above. `http://intelligence:8090` on the bundled stack. |
-| `KINDLAST_MODEL_ENDPOINT` | `http://model:8080` (on core-api) | Where core-api sends the deployment's own completions. **core-api makes every model call** (ENT-256, part five): the Python service asks core-api for each completion, naming only the organisation, and core-api resolves whether that organisation uses this endpoint or a provider it chose, opens the provider key only it holds, and dials. The Python service holds no model endpoint and no key. Empty means this deployment runs no model; a completion is then refused with a reason and nothing dials anything. Not `KINDLAST_MODEL_URL`, which is `model-init`'s download URL. |
+| `KINDLAST_INTELLIGENCE_URL` | `http://intelligence:8090` (on core-api) | Where Intelligence answers core-api's synchronous calls: the Analyst on a finding, the Hands' explanation, narration. It defaulted to empty while `intelligence` sat behind the `model` profile, because compose cannot make a variable conditional on one; the container is a default service since ENT-282, so this can name it. Set it empty to run without Intelligence at all. |
+| `KINDLAST_MODEL_ENDPOINT` | `http://model:8080` (on core-api) | Where core-api sends the deployment's own completions. **Override it to point at a model you run yourself** and leave the `model` profile down. Anything OpenAI-compatible: a llama.cpp, vLLM or Ollama on the host, on your LAN, or a hosted endpoint that needs no key. **core-api makes every model call** (ENT-256, part five): the Python service asks core-api for each completion, naming only the organisation, and core-api resolves whether that organisation uses this endpoint or a provider it chose, opens the provider key only it holds, and dials. The Python service holds no model endpoint and no key. Empty means this deployment runs no model; a completion is then refused with a reason and nothing dials anything. Not `KINDLAST_MODEL_URL`, which is `model-init`'s download URL. |
 
 Sizing, so you can pick before rather than after:
 
@@ -244,9 +242,28 @@ set `KINDLAST_MODEL_FILE`, `KINDLAST_MODEL_URL` and `KINDLAST_MODEL_SHA256`
 a filename from one model and a digest from another is a configuration that
 deletes a good file and fetches the wrong one.
 
-**Using a hosted provider instead.** Anything OpenAI-compatible works, so point
-`KINDLAST_MODEL_ENDPOINT` on core-api at it and leave the `model` service out.
-Understand what that changes: your compliance profile, findings and DSAR
+**Pointing at a model you run yourself.** Anything OpenAI-compatible works, so
+point `KINDLAST_MODEL_ENDPOINT` on core-api at it and leave the `model` service
+out:
+
+```bash
+# deploy/.env
+KINDLAST_MODEL_ENDPOINT=http://host.docker.internal:8080
+```
+
+A llama.cpp, vLLM or Ollama on the host, on your LAN, or anywhere core-api can
+reach. Nothing leaves your network, so the air-gap property holds exactly as it
+does with the bundled model, and you choose the model and the hardware rather
+than taking the three tiers above. `docker compose up -d` then brings up
+everything except `model` and `model-init`, Intelligence included.
+
+This setting is not scheme-checked or address-checked, unlike the
+per-organisation providers below. That asymmetry is deliberate: here you are an
+operator configuring your own deployment, and there a tenant is naming a host
+core-api will dial on their behalf.
+
+**Using a hosted endpoint instead.** The same setting reaches one, and you
+should understand what changes: your compliance profile, findings and DSAR
 content start leaving the deployment, and the provider becomes a processor you
 are responsible for recording. (A deployment-wide hosted endpoint that needs a
 key is not supported through this setting: the deployment's own endpoint is
