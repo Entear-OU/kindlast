@@ -8,26 +8,44 @@
  *
  * The states are not collapsed, the ask panel's own rule: a refusal is a
  * guardrail working, a failure is something broken, no-model is a fact about
- * the deployment, and nothing-open is a fact about the organisation. Drawing
- * any of them as "sorry" would misreport the product's most important
- * behaviour.
+ * the deployment, nothing-open is a fact about the organisation, and choose
+ * is Kindy asking a question back. Drawing any of them as "sorry" would
+ * misreport the product's most important behaviour.
  */
+
+/**
+ * The finding an exchange is about, named so a reader can check it (ENT-284).
+ *
+ * Always both halves. An id on its own is a subject only the server can read,
+ * and the panel's job here is to let somebody notice that Kindy is answering
+ * about the wrong finding before they act on the answer.
+ */
+export interface KindySubject {
+  findingId: string
+  findingTitle: string
+}
+
 export type KindyState =
   | { status: 'idle' }
-  | {
+  | ({
       status: 'answered'
       question: string
       answer: string
-      /** The finding the answer is about: the subject a reader can check. */
-      findingId: string
-      findingTitle: string
-    }
-  | {
+    } & KindySubject)
+  | ({
       status: 'refused'
       question: string
       reason: string
-      findingId: string
-      findingTitle: string
+    } & KindySubject)
+  /**
+   * The question was asked away from any finding, so Kindy asks which one it
+   * is about rather than choosing (ENT-284). The question rides along so that
+   * choosing does not mean typing it again.
+   */
+  | {
+      status: 'choose'
+      question: string
+      choices: KindySubject[]
     }
   | {
       status: 'nothing-open'
