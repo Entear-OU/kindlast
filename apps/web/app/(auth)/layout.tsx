@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { KindlastMark } from '@/components/console/mark'
 
 /**
  * The auth shell.
@@ -13,7 +14,9 @@ import Link from 'next/link'
  * of thing that is invisible until a screen reader hits it.
  *
  * The wordmark stays as the one way out, because a screen with no exit is its
- * own trap.
+ * own trap. It carries the mark beside it for the same reason the console and
+ * the marketing header do: this is the last screen before the product, and the
+ * word alone on an empty page reads as a page that has not finished loading.
  */
 export default function AuthLayout({
   children,
@@ -25,8 +28,9 @@ export default function AuthLayout({
       <header className="px-6 py-6 sm:px-10">
         <Link
           href="/"
-          className="rounded-sm font-semibold tracking-tight text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex w-fit items-center gap-2 rounded-sm font-semibold tracking-tight text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
+          <KindlastMark />
           kindlast
         </Link>
       </header>
