@@ -183,29 +183,44 @@ var mappings = map[string][]mapping{
 	},
 }
 
-// unmapped is what a column with no fact behind it says for itself.
+// unmapped is what a column with no fact behind it says for itself, per
+// register.
 //
 // Written per column rather than generated from the label, because these are
 // the sentences a person reads under "what is still yours to do" and a
 // generated one reads like a form validator. A column that gains no entry here
 // falls back to `defaultReason`, which is honest and duller.
-var unmapped = map[string]string{
-	"name": "you have not told us what this activity is called, so the entry needs " +
-		"a name a colleague would recognise",
-	"purpose": "you have not told us why you process this data, and the purpose is " +
-		"the part of an Article 30 entry only you can write",
-	"retention_period": "you have not told us how long you keep it, or what decides " +
-		"when it goes",
-	"vendor": "you have not told us who supplies this system",
-	"documentation_status": "you have not told us how far its technical documentation " +
-		"has got",
-	"risk_classification": "its classification under the AI Act is a legal judgement " +
-		"about this system, so it is yours to make rather than ours to guess",
-	"requester":    "a data-subject request comes from a person, and nobody has said who",
-	"request_type": "nobody has said which right is being exercised",
-	"handler":      "you have not told us who is dealing with this",
-	"received_at": "the Article 12(3) deadline runs from the day the request arrived, " +
-		"so that date is yours to give and never ours to infer",
+//
+// Keyed by register and not by column name alone, because the same name means
+// different things in two of them: a `purpose` on an Article 30 entry is why
+// personal data is processed, and a `purpose` on an AI Act entry is what the
+// system is used to do. One sentence for both would be wrong in one place.
+var unmapped = map[string]map[string]string{
+	RegisterProcessingActivities: {
+		"name": "you have not told us what this activity is called, so the entry " +
+			"needs a name a colleague would recognise",
+		"purpose": "you have not told us why you process this data, and the purpose " +
+			"is the part of an Article 30 entry only you can write",
+		"retention_period": "you have not told us how long you keep it, or what " +
+			"decides when it goes",
+	},
+	RegisterAISystems: {
+		"name":    "you have not told us what this system is called inside the organisation",
+		"vendor":  "you have not told us who supplies it",
+		"purpose": "you have not told us what this system is used to do",
+		"risk_classification": "its classification under the AI Act is a legal " +
+			"judgement about this system under Annex III, so it is yours to make " +
+			"rather than ours to guess",
+		"documentation_status": "you have not told us how far its technical " +
+			"documentation has got",
+	},
+	RegisterDSARs: {
+		"requester":    "a data-subject request comes from a person, and nobody has said who",
+		"request_type": "nobody has said which right is being exercised",
+		"handler":      "you have not told us who is dealing with this",
+		"received_at": "the Article 12(3) deadline runs from the day the request " +
+			"arrived, so that date is yours to give and never ours to infer",
+	},
 }
 
 // DraftFromFacts proposes the record an approval of this finding would create.
@@ -236,7 +251,7 @@ func DraftFromFacts(register Register, facts []Fact) Draft {
 		m, mapped := byField[field.Name]
 		if !mapped {
 			draft.LeftForYou = append(draft.LeftForYou, LeftForYou{
-				Name: field.Name, Why: reasonFor(field),
+				Name: field.Name, Why: reasonFor(register, field),
 			})
 			continue
 		}
@@ -280,8 +295,8 @@ func draftField(field Field, m mapping, recorded Fact) (PreparedField, string) {
 }
 
 // reasonFor is what an unmapped column says for itself.
-func reasonFor(field Field) string {
-	if why, written := unmapped[field.Name]; written {
+func reasonFor(register Register, field Field) string {
+	if why, written := unmapped[register.Name][field.Name]; written {
 		return why
 	}
 	return defaultReason(field)
