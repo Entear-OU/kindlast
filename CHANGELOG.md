@@ -12,6 +12,25 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
+### Changed
+
+- **The model settings page now opens with a toggle rather than a form**
+  (ENT-281). On a deployment that permits hosted providers, an owner used to
+  arrive at the provider, endpoint, model and API key fields already on screen,
+  which read as a form waiting to be filled in rather than as a decision to be
+  taken. There is now a single switch, on by default, saying the organisation
+  uses the model the deployment runs. Turning it off reveals the fields;
+  turning it back on reverts to the bundled model.
+
+  Nothing about the decision itself has changed. The consequence notice still
+  comes from core-api, still appears above the fields rather than under the
+  button, and the acknowledgement is still required with no default, so
+  `UseHostedModel` still refuses a request from somebody who was not shown what
+  it does. The toggle governs disclosure only: revealing the fields reaches no
+  RPC and writes no audit row. Deployments with `KINDLAST_BYOK_PROVIDERS`
+  unset, which is the default, see the same explanation as before and no
+  switch.
+
 ### Fixed
 
 - **The self-hosting guide now says the model profile needs

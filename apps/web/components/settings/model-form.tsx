@@ -1,10 +1,12 @@
 'use client'
 
+import * as React from 'react'
 import { useActionState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   chooseBundledModelAction,
   chooseHostedModelAction,
@@ -13,17 +15,28 @@ import { idle, type ActionState } from '@/lib/org/action-state'
 import { describeSetting, type ModelSettingView } from '@/lib/model/client'
 
 /**
- * Choosing where this organisation's model runs (ENT-236, §26.6).
+ * Choosing where this organisation's model runs (ENT-236, §26.6; the toggle in
+ * ENT-281).
  *
- * # THIS IS A CONFIRMATION SCREEN, NOT A SETTINGS ROW
+ * # THE TOGGLE DISCLOSES, IT DOES NOT DECIDE
  *
- * Everything about the layout follows from the toggle being a compliance event.
- * The consequence is above the fields rather than below the button, because a
- * warning under a button is one people read after deciding. The checkbox has no
- * default and the submit button says what it does rather than "Save". And the
- * sentence itself comes from core-api rather than from this file, so a
- * self-hoster's own client shows the same words and there is no second copy to
- * drift out of date.
+ * ENT-236 shaped this surface as a confirmation rather than a settings row,
+ * and that has not changed. Switching the toggle off reveals the provider
+ * fields and reaches no RPC, because revealing a form is not a processing
+ * decision. What makes the change is still the submit below it, and that still
+ * requires the consequence notice core-api served and an acknowledgement with
+ * no default. A toggle that wrote on flip would turn a compliance event into a
+ * preference, which is the one thing this file must not do.
+ *
+ * Switching it back on is different, and deliberately so. Stopping data
+ * leaving is the safe direction, so the toggle performs it directly: friction
+ * on the safe way back makes the unsafe way look equivalent.
+ *
+ * # THE CONSEQUENCE IS ABOVE THE FIELDS, NOT UNDER THE BUTTON
+ *
+ * A warning under a button is one people read after deciding. The sentence
+ * itself comes from core-api rather than from this file, so a self-hoster's
+ * own client shows the same words and there is no second copy to drift.
  *
  * # THE KEY IS WRITE ONLY, AND THE FIELD SAYS SO
  *
@@ -53,6 +66,26 @@ export function ModelForm({
   const setting = view.setting
   const providers = view.permittedProviders ?? []
   const hosted = Boolean(setting?.hosted)
+
+  /* Revealed starts where the organisation already is. An owner arriving at a
+     hosted organisation sees the fields, because the thing they came to do is
+     usually change the provider or rotate the key, not read the toggle. */
+  const [revealed, setRevealed] = React.useState(hosted)
+  const revertFormRef = React.useRef<HTMLFormElement>(null)
+  const toggleLabelId = React.useId()
+
+  function onToggle(usesBundledModel: boolean) {
+    if (!usesBundledModel) {
+      setRevealed(true)
+      return
+    }
+    setRevealed(false)
+    /* Only a live hosted choice has anything to revoke. Flipping back before
+       submitting anything is somebody changing their mind about a form, and
+       writing an audit row for that would put a decision nobody made into a
+       regulatory record. */
+    if (hosted) revertFormRef.current?.requestSubmit()
+  }
 
   return (
     <div className="space-y-8">
@@ -84,7 +117,9 @@ export function ModelForm({
         /* Not an error and not an empty state. A deployment permitting no
            provider is one that can run with no outbound internet at all, which
            is the position a compliance buyer chose this product for, so it is
-           described as a property rather than as something missing. */
+           described as a property rather than as something missing. No toggle
+           either: a switch that can only ever fail tells somebody the
+           deployment has a choice it does not have. */
         <p className="text-sm text-muted-foreground">
           This deployment permits no hosted model providers. Everything is
           processed by the model it runs itself, and an operator would have to
@@ -96,146 +131,162 @@ export function ModelForm({
         </p>
       ) : (
         <>
-          <form action={host} className="max-w-xl space-y-4">
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4">
-              <h3 className="text-sm font-medium text-foreground">
-                What changes if you do this
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {view.consequenceNotice}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="model-provider">Provider</Label>
-              <select
-                id="model-provider"
-                name="provider"
-                required
-                defaultValue={setting?.provider ?? ''}
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+          <div className="flex items-start gap-3 rounded-md border border-border p-4">
+            <Switch
+              id="model-bundled"
+              checked={!revealed}
+              onCheckedChange={onToggle}
+              aria-labelledby={toggleLabelId}
+              className="mt-0.5"
+            />
+            <div className="space-y-1">
+              <span
+                id={toggleLabelId}
+                className="text-sm leading-none font-medium text-foreground"
               >
-                <option value="" disabled>
-                  Choose a provider
-                </option>
-                {providers.map((provider) => (
-                  <option key={provider.name} value={provider.name}>
-                    {provider.name} ({provider.host})
-                  </option>
-                ))}
-              </select>
+                Use the model this deployment runs
+              </span>
               <p className="text-xs text-muted-foreground">
-                Only providers this deployment permits are listed, and the
-                endpoint below has to be on the host shown beside the name.
+                On, nothing about this organisation leaves this deployment. Turn
+                it off to send this organisation&rsquo;s compliance data to a
+                provider you name instead.
               </p>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="model-base-url">Endpoint</Label>
-              <Input
-                id="model-base-url"
-                name="baseUrl"
-                type="url"
-                placeholder="https://api.example.com"
-                defaultValue={setting?.baseUrl ?? ''}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="model-name">Model</Label>
-              <Input
-                id="model-name"
-                name="model"
-                placeholder="the model name the provider knows"
-                defaultValue={setting?.model ?? ''}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="model-api-key">API key</Label>
-              <Input
-                id="model-api-key"
-                name="apiKey"
-                type="password"
-                autoComplete="off"
-                placeholder={
-                  setting?.credentialLastFour
-                    ? `ends ${setting.credentialLastFour}, enter a new key to replace it`
-                    : 'the key this provider issued you'
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                Stored encrypted and never shown again. Leave it blank only if
-                your provider needs no key.
-              </p>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <input
-                id="model-acknowledge"
-                name="acknowledge"
-                type="checkbox"
-                className="mt-1"
-              />
-              <Label
-                htmlFor="model-acknowledge"
-                className="text-sm font-normal leading-snug"
-              >
-                I understand this sends this organisation&rsquo;s compliance
-                data to the provider above, and that they become a sub-processor
-                we are responsible for recording.
-              </Label>
-            </div>
-
-            <Button type="submit" variant="destructive">
-              {hosted ? 'Change provider' : 'Send our data to this provider'}
-            </Button>
-
-            {hostState.status !== 'idle' ? (
-              <p
-                role="status"
-                className={
-                  hostState.status === 'error'
-                    ? 'text-sm text-destructive'
-                    : 'text-sm text-muted-foreground'
-                }
-              >
-                {hostState.message}
-              </p>
-            ) : null}
-          </form>
+          </div>
 
           {hosted ? (
-            <form
-              action={revert}
-              className="max-w-xl space-y-3 border-t border-border pt-6"
-            >
-              <h3 className="text-sm font-medium text-foreground">
-                Go back to the model this deployment runs
-              </h3>
+            /* The half an owner would otherwise assume, said before they flip
+               it rather than after. */
+            <form action={revert} ref={revertFormRef} className="max-w-xl">
               <p className="text-sm text-muted-foreground">
                 {view.revertNotice}
               </p>
-              {/* No confirmation checkbox on the way back. Stopping data
-                  leaving is not a decision anybody needs protecting from, and
-                  friction on the safe direction makes the unsafe one look
-                  equivalent. */}
-              <Button type="submit" variant="outline">
-                Stop sending our data out
-              </Button>
-
               {revertState.status !== 'idle' ? (
                 <p
                   role="status"
                   className={
                     revertState.status === 'error'
+                      ? 'mt-2 text-sm text-destructive'
+                      : 'mt-2 text-sm text-muted-foreground'
+                  }
+                >
+                  {revertState.message}
+                </p>
+              ) : null}
+            </form>
+          ) : null}
+
+          {revealed ? (
+            <form action={host} className="max-w-xl space-y-4">
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4">
+                <h3 className="text-sm font-medium text-foreground">
+                  What changes if you do this
+                </h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {view.consequenceNotice}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="model-provider">Provider</Label>
+                <select
+                  id="model-provider"
+                  name="provider"
+                  required
+                  defaultValue={setting?.provider ?? ''}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                >
+                  <option value="" disabled>
+                    Choose a provider
+                  </option>
+                  {providers.map((provider) => (
+                    <option key={provider.name} value={provider.name}>
+                      {provider.name} ({provider.host})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Only providers this deployment permits are listed, and the
+                  endpoint below has to be on the host shown beside the name.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="model-base-url">Endpoint</Label>
+                <Input
+                  id="model-base-url"
+                  name="baseUrl"
+                  type="url"
+                  placeholder="https://api.example.com"
+                  defaultValue={setting?.baseUrl ?? ''}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="model-name">Model</Label>
+                <Input
+                  id="model-name"
+                  name="model"
+                  placeholder="the model name the provider knows"
+                  defaultValue={setting?.model ?? ''}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="model-api-key">API key</Label>
+                <Input
+                  id="model-api-key"
+                  name="apiKey"
+                  type="password"
+                  autoComplete="off"
+                  placeholder={
+                    setting?.credentialLastFour
+                      ? `ends ${setting.credentialLastFour}, enter a new key to replace it`
+                      : 'the key this provider issued you'
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Stored encrypted and never shown again. Leave it blank only if
+                  your provider needs no key.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-2">
+                {/* No default, and it does not survive the fields being
+                    hidden: React unmounts this with the form, so somebody who
+                    reveals it again ticks it again. */}
+                <input
+                  id="model-acknowledge"
+                  name="acknowledge"
+                  type="checkbox"
+                  className="mt-1"
+                />
+                <Label
+                  htmlFor="model-acknowledge"
+                  className="text-sm font-normal leading-snug"
+                >
+                  I understand this sends this organisation&rsquo;s compliance
+                  data to the provider above, and that they become a
+                  sub-processor we are responsible for recording.
+                </Label>
+              </div>
+
+              <Button type="submit" variant="destructive">
+                {hosted ? 'Change provider' : 'Send our data to this provider'}
+              </Button>
+
+              {hostState.status !== 'idle' ? (
+                <p
+                  role="status"
+                  className={
+                    hostState.status === 'error'
                       ? 'text-sm text-destructive'
                       : 'text-sm text-muted-foreground'
                   }
                 >
-                  {revertState.message}
+                  {hostState.message}
                 </p>
               ) : null}
             </form>

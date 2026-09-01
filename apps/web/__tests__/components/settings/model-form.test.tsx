@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 import { ModelForm } from '@/components/settings/model-form'
+import {
+  chooseBundledModelAction,
+  chooseHostedModelAction,
+} from '@/app/(authed)/o/[org]/settings/model/actions'
 import type { ModelSettingView } from '@/lib/model/client'
 
 /**
@@ -18,9 +23,19 @@ import type { ModelSettingView } from '@/lib/model/client'
  *   the product rather than a property of the deployment.
  */
 
+/* Both stand in for server actions, and a server action on this surface
+   always resolves to an ActionState. Returning undefined here would make the
+   component read `.status` off nothing, which is a property of the mock rather
+   than of the code under test. */
 vi.mock('@/app/(authed)/o/[org]/settings/model/actions', () => ({
-  chooseHostedModelAction: vi.fn(),
-  chooseBundledModelAction: vi.fn(),
+  chooseHostedModelAction: vi.fn(async () => ({
+    status: 'idle' as const,
+    message: '',
+  })),
+  chooseBundledModelAction: vi.fn(async () => ({
+    status: 'idle' as const,
+    message: '',
+  })),
 }))
 
 const NOTICE =
@@ -43,8 +58,16 @@ function view(overrides: Partial<ModelSettingView> = {}): ModelSettingView {
 }
 
 describe('ModelForm', () => {
-  it('states the consequence before the fields rather than after the button', () => {
+  it('states the consequence before the fields rather than after the button', async () => {
+    const user = userEvent.setup()
     render(<ModelForm slug="acme" view={view()} canManage />)
+
+    // The fields are disclosed by the toggle (ENT-281), so reveal them first.
+    // What is being asserted is unchanged: whoever sees the fields has already
+    // been handed the sentence describing what they do.
+    await user.click(
+      screen.getByRole('switch', { name: /model this deployment runs/i }),
+    )
 
     expect(screen.getByText(new RegExp(NOTICE.slice(0, 40), 'i'))).toBeTruthy()
 
@@ -135,5 +158,120 @@ describe('ModelForm', () => {
     expect(
       screen.getByText(/cannot reach content the provider has already/i),
     ).toBeTruthy()
+  })
+})
+
+/**
+ * The toggle, and what it is allowed to decide (ENT-281).
+ *
+ * ENT-236 shaped this surface as a confirmation rather than a settings row,
+ * and the toggle added here governs DISCLOSURE ONLY. The tests below are the
+ * ones that would catch it quietly becoming the decision instead: a reveal
+ * that calls core-api, an acknowledgement that survives being hidden, a
+ * viewer who can operate it, or a deployment permitting nothing that offers a
+ * switch leading nowhere.
+ */
+describe('ModelForm, the local-model toggle', () => {
+  it('is on, and hides the provider fields, when the deployment runs the model', () => {
+    render(<ModelForm slug="acme" view={view()} canManage />)
+
+    const toggle = screen.getByRole('switch', {
+      name: /model this deployment runs/i,
+    })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+
+    // Nothing to fill in until somebody asks for it. A form rendered behind an
+    // "on" toggle is one a person can submit without ever having turned the
+    // toggle off, which would make the disclosure decorative.
+    expect(screen.queryByLabelText(/API key/i)).toBeNull()
+    expect(screen.queryByLabelText(/I understand this sends/i)).toBeNull()
+  })
+
+  it('reveals the fields when switched off, and calls nothing to do it', async () => {
+    const user = userEvent.setup()
+    render(<ModelForm slug="acme" view={view()} canManage />)
+
+    await user.click(
+      screen.getByRole('switch', { name: /model this deployment runs/i }),
+    )
+
+    expect(screen.getByLabelText(/API key/i)).toBeTruthy()
+    expect(screen.getByLabelText(/I understand this sends/i)).toBeTruthy()
+    // The consequence still arrives above the fields, from core-api.
+    expect(screen.getByText(new RegExp(NOTICE.slice(0, 40), 'i'))).toBeTruthy()
+
+    // THE POINT OF THE WHOLE ISSUE. Revealing a form is not a processing
+    // decision, so it reaches no RPC. If this ever fails, the toggle has
+    // become the switch rather than the disclosure.
+    expect(chooseHostedModelAction).not.toHaveBeenCalled()
+    expect(chooseBundledModelAction).not.toHaveBeenCalled()
+  })
+
+  it('is off, with the fields already showing, when a provider is serving', () => {
+    render(
+      <ModelForm
+        slug="acme"
+        canManage
+        view={view({
+          setting: {
+            hosted: true,
+            provider: 'openai',
+            baseUrl: 'https://api.openai.com',
+            model: 'gpt-oss-120b',
+          },
+        })}
+      />,
+    )
+
+    const toggle = screen.getByRole('switch', {
+      name: /model this deployment runs/i,
+    })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByLabelText(/API key/i)).toBeTruthy()
+  })
+
+  it('reverts to the bundled model when switched back on while hosted', async () => {
+    const user = userEvent.setup()
+    render(
+      <ModelForm
+        slug="acme"
+        canManage
+        view={view({
+          setting: { hosted: true, provider: 'openai', model: 'gpt-oss-120b' },
+        })}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('switch', { name: /model this deployment runs/i }),
+    )
+
+    // Stopping data leaving is the safe direction and carries no confirmation
+    // by deliberate design, so the toggle may perform it directly.
+    expect(chooseBundledModelAction).toHaveBeenCalled()
+    expect(chooseHostedModelAction).not.toHaveBeenCalled()
+  })
+
+  it('offers no toggle when the deployment permits no provider', () => {
+    render(
+      <ModelForm
+        slug="acme"
+        canManage
+        view={view({ permittedProviders: [] })}
+      />,
+    )
+
+    // A switch that can only ever fail is worse than none: it tells somebody
+    // the deployment has a choice it does not have.
+    expect(screen.queryByRole('switch')).toBeNull()
+    expect(screen.getByText(/permits no hosted model providers/i)).toBeTruthy()
+  })
+
+  it('does not let a member who is not an owner operate it', () => {
+    render(<ModelForm slug="acme" canManage={false} view={view()} />)
+
+    const toggle = screen.queryByRole('switch')
+    if (toggle) expect(toggle).toBeDisabled()
+    expect(screen.getByText(/Only an owner can change/i)).toBeTruthy()
   })
 })
