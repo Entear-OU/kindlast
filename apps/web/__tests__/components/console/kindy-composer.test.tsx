@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -116,9 +117,13 @@ describe("Kindy's composer", () => {
   })
 
   it('says it is writing, and disables the send, while the model works', async () => {
-    // A promise that never resolves inside this test: the state under test is
-    // the minutes-long wait a self-hosted model actually produces.
-    const action = () => new Promise<KindyState>(() => {})
+    // A promise held open for the length of the assertions: the state under
+    // test is the minutes-long wait a self-hosted model actually produces.
+    let land: (state: KindyState) => void = () => {}
+    const action = () =>
+      new Promise<KindyState>((resolve) => {
+        land = resolve
+      })
     render(<KindyComposer orgSlug="acme-ltd" action={action} variant="test" />)
 
     type('hello')
@@ -126,6 +131,12 @@ describe("Kindy's composer", () => {
 
     expect(await screen.findByText(/Kindy is writing/)).toBeVisible()
     expect(screen.getByRole('button', { name: /Send to Kindy/ })).toBeDisabled()
+
+    // And then let it land. A transition left pending outlives this test's
+    // DOM: React keeps it queued, and the next test's state updates go into
+    // that queue instead of onto the screen, which reads as the composer
+    // being broken in whichever test happens to run next.
+    await act(async () => land({ status: 'nothing-open', question: 'hello' }))
   })
 })
 
