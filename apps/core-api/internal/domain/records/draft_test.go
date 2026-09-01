@@ -1,6 +1,7 @@
 package records
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -238,6 +239,32 @@ func TestEveryColumnIsEitherFilledOrLeftWithAReason(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The sentence a person reads above the decision counts what is there, and
+// never claims the entry is finished.
+func TestTheExplanationCountsBothHalvesAndReadsAsEnglish(t *testing.T) {
+	ropa, _ := RegisterFor("create_ropa")
+
+	one := DraftFromFacts(ropa, []Fact{fact("lawful_bases", "contract")}).Explanation(ropa)
+	if want := "1 column is filled"; !contains(one, want) {
+		t.Fatalf("got %q, want it to contain %q", one, want)
+	}
+	if want := "5 columns are left"; !contains(one, want) {
+		t.Fatalf("got %q, want it to contain %q", one, want)
+	}
+	if !contains(one, ropa.Label) {
+		t.Fatalf("got %q, which does not name the register it writes to", one)
+	}
+
+	none := DraftFromFacts(ropa, nil).Explanation(ropa)
+	if want := "0 columns are filled"; !contains(none, want) {
+		t.Fatalf("got %q, want it to contain %q", none, want)
+	}
+}
+
+func contains(haystack, needle string) bool {
+	return len(haystack) >= len(needle) && strings.Contains(haystack, needle)
 }
 
 // A register nothing creates (today: `review`) drafts nothing at all, so

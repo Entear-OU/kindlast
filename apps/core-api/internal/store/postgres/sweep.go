@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/records"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/domain/sweep"
 )
 
@@ -325,14 +327,14 @@ func emitSignal(ctx context.Context, tx pgx.Tx, profile sweep.Profile, signal sw
 // somebody can actually read: `raise log` went to the Postgres log, where
 // nobody operating this product is looking.
 func runAnalyst(ctx context.Context, tx pgx.Tx, logger *slog.Logger) (int32, error) {
-	var profileID string
+	var profileID, orgID string
 	var dataCategories []string
 	err := tx.QueryRow(ctx, `
-		select id::text, data_categories
+		select id::text, org_id::text, data_categories
 		  from compliance_profiles
 		 order by created_at desc
 		 limit 1
-	`).Scan(&profileID, &dataCategories)
+	`).Scan(&profileID, &orgID, &dataCategories)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}
@@ -341,6 +343,14 @@ func runAnalyst(ctx context.Context, tx pgx.Tx, logger *slog.Logger) (int32, err
 	}
 
 	signals, err := openSignalsToAnalyse(ctx, tx, profileID)
+	if err != nil {
+		return 0, err
+	}
+
+	// Once for the sweep rather than once per finding: the facts are the
+	// organisation's, they do not change inside this transaction, and a sweep
+	// converting forty signals would otherwise ask forty times.
+	facts, err := draftableFacts(ctx, tx, orgID)
 	if err != nil {
 		return 0, err
 	}
@@ -363,6 +373,9 @@ func runAnalyst(ctx context.Context, tx pgx.Tx, logger *slog.Logger) (int32, err
 
 		finding := sweep.Convert(signal.signal, obligation, dataCategories)
 		if err := writeFinding(ctx, tx, profileID, signal, obligation.ID, finding); err != nil {
+			return 0, err
+		}
+		if err := draftPayload(ctx, tx, logger, signal, finding.ActionType, facts); err != nil {
 			return 0, err
 		}
 		converted++
@@ -465,6 +478,24 @@ func citedObligation(ctx context.Context, tx pgx.Tx, slug string) (sweep.CitedOb
 // are `after update of status` and gated on the transition. Records are never
 // created retroactively for decisions taken before the obligation was
 // classified, which is the safe direction to be wrong in.
+//
+// # AND `metadata` MERGES RATHER THAN REPLACES, WHICH IS A FIX (ENT-287)
+//
+// This upsert used to set `metadata = excluded.metadata`, and
+// `excluded.metadata` is built here out of exactly three keys: the signal's
+// kind, its deduplication key and its own metadata. Everything else a finding
+// had accumulated under `metadata` was therefore deleted by the next sweep.
+//
+// That was not theoretical and it was not cosmetic. `metadata.payload` is the
+// record an approval creates (00036) and `metadata.approval_plan` is the
+// provenance a person reads before approving (ENT-261). Both are written by
+// other code paths, hours or days after the finding was raised, and both were
+// silently erased by the next scheduled sweep, which is a customer's prepared
+// record disappearing with nobody told.
+//
+// So the three signal keys refresh and everything else is preserved. Written
+// as `existing || excluded` rather than the other way round because the
+// excluded row is the fresh one and must win for the keys it carries.
 func writeFinding(
 	ctx context.Context, tx pgx.Tx, profileID string,
 	signal analysable, obligationID string, finding sweep.Finding,
@@ -493,7 +524,7 @@ func writeFinding(
 			citation_url          = excluded.citation_url,
 			supporting_context    = excluded.supporting_context,
 			action_type           = excluded.action_type,
-			metadata              = excluded.metadata,
+			metadata              = coalesce(findings.metadata, '{}'::jsonb) || excluded.metadata,
 			updated_at            = now()
 	`,
 		profileID, signal.orgID, signal.signal.ID, obligationID, signal.slug,
@@ -505,4 +536,174 @@ func writeFinding(
 		return fmt.Errorf("postgres: writing a finding: %w", err)
 	}
 	return nil
+}
+
+// The draft the sweep leaves on a finding (ENT-287).
+//
+// # WHY THE DRAFT IS WRITTEN HERE AND NOT WHEN SOMEBODY APPROVES
+//
+// Approving a `create_ropa` finding creates a `processing_activities` row out
+// of `metadata.payload`, and until something puts a payload there it creates a
+// row with a name taken from the finding and every other column empty. ENT-261
+// built the path that fills it, and it only runs when a person presses "what
+// approving will do", so a finding nobody explains is approved into the empty
+// row.
+//
+// Drafting at execution instead was rejected: the Executor runs behind the
+// event boundary, so a person would be approving an artefact nobody has read,
+// and a refusal there has nowhere to go. `findings.CheckReceipt` and
+// `findings.RequiresReview` both moved to the approval for that reason.
+//
+// # WHAT IT WILL NOT OVERWRITE, WHICH IS THE PART TO GET RIGHT
+//
+// Three guards, in the predicate rather than in Go, so a concurrent write
+// loses the race rather than the row:
+//
+//	an existing payload    a person's or the Hands' proposal is theirs. This
+//	                       fills an empty payload and never edits one.
+//	an existing plan       same reasoning, one key over: a plan is what
+//	                       somebody has already been shown.
+//	an enqueued execution  `ErrAlreadyEnqueued`'s argument exactly (00036,
+//	                       store/postgres/hands.go). The payload stops being a
+//	                       proposal the moment something is going to act on it,
+//	                       and a sweep running a second later must not rewrite
+//	                       what a person approved.
+//
+// The status test is the console's own rule (`awaitingADecision`): a finding
+// that has been approved or rejected is a decision that was taken, and its
+// payload is a record of what was decided rather than a proposal.
+//
+// # AND IT IS VALIDATED, EVEN THOUGH IT IS DETERMINISTIC
+//
+// `ValidatePrepared` is the invariant `hands.go` describes: no finding's
+// payload carries a field the register does not have or a value attributed to
+// a fact this organisation never recorded, WHOEVER wrote it. A deterministic
+// drafter is easier to trust than a model and that is not a reason to exempt
+// it, because the thing being protected is the record rather than the writer.
+// A draft that fails is skipped with a warning and the sweep carries on: a
+// finding with no payload is the state we are improving on, not a reason to
+// fail the sweep that raised it.
+func draftPayload(
+	ctx context.Context, tx pgx.Tx, logger *slog.Logger,
+	signal analysable, actionType string, facts []records.Fact,
+) error {
+	register, creates := records.RegisterFor(actionType)
+	if !creates {
+		// `review`, which is most findings: approving records the decision and
+		// creates nothing, so there is nothing to propose and nothing about
+		// this finding changes.
+		return nil
+	}
+
+	draft := records.DraftFromFacts(register, facts)
+	if draft.Empty() {
+		// Nothing could be filled honestly. Deliberately not written as a plan
+		// of six empty columns: that is a proposal to create an empty record,
+		// and the person is better served by the Hands, which can reach what a
+		// mapping cannot.
+		return nil
+	}
+
+	known := make(map[string]bool, len(facts))
+	for _, f := range facts {
+		known[f.Key] = true
+	}
+	if err := records.ValidatePrepared(register, draft.Fields, known); err != nil {
+		logger.WarnContext(ctx, "skipped a drafted payload the validator refused",
+			"signal_id", signal.signal.ID, "action_type", actionType, "error", err)
+		return nil
+	}
+
+	payload := map[string]any{}
+	for _, f := range draft.Fields {
+		field, known := register.Field(f.Name)
+		if !known {
+			// Unreachable: the validator above refuses a field the register
+			// does not have. Skipped rather than written, for the reason
+			// `PrepareRecord` gives: the one thing worse than refusing an
+			// unknown field is writing it into a customer's proposed record.
+			continue
+		}
+		payload[f.Name] = payloadValue(field, f)
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("postgres: encoding a drafted payload: %w", err)
+	}
+
+	left := make([]map[string]any, 0, len(draft.LeftForYou))
+	for _, l := range draft.LeftForYou {
+		left = append(left, map[string]any{"name": l.Name, "why": l.Why})
+	}
+	planJSON, err := json.Marshal(map[string]any{
+		"prepared_at": time.Now().UTC().Format(time.RFC3339),
+		// WHICH WRITER PRODUCED THIS, WHICH A PERSON IS ENTITLED TO KNOW.
+		// A plan a model wrote and a plan an organisation's own onboarding
+		// answers wrote are not owed the same trust, and a surface that
+		// rendered them identically would be deciding that for the customer.
+		"source":       records.DraftSource,
+		"explanation":  draft.Explanation(register),
+		"fields":       provenanceFields(draft.Fields),
+		"left_for_you": left,
+	})
+	if err != nil {
+		return fmt.Errorf("postgres: encoding a drafted plan: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		update findings f
+		   set metadata = coalesce(f.metadata, '{}'::jsonb)
+		                  || jsonb_build_object('payload', $2::jsonb, 'approval_plan', $3::jsonb)
+		 where f.watcher_finding_id = $1::uuid
+		   and f.status not in ('approved', 'rejected')
+		   and coalesce(f.metadata -> 'payload', '{}'::jsonb) = '{}'::jsonb
+		   and f.metadata -> 'approval_plan' is null
+		   and not exists (
+		         select 1 from executor_jobs j where j.finding_id = f.id
+		       )
+	`, signal.signal.ID, payloadJSON, planJSON); err != nil {
+		return fmt.Errorf("postgres: writing a drafted payload: %w", err)
+	}
+	return nil
+}
+
+// draftableFacts reads what the organisation has told us about itself, as the
+// drafter takes it.
+//
+// `org_id` in the predicate, not left to the policy, for the reason
+// `watchedFacts` gives at length: the producer's select policy on
+// `org_profile_facts` is `using (true)` (00023), so the scoping here is the
+// query's. A sweep that read every organisation's facts would draft one
+// customer's record out of another's answers, which is the worst failure this
+// file could have.
+//
+// Open facts only (`valid_to is null`): a fact that has been superseded is
+// what the organisation used to believe, and a record drafted from it would be
+// current in every way except the one that matters.
+func draftableFacts(ctx context.Context, tx pgx.Tx, orgID string) ([]records.Fact, error) {
+	rows, err := tx.Query(ctx, `
+		select key, value::text
+		  from org_profile_facts
+		 where org_id = $1::uuid and valid_to is null
+		 order by key
+	`, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: reading the facts to draft from: %w", err)
+	}
+	defer rows.Close()
+
+	var facts []records.Fact
+	for rows.Next() {
+		var key, valueJSON string
+		if err := rows.Scan(&key, &valueJSON); err != nil {
+			return nil, fmt.Errorf("postgres: reading a fact to draft from: %w", err)
+		}
+		// `decodeValues` is the Hands' decoder (store/postgres/hands.go), used
+		// here rather than a second one: a text fact is one value, a list fact
+		// is several, and anything else decodes to nothing rather than to its
+		// JSON spelling. A number rendered as "4" into a ROPA column would be
+		// a value the plan claims was recorded in that form, and it was not.
+		facts = append(facts, records.Fact{Key: key, Values: decodeValues([]byte(valueJSON))})
+	}
+	return facts, rows.Err()
 }
