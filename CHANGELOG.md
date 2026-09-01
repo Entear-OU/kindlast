@@ -12,6 +12,31 @@ what they have to do about it, which no commit subject knows.
 
 ## [Unreleased]
 
+### Added
+
+- **A finding now arrives carrying the record its approval would create**
+  (ENT-287). Approving a finding whose action is `create_ropa` builds a
+  processing activity out of the finding's proposed payload, and until now
+  nothing wrote that payload unless somebody first pressed "what approving will
+  do" on the finding page. Approving without doing so created an entry named
+  after the finding with every other column empty.
+
+  The sweep now drafts the payload as it raises the finding, from what the
+  organisation itself recorded during onboarding: the lawful basis, the
+  categories of personal data and the vendors who handle it become the entry's
+  legal basis, data categories and recipients. Every value names the fact it
+  came from, and a column no recorded fact supports is left empty with a
+  sentence saying why rather than filled with something plausible. The name,
+  the purpose and the retention period are always left, because no fact states
+  them and a compliance record that reads as complete and is not is worse than
+  one that is honestly partial.
+
+  Nothing about the decision changes. The draft is a proposal on the finding,
+  it is never written to a register without an approval, the audit row still
+  names the person who approved, and the created record still points back at
+  the finding. A `review` finding is untouched: it carries no proposal, because
+  approving it still creates nothing.
+
 ### Changed
 
 - **The model settings page now opens with a toggle rather than a form**
@@ -69,6 +94,15 @@ what they have to do about it, which no commit subject knows.
   Intelligence at all, set it empty explicitly.
 
 ### Fixed
+
+- **A sweep no longer erases a prepared record** (ENT-287). Each run of the
+  Watcher and the Analyst refreshes the findings it raised before, and the
+  refresh replaced the finding's whole metadata rather than the part it owns.
+  Anything prepared since the finding was raised, which is the proposed record
+  and the note of which value came from which answer, was silently deleted by
+  the next scheduled sweep. Somebody who prepared a record in the morning and
+  approved it in the afternoon could get the empty entry with nothing to say
+  why. The sweep now refreshes only what it wrote and leaves the rest alone.
 
 - **The model settings fields no longer keep a typed value after the change is
   stored** (ENT-281). The provider, endpoint and model inputs are seeded from
