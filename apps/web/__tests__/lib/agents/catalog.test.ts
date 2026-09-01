@@ -35,8 +35,16 @@ const SKILLS_DIR = path.resolve(
   '../../../../intelligence/src/kindlast_intelligence/skills',
 )
 
-/** The four, in the order work flows through them. */
-const PIPELINE_ORDER = ['watcher', 'analyst', 'messenger', 'hands']
+/**
+ * Kindy, then the four in the order work flows through them.
+ *
+ * KINDY IS AT THE HEAD AND IS NOT A FIFTH STAGE (ENT-285). It is the one a
+ * person talks to and it routes to the other four, so it sits over the
+ * pipeline rather than in it. The four keep their order underneath, which is
+ * the property this constant was written to hold: a catalogue that drew the
+ * Messenger before the Analyst would describe a product that does not exist.
+ */
+const PIPELINE_ORDER = ['kindy', 'watcher', 'analyst', 'messenger', 'hands']
 
 const EM_DASH = '—'
 const EN_DASH = '–'
@@ -63,10 +71,12 @@ function pythonTuple(source: string, name: string): string[] {
 }
 
 describe('the agent catalogue (ENT-232)', () => {
-  it('names the four agents in the order work flows through them', () => {
-    // Order is meaning here, not layout. The rail draws them as a pipeline, so
-    // a catalogue in a different order would draw the Messenger before the
-    // Analyst and describe a product that does not exist.
+  it('names the agents with Kindy first and the pipeline in its order', () => {
+    // Order is meaning here, not layout. The four are a pipeline, so a
+    // catalogue in a different order would draw the Messenger before the
+    // Analyst and describe a product that does not exist. Kindy is at the head
+    // because it is the one you talk to and it routes to the four, which is a
+    // different relationship from being the first of them.
     expect(AGENTS.map((a) => a.slug)).toEqual(PIPELINE_ORDER)
   })
 
@@ -132,7 +142,22 @@ describe('the agent catalogue (ENT-232)', () => {
     // Back to zero as of ENT-280, having been the Hands and then the
     // Messenger. The state stays rendered for the next agent that gets half
     // built, which twice now has been the honest label for a real week.
-    expect(AGENTS.filter((a) => a.status === 'partly-working')).toHaveLength(0)
+    //
+    // AND IT IS KINDY'S NOW, AS OF ENT-285, WHICH IS THE THIRD TIME. The
+    // comment above predicted "the next agent added to the rail before its
+    // skill exists"; this is the mirror image, a skill added before anything
+    // can call it, and the label is the same one for the same reason.
+    // `kindy.orchestrate` runs under a budget, an allow-list, an offered
+    // subject set and a check on the asking person's own scopes, and leaves an
+    // `agent_runs` row. No RPC reaches it, so the composer still asks the
+    // Analyst directly and no answer anybody has had was routed by Kindy.
+    //
+    // Named rather than counted, because the failure worth catching is the
+    // wrong agent being in this state, not the number of them. A count would
+    // pass the day somebody quietly demoted the Analyst.
+    expect(
+      AGENTS.filter((a) => a.status === 'partly-working').map((a) => a.slug),
+    ).toEqual(['kindy'])
   })
 
   it('says what remains for every agent that is not finished', () => {

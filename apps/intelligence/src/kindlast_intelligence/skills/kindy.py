@@ -130,7 +130,21 @@ VERSION = "1.0.0"
 # four exist elsewhere on the surface and are unreachable from here. The fifth
 # exists nowhere.
 ASK_ANALYST = "ask_analyst"
-ALLOWED_TOOLS: tuple[str, ...] = (ASK_ANALYST,)
+
+# THE TUPLE HOLDS A LITERAL RATHER THAN `ASK_ANALYST`, AND THAT IS DELIBERATE.
+#
+# The console repeats this allow-list to a customer, because there is no RPC it
+# could ask over, and `apps/web/__tests__/lib/agents/catalog.test.ts` keeps the
+# two in step by READING THIS LINE WITH A REGEX. It cannot resolve a Python
+# name, so a tuple built from constants parses as empty, and the console would
+# then be made to claim this agent holds no tools at all. That is the failure
+# the catalogue calls the worst kind of wrong: a page understating what an
+# agent may do to somebody's data.
+#
+# So the declaration stays literal, the way every other skill's does, and
+# `test_the_allow_list_is_exactly_what_is_wired` asserts the constant and the
+# tuple agree so the small duplication cannot drift.
+ALLOWED_TOOLS: tuple[str, ...] = ("ask_analyst",)
 
 # WHAT THE ASKING PERSON WOULD HAVE NEEDED TO MAKE THIS CALL THEMSELVES.
 #

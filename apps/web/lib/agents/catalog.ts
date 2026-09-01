@@ -1,10 +1,15 @@
 /**
- * The four agents, as the console is allowed to describe them (ENT-232).
+ * The agents, as the console is allowed to describe them (ENT-232).
  *
  * §26.5 defines an agent as a skill plus a tool allow-list plus a workflow,
  * addressable by name in the rail. They arrived at different times and one is
  * still missing a half, and this file is where the console keeps track of
  * which is which.
+ *
+ * Five since ENT-285: Kindy, and the four it routes to. Kindy is not a fifth
+ * stage of the pipeline, which is why it sits at the head of the list rather
+ * than the end. It is the one a person talks to, and the four underneath it
+ * still run in the order they always did.
  *
  * # WHY THIS IS NOT FOUR CHEERFUL CARDS
  *
@@ -19,6 +24,9 @@
  * that a human can check it. An agent rail is a claim about what has looked at
  * your compliance. So each of the four carries what is true of it alone:
  *
+ *   Kindy          runs as a skill (ENT-285): it chooses which agent answers
+ *                  and about which finding. Nothing calls it yet, so the
+ *                  panel still asks the Analyst directly.
  *   The Watcher    runs, but as fixed rules rather than a skill. No tool list,
  *                  no run record.
  *   The Analyst    runs as a skill, under a budget and a citation validator,
@@ -133,6 +141,61 @@ export interface Agent {
  * the Analyst has decided anything.
  */
 export const AGENTS: readonly Agent[] = [
+  {
+    slug: 'kindy',
+    name: 'Kindy',
+    does: 'Takes what you ask, works out which finding you mean, and puts it to the agent that can answer.',
+    // `partly-working` AS OF ENT-285, AND THE SKILL HALF IS THE HALF THAT
+    // LANDED.
+    //
+    // The rail has been Kindy's card since ENT-222 and said, in its own
+    // comment, that the orchestrator did not exist as a skill and that when it
+    // landed its status would arrive from this catalogue. This is that entry.
+    //
+    // What exists is `kindy.orchestrate`: a skill with one tool, a budget
+    // shared with whatever it calls, an offered subject set it may not name a
+    // finding outside, and a check that refuses a tool the person asking could
+    // not have used themselves. It leaves an `agent_runs` row whatever the
+    // outcome.
+    //
+    // What does not exist is the caller. There is no RPC a browser can reach
+    // that runs it, so the composer still asks the Analyst directly about the
+    // finding you have open (ENT-284) and no answer anybody has had was routed
+    // by Kindy. Calling that "Working" would be the exact failure this file was
+    // written after, and worse here than for the Messenger or the Hands before
+    // it: this is the agent a person thinks they are talking to, so the claim
+    // would be about the conversation they just had.
+    //
+    // It is first because it is the one you talk to and it routes to the other
+    // four, not because work flows out of it into them. The pipeline underneath
+    // is unchanged and still runs in its own order.
+    status: 'partly-working',
+    runs: 'Nothing runs it yet. What you type in the panel still goes straight to the Analyst.',
+    effects:
+      'It chooses which agent answers and which finding they answer about, and it writes nothing itself. It can only ask about findings you can already see, and it holds no tool that sends, approves or changes a record.',
+    remaining:
+      'The skill is built and nothing calls it, so no answer you have had came through it. It can also reach only the Analyst so far, because a tool that sends is a different risk from a tool that reads.',
+    skills: [
+      {
+        module: 'kindy',
+        name: 'kindy.orchestrate',
+        version: '1.0.0',
+        // ONE TOOL, AND IT IS ANOTHER AGENT RATHER THAN AN RPC (ENT-285).
+        //
+        // This list is where a customer checks the claim that the thing they
+        // talk to cannot act on their behalf. `ask_analyst` puts their question
+        // to the Analyst about one finding, and the Analyst writes nothing
+        // either. There is deliberately nothing here that sends, approves,
+        // raises a signal or prepares a record: all four exist elsewhere in
+        // this catalogue and none is reachable from here.
+        //
+        // The grammar deliberately lets the model ASK for one of them, so the
+        // refusal lands in `agent_runs` as a real event rather than being made
+        // inexpressible and therefore invisible.
+        tools: ['ask_analyst'],
+      },
+    ],
+  },
   {
     slug: 'watcher',
     name: 'The Watcher',
