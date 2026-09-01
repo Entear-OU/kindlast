@@ -14,6 +14,23 @@ what they have to do about it, which no commit subject knows.
 
 ### Changed
 
+- **The model settings page now opens with a toggle rather than a form**
+  (ENT-281). On a deployment that permits hosted providers, an owner used to
+  arrive at the provider, endpoint, model and API key fields already on screen,
+  which read as a form waiting to be filled in rather than as a decision to be
+  taken. There is now a single switch, on by default, saying the organisation
+  uses the model the deployment runs. Turning it off reveals the fields;
+  turning it back on reverts to the bundled model.
+
+  Nothing about the decision itself has changed. The consequence notice still
+  comes from core-api, still appears above the fields rather than under the
+  button, and the acknowledgement is still required with no default, so
+  `UseHostedModel` still refuses a request from somebody who was not shown what
+  it does. The toggle governs disclosure only: revealing the fields reaches no
+  RPC and writes no audit row. Deployments with `KINDLAST_BYOK_PROVIDERS`
+  unset, which is the default, see the same explanation as before and no
+  switch.
+
 - **A deployment can point at a model it runs itself, without the bundled one**
   (ENT-282). `KINDLAST_MODEL_ENDPOINT` is now overridable. Set it in
   `deploy/.env` to any OpenAI-compatible endpoint (a llama.cpp, vLLM or Ollama
@@ -52,6 +69,17 @@ what they have to do about it, which no commit subject knows.
   Intelligence at all, set it empty explicitly.
 
 ### Fixed
+
+- **The model settings fields no longer keep a typed value after the change is
+  stored** (ENT-281). The provider, endpoint and model inputs are seeded from
+  the stored setting, and a field somebody had typed into kept what they typed
+  across the revalidate that follows a successful change. So a mistyped
+  endpoint corrected by core-api, or a value normalised on the way in, went on
+  being displayed while the record said something else, and the browser console
+  carried a Base UI warning about a default changing under an uncontrolled
+  field. The form is now keyed on the stored setting, so it re-seeds when the
+  record changes and leaves what was typed alone when a submit is refused. The
+  bug predates the toggle and affected anybody who completed a provider change.
 
 - **The self-hosting guide now says the model profile needs
   `KINDLAST_INTELLIGENCE_URL`.** The compose file has always defaulted it to
