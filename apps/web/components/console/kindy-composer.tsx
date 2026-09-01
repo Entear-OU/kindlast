@@ -247,7 +247,10 @@ function Reply({
 
     case 'nothing-open':
       return (
-        <p data-testid="kindy-reply" className={`${bubble} text-muted-foreground`}>
+        <p
+          data-testid="kindy-reply"
+          className={`${bubble} text-muted-foreground`}
+        >
           Nothing is open to talk about yet. When something lands in Activity,
           ask me about it here.
         </p>
@@ -255,7 +258,10 @@ function Reply({
 
     case 'unavailable':
       return (
-        <p data-testid="kindy-reply" className={`${bubble} text-muted-foreground`}>
+        <p
+          data-testid="kindy-reply"
+          className={`${bubble} text-muted-foreground`}
+        >
           This deployment runs no model, so there is nobody behind this box. An
           operator brings one up with the model profile.
         </p>
@@ -263,7 +269,10 @@ function Reply({
 
     case 'error':
       return (
-        <p data-testid="kindy-reply" className={`${bubble} text-muted-foreground`}>
+        <p
+          data-testid="kindy-reply"
+          className={`${bubble} text-muted-foreground`}
+        >
           {state.message}
         </p>
       )

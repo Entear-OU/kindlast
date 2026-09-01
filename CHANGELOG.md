@@ -33,6 +33,20 @@ what they have to do about it, which no commit subject knows.
 
 ### Fixed
 
+- **Kindy now answers about the finding you are reading** (ENT-284). The
+  message box on Kindy's card sent only the organisation, so the answer was
+  always about the newest finding still awaiting a decision, whatever was on
+  screen. Opening one finding and asking why it applied returned an answer
+  about another, and that is the hardest kind of wrong answer to catch: the
+  citation it carries resolves, so checking the answer against the regulation
+  does not reveal that it is about something else.
+
+  Asking from a finding page now asks about that finding. Asking from anywhere
+  else offers the findings still awaiting a decision and waits for you to pick
+  one, rather than choosing for you, and every reply names its subject above
+  the answer instead of underneath it. An organisation with nothing pending
+  gets the same reply as before. Nothing to do on upgrade.
+
 - **The model settings fields no longer keep a typed value after the change is
   stored** (ENT-281). The provider, endpoint and model inputs are seeded from
   the stored setting, and a field somebody had typed into kept what they typed
