@@ -179,7 +179,30 @@ class Budget(BaseModel):
 
         Called with nothing when there was no queue, which is the truthful
         reading of a run created at the moment it starts.
+
+        # ADMITTING TWICE IS A NO-OP, AND THAT IS NOT TIDINESS (ENT-285)
+
+        An orchestrated run shares ONE budget between the orchestrator and
+        every subagent it calls, because the alternative renews a budget per
+        subagent and an orchestrated ask then costs several times an ordinary
+        one while every limit reads as respected.
+
+        Every runner calls `admit`. So without this guard, passing one budget
+        into a subagent restamped `started_monotonic` on every subagent call,
+        which is the instant the wall clock measures from: `max_seconds` was
+        silently disabled for exactly the runs that most need it. It would also
+        have overwritten `queue_seconds` with the subagent's own wait, which is
+        zero, so the record would have reported no queue for a run that waited.
+
+        Returning rather than raising, because a second admission is not a
+        caller doing something wrong. It is the shape of a nested run, and the
+        truthful reading is that the work started when it started. Every
+        existing caller admits exactly once and is unaffected, and `renew`
+        produces a budget with `started_monotonic` unset, so a template is too.
         """
+        if self.started_monotonic is not None:
+            return
+
         if queued_at is not None:
             waited = (datetime.now(timezone.utc) - queued_at).total_seconds()
             self.queue_seconds = max(0.0, waited)

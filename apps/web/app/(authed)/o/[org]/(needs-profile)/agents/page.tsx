@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 }
 
 /**
- * The four agents (ENT-232).
+ * The agents (ENT-232). Kindy, and the four it routes to.
  *
  * The rail is the index on a wide screen, so this page exists for the two
  * places the rail is not: a phone, where the rail sits below the fold, and the
@@ -52,7 +52,8 @@ export default async function AgentsPage({
         Your agents
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Four of them, working in order. Each one says when it runs and what it
+        Kindy is the one you talk to, and it passes what you ask to the four
+        below it, which work in order. Each one says when it runs and what it
         can change, so you can tell what has looked at your compliance and what
         has not.
       </p>

@@ -95,7 +95,7 @@ def answer_question(
         # error. A blank question is the same shape of problem: there is nothing
         # to answer, and spending a completion to discover that is worse than
         # saying so.
-        refusal = _refuse_question(question)
+        refusal = refuse_question(question)
         if refusal:
             run.outcome = Outcome.REFUSED
             run.outcome_detail = refusal
@@ -161,11 +161,18 @@ def answer_question(
         return finish_run(run)
 
 
-def _refuse_question(question: str) -> str:
+def refuse_question(question: str) -> str:
     """Why this question cannot be put to a model, or an empty string.
 
     Written for the person who asked, because unlike every other refusal in this
     package somebody is sitting in front of this one waiting for it.
+
+    PUBLIC SINCE ENT-285, because the orchestrator has to make the same
+    judgement before its own first model call. Shared rather than copied for
+    the reason ENT-248 made a single refusing-critic seam an acceptance
+    criterion: two call sites is how the second one ends up with its own limit.
+    And an orchestrated ask that accepted a question a direct ask refuses would
+    be a way around the limit rather than a second route to the same place.
     """
     if not question.strip():
         return "there was no question to answer"
