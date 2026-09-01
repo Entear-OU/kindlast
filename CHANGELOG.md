@@ -81,6 +81,20 @@ what they have to do about it, which no commit subject knows.
   record changes and leaves what was typed alone when a submit is refused. The
   bug predates the toggle and affected anybody who completed a provider change.
 
+- **The console no longer scrolls behind its own chrome on a long page**
+  (ENT-283). The shell is exactly one viewport tall and the middle column
+  scrolls inside it, so the document itself should never move. On a long page,
+  most visibly a finding carrying a full narrative, it moved anyway: the whole
+  shell lifted off the top of the window and left a white band beneath it,
+  taking the navigation and the agents panel out of view with it. The cause
+  was a single screen-reader-only label. Those are absolutely positioned with
+  no offsets, so one sits wherever it falls, and with nothing in the shell
+  establishing a containing block it resolved against the page rather than
+  against the column it was written inside. An invisible pixel far down the
+  content was setting the height of the document. The scrolling column and the
+  agents panel now contain what they scroll. Nothing to do on upgrade, and no
+  change to what any page shows.
+
 - **The self-hosting guide now says the model profile needs
   `KINDLAST_INTELLIGENCE_URL`.** The compose file has always defaulted it to
   empty on purpose (a profile cannot set a variable on a service outside it,
