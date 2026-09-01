@@ -4,6 +4,9 @@
  * Extracted from chrome.tsx when the sidebar replaced the header (ENT-222), so
  * the shell and anything else in the console draw the same one.
  *
+ * Drawn by the console shell and by the auth shell (`app/(auth)/layout.tsx`),
+ * which sits in the same key on the same ground.
+ *
  * Still not shared with `app/(public)/layout.tsx`: the public header sits in a
  * different visual key, on an eggshell ground at a larger size, and a single
  * component serving both would grow props for the differences rather than
