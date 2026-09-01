@@ -75,8 +75,18 @@ export function ConsoleShell({
 
           A div, not a <main>: every page already renders its own, and nesting
           landmarks leaves a screen reader two "main" regions to choose
-          between. */}
-      <div className="flex h-full min-h-0 flex-col overflow-y-auto">
+          between.
+
+          `relative` is load-bearing (ENT-283). Tailwind's `sr-only` is
+          `position: absolute` with no offsets, so a screen-reader-only label
+          sits at its static position. With nothing here positioned, its
+          containing block was the initial containing block rather than this
+          column, so a label far down a long page resolved to a y outside the
+          viewport-height shell and took the document's scrollable area with
+          it: the finding page scrolled by 485px, lifting the whole
+          `h-[100dvh]` shell and leaving a white band. A column that scrolls
+          has to contain what it scrolls. */}
+      <div className="relative flex h-full min-h-0 flex-col overflow-y-auto">
         <MobileHeader orgSlug={orgSlug} orgName={orgName} />
 
         <div className="flex-1">{children}</div>
@@ -101,8 +111,13 @@ export function ConsoleShell({
       <div className="hidden h-full min-h-0 p-3 pl-0 xl:block">
         {/* A touch deeper than --muted, which on the white sheet read as
             white and lost the panel: the inset has to be visibly a panel
-            for the white cards inside it to read as cards. */}
-        <div className="h-full min-h-0 overflow-hidden rounded-2xl bg-[oklch(0.951_0.005_84)]">
+            for the white cards inside it to read as cards.
+
+            `relative` for the same reason as the middle column: the rail
+            scrolls internally and carries screen-reader-only labels of its
+            own, and clipping a box does not stop an absolutely positioned
+            descendant leaving it (ENT-283). */}
+        <div className="relative h-full min-h-0 overflow-hidden rounded-2xl bg-[oklch(0.951_0.005_84)]">
           <AgentRail
             orgSlug={orgSlug}
             activity={activity}

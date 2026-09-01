@@ -95,6 +95,20 @@ what they have to do about it, which no commit subject knows.
 
 ### Fixed
 
+- **Kindy now answers about the finding you are reading** (ENT-284). The
+  message box on Kindy's card sent only the organisation, so the answer was
+  always about the newest finding still awaiting a decision, whatever was on
+  screen. Opening one finding and asking why it applied returned an answer
+  about another, and that is the hardest kind of wrong answer to catch: the
+  citation it carries resolves, so checking the answer against the regulation
+  does not reveal that it is about something else.
+
+  Asking from a finding page now asks about that finding. Asking from anywhere
+  else offers the findings still awaiting a decision and waits for you to pick
+  one, rather than choosing for you, and every reply names its subject above
+  the answer instead of underneath it. An organisation with nothing pending
+  gets the same reply as before. Nothing to do on upgrade.
+
 - **A sweep no longer erases a prepared record** (ENT-287). Each run of the
   Watcher and the Analyst refreshes the findings it raised before, and the
   refresh replaced the finding's whole metadata rather than the part it owns.
@@ -114,6 +128,20 @@ what they have to do about it, which no commit subject knows.
   field. The form is now keyed on the stored setting, so it re-seeds when the
   record changes and leaves what was typed alone when a submit is refused. The
   bug predates the toggle and affected anybody who completed a provider change.
+
+- **The console no longer scrolls behind its own chrome on a long page**
+  (ENT-283). The shell is exactly one viewport tall and the middle column
+  scrolls inside it, so the document itself should never move. On a long page,
+  most visibly a finding carrying a full narrative, it moved anyway: the whole
+  shell lifted off the top of the window and left a white band beneath it,
+  taking the navigation and the agents panel out of view with it. The cause
+  was a single screen-reader-only label. Those are absolutely positioned with
+  no offsets, so one sits wherever it falls, and with nothing in the shell
+  establishing a containing block it resolved against the page rather than
+  against the column it was written inside. An invisible pixel far down the
+  content was setting the height of the document. The scrolling column and the
+  agents panel now contain what they scroll. Nothing to do on upgrade, and no
+  change to what any page shows.
 
 - **The self-hosting guide now says the model profile needs
   `KINDLAST_INTELLIGENCE_URL`.** The compose file has always defaulted it to
