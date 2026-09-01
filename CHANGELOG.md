@@ -33,6 +33,19 @@ what they have to do about it, which no commit subject knows.
 
 ### Fixed
 
+- **The model settings fields no longer keep a typed value after the change is
+  stored** (ENT-281). The provider, endpoint and model inputs are seeded from
+  the stored setting, and a field somebody had typed into kept what they typed
+  across the revalidate that follows a successful change. So a mistyped
+  endpoint corrected by core-api, or a value normalised on the way in, went on
+  being displayed while the record said something else, and the browser console
+  carried a Base UI warning about a default changing under an uncontrolled
+  field. The form is now keyed on the stored setting, so it re-seeds when the
+  record changes and leaves what was typed alone when a submit is refused. The
+  bug predates the toggle and affected anybody who completed a provider change.
+
+### Fixed
+
 - **The self-hosting guide now says the model profile needs
   `KINDLAST_INTELLIGENCE_URL`.** The compose file has always defaulted it to
   empty on purpose (a profile cannot set a variable on a service outside it,

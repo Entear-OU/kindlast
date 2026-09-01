@@ -275,3 +275,101 @@ describe('ModelForm, the local-model toggle', () => {
     expect(screen.getByText(/Only an owner can change/i)).toBeTruthy()
   })
 })
+
+/**
+ * Re-seeding the fields after the setting actually changes (ENT-281).
+ *
+ * The provider, endpoint and model inputs are uncontrolled and seeded from
+ * `defaultValue`. React keeps an uncontrolled input's value across a rerender,
+ * so once a submit succeeds and the page revalidates, the form goes on showing
+ * what was typed rather than what was stored, and Base UI warns that a default
+ * changed after initialisation. On a surface whose whole job is saying where
+ * the data goes, a field that disagrees with the record is the wrong bug to
+ * have.
+ */
+describe('ModelForm, after the stored setting changes', () => {
+  it('re-seeds a field the person had typed into, and warns about nothing', async () => {
+    const user = userEvent.setup()
+    // Base UI reports a default changing under an uncontrolled field through
+    // console.error, which is what surfaced in the dev overlay. Asserting the
+    // silence is what keeps the fix rather than the symptom.
+    const errors: unknown[][] = []
+    const spy = vi
+      .spyOn(console, 'error')
+      .mockImplementation((...args: unknown[]) => {
+        errors.push(args)
+      })
+
+    try {
+      const { rerender } = render(
+        <ModelForm slug="acme" view={view()} canManage />,
+      )
+
+      await user.click(
+        screen.getByRole('switch', { name: /model this deployment runs/i }),
+      )
+      // Typing is what makes the field dirty, and a dirty uncontrolled input
+      // keeps its value across a rerender. Without it this test passes against
+      // the bug.
+      await user.type(
+        screen.getByLabelText(/Endpoint/i),
+        'https://typo.example',
+      )
+
+      // What a successful UseHostedModel plus a revalidate looks like here.
+      rerender(
+        <ModelForm
+          slug="acme"
+          canManage
+          view={view({
+            setting: {
+              hosted: true,
+              provider: 'openai',
+              baseUrl: 'https://api.openai.com',
+              model: 'gpt-oss-120b',
+              credentialLastFour: '1234',
+              changedAt: '2026-09-01T12:00:00Z',
+            },
+          })}
+        />,
+      )
+
+      // The field agrees with the record. A page whose whole job is saying
+      // where the data goes must not show an endpoint that is not the stored
+      // one.
+      expect(
+        (screen.getByLabelText(/Endpoint/i) as HTMLInputElement).value,
+      ).toBe('https://api.openai.com')
+
+      const complaints = errors
+        .map((args) => String(args[0] ?? ''))
+        .filter((m) => /changing the default value state|uncontrolled/i.test(m))
+      expect(complaints).toEqual([])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('keeps what was typed when the setting did not change', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <ModelForm slug="acme" view={view()} canManage />,
+    )
+
+    await user.click(
+      screen.getByRole('switch', { name: /model this deployment runs/i }),
+    )
+    await user.type(
+      screen.getByLabelText(/Endpoint/i),
+      'https://api.openai.com',
+    )
+
+    // A refused submit leaves the setting alone, and retyping an endpoint
+    // because the acknowledgement was missed is its own small insult.
+    rerender(<ModelForm slug="acme" view={view()} canManage />)
+
+    expect((screen.getByLabelText(/Endpoint/i) as HTMLInputElement).value).toBe(
+      'https://api.openai.com',
+    )
+  })
+})

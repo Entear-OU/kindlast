@@ -71,6 +71,25 @@ export function ModelForm({
      hosted organisation sees the fields, because the thing they came to do is
      usually change the provider or rotate the key, not read the toggle. */
   const [revealed, setRevealed] = React.useState(hosted)
+
+  /* The identity of the stored decision, used to key the form below.
+     The provider, endpoint and model fields are uncontrolled and seeded from
+     `defaultValue`, and React keeps a field the person has typed into across a
+     rerender. So once a submit succeeds and the page revalidates, the form
+     goes on showing what was typed while the record says something else, and
+     Base UI reports the default changing underneath it. Remounting on a
+     changed setting re-seeds them from what was actually stored.
+
+     Keyed on the setting rather than on a counter so the reverse holds too: a
+     REFUSED submit changes nothing here, the key is stable, and nobody retypes
+     an endpoint because they missed the acknowledgement. */
+  const storedSetting = [
+    setting?.provider ?? '',
+    setting?.baseUrl ?? '',
+    setting?.model ?? '',
+    setting?.credentialLastFour ?? '',
+    setting?.changedAt ?? '',
+  ].join('|')
   const revertFormRef = React.useRef<HTMLFormElement>(null)
   const toggleLabelId = React.useId()
 
@@ -177,7 +196,11 @@ export function ModelForm({
           ) : null}
 
           {revealed ? (
-            <form action={host} className="max-w-xl space-y-4">
+            <form
+              key={storedSetting}
+              action={host}
+              className="max-w-xl space-y-4"
+            >
               <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4">
                 <h3 className="text-sm font-medium text-foreground">
                   What changes if you do this
