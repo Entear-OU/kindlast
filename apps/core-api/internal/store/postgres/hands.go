@@ -54,6 +54,11 @@ import (
 // it is that the connection this file holds cannot, and a future change here
 // that tried would fail loudly in every deployment rather than quietly in one.
 
+// HandsSource is what `approval_plan.source` says about a plan a Hands run
+// prepared. Its sibling is `records.DraftSource`, and see the write below for
+// why a reader is told which of the two it is looking at.
+const HandsSource = "hands"
+
 // ApprovalContext is everything one Hands run reasons over, for one finding.
 type ApprovalContext struct {
 	Finding  ApprovalFinding
@@ -361,6 +366,15 @@ func (a *AgentStore) PrepareRecord(
 
 	provenance := map[string]any{
 		"prepared_at": time.Now().UTC().Format(time.RFC3339),
+		// WHICH WRITER PRODUCED THIS PLAN (ENT-287).
+		//
+		// There are two now: a Hands run, and the sweep's deterministic draft
+		// from the organisation's own recorded facts (`domain/records/draft.go`).
+		// They write the same two keys and are read by the same surface, and a
+		// person's trust in "a model prepared this" and "your own onboarding
+		// answers prepared this" is not the same. Rendering them identically
+		// would decide that on the customer's behalf, so the plan says which.
+		"source":      HandsSource,
 		"explanation": plan.Explanation,
 		"fields":      provenanceFields(plan.Fields),
 		"left_for_you": func() []map[string]any {

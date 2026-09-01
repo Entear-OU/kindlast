@@ -215,6 +215,7 @@ func TestThePlanSaysWhichColumnsCameFromWhichFactAndWhichWereLeft(t *testing.T) 
 	}
 
 	var plan struct {
+		Source      string `json:"source"`
 		Explanation string `json:"explanation"`
 		Fields      []struct {
 			Name     string   `json:"name"`
@@ -232,6 +233,13 @@ func TestThePlanSaysWhichColumnsCameFromWhichFactAndWhichWereLeft(t *testing.T) 
 
 	if plan.Explanation == "" {
 		t.Error("the plan carries no explanation")
+	}
+	// WHICH WRITER PREPARED IT (ENT-287). The sweep drafts the same two keys
+	// deterministically from the organisation's own facts, so a reader that
+	// could not tell the two apart would be presenting a model's proposal and
+	// a customer's own answers as the same kind of claim.
+	if plan.Source != HandsSource {
+		t.Errorf("the plan says it was prepared by %q, want %q", plan.Source, HandsSource)
 	}
 	if len(plan.Fields) != 2 {
 		t.Fatalf("the plan records %d filled columns; want 2", len(plan.Fields))
