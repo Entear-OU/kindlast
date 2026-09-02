@@ -11,12 +11,15 @@
 // depend on the language version it parses with.
 module github.com/Entear-OU/kindlast/apps/workers
 
-go 1.25.0
+go 1.25.4
 
 require (
 	connectrpc.com/connect v1.20.0
+	github.com/Entear-OU/kindlast/gen/go v0.0.0-20260901224854-d913d08d7f7f
+	github.com/Entear-OU/kindlast/libs/chassis v0.0.0-20260901224854-d913d08d7f7f
 	go.temporal.io/api v1.63.4
 	go.temporal.io/sdk v1.48.0
+	google.golang.org/grpc v1.83.1
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -42,6 +45,5 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260810153831-ec0a7760b754 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260807164820-c8921c73eeea // indirect
-	google.golang.org/grpc v1.82.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
