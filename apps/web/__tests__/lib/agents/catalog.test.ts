@@ -170,7 +170,7 @@ describe('the agent catalogue (ENT-232)', () => {
   })
 
   it('resolves an agent by its exact slug, and nothing else', () => {
-    expect(agentBySlug('analyst')?.name).toBe('The Analyst')
+    expect(agentBySlug('analyst')?.name).toBe('Explanations')
     // No normalisation and no nearest match, for the reason the citation
     // validator gives: helping turns "this does not exist" into "this nearly
     // exists", and the page behind a wrong slug should be a 404.

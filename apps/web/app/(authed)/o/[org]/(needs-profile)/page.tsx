@@ -302,8 +302,8 @@ function PostureStrip({ dashboard }: { dashboard?: Dashboard }) {
         value={relativeTime(dashboard.pipeline?.watcherLastRunAt)}
         detail={
           dashboard.pipeline?.watcherLastRunAt
-            ? 'the Watcher looked and recorded it'
-            : 'the Watcher has not looked yet'
+            ? 'Kindy looked and recorded it'
+            : 'Kindy has not looked yet'
         }
       />
     </div>
@@ -386,7 +386,7 @@ function DecisionList({
     return (
       <p className="mt-3 rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
         {assessed
-          ? 'Nothing is waiting on you. New findings land here when the Watcher raises them.'
+          ? 'Nothing is waiting on you. New findings land here when Kindy raises them.'
           : 'Nothing has looked at your compliance yet. The first sweep runs after onboarding is confirmed, and what it raises appears here.'}
       </p>
     )
