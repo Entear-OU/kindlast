@@ -36,7 +36,7 @@ export function OpenBreakdown({ counts }: { counts: SeverityCounts }) {
     <div className="rounded-2xl border border-border/60 bg-card px-5 py-4">
       {total === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nothing open. Findings appear here as the Watcher raises them.
+          Nothing open. Findings appear here as Kindy raises them.
         </p>
       ) : (
         <div

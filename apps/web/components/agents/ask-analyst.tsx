@@ -50,20 +50,16 @@ export function AskAnalyst({
 
   return (
     <section
-      aria-label="Ask the Analyst"
+      aria-label="Ask Kindy"
       className="mt-8 rounded-xl border border-border/60 bg-background p-5"
     >
-      <h2 className="text-sm font-medium text-foreground">Ask the Analyst</h2>
+      <h2 className="text-sm font-medium text-foreground">Ask Kindy</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         About this finding and your organisation. It will not tell you what the
         law says: that is the quoted text above, which a person wrote.
       </p>
 
-      <form
-        action={submit}
-        aria-label="Ask the Analyst"
-        className="mt-4 space-y-3"
-      >
+      <form action={submit} aria-label="Ask Kindy" className="mt-4 space-y-3">
         {/* The finding, and the slug the action re-resolves the organisation
             from. Deliberately no org id: a hidden field carrying one is a field
             somebody can edit, and the slug is checked against the caller's own
@@ -72,7 +68,7 @@ export function AskAnalyst({
         <input type="hidden" name="slug" value={slug} readOnly />
 
         <label htmlFor="analyst-question" className="sr-only">
-          Ask the Analyst about this finding
+          Ask Kindy about this finding
         </label>
         <textarea
           id="analyst-question"
@@ -133,7 +129,7 @@ function Result({ state }: { state: AskState }) {
             className="rounded-lg border border-border/60 bg-muted/40 p-4"
           >
             <p className="text-[13px] font-medium text-foreground">
-              The Analyst did not answer this one
+              Kindy did not answer this one
             </p>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               {state.reason}

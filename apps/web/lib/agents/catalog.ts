@@ -144,7 +144,7 @@ export const AGENTS: readonly Agent[] = [
   {
     slug: 'kindy',
     name: 'Kindy',
-    does: 'Takes what you ask, works out which finding you mean, and puts it to the agent that can answer.',
+    does: 'Takes what you ask, works out which finding you mean, and answers it.',
     // `partly-working` AS OF ENT-285, AND THE SKILL HALF IS THE HALF THAT
     // LANDED.
     //
@@ -170,11 +170,11 @@ export const AGENTS: readonly Agent[] = [
     // four, not because work flows out of it into them. The pipeline underneath
     // is unchanged and still runs in its own order.
     status: 'partly-working',
-    runs: 'Nothing runs it yet. What you type in the panel still goes straight to the Analyst.',
+    runs: 'Nothing runs it yet. What you type in the panel is still answered directly.',
     effects:
       'It chooses which agent answers and which finding they answer about, and it writes nothing itself. It can only ask about findings you can already see, and it holds no tool that sends, approves or changes a record.',
     remaining:
-      'The skill is built and nothing calls it, so no answer you have had came through it. It can also reach only the Analyst so far, because a tool that sends is a different risk from a tool that reads.',
+      'The skill is built and nothing calls it, so no answer you have had came through it. It can also answer only questions so far, because a tool that sends is a different risk from a tool that reads.',
     skills: [
       {
         module: 'kindy',
@@ -198,7 +198,7 @@ export const AGENTS: readonly Agent[] = [
   },
   {
     slug: 'watcher',
-    name: 'The Watcher',
+    name: 'Monitoring',
     does: 'Looks at your profile, what you have connected, and what has changed, and raises what is worth your attention.',
     status: 'working',
     runs: 'When a sweep is triggered for your organisation, and once a day for every organisation.',
@@ -257,7 +257,7 @@ export const AGENTS: readonly Agent[] = [
   },
   {
     slug: 'analyst',
-    name: 'The Analyst',
+    name: 'Explanations',
     does: 'Explains why a finding applies to you, beside the article it cites, and answers what you ask about it.',
     status: 'working',
     runs: 'On the sweep, to explain a new finding, and whenever you ask it a question about one.',
@@ -299,7 +299,7 @@ export const AGENTS: readonly Agent[] = [
   },
   {
     slug: 'messenger',
-    name: 'The Messenger',
+    name: 'Messages',
     does: 'Tells you when something needs a decision.',
     // WORKING, IN THE COMMIT THAT MADE IT TRUE (ENT-280).
     //
@@ -339,7 +339,7 @@ export const AGENTS: readonly Agent[] = [
   },
   {
     slug: 'hands',
-    name: 'The Hands',
+    name: 'Record keeping',
     does: 'Explains what approving will do, then prepares the record.',
     // `working` AS OF ENT-278, AND THE LABEL MOVED IN THE COMMIT THAT EARNED IT.
     //

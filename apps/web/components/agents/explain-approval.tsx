@@ -55,7 +55,7 @@ export function ExplainApproval({
         What approving will do
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        The Hands reads this finding and what you have told us about your
+        Kindy reads this finding and what you have told us about your
         organisation, and says what approving would add to your records and what
         it could not fill in. It prepares and it never decides: the decision
         below stays yours.
@@ -63,7 +63,7 @@ export function ExplainApproval({
 
       <form
         action={submit}
-        aria-label="Ask the Hands"
+        aria-label="Ask Kindy"
         className="mt-4 flex items-center gap-3"
       >
         {/* The finding, and the slug the action re-resolves the organisation
@@ -73,7 +73,7 @@ export function ExplainApproval({
         <input type="hidden" name="slug" value={slug} readOnly />
 
         <Button type="submit" disabled={asking}>
-          {asking ? 'Asking the Hands' : 'Ask the Hands'}
+          {asking ? 'Asking Kindy' : 'Ask Kindy'}
         </Button>
       </form>
 
@@ -122,8 +122,8 @@ function Result({ state }: { state: ExplainState }) {
             data-testid="approval-attribution"
             className="text-xs text-muted-foreground"
           >
-            Prepared by the Hands about your organisation, not a statement of
-            the law
+            Prepared by Kindy about your organisation, not a statement of the
+            law
             {state.agentRunId ? (
               <>
                 , run <span className="font-mono">{state.agentRunId}</span>
@@ -146,7 +146,7 @@ function Result({ state }: { state: ExplainState }) {
           {/* Not an alert. Nothing went wrong, and a screen reader interrupting
               with an error would describe the guardrail as a failure. */}
           <p className="text-[13px] font-medium text-foreground">
-            The Hands did not prepare this one
+            Kindy did not prepare this one
           </p>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             {state.reason}
