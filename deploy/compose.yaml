@@ -1027,6 +1027,31 @@ services:
       - "off"
       - --parallel
       - "${KINDLAST_MODEL_PARALLEL:-2}"
+      # THREADS, AND WHY THE DEFAULT IS AUTO RATHER THAN A NUMBER.
+      #
+      # `-1` is llama-server's own default and means "decide for me", so this
+      # line changes nothing anywhere until an operator sets the variable. It
+      # exists because the server cannot make that decision well inside a VM.
+      #
+      # Measured on a 13th-gen Intel laptop (6 performance cores, 8 efficiency
+      # cores, 20 threads) through Docker Desktop, same model and prompt, only
+      # this value changed:
+      #
+      #     -t 6   10.48 tok/s        -t 10   11.65 tok/s
+      #     -t 8    9.53 tok/s        -t 14    9.42 tok/s
+      #     -t 20   2.10 tok/s   <- what auto chose
+      #
+      # Auto picked 20 and was five times slower than anything else. The VM
+      # presents twenty identical vCPUs, so the server cannot see that fourteen
+      # of them are efficiency cores or that half are hyperthreads; it takes
+      # them all, and every layer then finishes at the speed of its slowest
+      # thread. That topology is a property of the host, which a container has
+      # no way to read, so the number has to come from whoever runs it.
+      #
+      # Worth setting on any hybrid or hyperthreaded machine. A homogeneous
+      # server has nothing to gain and should leave it alone.
+      - --threads
+      - "${KINDLAST_MODEL_THREADS:--1}"
     healthcheck:
       # `/health` returns 200 only once the weights are loaded, so a dependent
       # service waiting on this is waiting on a model that can actually answer
