@@ -46,7 +46,7 @@ function renderPanel(state: AskState) {
 async function ask(question = 'Why does this apply to us?') {
   const user = userEvent.setup()
   await user.type(
-    screen.getByLabelText('Ask the Analyst about this finding'),
+    screen.getByLabelText('Ask Kindy about this finding'),
     question,
   )
   await user.click(screen.getByRole('button', { name: /Ask/i }))
@@ -76,7 +76,7 @@ describe('asking the Analyst (ENT-270)', () => {
     // it from the slug against the caller's own memberships. The slug travels
     // because the action needs to know which URL it is acting under, and it is
     // resolved rather than trusted.
-    const form = screen.getByRole('form', { name: 'Ask the Analyst' })
+    const form = screen.getByRole('form', { name: 'Ask Kindy' })
     expect(within(form).getByDisplayValue('f-1')).toBeInTheDocument()
     expect(within(form).getByDisplayValue('acme-ltd')).toBeInTheDocument()
     expect(form.querySelector('input[name="orgId"]')).toBeNull()

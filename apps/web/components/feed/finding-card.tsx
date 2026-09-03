@@ -79,7 +79,7 @@ export function FindingCard({
                 pipeline would be a line about us in a place reserved for
                 them. */}
             <p className="mt-1 text-[11px] tracking-[0.04em] text-muted-foreground/80 uppercase">
-              Drafted by the Analyst
+              Drafted by Kindy
             </p>
           </>
         ) : finding.proposedAction ? (
@@ -143,7 +143,7 @@ export function FindingNarrative({ finding }: { finding: Finding }) {
               data-testid="finding-narrative-refusal"
               className="mt-2 text-sm text-muted-foreground"
             >
-              The Analyst tried to explain this one and its draft was refused:{' '}
+              Kindy tried to explain this one and its draft was refused:{' '}
               {finding.narrativeRefusal}. Nothing else on this page was written
               by a model, so nothing else changed when that happened.
             </p>
@@ -151,8 +151,8 @@ export function FindingNarrative({ finding }: { finding: Finding }) {
 
           <p className="mt-2 text-xs text-muted-foreground">
             {finding.narrative
-              ? 'Drafted by the Analyst about your organisation, not a statement of the law'
-              : 'Attempted by the Analyst'}
+              ? 'Drafted by Kindy about your organisation, not a statement of the law'
+              : 'Attempted by Kindy'}
             {finding.agentRunId ? (
               <>
                 , run <span className="font-mono">{finding.agentRunId}</span>

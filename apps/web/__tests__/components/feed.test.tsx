@@ -201,7 +201,7 @@ describe('the narrative on a finding page', () => {
     expect(
       screen.getByText(/Article 30 wants a written record/),
     ).toBeInTheDocument()
-    expect(screen.getByText(/Analyst/)).toBeInTheDocument()
+    expect(screen.getByText(/Kindy/)).toBeInTheDocument()
     expect(screen.getByText(/run-1/)).toBeInTheDocument()
   })
 
@@ -305,7 +305,7 @@ describe('the authored statement of law beside the narrative', () => {
     render(<FindingNarrative finding={withSummary} />)
 
     expect(screen.getByText(/not generated/i)).toBeInTheDocument()
-    expect(screen.getByText(/Drafted by the Analyst/i)).toBeInTheDocument()
+    expect(screen.getByText(/Drafted by Kindy/i)).toBeInTheDocument()
   })
 
   // The statement of law does not depend on a model having run. A finding
@@ -330,14 +330,14 @@ describe('the authored statement of law beside the narrative', () => {
   it('marks the narrative as drafted on the card as well', () => {
     render(<FindingCard finding={narrated} orgSlug="acme" />)
 
-    expect(screen.getByText(/Drafted by the Analyst/i)).toBeInTheDocument()
+    expect(screen.getByText(/Drafted by Kindy/i)).toBeInTheDocument()
   })
 
   it('marks nothing on a card that has no narrative', () => {
     render(<FindingCard finding={finding} orgSlug="acme" />)
 
     expect(
-      screen.queryByText(/Drafted by the Analyst/i),
+      screen.queryByText(/Drafted by Kindy/i),
     ).not.toBeInTheDocument()
   })
 })

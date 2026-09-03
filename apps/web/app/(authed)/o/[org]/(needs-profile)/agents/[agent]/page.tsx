@@ -104,7 +104,7 @@ export default async function AgentPage({
               // sweep that never happened are different facts, and showing the
               // second for the first is the ENT-161 mistake in miniature.
               <p className="text-xs text-muted-foreground">
-                Could not read when the Watcher last ran. Reload to try again.
+                Could not read when this last ran. Reload to try again.
               </p>
             )}
           </div>

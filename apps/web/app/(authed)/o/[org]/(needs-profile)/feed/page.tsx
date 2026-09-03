@@ -79,8 +79,8 @@ export default async function FeedPage({
         Feed
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        What the Watcher has found, newest first. Every finding cites the
-        regulation it comes from, so you can check it rather than take our word.
+        What Kindy has found, newest first. Every finding cites the regulation
+        it comes from, so you can check it rather than take our word.
       </p>
 
       <div className="mt-6">
@@ -192,7 +192,7 @@ function EmptyFeed({ filtered }: { filtered: boolean }) {
     >
       {filtered
         ? 'No findings with that status.'
-        : 'No findings yet. When the Watcher runs, what it finds appears here.'}
+        : 'No findings yet. When Kindy runs, what it finds appears here.'}
     </p>
   )
 }

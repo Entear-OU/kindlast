@@ -38,10 +38,10 @@ describe('PIPELINE_STAGES', () => {
     // page uses plainer names and the `technical` line names the component in
     // the repository. The next test is what stops those two drifting apart.
     expect(PIPELINE_STAGES.map((s) => s.agent)).toEqual([
-      'The Watcher',
-      'The Analyst',
-      'The Messenger',
-      'The Hands',
+      'Kindy',
+      'Kindy',
+      'Kindy',
+      'Kindy',
     ])
   })
 
@@ -76,13 +76,25 @@ describe('PIPELINE_STAGES', () => {
 })
 
 describe('AgentPipeline', () => {
-  it('names all four agents', () => {
-    render(<AgentPipeline />)
-    for (const stage of PIPELINE_STAGES) {
-      expect(
-        screen.getByRole('heading', { name: new RegExp(stage.agent, 'i') }),
-      ).toBeInTheDocument()
+  it('names Kindy on every stage and no internal agent anywhere', () => {
+    // The rule changed: a reader meets one assistant, not a cast of four.
+    // `getAllByRole` rather than `getByRole`, because four headings now carry
+    // the same name and the singular query throws on the second one.
+    const { container } = render(<AgentPipeline />)
+    expect(
+      screen.getAllByRole('heading', { name: /Kindy/i }).length,
+    ).toBe(PIPELINE_STAGES.length)
+
+    // The internal names survive in `technical`, which is the engineer-facing
+    // note and is deliberately checkable against the source. Nowhere else.
+    const headings = screen
+      .getAllByRole('heading')
+      .map((h) => h.textContent ?? '')
+      .join(' ')
+    for (const internal of ['Watcher', 'Analyst', 'Messenger', 'Hands']) {
+      expect(headings).not.toMatch(new RegExp(internal, 'i'))
     }
+    expect(container).toBeTruthy()
   })
 
   it('renders every stage as a list item in order', () => {

@@ -122,7 +122,7 @@ function read(answer: Answer, question: string): AskState {
         status: 'error',
         message:
           answer.outcomeDetail ||
-          'The Analyst could not answer just now. Nothing about this finding changed.',
+          'Kindy could not answer just now. Nothing about this finding changed.',
       }
   }
 }
@@ -246,7 +246,7 @@ function readExplanation(explanation: Explanation): ExplainState {
         status: 'error',
         message:
           explanation.outcomeDetail ||
-          'The Hands could not explain this one just now. Nothing about this finding changed.',
+          'Kindy could not explain this one just now. Nothing about this finding changed.',
       }
   }
 }
