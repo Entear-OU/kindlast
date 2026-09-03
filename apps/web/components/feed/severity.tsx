@@ -7,10 +7,15 @@
  * this surface exists to answer.
  */
 
+// The text sits at the 700 shade, not the 300 these started on. The console
+// is a white sheet and nothing sets `.dark`, so pale text on a 10% tint of the
+// same hue was a badge whose word could not be read at the size it is drawn.
+// Since colour is never the only signal here, the word is the signal, and an
+// unreadable word leaves only the colour.
 const SEVERITY_STYLES: Record<string, string> = {
-  critical: 'border-red-500/40 bg-red-500/10 text-red-300',
-  high: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-  medium: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
+  critical: 'border-red-500/40 bg-red-500/10 text-red-700',
+  high: 'border-amber-500/40 bg-amber-500/10 text-amber-700',
+  medium: 'border-sky-500/40 bg-sky-500/10 text-sky-700',
   low: 'border-border/60 bg-muted text-muted-foreground',
 }
 
