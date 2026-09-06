@@ -81,9 +81,9 @@ describe('AgentPipeline', () => {
     // `getAllByRole` rather than `getByRole`, because four headings now carry
     // the same name and the singular query throws on the second one.
     const { container } = render(<AgentPipeline />)
-    expect(
-      screen.getAllByRole('heading', { name: /Kindy/i }).length,
-    ).toBe(PIPELINE_STAGES.length)
+    expect(screen.getAllByRole('heading', { name: /Kindy/i }).length).toBe(
+      PIPELINE_STAGES.length,
+    )
 
     // The internal names survive in `technical`, which is the engineer-facing
     // note and is deliberately checkable against the source. Nowhere else.

@@ -336,8 +336,6 @@ describe('the authored statement of law beside the narrative', () => {
   it('marks nothing on a card that has no narrative', () => {
     render(<FindingCard finding={finding} orgSlug="acme" />)
 
-    expect(
-      screen.queryByText(/Drafted by Kindy/i),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Drafted by Kindy/i)).not.toBeInTheDocument()
   })
 })
