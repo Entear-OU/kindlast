@@ -5,17 +5,19 @@
 // share a dependency set and a careless import cannot cross the boundary. CI
 // checks the second half directly: apps/workers must not import apps/core-api.
 //
-// `go 1.25.0` to match go.work and the two sibling modules. A module that
-// declares a newer toolchain than the workspace is one that silently downloads
-// a second Go to build, which is a poor footing for a linter whose findings
-// depend on the language version it parses with.
+// `go 1.25.4` because grpc v1.83.1 requires it, and go.work was raised to the
+// same number in the same commit. A module that declares a newer toolchain
+// than the workspace does not merely download a second Go: `go.work` refuses
+// to load at all, and every command in every module fails with an error that
+// names this file. The rule is that the workspace floor is the highest floor
+// any module declares, and the two move together.
 module github.com/Entear-OU/kindlast/apps/workers
 
-go 1.25.0
+go 1.25.4
 
 require (
 	connectrpc.com/connect v1.20.0
-	go.temporal.io/api v1.63.4
+	go.temporal.io/api v1.63.5
 	go.temporal.io/sdk v1.48.0
 	google.golang.org/protobuf v1.36.12
 )
@@ -42,6 +44,6 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260810153831-ec0a7760b754 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260807164820-c8921c73eeea // indirect
-	google.golang.org/grpc v1.82.1 // indirect
+	google.golang.org/grpc v1.83.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -5,7 +5,12 @@
 //
 // apps/workers joined at ENT-231, when the integrations gateway gave it
 // something to do. apps/intelligence is Python and never joins.
-go 1.25.0
+//
+// This number is a floor for the whole workspace, so it has to be at least the
+// highest `go` any joined module declares. Raise a module past it and go.work
+// stops loading, which fails every command in every module at once rather than
+// only in the module that moved.
+go 1.25.4
 
 use (
 	./apps/core-api
