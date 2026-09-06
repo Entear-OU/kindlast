@@ -14,6 +14,18 @@ what they have to do about it, which no commit subject knows.
 
 ### Added
 
+- **The bundled model's thread count is now configurable**
+  (`KINDLAST_MODEL_THREADS`). It defaults to `-1`, which is llama-server's own
+  "decide for me", so nothing changes unless you set it. Set it if you run the
+  `model` profile on a laptop or any hybrid or hyperthreaded CPU: the VM
+  presents every core as identical, so the server cannot tell performance cores
+  from efficiency cores and takes all of them, and each layer then finishes at
+  the speed of its slowest thread. Measured on a 13th-generation Intel laptop
+  (6 performance cores, 8 efficiency cores, 20 threads), same model and prompt:
+  auto chose 20 threads and produced 2.10 tokens per second, where 10 threads
+  produced 11.65. A homogeneous server has nothing to gain and should leave it
+  unset.
+
 - **A finding now arrives carrying the record its approval would create**
   (ENT-287). Approving a finding whose action is `create_ropa` builds a
   processing activity out of the finding's proposed payload, and until now
