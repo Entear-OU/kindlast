@@ -36,6 +36,9 @@ const (
 	// ConversationServiceAskAboutFindingProcedure is the fully-qualified name of the
 	// ConversationService's AskAboutFinding RPC.
 	ConversationServiceAskAboutFindingProcedure = "/kindlast.core.v1.ConversationService/AskAboutFinding"
+	// ConversationServiceGetAgentStatusProcedure is the fully-qualified name of the
+	// ConversationService's GetAgentStatus RPC.
+	ConversationServiceGetAgentStatusProcedure = "/kindlast.core.v1.ConversationService/GetAgentStatus"
 )
 
 // ConversationServiceClient is a client for the kindlast.core.v1.ConversationService service.
@@ -64,6 +67,44 @@ type ConversationServiceClient interface {
 	// transaction, so a question about a finding in another organisation is the
 	// same `not_found` that reading it would be.
 	AskAboutFinding(context.Context, *connect.Request[v1.AskAboutFindingRequest]) (*connect.Response[v1.AskAboutFindingResponse], error)
+	// Whether asking would work right now (ENT-296).
+	//
+	// # IT EXISTS BECAUSE A CONSOLE WAS CLAIMING SOMETHING IT COULD NOT KNOW
+	//
+	// The rail draws a presence dot beside Kindy, and it was a hardcoded green.
+	// Its own comment said it should go grey the day Kindy stops answering
+	// rather than the day somebody remembers, and nothing existed for it to
+	// read. A green dot over a stopped service is the ENT-202 failure exactly:
+	// a live-looking control that is not.
+	//
+	// # WHY IT IS NOT `intelligence_available` ON THE ASK
+	//
+	// That field is a CONFIGURATION fact: it says this deployment wired an
+	// Intelligence URL. It cannot go false for a service that was configured
+	// and has since stopped, so a crashed container still reported `true` and
+	// failed at the call. This RPC reports REACHABILITY, which is a different
+	// question, measured rather than declared.
+	//
+	// The three outcomes are kept apart for the reason the codebase keeps
+	// "no model here" apart from "the Analyst refused": they are different
+	// sentences with different things to do about them. A deployment that runs
+	// no Intelligence is not broken and should not be drawn as an outage.
+	//
+	// # `agents:ask` RATHER THAN A READ SCOPE
+	//
+	// The claim this answers is "asking works", so the people who may see it are
+	// exactly the people who may ask. A new read scope would be a second thing
+	// to keep in step with the first, for a boolean that only means anything
+	// alongside it.
+	//
+	// # IT IS CHEAP AND IT IS CACHED, BECAUSE THE RAIL IS ON EVERY PAGE
+	//
+	// core-api probes Intelligence's unauthenticated liveness endpoint and holds
+	// the answer briefly, so a console rendering the shell on every navigation
+	// costs one cached read rather than one probe. `checked_at` is when the
+	// probe behind this answer actually ran, so a caller can tell a fresh
+	// answer from a held one instead of assuming.
+	GetAgentStatus(context.Context, *connect.Request[v1.GetAgentStatusRequest]) (*connect.Response[v1.GetAgentStatusResponse], error)
 }
 
 // NewConversationServiceClient constructs a client for the kindlast.core.v1.ConversationService
@@ -83,17 +124,29 @@ func NewConversationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(conversationServiceMethods.ByName("AskAboutFinding")),
 			connect.WithClientOptions(opts...),
 		),
+		getAgentStatus: connect.NewClient[v1.GetAgentStatusRequest, v1.GetAgentStatusResponse](
+			httpClient,
+			baseURL+ConversationServiceGetAgentStatusProcedure,
+			connect.WithSchema(conversationServiceMethods.ByName("GetAgentStatus")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // conversationServiceClient implements ConversationServiceClient.
 type conversationServiceClient struct {
 	askAboutFinding *connect.Client[v1.AskAboutFindingRequest, v1.AskAboutFindingResponse]
+	getAgentStatus  *connect.Client[v1.GetAgentStatusRequest, v1.GetAgentStatusResponse]
 }
 
 // AskAboutFinding calls kindlast.core.v1.ConversationService.AskAboutFinding.
 func (c *conversationServiceClient) AskAboutFinding(ctx context.Context, req *connect.Request[v1.AskAboutFindingRequest]) (*connect.Response[v1.AskAboutFindingResponse], error) {
 	return c.askAboutFinding.CallUnary(ctx, req)
+}
+
+// GetAgentStatus calls kindlast.core.v1.ConversationService.GetAgentStatus.
+func (c *conversationServiceClient) GetAgentStatus(ctx context.Context, req *connect.Request[v1.GetAgentStatusRequest]) (*connect.Response[v1.GetAgentStatusResponse], error) {
+	return c.getAgentStatus.CallUnary(ctx, req)
 }
 
 // ConversationServiceHandler is an implementation of the kindlast.core.v1.ConversationService
@@ -123,6 +176,44 @@ type ConversationServiceHandler interface {
 	// transaction, so a question about a finding in another organisation is the
 	// same `not_found` that reading it would be.
 	AskAboutFinding(context.Context, *connect.Request[v1.AskAboutFindingRequest]) (*connect.Response[v1.AskAboutFindingResponse], error)
+	// Whether asking would work right now (ENT-296).
+	//
+	// # IT EXISTS BECAUSE A CONSOLE WAS CLAIMING SOMETHING IT COULD NOT KNOW
+	//
+	// The rail draws a presence dot beside Kindy, and it was a hardcoded green.
+	// Its own comment said it should go grey the day Kindy stops answering
+	// rather than the day somebody remembers, and nothing existed for it to
+	// read. A green dot over a stopped service is the ENT-202 failure exactly:
+	// a live-looking control that is not.
+	//
+	// # WHY IT IS NOT `intelligence_available` ON THE ASK
+	//
+	// That field is a CONFIGURATION fact: it says this deployment wired an
+	// Intelligence URL. It cannot go false for a service that was configured
+	// and has since stopped, so a crashed container still reported `true` and
+	// failed at the call. This RPC reports REACHABILITY, which is a different
+	// question, measured rather than declared.
+	//
+	// The three outcomes are kept apart for the reason the codebase keeps
+	// "no model here" apart from "the Analyst refused": they are different
+	// sentences with different things to do about them. A deployment that runs
+	// no Intelligence is not broken and should not be drawn as an outage.
+	//
+	// # `agents:ask` RATHER THAN A READ SCOPE
+	//
+	// The claim this answers is "asking works", so the people who may see it are
+	// exactly the people who may ask. A new read scope would be a second thing
+	// to keep in step with the first, for a boolean that only means anything
+	// alongside it.
+	//
+	// # IT IS CHEAP AND IT IS CACHED, BECAUSE THE RAIL IS ON EVERY PAGE
+	//
+	// core-api probes Intelligence's unauthenticated liveness endpoint and holds
+	// the answer briefly, so a console rendering the shell on every navigation
+	// costs one cached read rather than one probe. `checked_at` is when the
+	// probe behind this answer actually ran, so a caller can tell a fresh
+	// answer from a held one instead of assuming.
+	GetAgentStatus(context.Context, *connect.Request[v1.GetAgentStatusRequest]) (*connect.Response[v1.GetAgentStatusResponse], error)
 }
 
 // NewConversationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -138,10 +229,18 @@ func NewConversationServiceHandler(svc ConversationServiceHandler, opts ...conne
 		connect.WithSchema(conversationServiceMethods.ByName("AskAboutFinding")),
 		connect.WithHandlerOptions(opts...),
 	)
+	conversationServiceGetAgentStatusHandler := connect.NewUnaryHandler(
+		ConversationServiceGetAgentStatusProcedure,
+		svc.GetAgentStatus,
+		connect.WithSchema(conversationServiceMethods.ByName("GetAgentStatus")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/kindlast.core.v1.ConversationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ConversationServiceAskAboutFindingProcedure:
 			conversationServiceAskAboutFindingHandler.ServeHTTP(w, r)
+		case ConversationServiceGetAgentStatusProcedure:
+			conversationServiceGetAgentStatusHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -153,4 +252,8 @@ type UnimplementedConversationServiceHandler struct{}
 
 func (UnimplementedConversationServiceHandler) AskAboutFinding(context.Context, *connect.Request[v1.AskAboutFindingRequest]) (*connect.Response[v1.AskAboutFindingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.ConversationService.AskAboutFinding is not implemented"))
+}
+
+func (UnimplementedConversationServiceHandler) GetAgentStatus(context.Context, *connect.Request[v1.GetAgentStatusRequest]) (*connect.Response[v1.GetAgentStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("kindlast.core.v1.ConversationService.GetAgentStatus is not implemented"))
 }

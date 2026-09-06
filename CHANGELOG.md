@@ -105,6 +105,27 @@ what they have to do about it, which no commit subject knows.
   profile, you can drop it; leaving it changes nothing. To run without
   Intelligence at all, set it empty explicitly.
 
+- **Kindy's presence dot now reports whether Kindy can actually answer**
+  (ENT-296). It was green on every console page in every deployment, including
+  ones running no model at all and ones whose Intelligence service had stopped,
+  because nothing measured it: the only signal the product had was whether an
+  Intelligence URL had been configured, which cannot go false for a service
+  that crashes after boot.
+
+  core-api now probes Intelligence and the dot draws the answer, in three
+  states rather than two. Green is answering. Amber is configured and not
+  answering, which is something to fix. Grey is a deployment that runs no
+  model, which is supported and is deliberately not drawn as an outage. Each
+  carries the sentence as text as well as colour, so a screen reader hears the
+  same thing the screen shows.
+
+  **If you are self-hosting**, the `intelligence` container now has a
+  healthcheck, so `docker compose ps` reports it `healthy` rather than only
+  `Up`, and a stack where it is failing is visible without reading logs. It
+  serves a new unauthenticated `GET /healthz` on its own port for that, which
+  returns `{"status": "ok"}` and nothing else: no version, no model name, no
+  configuration. Nothing needs configuring and no ports change.
+
 ### Security
 
 - **The integrations gateway takes the gRPC heap exhaustion fix**

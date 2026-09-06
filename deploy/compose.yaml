@@ -1170,6 +1170,35 @@ services:
       - zitadel-machinekey:/machinekey:ro
     ports:
       - "127.0.0.1:${KINDLAST_INTELLIGENCE_PORT:-8090}:8090"
+    healthcheck:
+      # THIS SERVICE HAD NO HEALTHCHECK UNTIL ENT-296, AND COULD NOT HAVE ONE.
+      #
+      # Every Connect path here requires `internal:intelligence`, so the only
+      # way to ask whether the process was up was to hold a client credential
+      # and spend a run. `docker compose ps` therefore reported it `Up` and
+      # never `(healthy)`, which is the one service in this file where "the
+      # container is running" and "the feature works" could differ silently.
+      #
+      # `python -c` rather than curl: the runtime image is python:3.12-slim and
+      # has no curl, and adding one to carry a healthcheck would put a package
+      # in the image for the sake of a probe.
+      #
+      # It asks for liveness only. Whether a model can answer is a different
+      # question with a different answer per organisation, and core-api is the
+      # only process that may ask it.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8090/healthz', timeout=3).status == 200 else 1)",
+        ]
+      interval: 5s
+      timeout: 5s
+      # Generous for the same reason the boot is: this process discovers OIDC
+      # and warms a JWKS cache before it listens, against an identity provider
+      # that is coming up alongside it.
+      retries: 24
 
   # The integrations policy gateway (ENT-231, §26.4).
   #

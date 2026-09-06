@@ -5,11 +5,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 
 	domain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/findings"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/reach"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
 	platformv1 "github.com/Entear-OU/kindlast/gen/go/kindlast/platform/v1"
@@ -366,4 +368,115 @@ func TestAnUnreachableIntelligenceIsUnavailableRatherThanARefusal(t *testing.T) 
 	if connect.CodeOf(err) != connect.CodeUnavailable {
 		t.Fatalf("code = %v, want unavailable", connect.CodeOf(err))
 	}
+}
+
+// --- The presence dot's source of truth (ENT-296) ----------------------------
+//
+// The console draws a dot beside Kindy. It was a hardcoded green, and these
+// are what make it mean something. Each asserts one of the three sentences the
+// dot has to be able to say, because collapsing any two of them is how a
+// presence indicator starts lying.
+
+// fakeProber stands in for the reachability probe, so these exercise the three
+// states without an HTTP server. reach.Prober has its own tests for the
+// measuring and the caching.
+type fakeProber struct {
+	result reach.Result
+	calls  int
+}
+
+func (f *fakeProber) Probe(context.Context) reach.Result {
+	f.calls++
+	return f.result
+}
+
+func TestStatusReportsNotConfiguredForADeploymentRunningNoIntelligence(t *testing.T) {
+	t.Parallel()
+
+	// Supported rather than broken, and the distinction is the whole reason
+	// this is three states and not a bool: a self-hoster who never enabled the
+	// model profile has nothing wrong with their stack and must not be shown
+	// an outage.
+	got, err := status(t, New(nil, nil))
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if got.GetAvailability() != corev1.Availability_AVAILABILITY_NOT_CONFIGURED {
+		t.Fatalf("availability = %v, want NOT_CONFIGURED", got.GetAvailability())
+	}
+}
+
+func TestStatusReportsReachableWhenIntelligenceAnswers(t *testing.T) {
+	t.Parallel()
+
+	at := time.Now().Add(-3 * time.Second)
+	got, err := status(t, New(&fakeAnswerer{response: anAnswer()}, nil,
+		WithProber(&fakeProber{result: reach.Result{State: reach.Reachable, At: at}})))
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if got.GetAvailability() != corev1.Availability_AVAILABILITY_REACHABLE {
+		t.Fatalf("availability = %v, want REACHABLE", got.GetAvailability())
+	}
+	if !got.GetCheckedAt().AsTime().Equal(at.UTC().Truncate(time.Nanosecond)) {
+		t.Fatalf("checked_at = %v, want the probe's own time %v",
+			got.GetCheckedAt().AsTime(), at)
+	}
+}
+
+func TestStatusReportsUnreachableForAConfiguredServiceThatStopped(t *testing.T) {
+	t.Parallel()
+
+	// THE BUG THIS WHOLE CHANGE EXISTS FOR. Before ENT-296 this deployment
+	// answered `intelligence_available: true` and the dot stayed green,
+	// because the only signal was that a URL had been configured.
+	got, err := status(t, New(&fakeAnswerer{response: anAnswer()}, nil,
+		WithProber(&fakeProber{result: reach.Result{State: reach.Unreachable, At: time.Now()}})))
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if got.GetAvailability() != corev1.Availability_AVAILABILITY_UNREACHABLE {
+		t.Fatalf("availability = %v, want UNREACHABLE", got.GetAvailability())
+	}
+}
+
+func TestStatusWithoutAProberClaimsNothing(t *testing.T) {
+	t.Parallel()
+
+	// A wiring mistake must not restore the old lie. With an answerer and no
+	// way to measure, the honest answer is that this deployment cannot say,
+	// which is drawn the same as running none rather than as present.
+	got, err := status(t, New(&fakeAnswerer{response: anAnswer()}, nil))
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if got.GetAvailability() == corev1.Availability_AVAILABILITY_REACHABLE {
+		t.Fatal("a service with no prober claimed to be reachable")
+	}
+}
+
+func TestStatusNeverAsksTheProberForADeploymentWithNoIntelligence(t *testing.T) {
+	t.Parallel()
+
+	prober := &fakeProber{result: reach.Result{State: reach.Reachable, At: time.Now()}}
+	if _, err := status(t, New(nil, nil, WithProber(prober))); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if prober.calls != 0 {
+		t.Fatalf("probed %d times: there is nothing to probe", prober.calls)
+	}
+}
+
+// status calls GetAgentStatus with a context carrying an identity, the way the
+// interceptors would. No tenant transaction: reachability is a property of the
+// deployment, so the handler must not need one.
+func status(t *testing.T, service *Service) (*corev1.GetAgentStatusResponse, error) {
+	t.Helper()
+
+	ctx := interceptor.WithClaims(context.Background(), &oidc.Claims{Subject: "user-1"})
+	res, err := service.GetAgentStatus(ctx, connect.NewRequest(&corev1.GetAgentStatusRequest{}))
+	if err != nil {
+		return nil, err
+	}
+	return res.Msg, nil
 }

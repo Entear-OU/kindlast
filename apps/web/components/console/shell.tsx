@@ -43,6 +43,7 @@ export function ConsoleShell({
   orgName,
   activity,
   kindyAction,
+  status,
   children,
 }: {
   orgSlug: string
@@ -51,6 +52,8 @@ export function ConsoleShell({
   activity?: import('@/components/console/agent-rail').ActivityItem[]
   /** The composer's server action, injected by the layout. See AgentRail. */
   kindyAction: import('@/components/console/kindy-state').KindyAction
+  /** Whether Kindy is answering, fetched by the layout. See AgentRail. */
+  status?: import('@/lib/agents/conversation').AgentStatus
   children: React.ReactNode
 }) {
   return (
@@ -100,6 +103,7 @@ export function ConsoleShell({
             variant="mobile"
             activity={activity}
             kindyAction={kindyAction}
+            status={status}
           />
         </div>
 
@@ -122,6 +126,7 @@ export function ConsoleShell({
             orgSlug={orgSlug}
             activity={activity}
             kindyAction={kindyAction}
+            status={status}
           />
         </div>
       </div>

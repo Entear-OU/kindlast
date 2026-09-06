@@ -23,10 +23,11 @@ _sym_db = _symbol_database.Default()
 
 
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
+from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 from kindlast.options.v1 import scope_pb2 as kindlast_dot_options_dot_v1_dot_scope__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#kindlast/core/v1/conversation.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"S\n\x16\x41skAboutFindingRequest\x12\x1d\n\nfinding_id\x18\x01 \x01(\tR\tfindingId\x12\x1a\n\x08question\x18\x02 \x01(\tR\x08question\"\xff\x01\n\x17\x41skAboutFindingResponse\x12\x35\n\x16intelligence_available\x18\x01 \x01(\x08R\x15intelligenceAvailable\x12\x39\n\x07outcome\x18\x02 \x01(\x0e\x32\x1f.kindlast.core.v1.AnswerOutcomeR\x07outcome\x12\x16\n\x06\x61nswer\x18\x03 \x01(\tR\x06\x61nswer\x12%\n\x0eoutcome_detail\x18\x04 \x01(\tR\routcomeDetail\x12\x33\n\x03run\x18\x05 \x01(\x0b\x32!.kindlast.core.v1.AgentRunSummaryR\x03run\"\xf4\x01\n\x0f\x41gentRunSummary\x12 \n\x0c\x61gent_run_id\x18\x01 \x01(\tR\nagentRunId\x12\x14\n\x05skill\x18\x02 \x01(\tR\x05skill\x12#\n\rskill_version\x18\x03 \x01(\tR\x0cskillVersion\x12\x14\n\x05model\x18\x04 \x01(\tR\x05model\x12#\n\rmodel_version\x18\x05 \x01(\tR\x0cmodelVersion\x12\x1a\n\x08provider\x18\x06 \x01(\tR\x08provider\x12-\n\x12resolved_citations\x18\x07 \x03(\tR\x11resolvedCitations*\x84\x01\n\rAnswerOutcome\x12\x1e\n\x1a\x41NSWER_OUTCOME_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x41NSWER_OUTCOME_SUCCEEDED\x10\x01\x12\x1a\n\x16\x41NSWER_OUTCOME_REFUSED\x10\x02\x12\x19\n\x15\x41NSWER_OUTCOME_FAILED\x10\x03\x32\xba\x01\n\x13\x43onversationService\x12\xa2\x01\n\x0f\x41skAboutFinding\x12(.kindlast.core.v1.AskAboutFindingRequest\x1a).kindlast.core.v1.AskAboutFindingResponse\":\x8a\xb5\x18\nagents:ask\x82\xd3\xe4\x93\x02&\"!/api/v1/findings/{finding_id}:ask:\x01*B\xc9\x01\n\x14\x63om.kindlast.core.v1B\x11\x43onversationProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#kindlast/core/v1/conversation.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\x17\n\x15GetAgentStatusRequest\"\x97\x01\n\x16GetAgentStatusResponse\x12\x42\n\x0c\x61vailability\x18\x01 \x01(\x0e\x32\x1e.kindlast.core.v1.AvailabilityR\x0c\x61vailability\x12\x39\n\nchecked_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tcheckedAt\"S\n\x16\x41skAboutFindingRequest\x12\x1d\n\nfinding_id\x18\x01 \x01(\tR\tfindingId\x12\x1a\n\x08question\x18\x02 \x01(\tR\x08question\"\xff\x01\n\x17\x41skAboutFindingResponse\x12\x35\n\x16intelligence_available\x18\x01 \x01(\x08R\x15intelligenceAvailable\x12\x39\n\x07outcome\x18\x02 \x01(\x0e\x32\x1f.kindlast.core.v1.AnswerOutcomeR\x07outcome\x12\x16\n\x06\x61nswer\x18\x03 \x01(\tR\x06\x61nswer\x12%\n\x0eoutcome_detail\x18\x04 \x01(\tR\routcomeDetail\x12\x33\n\x03run\x18\x05 \x01(\x0b\x32!.kindlast.core.v1.AgentRunSummaryR\x03run\"\xf4\x01\n\x0f\x41gentRunSummary\x12 \n\x0c\x61gent_run_id\x18\x01 \x01(\tR\nagentRunId\x12\x14\n\x05skill\x18\x02 \x01(\tR\x05skill\x12#\n\rskill_version\x18\x03 \x01(\tR\x0cskillVersion\x12\x14\n\x05model\x18\x04 \x01(\tR\x05model\x12#\n\rmodel_version\x18\x05 \x01(\tR\x0cmodelVersion\x12\x1a\n\x08provider\x18\x06 \x01(\tR\x08provider\x12-\n\x12resolved_citations\x18\x07 \x03(\tR\x11resolvedCitations*\x87\x01\n\x0c\x41vailability\x12\x1c\n\x18\x41VAILABILITY_UNSPECIFIED\x10\x00\x12\x1a\n\x16\x41VAILABILITY_REACHABLE\x10\x01\x12\x1c\n\x18\x41VAILABILITY_UNREACHABLE\x10\x02\x12\x1f\n\x1b\x41VAILABILITY_NOT_CONFIGURED\x10\x03*\x84\x01\n\rAnswerOutcome\x12\x1e\n\x1a\x41NSWER_OUTCOME_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x41NSWER_OUTCOME_SUCCEEDED\x10\x01\x12\x1a\n\x16\x41NSWER_OUTCOME_REFUSED\x10\x02\x12\x19\n\x15\x41NSWER_OUTCOME_FAILED\x10\x03\x32\xcd\x02\n\x13\x43onversationService\x12\xa2\x01\n\x0f\x41skAboutFinding\x12(.kindlast.core.v1.AskAboutFindingRequest\x1a).kindlast.core.v1.AskAboutFindingResponse\":\x8a\xb5\x18\nagents:ask\x82\xd3\xe4\x93\x02&\"!/api/v1/findings/{finding_id}:ask:\x01*\x12\x90\x01\n\x0eGetAgentStatus\x12\'.kindlast.core.v1.GetAgentStatusRequest\x1a(.kindlast.core.v1.GetAgentStatusResponse\"+\x8a\xb5\x18\nagents:ask\x82\xd3\xe4\x93\x02\x17\x12\x15/api/v1/agents/statusB\xc9\x01\n\x14\x63om.kindlast.core.v1B\x11\x43onversationProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,14 +37,22 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'\n\024com.kindlast.core.v1B\021ConversationProtoP\001Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\242\002\003KCX\252\002\020Kindlast.Core.V1\312\002\020Kindlast\\Core\\V1\342\002\034Kindlast\\Core\\V1\\GPBMetadata\352\002\022Kindlast::Core::V1'
   _globals['_CONVERSATIONSERVICE'].methods_by_name['AskAboutFinding']._loaded_options = None
   _globals['_CONVERSATIONSERVICE'].methods_by_name['AskAboutFinding']._serialized_options = b'\212\265\030\nagents:ask\202\323\344\223\002&\"!/api/v1/findings/{finding_id}:ask:\001*'
-  _globals['_ANSWEROUTCOME']._serialized_start=711
-  _globals['_ANSWEROUTCOME']._serialized_end=843
-  _globals['_ASKABOUTFINDINGREQUEST']._serialized_start=120
-  _globals['_ASKABOUTFINDINGREQUEST']._serialized_end=203
-  _globals['_ASKABOUTFINDINGRESPONSE']._serialized_start=206
-  _globals['_ASKABOUTFINDINGRESPONSE']._serialized_end=461
-  _globals['_AGENTRUNSUMMARY']._serialized_start=464
-  _globals['_AGENTRUNSUMMARY']._serialized_end=708
-  _globals['_CONVERSATIONSERVICE']._serialized_start=846
-  _globals['_CONVERSATIONSERVICE']._serialized_end=1032
+  _globals['_CONVERSATIONSERVICE'].methods_by_name['GetAgentStatus']._loaded_options = None
+  _globals['_CONVERSATIONSERVICE'].methods_by_name['GetAgentStatus']._serialized_options = b'\212\265\030\nagents:ask\202\323\344\223\002\027\022\025/api/v1/agents/status'
+  _globals['_AVAILABILITY']._serialized_start=923
+  _globals['_AVAILABILITY']._serialized_end=1058
+  _globals['_ANSWEROUTCOME']._serialized_start=1061
+  _globals['_ANSWEROUTCOME']._serialized_end=1193
+  _globals['_GETAGENTSTATUSREQUEST']._serialized_start=153
+  _globals['_GETAGENTSTATUSREQUEST']._serialized_end=176
+  _globals['_GETAGENTSTATUSRESPONSE']._serialized_start=179
+  _globals['_GETAGENTSTATUSRESPONSE']._serialized_end=330
+  _globals['_ASKABOUTFINDINGREQUEST']._serialized_start=332
+  _globals['_ASKABOUTFINDINGREQUEST']._serialized_end=415
+  _globals['_ASKABOUTFINDINGRESPONSE']._serialized_start=418
+  _globals['_ASKABOUTFINDINGRESPONSE']._serialized_end=673
+  _globals['_AGENTRUNSUMMARY']._serialized_start=676
+  _globals['_AGENTRUNSUMMARY']._serialized_end=920
+  _globals['_CONVERSATIONSERVICE']._serialized_start=1196
+  _globals['_CONVERSATIONSERVICE']._serialized_end=1529
 # @@protoc_insertion_point(module_scope)

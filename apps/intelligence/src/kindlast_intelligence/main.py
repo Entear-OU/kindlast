@@ -22,6 +22,7 @@ from .auth.verifier import Verifier
 from .coreapi import CoreAPI
 from .harness.budget import Budget
 from .harness.model import ProxiedModelClient
+from .health import with_health
 from .worker import start_in_background
 from .service import (
     IntelligenceService,
@@ -179,7 +180,12 @@ def build_app():
             "narrated only when NarrateFindings is called by hand"
         )
 
-    return intelligence_connect.IntelligenceServiceWSGIApplication(service)
+    # Wrapped rather than mounted: `/healthz` answers here and never reaches
+    # the Connect application, so the scope-guarded surface stays exactly as
+    # generated. See health.py for why it is unauthenticated.
+    return with_health(
+        intelligence_connect.IntelligenceServiceWSGIApplication(service)
+    )
 
 
 def main() -> int:

@@ -3,6 +3,7 @@ import Link from 'next/link'
 
 import { KindyComposer } from '@/components/console/kindy-composer'
 import type { KindyAction } from '@/components/console/kindy-state'
+import type { AgentStatus } from '@/lib/agents/conversation'
 import { orgPath } from '@/lib/auth/org'
 import { relativeTime } from '@/lib/utils'
 
@@ -34,6 +35,51 @@ const SEVERITY_DOT: Record<string, string> = {
   medium: 'bg-sky-500',
   low: 'bg-muted-foreground/40',
 }
+
+/**
+ * What the presence dot draws, per availability (ENT-296).
+ *
+ * # A SENTENCE PER STATE, NOT A COLOUR PER STATE
+ *
+ * The dot used to be `bg-emerald-500` with nothing behind it. Now that it
+ * carries a claim, the claim has to be readable without the colour: the same
+ * rule the severity dots follow, and it binds harder here, because this dot is
+ * the only presence signal on the card and a reader who cannot tell the
+ * colours apart would otherwise have nothing.
+ *
+ * # WHY UNREACHABLE AND NOT-CONFIGURED ARE DIFFERENT SENTENCES
+ *
+ * One is an incident and one is a supported deployment. A self-hoster who
+ * never enabled the model profile has nothing to fix, and telling them their
+ * agent is down would send them looking for a fault that is not there. Amber
+ * is a fault; muted is a product running as configured.
+ *
+ * `undefined` is its own row and deliberately not green: a status that could
+ * not be read is not a reason to claim presence, which is exactly the
+ * assumption this whole change removed.
+ */
+const PRESENCE = {
+  AVAILABILITY_REACHABLE: {
+    className: 'bg-emerald-500',
+    label: 'Kindy is answering',
+  },
+  AVAILABILITY_UNREACHABLE: {
+    className: 'bg-amber-500',
+    label: 'Kindy is not answering just now',
+  },
+  AVAILABILITY_NOT_CONFIGURED: {
+    className: 'bg-muted-foreground/40',
+    label: 'This deployment runs no model, so Kindy cannot answer',
+  },
+  AVAILABILITY_UNSPECIFIED: {
+    className: 'bg-muted-foreground/40',
+    label: "Kindy's status is unknown",
+  },
+  unknown: {
+    className: 'bg-muted-foreground/40',
+    label: "Kindy's status is unknown",
+  },
+} as const
 
 /**
  * Kindy's panel (ENT-222, ENT-232, ENT-270, reshaped when the rail became a
@@ -70,6 +116,7 @@ export function AgentRail({
   variant = 'desktop',
   activity,
   kindyAction,
+  status,
 }: {
   orgSlug: string
   variant?: 'desktop' | 'mobile'
@@ -86,8 +133,19 @@ export function AgentRail({
    * into every test that renders the chrome.
    */
   kindyAction: KindyAction
+  /**
+   * Whether Kindy is answering (ENT-296), fetched by the layout for the same
+   * reason activity is: this stays a plain synchronous component a test can
+   * render.
+   *
+   * Absent when the read failed or was not attempted, and absent is NOT
+   * treated as healthy. That defaulting is the bug this prop exists to fix.
+   */
+  status?: AgentStatus
 }) {
   const headingId = `agent-rail-heading-${variant}`
+  const presence =
+    PRESENCE[status?.availability ?? 'unknown'] ?? PRESENCE.unknown
 
   return (
     <aside
@@ -102,12 +160,22 @@ export function AgentRail({
       <div className="rounded-2xl bg-card px-5 py-6 text-center shadow-[0_1px_3px_oklch(0_0_0/0.06)]">
         <span className="relative mx-auto flex size-14 items-center justify-center rounded-full bg-gradient-to-br from-[oklch(0.62_0.11_176)] to-[oklch(0.42_0.1_200)] text-white">
           <Sparkles aria-hidden="true" className="size-6" />
-          {/* The dot claims exactly what the composer delivers: Kindy
-              answers in writing today. It goes grey the day that stops being
-              true, not the day someone remembers it. */}
+          {/* The dot claims exactly what the composer delivers, and since
+              ENT-296 it is measured rather than asserted: core-api probes
+              Intelligence and this draws the answer. It goes grey the day
+              that stops being true, which is now the day it stops being true
+              rather than the day someone remembers it.
+
+              NOT `aria-hidden` ANY MORE, and that is the part to keep. While
+              it was always green it was decoration and hiding it was right.
+              It carries the card's only presence signal now, so hiding it
+              would mean a screen reader hears a working assistant on a
+              deployment whose agent has stopped. */}
           <span
-            aria-hidden="true"
-            className="absolute right-0 bottom-0 size-3 rounded-full border-2 border-card bg-emerald-500"
+            role="status"
+            aria-label={presence.label}
+            title={presence.label}
+            className={`absolute right-0 bottom-0 size-3 rounded-full border-2 border-card ${presence.className}`}
           />
         </span>
         <h2 id={headingId} className="mt-3 text-[15px] font-semibold">

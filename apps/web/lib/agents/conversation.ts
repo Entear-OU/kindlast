@@ -84,3 +84,48 @@ export function askAboutFinding(
     body: { findingId, question },
   })
 }
+
+/**
+ * Whether Kindy is answering right now (ENT-296), as Connect's JSON spells an
+ * enum: the name, not the number.
+ *
+ * THREE STATES AND NOT A BOOLEAN, and the middle one is the reason. A
+ * deployment that runs no Intelligence is supported and must not be drawn as
+ * an outage, and a deployment whose Intelligence has stopped is an outage and
+ * must not be drawn as a working product. A boolean would have to pick which
+ * of those two lies to tell.
+ */
+export type Availability =
+  | 'AVAILABILITY_UNSPECIFIED'
+  | 'AVAILABILITY_REACHABLE'
+  | 'AVAILABILITY_UNREACHABLE'
+  | 'AVAILABILITY_NOT_CONFIGURED'
+
+export interface AgentStatus {
+  availability?: Availability
+  /**
+   * When the probe behind this answer ran, RFC 3339 as Connect spells a
+   * timestamp. Older than now by up to core-api's cache window, which is the
+   * point of carrying it: presence that says how old it is beats presence that
+   * implies it is live.
+   */
+  checkedAt?: string
+}
+
+/**
+ * Ask core-api whether Kindy would answer.
+ *
+ * Never throws for an unreachable core-api: `call` returns a Failure, and the
+ * rail draws that the same as unreachable. A status read is chrome, and chrome
+ * that can fail a page render is worse than no chrome.
+ */
+export function getAgentStatus(accessToken: string, orgId: string) {
+  return call<AgentStatus>(
+    'kindlast.core.v1.ConversationService/GetAgentStatus',
+    {
+      accessToken,
+      orgId,
+      body: {},
+    },
+  )
+}
