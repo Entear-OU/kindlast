@@ -57,7 +57,7 @@ function renderPanel(state: ExplainState) {
 
 async function askTheHands() {
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: /Ask the Hands/i }))
+  await user.click(screen.getByRole('button', { name: /Ask Kindy/i }))
 }
 
 describe('what approving will do (ENT-278)', () => {
@@ -69,7 +69,7 @@ describe('what approving will do (ENT-278)', () => {
     // on the Analyst's box: this one changes what approving would create.
     expect(action).not.toHaveBeenCalled()
     expect(
-      screen.getByRole('button', { name: /Ask the Hands/i }),
+      screen.getByRole('button', { name: /Ask Kindy/i }),
     ).toBeInTheDocument()
   })
 
@@ -84,7 +84,7 @@ describe('what approving will do (ENT-278)', () => {
     // The same rule the act path and the Analyst's box follow: a hidden org id
     // is a field somebody can edit, so the action re-resolves the organisation
     // from the slug against the caller's own memberships.
-    const form = screen.getByRole('form', { name: 'Ask the Hands' })
+    const form = screen.getByRole('form', { name: 'Ask Kindy' })
     expect(within(form).getByDisplayValue('f-1')).toBeInTheDocument()
     expect(within(form).getByDisplayValue('acme-ltd')).toBeInTheDocument()
     expect(form.querySelector('input[name="orgId"]')).toBeNull()
@@ -101,7 +101,7 @@ describe('what approving will do (ENT-278)', () => {
     // narrative carries, in the same words, because a second phrasing for the
     // same claim is a second thing to keep true.
     const attribution = screen.getByTestId('approval-attribution')
-    expect(attribution).toHaveTextContent(/Prepared by the Hands/i)
+    expect(attribution).toHaveTextContent(/Prepared by Kindy/i)
     expect(attribution).toHaveTextContent(/not a statement of the law/i)
     // The run, so somebody can ask about this exact one later.
     expect(attribution).toHaveTextContent(RUN)

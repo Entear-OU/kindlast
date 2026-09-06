@@ -121,8 +121,8 @@ export function PipelineNote({ dashboard }: { dashboard: Dashboard }) {
   if (!pipeline.profileExists) {
     return (
       <p className="text-xs text-muted-foreground">
-        The Watcher has nothing to check yet. Onboarding has not been completed
-        for this organisation.
+        Kindy has nothing to check yet. Onboarding has not been completed for
+        this organisation.
       </p>
     )
   }
@@ -130,14 +130,14 @@ export function PipelineNote({ dashboard }: { dashboard: Dashboard }) {
   if (!pipeline.watcherLastRunAt) {
     return (
       <p className="text-xs text-muted-foreground">
-        The Watcher has not run yet, so nothing here has been assessed.
+        Kindy has not run yet, so nothing here has been assessed.
       </p>
     )
   }
 
   return (
     <p className="text-xs text-muted-foreground">
-      The Watcher last ran{' '}
+      Kindy last ran{' '}
       <time dateTime={pipeline.watcherLastRunAt}>
         {new Date(pipeline.watcherLastRunAt).toLocaleString()}
       </time>

@@ -63,7 +63,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   {
     id: 'watcher',
     index: '01',
-    agent: 'The Watcher',
+    agent: 'Kindy',
     headline: 'It checks every day, so nobody has to remember to',
     plain:
       'Every day it looks through your compliance record for problems, without being asked.',
@@ -88,7 +88,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   {
     id: 'analyst',
     index: '02',
-    agent: 'The Analyst',
+    agent: 'Kindy',
     headline: 'It works out what the problem means and what to do',
     plain: 'It turns a raw signal into one specific thing you can actually do.',
     body: [
@@ -111,7 +111,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   {
     id: 'comms',
     index: '03',
-    agent: 'The Messenger',
+    agent: 'Kindy',
     headline: 'It comes to you, rather than waiting to be found',
     plain: 'The answer arrives in your inbox, and replying takes one tap.',
     body: [
@@ -134,7 +134,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   {
     id: 'executor',
     index: '04',
-    agent: 'The Hands',
+    agent: 'Kindy',
     headline: 'It does nothing until you say yes',
     plain:
       'Nothing changes unless you approve it, and everything that happens is written down.',
