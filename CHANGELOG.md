@@ -105,6 +105,20 @@ what they have to do about it, which no commit subject knows.
   profile, you can drop it; leaving it changes nothing. To run without
   Intelligence at all, set it empty explicitly.
 
+### Security
+
+- **The integrations gateway takes the gRPC heap exhaustion fix**
+  (`google.golang.org/grpc` 1.82.1 to 1.83.1). A peer could make a gRPC server
+  hold unbounded memory by fragmenting HTTP/2 DATA frames. It matters most in
+  this one process because the gateway is the only part of Kindlast that dials
+  an address a customer supplied, so an unfriendly peer at the other end is
+  part of its job rather than a surprise. Nothing else in the product links
+  gRPC.
+
+  **If you are upgrading**, there is nothing to do and no configuration
+  changes. Building from source now needs Go 1.25.4 or newer, which the pinned
+  container image and the CI toolchain already satisfy.
+
 ### Fixed
 
 - **Kindy now answers about the finding you are reading** (ENT-284). The
