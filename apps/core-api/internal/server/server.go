@@ -244,6 +244,20 @@ type Dependencies struct {
 	// `intelligence_available: false` for it.
 	Answerer conversationservice.Answerer
 
+	// IntelligenceProber measures whether that same service is answering right
+	// now (ENT-296).
+	//
+	// A THIRD FIELD FOR THE SAME SERVICE, AND IT IS NOT REDUNDANT. Drafter and
+	// Answerer are nil-or-not, which is a configuration fact: was this
+	// deployment given an Intelligence URL. This one is the only thing that can
+	// say whether the process behind that URL is up, and before it existed the
+	// console drew a presence dot that could not go out.
+	//
+	// Nil is a deployment that runs no Intelligence, and also a deployment
+	// where nobody wired this: GetAgentStatus draws both the same way rather
+	// than claiming presence nothing measured.
+	IntelligenceProber conversationservice.Prober
+
 	// ModelRouter answers where an organisation's completions go: the
 	// deployment's own model, or the provider it chose (ENT-236), with the
 	// sealed key opened only here in Go (ENT-256, part five). Two services
@@ -362,7 +376,8 @@ func New(deps Dependencies) (http.Handler, error) {
 	// model here" and "wrong URL" the same 404.
 	mux.Handle(corev1connect.NewConversationServiceHandler(
 		conversationservice.New(deps.Answerer, deps.Logger,
-			conversationservice.WithRouter(conversationRouterOrNil(deps.ModelRouter))),
+			conversationservice.WithRouter(conversationRouterOrNil(deps.ModelRouter)),
+			conversationservice.WithProber(deps.IntelligenceProber)),
 		chain))
 	// Asking the Hands what approving one finding will do (ENT-278).
 	// Registered unconditionally, for the reason ConversationService is: a

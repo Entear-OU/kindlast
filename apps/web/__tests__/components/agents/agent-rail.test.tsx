@@ -156,4 +156,99 @@ describe("Kindy's panel", () => {
       expect(screen.queryByText(/Talking to them is coming/)).toBeNull()
     })
   })
+
+  /**
+   * The presence dot (ENT-296).
+   *
+   * It was `bg-emerald-500`, hardcoded, with a comment saying it should go
+   * grey the day Kindy stops answering rather than the day somebody
+   * remembers. Nothing existed for it to read, so it was a live-looking
+   * indicator with nothing behind it: the ENT-202 shape, on the one control
+   * whose entire job is to say whether something is live.
+   *
+   * These pin the three sentences it has to be able to say, and the rule that
+   * makes it legible to somebody who cannot see the colour.
+   */
+  describe('the presence dot', () => {
+    it('says Kindy is answering when Intelligence is reachable', () => {
+      render(
+        <AgentRail
+          orgSlug="acme-ltd"
+          kindyAction={noopKindy}
+          status={{ availability: 'AVAILABILITY_REACHABLE' }}
+        />,
+      )
+
+      expect(
+        screen.getByRole('status', { name: /Kindy is answering/i }),
+      ).toBeInTheDocument()
+    })
+
+    it('says Kindy is not answering when Intelligence has stopped', () => {
+      // THE BUG THE WHOLE CHANGE EXISTS FOR. This deployment used to draw a
+      // green dot, because the only signal was that a URL was configured.
+      render(
+        <AgentRail
+          orgSlug="acme-ltd"
+          kindyAction={noopKindy}
+          status={{ availability: 'AVAILABILITY_UNREACHABLE' }}
+        />,
+      )
+
+      const dot = screen.getByRole('status', { name: /not answering/i })
+      expect(dot).toBeInTheDocument()
+      expect(dot.className).not.toMatch(/emerald/)
+    })
+
+    it('distinguishes a deployment that runs no model from one that is broken', () => {
+      // Supported rather than broken. A self-hoster who never enabled the
+      // model profile has nothing to fix and must not be told they do.
+      render(
+        <AgentRail
+          orgSlug="acme-ltd"
+          kindyAction={noopKindy}
+          status={{ availability: 'AVAILABILITY_NOT_CONFIGURED' }}
+        />,
+      )
+
+      const dot = screen.getByRole('status')
+      expect(dot).toHaveAccessibleName(/no model/i)
+      // And specifically NOT the outage wording, which is the whole point of
+      // keeping the two states apart.
+      expect(dot).not.toHaveAccessibleName(/not answering/i)
+    })
+
+    it('claims nothing when the status could not be read', () => {
+      // An unreadable status is not a claim that Kindy is up. The rail is
+      // chrome on every page and this read can fail on its own, so absent has
+      // to be its own state rather than defaulting to green.
+      render(<AgentRail orgSlug="acme-ltd" kindyAction={noopKindy} />)
+
+      const dot = screen.getByRole('status')
+      expect(dot.className).not.toMatch(/emerald/)
+      expect(dot).not.toHaveAccessibleName(/is answering/i)
+    })
+
+    it('never says it in colour alone', () => {
+      // The rule the severity dots already follow, and it matters more here:
+      // this dot is 12 pixels and carries the only presence signal on the
+      // card, so a reader who cannot distinguish the colours would otherwise
+      // have nothing at all.
+      for (const availability of [
+        'AVAILABILITY_REACHABLE',
+        'AVAILABILITY_UNREACHABLE',
+        'AVAILABILITY_NOT_CONFIGURED',
+      ] as const) {
+        const { unmount } = render(
+          <AgentRail
+            orgSlug="acme-ltd"
+            kindyAction={noopKindy}
+            status={{ availability }}
+          />,
+        )
+        expect(screen.getByRole('status')).toHaveAccessibleName(/\S/)
+        unmount()
+      }
+    })
+  })
 })

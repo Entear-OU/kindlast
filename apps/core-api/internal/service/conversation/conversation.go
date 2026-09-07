@@ -51,8 +51,10 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	domain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/findings"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/reach"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/service/modelroute"
 	corev1 "github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1"
@@ -97,14 +99,35 @@ type Router interface {
 	Resolve(ctx context.Context, orgID string) (modelroute.Route, error)
 }
 
+// Prober measures whether Intelligence is answering right now (ENT-296).
+//
+// An interface rather than *reach.Prober so these tests can drive the three
+// states without an HTTP server, and so this package holds no opinion about
+// how reachability is measured.
+type Prober interface {
+	Probe(ctx context.Context) reach.Result
+}
+
 type Service struct {
 	answerer Answerer
 	router   Router
+	prober   Prober
 	logger   *slog.Logger
 }
 
 // Option configures the service.
 type Option func(*Service)
+
+// WithProber gives the service a way to measure whether Intelligence is
+// answering. Without one, GetAgentStatus claims nothing rather than claiming
+// presence: an unmeasured green dot is the thing ENT-296 removed.
+func WithProber(prober Prober) Option {
+	return func(s *Service) {
+		if prober != nil {
+			s.prober = prober
+		}
+	}
+}
 
 // WithRouter makes this service name, for the run record, the model an
 // organisation's runs go to. Nil is the same as absent: runs are recorded
@@ -262,6 +285,64 @@ func (s *Service) AskAboutFinding(
 		OutcomeDetail: msg.GetOutcomeDetail(),
 		Run:           runFor(msg),
 	}), nil
+}
+
+// GetAgentStatus answers whether asking would work right now (ENT-296).
+//
+// # IT TAKES NO TENANT TRANSACTION, AND THAT IS DELIBERATE
+//
+// Reachability is a property of the deployment, not of an organisation, so
+// this handler reads no rows and narrows no store. It is still behind
+// `agents:ask` and still behind the tenancy interceptor's org header, because
+// the claim only means anything to somebody who may ask; it simply has nothing
+// per-organisation to look up.
+//
+// # WHAT IT DOES NOT PROMISE
+//
+// Reachable means the harness is answering. It is not a promise that a MODEL
+// will answer: that depends on the organisation's own provider choice and is
+// resolved per call by the router, which can refuse for reasons that have
+// nothing to do with whether Intelligence is up. Rolling the two together
+// would produce a dot that goes grey when one organisation's API key expires,
+// which is a different sentence for a different person.
+func (s *Service) GetAgentStatus(
+	ctx context.Context,
+	_ *connect.Request[corev1.GetAgentStatusRequest],
+) (*connect.Response[corev1.GetAgentStatusResponse], error) {
+	// NOT CONFIGURED IS DECIDED HERE RATHER THAN BY THE PROBER, because this
+	// is the same fact `intelligence_available` reports elsewhere and it must
+	// not be able to disagree with it: a nil answerer is a deployment that
+	// runs no Intelligence, whatever a URL says.
+	if s.answerer == nil || s.prober == nil {
+		// A nil prober is a wiring mistake rather than a configuration, and it
+		// is drawn the same way on purpose. The alternative is claiming
+		// presence that nothing measured, which is exactly what this RPC
+		// exists to stop.
+		return connect.NewResponse(&corev1.GetAgentStatusResponse{
+			Availability: corev1.Availability_AVAILABILITY_NOT_CONFIGURED,
+		}), nil
+	}
+
+	result := s.prober.Probe(ctx)
+
+	res := &corev1.GetAgentStatusResponse{Availability: availabilityFor(result.State)}
+	if !result.At.IsZero() {
+		// The probe's own time rather than now, so a console can say how old
+		// the claim is instead of implying every read is live.
+		res.CheckedAt = timestamppb.New(result.At)
+	}
+	return connect.NewResponse(res), nil
+}
+
+func availabilityFor(state reach.State) corev1.Availability {
+	switch state {
+	case reach.Reachable:
+		return corev1.Availability_AVAILABILITY_REACHABLE
+	case reach.Unreachable:
+		return corev1.Availability_AVAILABILITY_UNREACHABLE
+	default:
+		return corev1.Availability_AVAILABILITY_NOT_CONFIGURED
+	}
 }
 
 // modelEndpointFor names, for the run record, the model this organisation's

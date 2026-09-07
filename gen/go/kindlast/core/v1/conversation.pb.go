@@ -11,6 +11,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -22,6 +23,70 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+// Why a console should or should not draw Kindy as present.
+//
+// Three states rather than a bool, because "this deployment runs no agent" and
+// "this deployment's agent is not answering" are the difference between a
+// product working as configured and an incident.
+type Availability int32
+
+const (
+	Availability_AVAILABILITY_UNSPECIFIED Availability = 0
+	// Reachable. Asking would get as far as the harness, which is as much as
+	// this can honestly promise: whether a MODEL then answers depends on the
+	// organisation's own choice and is resolved per call.
+	Availability_AVAILABILITY_REACHABLE Availability = 1
+	// Configured and not answering. Something to fix.
+	Availability_AVAILABILITY_UNREACHABLE Availability = 2
+	// This deployment runs no Intelligence at all, which is supported rather
+	// than broken: findings still carry the deterministic text the sweep wrote.
+	// A console should say so, not draw an outage.
+	Availability_AVAILABILITY_NOT_CONFIGURED Availability = 3
+)
+
+// Enum value maps for Availability.
+var (
+	Availability_name = map[int32]string{
+		0: "AVAILABILITY_UNSPECIFIED",
+		1: "AVAILABILITY_REACHABLE",
+		2: "AVAILABILITY_UNREACHABLE",
+		3: "AVAILABILITY_NOT_CONFIGURED",
+	}
+	Availability_value = map[string]int32{
+		"AVAILABILITY_UNSPECIFIED":    0,
+		"AVAILABILITY_REACHABLE":      1,
+		"AVAILABILITY_UNREACHABLE":    2,
+		"AVAILABILITY_NOT_CONFIGURED": 3,
+	}
+)
+
+func (x Availability) Enum() *Availability {
+	p := new(Availability)
+	*p = x
+	return p
+}
+
+func (x Availability) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Availability) Descriptor() protoreflect.EnumDescriptor {
+	return file_kindlast_core_v1_conversation_proto_enumTypes[0].Descriptor()
+}
+
+func (Availability) Type() protoreflect.EnumType {
+	return &file_kindlast_core_v1_conversation_proto_enumTypes[0]
+}
+
+func (x Availability) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Availability.Descriptor instead.
+func (Availability) EnumDescriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{0}
+}
 
 // The three ways a run ends, on the customer-facing surface.
 //
@@ -70,11 +135,11 @@ func (x AnswerOutcome) String() string {
 }
 
 func (AnswerOutcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_kindlast_core_v1_conversation_proto_enumTypes[0].Descriptor()
+	return file_kindlast_core_v1_conversation_proto_enumTypes[1].Descriptor()
 }
 
 func (AnswerOutcome) Type() protoreflect.EnumType {
-	return &file_kindlast_core_v1_conversation_proto_enumTypes[0]
+	return &file_kindlast_core_v1_conversation_proto_enumTypes[1]
 }
 
 func (x AnswerOutcome) Number() protoreflect.EnumNumber {
@@ -83,7 +148,102 @@ func (x AnswerOutcome) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AnswerOutcome.Descriptor instead.
 func (AnswerOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{1}
+}
+
+// Empty: the organisation comes from the `Kindlast-Org-Id` header like
+// everything else on this surface, and reachability is a property of the
+// deployment rather than of a caller.
+type GetAgentStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentStatusRequest) Reset() {
+	*x = GetAgentStatusRequest{}
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentStatusRequest) ProtoMessage() {}
+
+func (x *GetAgentStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetAgentStatusRequest) Descriptor() ([]byte, []int) {
 	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{0}
+}
+
+type GetAgentStatusResponse struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Availability Availability           `protobuf:"varint,1,opt,name=availability,proto3,enum=kindlast.core.v1.Availability" json:"availability,omitempty"`
+	// When the probe behind this answer ran. Older than now by up to the cache
+	// window, and that is the point of returning it: a console showing presence
+	// should be able to say how old the claim is rather than implying it is
+	// live.
+	CheckedAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAgentStatusResponse) Reset() {
+	*x = GetAgentStatusResponse{}
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAgentStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAgentStatusResponse) ProtoMessage() {}
+
+func (x *GetAgentStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAgentStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetAgentStatusResponse) Descriptor() ([]byte, []int) {
+	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GetAgentStatusResponse) GetAvailability() Availability {
+	if x != nil {
+		return x.Availability
+	}
+	return Availability_AVAILABILITY_UNSPECIFIED
+}
+
+func (x *GetAgentStatusResponse) GetCheckedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CheckedAt
+	}
+	return nil
 }
 
 type AskAboutFindingRequest struct {
@@ -107,7 +267,7 @@ type AskAboutFindingRequest struct {
 
 func (x *AskAboutFindingRequest) Reset() {
 	*x = AskAboutFindingRequest{}
-	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[0]
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -119,7 +279,7 @@ func (x *AskAboutFindingRequest) String() string {
 func (*AskAboutFindingRequest) ProtoMessage() {}
 
 func (x *AskAboutFindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[0]
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -132,7 +292,7 @@ func (x *AskAboutFindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AskAboutFindingRequest.ProtoReflect.Descriptor instead.
 func (*AskAboutFindingRequest) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{0}
+	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *AskAboutFindingRequest) GetFindingId() string {
@@ -177,7 +337,7 @@ type AskAboutFindingResponse struct {
 
 func (x *AskAboutFindingResponse) Reset() {
 	*x = AskAboutFindingResponse{}
-	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[1]
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -189,7 +349,7 @@ func (x *AskAboutFindingResponse) String() string {
 func (*AskAboutFindingResponse) ProtoMessage() {}
 
 func (x *AskAboutFindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[1]
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -202,7 +362,7 @@ func (x *AskAboutFindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AskAboutFindingResponse.ProtoReflect.Descriptor instead.
 func (*AskAboutFindingResponse) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{1}
+	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AskAboutFindingResponse) GetIntelligenceAvailable() bool {
@@ -276,7 +436,7 @@ type AgentRunSummary struct {
 
 func (x *AgentRunSummary) Reset() {
 	*x = AgentRunSummary{}
-	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[2]
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -288,7 +448,7 @@ func (x *AgentRunSummary) String() string {
 func (*AgentRunSummary) ProtoMessage() {}
 
 func (x *AgentRunSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[2]
+	mi := &file_kindlast_core_v1_conversation_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -301,7 +461,7 @@ func (x *AgentRunSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunSummary.ProtoReflect.Descriptor instead.
 func (*AgentRunSummary) Descriptor() ([]byte, []int) {
-	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{2}
+	return file_kindlast_core_v1_conversation_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *AgentRunSummary) GetAgentRunId() string {
@@ -357,7 +517,12 @@ var File_kindlast_core_v1_conversation_proto protoreflect.FileDescriptor
 
 const file_kindlast_core_v1_conversation_proto_rawDesc = "" +
 	"\n" +
-	"#kindlast/core/v1/conversation.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fkindlast/options/v1/scope.proto\"S\n" +
+	"#kindlast/core/v1/conversation.proto\x12\x10kindlast.core.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1fkindlast/options/v1/scope.proto\"\x17\n" +
+	"\x15GetAgentStatusRequest\"\x97\x01\n" +
+	"\x16GetAgentStatusResponse\x12B\n" +
+	"\favailability\x18\x01 \x01(\x0e2\x1e.kindlast.core.v1.AvailabilityR\favailability\x129\n" +
+	"\n" +
+	"checked_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\"S\n" +
 	"\x16AskAboutFindingRequest\x12\x1d\n" +
 	"\n" +
 	"finding_id\x18\x01 \x01(\tR\tfindingId\x12\x1a\n" +
@@ -376,15 +541,22 @@ const file_kindlast_core_v1_conversation_proto_rawDesc = "" +
 	"\x05model\x18\x04 \x01(\tR\x05model\x12#\n" +
 	"\rmodel_version\x18\x05 \x01(\tR\fmodelVersion\x12\x1a\n" +
 	"\bprovider\x18\x06 \x01(\tR\bprovider\x12-\n" +
-	"\x12resolved_citations\x18\a \x03(\tR\x11resolvedCitations*\x84\x01\n" +
+	"\x12resolved_citations\x18\a \x03(\tR\x11resolvedCitations*\x87\x01\n" +
+	"\fAvailability\x12\x1c\n" +
+	"\x18AVAILABILITY_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16AVAILABILITY_REACHABLE\x10\x01\x12\x1c\n" +
+	"\x18AVAILABILITY_UNREACHABLE\x10\x02\x12\x1f\n" +
+	"\x1bAVAILABILITY_NOT_CONFIGURED\x10\x03*\x84\x01\n" +
 	"\rAnswerOutcome\x12\x1e\n" +
 	"\x1aANSWER_OUTCOME_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18ANSWER_OUTCOME_SUCCEEDED\x10\x01\x12\x1a\n" +
 	"\x16ANSWER_OUTCOME_REFUSED\x10\x02\x12\x19\n" +
-	"\x15ANSWER_OUTCOME_FAILED\x10\x032\xba\x01\n" +
+	"\x15ANSWER_OUTCOME_FAILED\x10\x032\xcd\x02\n" +
 	"\x13ConversationService\x12\xa2\x01\n" +
 	"\x0fAskAboutFinding\x12(.kindlast.core.v1.AskAboutFindingRequest\x1a).kindlast.core.v1.AskAboutFindingResponse\":\x8a\xb5\x18\n" +
-	"agents:ask\x82\xd3\xe4\x93\x02&:\x01*\"!/api/v1/findings/{finding_id}:askB\xc9\x01\n" +
+	"agents:ask\x82\xd3\xe4\x93\x02&:\x01*\"!/api/v1/findings/{finding_id}:ask\x12\x90\x01\n" +
+	"\x0eGetAgentStatus\x12'.kindlast.core.v1.GetAgentStatusRequest\x1a(.kindlast.core.v1.GetAgentStatusResponse\"+\x8a\xb5\x18\n" +
+	"agents:ask\x82\xd3\xe4\x93\x02\x17\x12\x15/api/v1/agents/statusB\xc9\x01\n" +
 	"\x14com.kindlast.core.v1B\x11ConversationProtoP\x01Z<github.com/Entear-OU/kindlast/gen/go/kindlast/core/v1;corev1\xa2\x02\x03KCX\xaa\x02\x10Kindlast.Core.V1\xca\x02\x10Kindlast\\Core\\V1\xe2\x02\x1cKindlast\\Core\\V1\\GPBMetadata\xea\x02\x12Kindlast::Core::V1b\x06proto3"
 
 var (
@@ -399,24 +571,32 @@ func file_kindlast_core_v1_conversation_proto_rawDescGZIP() []byte {
 	return file_kindlast_core_v1_conversation_proto_rawDescData
 }
 
-var file_kindlast_core_v1_conversation_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kindlast_core_v1_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_kindlast_core_v1_conversation_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_kindlast_core_v1_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_kindlast_core_v1_conversation_proto_goTypes = []any{
-	(AnswerOutcome)(0),              // 0: kindlast.core.v1.AnswerOutcome
-	(*AskAboutFindingRequest)(nil),  // 1: kindlast.core.v1.AskAboutFindingRequest
-	(*AskAboutFindingResponse)(nil), // 2: kindlast.core.v1.AskAboutFindingResponse
-	(*AgentRunSummary)(nil),         // 3: kindlast.core.v1.AgentRunSummary
+	(Availability)(0),               // 0: kindlast.core.v1.Availability
+	(AnswerOutcome)(0),              // 1: kindlast.core.v1.AnswerOutcome
+	(*GetAgentStatusRequest)(nil),   // 2: kindlast.core.v1.GetAgentStatusRequest
+	(*GetAgentStatusResponse)(nil),  // 3: kindlast.core.v1.GetAgentStatusResponse
+	(*AskAboutFindingRequest)(nil),  // 4: kindlast.core.v1.AskAboutFindingRequest
+	(*AskAboutFindingResponse)(nil), // 5: kindlast.core.v1.AskAboutFindingResponse
+	(*AgentRunSummary)(nil),         // 6: kindlast.core.v1.AgentRunSummary
+	(*timestamppb.Timestamp)(nil),   // 7: google.protobuf.Timestamp
 }
 var file_kindlast_core_v1_conversation_proto_depIdxs = []int32{
-	0, // 0: kindlast.core.v1.AskAboutFindingResponse.outcome:type_name -> kindlast.core.v1.AnswerOutcome
-	3, // 1: kindlast.core.v1.AskAboutFindingResponse.run:type_name -> kindlast.core.v1.AgentRunSummary
-	1, // 2: kindlast.core.v1.ConversationService.AskAboutFinding:input_type -> kindlast.core.v1.AskAboutFindingRequest
-	2, // 3: kindlast.core.v1.ConversationService.AskAboutFinding:output_type -> kindlast.core.v1.AskAboutFindingResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // 0: kindlast.core.v1.GetAgentStatusResponse.availability:type_name -> kindlast.core.v1.Availability
+	7, // 1: kindlast.core.v1.GetAgentStatusResponse.checked_at:type_name -> google.protobuf.Timestamp
+	1, // 2: kindlast.core.v1.AskAboutFindingResponse.outcome:type_name -> kindlast.core.v1.AnswerOutcome
+	6, // 3: kindlast.core.v1.AskAboutFindingResponse.run:type_name -> kindlast.core.v1.AgentRunSummary
+	4, // 4: kindlast.core.v1.ConversationService.AskAboutFinding:input_type -> kindlast.core.v1.AskAboutFindingRequest
+	2, // 5: kindlast.core.v1.ConversationService.GetAgentStatus:input_type -> kindlast.core.v1.GetAgentStatusRequest
+	5, // 6: kindlast.core.v1.ConversationService.AskAboutFinding:output_type -> kindlast.core.v1.AskAboutFindingResponse
+	3, // 7: kindlast.core.v1.ConversationService.GetAgentStatus:output_type -> kindlast.core.v1.GetAgentStatusResponse
+	6, // [6:8] is the sub-list for method output_type
+	4, // [4:6] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_kindlast_core_v1_conversation_proto_init() }
@@ -429,8 +609,8 @@ func file_kindlast_core_v1_conversation_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kindlast_core_v1_conversation_proto_rawDesc), len(file_kindlast_core_v1_conversation_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   3,
+			NumEnums:      2,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

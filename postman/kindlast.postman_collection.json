@@ -2431,6 +2431,24 @@
           }
         },
         {
+          "name": "GetAgentStatus (ConversationService)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Kindlast-Org-Id", "value": "{{org_id}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{api_base_url}}/kindlast.core.v1.ConversationService/GetAgentStatus",
+              "host": ["{{api_base_url}}"],
+              "path": ["kindlast.core.v1.ConversationService", "GetAgentStatus"]
+            },
+            "description": "Whether asking would work right now (ENT-296).\n\n# IT EXISTS BECAUSE A CONSOLE WAS CLAIMING SOMETHING IT COULD NOT KNOW\n\nThe rail draws a presence dot beside Kindy, and it was a hardcoded green. Its own comment said it should go grey the day Kindy stops answering rather than the day somebody remembers, and nothing existed for it to read. A green dot over a stopped service is the ENT-202 failure exactly: a live-looking control that is not.\n\n# WHY IT IS NOT `intelligence_available` ON THE ASK\n\nThat field is a CONFIGURATION fact: it says this deployment wired an Intelligence URL. It cannot go false for a service that was configured and has since stopped, so a crashed container still reported `true` and failed at the call. This RPC reports REACHABILITY, which is a different question, measured rather than declared.\n\nThe three outcomes are kept apart for the reason the codebase keeps \"no model here\" apart from \"the Analyst refused\": they are different sentences with different things to do about them. A deployment that runs no Intelligence is not broken and should not be drawn as an outage.\n\n# `agents:ask` RATHER THAN A READ SCOPE\n\nThe claim this answers is \"asking works\", so the people who may see it are exactly the people who may ask. A new read scope would be a second thing to keep in step with the first, for a boolean that only means anything alongside it.\n\n# IT IS CHEAP AND IT IS CACHED, BECAUSE THE RAIL IS ON EVERY PAGE\n\ncore-api probes Intelligence's unauthenticated liveness endpoint and holds the answer briefly, so a console rendering the shell on every navigation costs one cached read rather than one probe. `checked_at` is when the probe behind this answer actually ran, so a caller can tell a fresh answer from a held one instead of assuming.\n\n**From the contract.** `kindlast.core.v1.ConversationService/GetAgentStatus`, declared in `proto/kindlast/core/v1/conversation.proto`. Required scope: `agents:ask`. Declared REST binding: `GET /api/v1/agents/status`."
+          }
+        },
+        {
           "name": "ExplainApproval (HandsService)",
           "request": {
             "method": "POST",

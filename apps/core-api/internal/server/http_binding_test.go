@@ -153,6 +153,13 @@ func TestTheDeclaredBindingsAreTheOnesTheContractPromises(t *testing.T) {
 		"kindlast.core.v1.ConversationService.AskAboutFinding": {
 			Method: "POST", Path: "/api/v1/findings/{finding_id}:ask",
 		},
+		// ENT-296. On `/agents` rather than on a finding, and it is the one
+		// place that is right: this asks nothing about any finding. It is a
+		// property of the deployment, which is why it is a plain GET on a
+		// noun and not a colon verb like every other route on this service.
+		"kindlast.core.v1.ConversationService.GetAgentStatus": {
+			Method: "GET", Path: "/api/v1/agents/status",
+		},
 		// ENT-278. A fifth colon verb on the finding, beside the three that
 		// decide it, because that is what it is about: what pressing approve
 		// will do. On the finding rather than on `/agents/hands:explain` for

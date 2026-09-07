@@ -3,6 +3,7 @@ syntax = "proto3";
 package kindlast.core.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 import "kindlast/options/v1/scope.proto";
 
 // Talking to the Analyst about one finding (ENT-270, §26.5).
@@ -77,6 +78,85 @@ service ConversationService {
       body: "*"
     };
   }
+
+  // Whether asking would work right now (ENT-296).
+  //
+  // # IT EXISTS BECAUSE A CONSOLE WAS CLAIMING SOMETHING IT COULD NOT KNOW
+  //
+  // The rail draws a presence dot beside Kindy, and it was a hardcoded green.
+  // Its own comment said it should go grey the day Kindy stops answering
+  // rather than the day somebody remembers, and nothing existed for it to
+  // read. A green dot over a stopped service is the ENT-202 failure exactly:
+  // a live-looking control that is not.
+  //
+  // # WHY IT IS NOT `intelligence_available` ON THE ASK
+  //
+  // That field is a CONFIGURATION fact: it says this deployment wired an
+  // Intelligence URL. It cannot go false for a service that was configured
+  // and has since stopped, so a crashed container still reported `true` and
+  // failed at the call. This RPC reports REACHABILITY, which is a different
+  // question, measured rather than declared.
+  //
+  // The three outcomes are kept apart for the reason the codebase keeps
+  // "no model here" apart from "the Analyst refused": they are different
+  // sentences with different things to do about them. A deployment that runs
+  // no Intelligence is not broken and should not be drawn as an outage.
+  //
+  // # `agents:ask` RATHER THAN A READ SCOPE
+  //
+  // The claim this answers is "asking works", so the people who may see it are
+  // exactly the people who may ask. A new read scope would be a second thing
+  // to keep in step with the first, for a boolean that only means anything
+  // alongside it.
+  //
+  // # IT IS CHEAP AND IT IS CACHED, BECAUSE THE RAIL IS ON EVERY PAGE
+  //
+  // core-api probes Intelligence's unauthenticated liveness endpoint and holds
+  // the answer briefly, so a console rendering the shell on every navigation
+  // costs one cached read rather than one probe. `checked_at` is when the
+  // probe behind this answer actually ran, so a caller can tell a fresh
+  // answer from a held one instead of assuming.
+  rpc GetAgentStatus(GetAgentStatusRequest) returns (GetAgentStatusResponse) {
+    option (kindlast.options.v1.required_scope) = "agents:ask";
+    option (google.api.http) = {get: "/api/v1/agents/status"};
+  }
+}
+
+// Empty: the organisation comes from the `Kindlast-Org-Id` header like
+// everything else on this surface, and reachability is a property of the
+// deployment rather than of a caller.
+message GetAgentStatusRequest {}
+
+message GetAgentStatusResponse {
+  Availability availability = 1;
+
+  // When the probe behind this answer ran. Older than now by up to the cache
+  // window, and that is the point of returning it: a console showing presence
+  // should be able to say how old the claim is rather than implying it is
+  // live.
+  google.protobuf.Timestamp checked_at = 2;
+}
+
+// Why a console should or should not draw Kindy as present.
+//
+// Three states rather than a bool, because "this deployment runs no agent" and
+// "this deployment's agent is not answering" are the difference between a
+// product working as configured and an incident.
+enum Availability {
+  AVAILABILITY_UNSPECIFIED = 0;
+
+  // Reachable. Asking would get as far as the harness, which is as much as
+  // this can honestly promise: whether a MODEL then answers depends on the
+  // organisation's own choice and is resolved per call.
+  AVAILABILITY_REACHABLE = 1;
+
+  // Configured and not answering. Something to fix.
+  AVAILABILITY_UNREACHABLE = 2;
+
+  // This deployment runs no Intelligence at all, which is supported rather
+  // than broken: findings still carry the deterministic text the sweep wrote.
+  // A console should say so, not draw an outage.
+  AVAILABILITY_NOT_CONFIGURED = 3;
 }
 
 message AskAboutFindingRequest {

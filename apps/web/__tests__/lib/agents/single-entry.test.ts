@@ -128,6 +128,28 @@ const ALLOWED: Record<string, string> = {
   // ENT-286 LANDS; the assertion below will insist.
   'app/(authed)/o/[org]/(needs-profile)/feed/[id]/actions.ts':
     'the finding page asks the Analyst and the Hands directly, until ENT-286',
+
+  // NOT AN ASK, AND THE GUARD IS RIGHT TO HAVE STOPPED IT ANYWAY (ENT-296).
+  //
+  // `GetAgentStatus` declares `agents:ask`, so the derivation above enrols it
+  // like any other, and the shell layout that reads it became a caller. That
+  // is the over-collection this file documents as the direction to err in, and
+  // it caught a real question rather than a false one: should a status read
+  // carry the ask scope at all?
+  //
+  // It should. The scope bounds who may see the claim, and the claim is
+  // "asking would work", so the people who may see it are exactly the people
+  // who may ask. A separate `agents:read` would be a new role in
+  // `deploy/seed/seed.sh`, which every existing deployment would have to be
+  // re-seeded for before a dot could be drawn, and a scope nobody's token
+  // carries yet is a dot that is grey for a reason unrelated to the service.
+  //
+  // What makes the entry safe rather than a hole is that this RPC spends
+  // nothing: no run, no model budget, no customer words on the wire, no
+  // `agent_runs` row. The property ENT-286 protects is that there is one way
+  // to ASK, and reading whether asking would work is not one of them.
+  'app/(authed)/o/[org]/layout.tsx':
+    'the shell reads whether Kindy is answering, to draw the presence dot; it asks nothing and spends no run',
 }
 
 /**

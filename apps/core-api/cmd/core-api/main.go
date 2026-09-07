@@ -28,6 +28,7 @@ import (
 	modelchoicedomain "github.com/Entear-OU/kindlast/apps/core-api/internal/domain/modelchoice"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/gateway"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/identity"
+	"github.com/Entear-OU/kindlast/apps/core-api/internal/reach"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/secrets"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server"
 	"github.com/Entear-OU/kindlast/apps/core-api/internal/server/interceptor"
@@ -405,6 +406,10 @@ func run(logger *slog.Logger) error {
 		// (ENT-270). Nil under the same conditions, and then the handler says
 		// this deployment has no model rather than failing.
 		Answerer: answererDependency(cfg.IntelligenceURL, intelligenceCredentials),
+		// Whether that service is answering right now, which is a different
+		// question from whether it was configured (ENT-296). The URL alone,
+		// with no credential: see intelligenceProberDependency.
+		IntelligenceProber: intelligenceProberDependency(cfg.IntelligenceURL),
 		// An organisation's own provider, honoured by the narration job
 		// (ENT-236). Absent unless all of the agent pool, a sealing key and a
 		// permitted provider list are present, because honouring a choice
@@ -810,6 +815,31 @@ func answererDependency(baseURL string, tokens *oidc.ClientCredentials) conversa
 		return nil
 	}
 	return intelligenceClient(baseURL, tokens)
+}
+
+// intelligenceProberDependency measures whether Intelligence is answering, for
+// the console's presence dot (ENT-296).
+//
+// # IT TAKES NO CREDENTIAL, UNLIKE EVERY OTHER CALL TO THAT SERVICE
+//
+// It probes an unauthenticated liveness path, and that is the point rather than
+// a shortcut. A probe carrying a token cannot tell "the service is down" from
+// "my token expired", and those are different incidents. Since the endpoint
+// discloses nothing but that a process is accepting connections, there is
+// nothing for the credential to protect.
+//
+// So this depends on the URL alone, and NOT on `tokens`: a deployment whose
+// client credentials are missing still gets a truthful dot, which is the case
+// where knowing whether the service is up matters most.
+func intelligenceProberDependency(baseURL string) conversation.Prober {
+	if baseURL == "" {
+		return nil
+	}
+	// Five seconds: long enough that a console navigating between pages costs
+	// one probe rather than one per page, short enough that a stopped service
+	// goes grey while somebody is still looking at the screen that told them
+	// it was up.
+	return reach.New(baseURL, 5*time.Second, nil)
 }
 
 // intelligenceClient is the one construction both dependencies above share, so

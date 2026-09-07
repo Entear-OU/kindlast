@@ -20,6 +20,9 @@ class ConversationService(Protocol):
     async def ask_about_finding(self, request: kindlast_dot_core_dot_v1_dot_conversation__pb2.AskAboutFindingRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_conversation__pb2.AskAboutFindingResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def get_agent_status(self, request: kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class ConversationServiceASGIApplication(ConnectASGIApplication[ConversationService]):
     def __init__(self, service: ConversationService | AsyncGenerator[ConversationService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -35,6 +38,16 @@ class ConversationServiceASGIApplication(ConnectASGIApplication[ConversationServ
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.ask_about_finding,
+                ),
+                "/kindlast.core.v1.ConversationService/GetAgentStatus": Endpoint.unary(
+                    method=MethodInfo(
+                        name="GetAgentStatus",
+                        service_name="kindlast.core.v1.ConversationService",
+                        input=kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusRequest,
+                        output=kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.get_agent_status,
                 ),
             },
             interceptors=interceptors,
@@ -69,9 +82,31 @@ class ConversationServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def get_agent_status(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="GetAgentStatus",
+                service_name="kindlast.core.v1.ConversationService",
+                input=kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusRequest,
+                output=kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 class ConversationServiceSync(Protocol):
     def ask_about_finding(self, request: kindlast_dot_core_dot_v1_dot_conversation__pb2.AskAboutFindingRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_conversation__pb2.AskAboutFindingResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def get_agent_status(self, request: kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusRequest, ctx: RequestContext) -> kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -88,6 +123,16 @@ class ConversationServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.ask_about_finding,
+                ),
+                "/kindlast.core.v1.ConversationService/GetAgentStatus": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="GetAgentStatus",
+                        service_name="kindlast.core.v1.ConversationService",
+                        input=kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusRequest,
+                        output=kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.get_agent_status,
                 ),
             },
             interceptors=interceptors,
@@ -116,6 +161,26 @@ class ConversationServiceClientSync(ConnectClientSync):
                 service_name="kindlast.core.v1.ConversationService",
                 input=kindlast_dot_core_dot_v1_dot_conversation__pb2.AskAboutFindingRequest,
                 output=kindlast_dot_core_dot_v1_dot_conversation__pb2.AskAboutFindingResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def get_agent_status(
+        self,
+        request: kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="GetAgentStatus",
+                service_name="kindlast.core.v1.ConversationService",
+                input=kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusRequest,
+                output=kindlast_dot_core_dot_v1_dot_conversation__pb2.GetAgentStatusResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

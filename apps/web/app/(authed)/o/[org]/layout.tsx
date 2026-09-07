@@ -5,6 +5,7 @@ import { ConsoleShell } from '@/components/console/shell'
 import { currentSession } from '@/lib/auth/session'
 import { orgPath, resolveOrg } from '@/lib/auth/org'
 import { listFindings } from '@/lib/findings/client'
+import { getAgentStatus } from '@/lib/agents/conversation'
 import { askKindy } from './kindy-actions'
 import type { ActivityItem } from '@/components/console/agent-rail'
 
@@ -148,11 +149,18 @@ export default async function OrgLayout({
   // plain synchronous component a test can render, and passed as absent on a
   // failed read so the rail shows nothing-listed rather than claiming
   // nothing happened.
-  const recent = await listFindings(
-    session.accessToken,
-    resolved.membership.orgId,
-    { pageSize: 3 },
-  )
+  // TWO READS, IN PARALLEL, BECAUSE THE SHELL IS EVERY PAGE (ENT-296).
+  //
+  // Sequentially these would add both round trips to every navigation. Neither
+  // gates the other and neither can reject: `listFindings` and `getAgentStatus`
+  // both return a Result, so `Promise.all` here cannot throw and cannot leave
+  // the console unrendered because a dot could not be drawn.
+  const [recent, agentStatus] = await Promise.all([
+    listFindings(session.accessToken, resolved.membership.orgId, {
+      pageSize: 3,
+    }),
+    getAgentStatus(session.accessToken, resolved.membership.orgId),
+  ])
   const activity: ActivityItem[] | undefined = recent.ok
     ? (recent.value.findings ?? []).map((f) => ({
         id: f.findingId,
@@ -168,6 +176,11 @@ export default async function OrgLayout({
       orgName={resolved.membership.orgName}
       activity={activity}
       kindyAction={askKindy}
+      // Undefined on a failed read, never a default. The rail draws that as
+      // unknown rather than as present, which is the property the whole
+      // change exists to establish: a dot that cannot be measured must not
+      // claim to be green.
+      status={agentStatus.ok ? agentStatus.value : undefined}
     >
       {children}
     </ConsoleShell>
